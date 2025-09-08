@@ -52,7 +52,7 @@
 <script setup lang="ts">
   import { ref, reactive, onMounted } from 'vue';
   import { useRouter, useRoute } from 'vue-router';
-  import { useBoardStore } from '@/stores/pem/board.store';
+  import { useBoardStore } from '@/stores/studio/board.store';
   import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
   import type { ColDef } from 'ag-grid-community';
   import BoardEditCellRenderer from './BoardEditCellRenderer.vue';

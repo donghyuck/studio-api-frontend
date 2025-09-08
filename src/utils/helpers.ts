@@ -1,4 +1,4 @@
-import { useAuthStore } from '@/stores/pem/auth.store';
+import { useAuthStore } from '@/stores/studio/auth.store';
 
 const IN_BROWSER = typeof window !== 'undefined';
 const HTTP = 'http';

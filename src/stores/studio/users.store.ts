@@ -13,7 +13,7 @@ type IPageableUserDataSource = PageableDataSource & {
   }): Promise<Blob>;
 };
 
-const fetchUrl = "/api/users";
+const fetchUrl = "/api/mgmt/users";
 
 class PageableUserDataSource
   extends AbstractPageDataSource

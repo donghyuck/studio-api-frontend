@@ -33,6 +33,8 @@ export interface menu {
   roles?: string[];
 }
 
+const requiredMgmtRole = `${import.meta.env.VITE_REQUIRED_ADMIN_ROLE}`
+
 const sidebarItem: menu[] = [
   { header: 'Home' },
   {
@@ -60,7 +62,7 @@ const sidebarItem: menu[] = [
       },
     ],
   },
-  { header: '시스템 관리', roles: ['ROLE_ADMINISTRATOR'] },
+  { header: '시스템 관리', roles: [requiredMgmtRole] },
   {
     title: '보안 관리',
     icon: AppWindowIcon,
@@ -68,26 +70,27 @@ const sidebarItem: menu[] = [
     chipColor: 'primary',
     chipBgColor: 'lightprimary',
     to: '/',
-    roles: ['ROLE_ADMINISTRATOR'],
+    roles: [requiredMgmtRole],
     children: [
       {
         title: '회원',
-        chip: 'Pro',
-        chipColor: 'primary',
-        chipBgColor: 'lightprimary',
         icon: PointIcon,
         to: '/mgmt/security/users',
-        roles: ['ROLE_ADMINISTRATOR'],
+        roles: [requiredMgmtRole],
         external: false,
       },
       {
-        title: '롤',
-        chip: 'Pro',
-        chipColor: 'primary',
-        chipBgColor: 'lightprimary',
+        title: '그룹', 
+        icon: PointIcon,
+        to: '/mgmt/security/groups',
+        roles: [requiredMgmtRole],
+        external: false,
+      },      
+      {
+        title: '롤', 
         icon: PointIcon,
         to: '/mgmt/security/roles',
-        roles: ['ROLE_ADMINISTRATOR'],
+        roles: [requiredMgmtRole],
         external: false,
       },
     ],
@@ -100,7 +103,7 @@ const sidebarItem: menu[] = [
     chipColor: 'primary',
     chipBgColor: 'lightprimary',
     to: '/',
-    roles: ['ROLE_USER','ROLE_ADMINISTRATOR'],
+    roles: ['ROLE_USER',requiredMgmtRole],
     children: [
       {
         title: '업로드', 
@@ -120,7 +123,7 @@ const sidebarItem: menu[] = [
     title: 'Typography',
     icon: TypographyIcon,
     to: '/ui/typography',
-    roles: ['ROLE_ADMINISTRATOR'],
+    roles: [requiredMgmtRole],
     external: false,
   },
   {

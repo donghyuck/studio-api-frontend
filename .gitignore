@@ -22,3 +22,8 @@ replay_pid*
 **/bin
 **/build
 .gradle/
+
+.env.local
+.package-lock.json
+node_modules/
+node_modules/**

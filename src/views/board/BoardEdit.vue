@@ -37,8 +37,8 @@
 <script setup lang="ts">
   import { reactive, computed, onMounted } from 'vue';
   import { useRoute, useRouter } from 'vue-router';
-  import { useBoardStore } from '@/stores/pem/board.store';
-  import { useAuthStore } from '@/stores/pem/auth.store';
+  import { useBoardStore } from '@/stores/studio/board.store';
+  import { useAuthStore } from '@/stores/studio/auth.store';
 
   const auth = useAuthStore();
   const user = auth.user as any;

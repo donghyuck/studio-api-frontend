@@ -13,7 +13,7 @@ import ProfileDD from './vertical-header/ProfileDD.vue';
 import NavCollapse from './vertical-sidebar/NavCollapse/NavCollapse.vue';
 
 //auth store import
-import { useAuthStore } from '@/stores/pem/auth.store';
+import { useAuthStore } from '@/stores/studio/auth.store';
 
 const auth = useAuthStore();
 

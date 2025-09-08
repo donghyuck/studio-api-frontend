@@ -3,7 +3,7 @@ import MainRoutes from "./MainRoutes";
 import AuthRoutes from "./AuthRoutes";
 import MgmtRoutes from "./MgmtRoutes";
 import BoardRoutes from "./BoardRoutes";
-import { useAuthStore } from "@/stores/pem/auth.store";
+import { useAuthStore } from "@/stores/studio/auth.store";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),

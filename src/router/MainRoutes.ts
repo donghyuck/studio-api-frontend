@@ -16,7 +16,7 @@ const MainRoutes = {
       path: "/files",
       meta: {
         requiresAuth: true,
-        roles: ["ROLE_USER", "ROLE_ADMINISTRATOR"],
+        roles: ["ROLE_USER", `${import.meta.env.VITE_REQUIRED_ADMIN_ROLE}`],
       },
       component: () => import("@/views/file/FilesPage.vue"),
     },

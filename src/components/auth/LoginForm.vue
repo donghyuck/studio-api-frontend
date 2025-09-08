@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useAuthStore } from '@/stores/pem/auth.store';
+import { useAuthStore } from '@/stores/studio/auth.store';
 import { useRouter, RouterLink } from 'vue-router';
 import { useForm, useField } from 'vee-validate';
 import * as yup from 'yup';

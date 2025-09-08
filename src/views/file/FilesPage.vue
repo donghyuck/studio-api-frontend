@@ -47,7 +47,7 @@
 import GridContent from '@/components/ag-grid/GridContent.vue';
 import { onMounted, ref } from 'vue';
 import type { ColDef } from 'ag-grid-community';
-import { usePageableFilesStore } from '@/stores/pem/files.store';
+import { usePageableFilesStore } from '@/stores/studio/files.store';
 import type { UploadMeta, UploadResult } from "@/types/upload"; 
 import { formatDataSize } from "@/utils/helpers";  
 import ButtonCellRenderer from '@/components/ag-grid/renderer/ButtonCellRenderer.vue';

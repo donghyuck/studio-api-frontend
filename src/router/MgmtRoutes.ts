@@ -3,7 +3,7 @@ const MgmtRoutes = {
     component: () => import("@/layouts/full/FullLayout.vue"),
     meta: {
         requiresAuth: true,
-        roles: ['ROLE_ADMINISTRATOR']
+        roles: [`${import.meta.env.VITE_REQUIRED_ADMIN_ROLE}`]
     },
     children: [
         {
@@ -11,6 +11,11 @@ const MgmtRoutes = {
             path: 'security/users',
             component: () => import('@/views/mgmt/security/UsersPage.vue')
         }, 
+        {
+            name: 'Groups',
+            path: 'security/groups',
+            component: () => import('@/views/mgmt/security/GroupsPage.vue')
+        },         
         {
             name: 'Roles',
             path: 'security/roles',

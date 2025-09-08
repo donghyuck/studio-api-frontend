@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useAuthStore } from '@/stores/pem/auth.store';
+import { useAuthStore } from '@/stores/studio/auth.store';
 import { useRouter } from 'vue-router';
 import { ListCheckIcon, MailIcon, UserIcon } from 'vue-tabler-icons';
 

@@ -63,8 +63,8 @@
 <script setup lang="ts">
   import { onMounted, ref, reactive } from 'vue';
   import { useRoute, useRouter } from 'vue-router';
-  import { useBoardStore } from '@/stores/pem/board.store';
-  import { useAuthStore } from '@/stores/pem/auth.store';
+  import { useBoardStore } from '@/stores/studio/board.store';
+  import { useAuthStore } from '@/stores/studio/auth.store';
 
   interface Board {
     boardId: number;

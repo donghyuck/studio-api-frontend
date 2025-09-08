@@ -31,8 +31,8 @@
     ColDef,
     GridApi,
     GridOptions,
-    IGetRowsParams,
-    SelectionChangedEvent,
+    IGetRowsParams,  
+    SelectionChangedEvent, 
   } from 'ag-grid-community';
   import { AgGridVue } from 'ag-grid-vue3'; // Vue Data Grid Component
   import { computed, defineProps, onMounted, ref, watch } from 'vue';
@@ -46,7 +46,7 @@
   // Props 설정
   const props = defineProps<{
     columns?: ColDef[];
-    options?: GridOptions;
+    options?: GridOptions; 
     events?: Listener[];
     datasource: PageableDataSource;
   }>();
@@ -60,7 +60,8 @@
   const gridData = ref<any[]>([]);
   const total = ref<number>(0);
 
-  // Grid options 설정
+  // Grid options 설정 
+
   // 프로퍼티로 전달된 옵션을 사용하거나 기본값 사용
   const gridOptionsDefs: GridOptions = computed(
     () => props.options || gridOptions
@@ -101,7 +102,6 @@
         // 페이지 및 페이지 크기 설정
         const page = Math.floor(params.startRow / pageSize.value);
         const pageSizeValue = params.endRow - params.startRow;
-
         // 필터 및 정렬 설정
         const filterModel = params.filterModel;
         const sortModel = params.sortModel;
@@ -111,7 +111,6 @@
           props.datasource?.setPage(page);
           // 필터가 설정되어 있는 경우
           filtersActive.value = Object.keys(filterModel).length > 0;
-
           await getData(true);
           params.successCallback(gridData.value, total.value);
         } catch (error) {
@@ -186,6 +185,7 @@
   onMounted(async () => {
     // Initial resize
     resizeGrid();
+    console.log( props )
   });
 
   defineExpose({
