@@ -1,9 +1,7 @@
 <script setup>
 import Icon from '../Icon.vue';
-
 const props = defineProps({ item: Object, level: Number });
 </script>
-
 <template>
     <!---Single Item-->
     <v-list-item
@@ -13,8 +11,7 @@ const props = defineProps({ item: Object, level: Number });
         class="mb-1"
         color="primary"
         :disabled="item.disabled"
-        :target="item.external === true ? '_blank' : undefined"
-    >
+        :target="item.external === true ? '_blank' : undefined"  >
         <!---If icon-->
         <template v-slot:prepend>
             <Icon :item="item.icon" :level="level" />
@@ -28,8 +25,7 @@ const props = defineProps({ item: Object, level: Number });
                         :class="'sidebarchip hide-menu bg-' + item.chipBgColor"
                         :size="item.chipIcon ? 'x-small' : 'x-small'"
                         :variant="item.chipVariant"
-                        :prepend-icon="item.chipIcon"
-                    >
+                        :prepend-icon="item.chipIcon" >
                         {{ item.chip }}
                     </v-chip>
                 </span>
@@ -47,8 +43,7 @@ const props = defineProps({ item: Object, level: Number });
                 :class="'sidebarchip hide-menu bg-' + item.chipBgColor"
                 :size="item.chipIcon ? 'x-small' : 'x-small'"
                 :variant="item.chipVariant"
-                :prepend-icon="item.chipIcon"
-            >
+                :prepend-icon="item.chipIcon" >
                 {{ item.chip }}
             </v-chip>
         </template>

@@ -1,9 +1,10 @@
-import { createRouter, createWebHistory } from "vue-router";
-import MainRoutes from "./MainRoutes";
-import AuthRoutes from "./AuthRoutes";
-import MgmtRoutes from "./MgmtRoutes";
-import BoardRoutes from "./BoardRoutes";
 import { useAuthStore } from "@/stores/studio/auth.store";
+import { createRouter, createWebHistory } from "vue-router";
+import AuthRoutes from "./AuthRoutes";
+import BoardRoutes from "./BoardRoutes";
+import MainRoutes from "./MainRoutes";
+import StudioRoutes from "./StudioRoutes";
+import { useNavStore } from "@/stores/studio/nav.store";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -13,7 +14,7 @@ const router = createRouter({
       component: () => import("@/views/pages/Error404.vue"),
     },
     MainRoutes,
-    MgmtRoutes,
+    StudioRoutes,
     AuthRoutes,
     BoardRoutes,
   ],
@@ -21,7 +22,6 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   const auth = useAuthStore();
-
   if (to.meta.requiresAuth) {
     // 로그인 안 되어 있으면 로그인 페이지로
     if (!auth.isAuthenticated) {
@@ -40,8 +40,8 @@ router.beforeEach(async (to, from, next) => {
     }
 
     // roles 확인 (권한 체크)
-    if (to.meta.roles) {
-      const allowedRoles = to.meta.roles as string[];
+    if ( to.meta.roles) {
+      const allowedRoles = to.meta.roles as string[] || [];
       const userRoles = auth.user?.roles || [];
       const hasRole = allowedRoles.some((role) => userRoles.includes(role));
       if (!hasRole) {
@@ -51,6 +51,9 @@ router.beforeEach(async (to, from, next) => {
     }
   }
   // 모든 조건 통과
+  const nav = useNavStore()
+  if(from.name)
+    nav.setPreviousRoute(from);
   next();
 });
 
