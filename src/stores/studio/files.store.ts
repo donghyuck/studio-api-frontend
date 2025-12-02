@@ -1,6 +1,8 @@
+import { getFileById } from "@/data/studio/files";
 import api from "@/plugins/axios";
 import { AbstractPageDataSource } from "@/stores/AbstractPageDataSource";
 import type { PageableDataSource } from "@/types/ag-gird";
+import type { AttachmentDto } from "@/types/studio/files";
 import type { UploadResult } from "@/types/upload";
 import { handleBlobDownloadResponse } from "@/utils/http-download";
 import { defineStore } from "pinia";
@@ -8,33 +10,36 @@ import { defineStore } from "pinia";
 // IPageableRoleDataSource를 정의
 type IPageableFileDataSource = PageableDataSource & {
   
-  deleteById(id: string | number): Promise<void>;
+  byId(id: number): Promise<AttachmentDto | undefined>;
 
+  deleteById(id: string | number): Promise<void>;
   download(
     data: UploadResult,
     opts?: {
-    signal?: AbortSignal; // 취소 지원
-    onProgress?: (percent: number) => void; // 진행률 콜백
-    download?: boolean; // true면 내부에서 바로 저장
-  }): Promise<Blob>;
+      signal?: AbortSignal; // 취소 지원
+      onProgress?: (percent: number) => void; // 진행률 콜백
+      download?: boolean; // true면 내부에서 바로 저장
+    }
+  ): Promise<Blob>;
 };
 
-const fetchUrl = "/api/files";
+const fetchUrl = "/api/mgmt/files";
 
 class PageableFileDataSource
   extends AbstractPageDataSource
   implements IPageableFileDataSource
 {
-  constructor() {
-    super("data", "totalElements"); // ← 필드명 필요 시 변경 가능
+  async byId(id: number):Promise<AttachmentDto | undefined> {
+    const data = await getFileById(id);
+    return data;
   }
-  
+
   // API 엔드포인트 URL을 제공
   getFetchUrl(): string {
     return fetchUrl;
   }
 
-    /** ID 기반 삭제 수행 */
+  /** ID 기반 삭제 수행 */
   async deleteById(id: string | number): Promise<void> {
     await api.delete(`${this.getFetchUrl()}/${id}`);
   }
@@ -44,13 +49,14 @@ class PageableFileDataSource
     return `${this.getFetchUrl()}/${id}/download`;
   }
 
-  async download (
+  async download(
     data: UploadResult,
     opts?: {
-    signal?: AbortSignal;
-    onProgress?: (percent: number) => void;
-    download?: boolean;
-  }): Promise<Blob> {
+      signal?: AbortSignal;
+      onProgress?: (percent: number) => void;
+      download?: boolean;
+    }
+  ): Promise<Blob> {
     const { signal, onProgress, download = false } = opts ?? {};
     const response = await api.get<Blob>(this.getDownloadUrl(data.id), {
       responseType: "blob",
@@ -86,6 +92,7 @@ export const usePageableFilesStore = defineStore(
       download: dataSource.download.bind(dataSource),
       setSort: dataSource.setSort.bind(dataSource),
       setFilter: dataSource.setFilter.bind(dataSource),
+      byId: dataSource.byId.bind(dataSource),
       deleteById: dataSource.deleteById.bind(dataSource),
       fetch: dataSource.fetch.bind(dataSource),
     };

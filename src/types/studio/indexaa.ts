@@ -1,5 +1,5 @@
-import type { Ref, ComputedRef } from 'vue';
 import type { SortModelItem } from 'ag-grid-community';
+import type { Ref } from 'vue';
 
 // `Signup` 타입 정의
 type Signup = {
@@ -40,4 +40,5 @@ type EnableActions = {
   isEnabled(): Promise<boolean>;
 };
 
-export type { Datasource, PageableDataSource, EnableActions, Signup };
+export type { Datasource, EnableActions, PageableDataSource, Signup };
+

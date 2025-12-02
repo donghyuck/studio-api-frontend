@@ -54,9 +54,7 @@ const login = handleSubmit(async (values) => {
     } else {
       localStorage.removeItem('remember_device');
     }
-
     await auth.login(values.username, values.password);
-
     router.push('/');
   } catch (e: any) {
     errorMessage.value =

@@ -1,3 +1,5 @@
+import { requiredAdminRoles } from "@/utils/helpers";
+
 const MainRoutes = {
   path: "/main",
   meta: {
@@ -16,19 +18,19 @@ const MainRoutes = {
       path: "/files",
       meta: {
         requiresAuth: true,
-        roles: ["ROLE_USER", `${import.meta.env.VITE_REQUIRED_ADMIN_ROLE}`],
+        roles: requiredAdminRoles,
       },
       component: () => import("@/views/file/FilesPage.vue"),
     },
-     {
+    {
       name: "FileUpload",
       path: "/file/upload",
       meta: {
         requiresAuth: true,
-        roles: ["ROLE_USER", "ROLE_ADMINISTRATOR"],
+        roles: requiredAdminRoles,
       },
       component: () => import("@/views/file/FileUploadPage.vue"),
-    },   
+    },
     {
       name: "Typography",
       path: "/ui/typography",
@@ -39,7 +41,7 @@ const MainRoutes = {
       path: "/ui/shadow",
       meta: {
         requiresAuth: true,
-        roles: ["ROLE_ADMINISTRATOR"],
+        roles: requiredAdminRoles,
       },
       component: () => import("@/views/components/Shadow.vue"),
     },

@@ -1,54 +1,61 @@
 // src/stores/greentogether/auth.ts
-import { defineStore } from 'pinia';
-import axios from 'axios';
-import api from '@/plugins/axios';
+import api from "@/plugins/axios";
+import { resolveAxiosError } from "@/utils/helpers";
+import axios from "axios";
+import { defineStore } from "pinia";
+import {type UserDto } from './users.store'
+
+export interface UserProfileDto extends UserDto {
+  roles?: string[];
+}
 
 const loginUrl = `${import.meta.env.VITE_API_BASE_URL}/api/auth/login`;
-const refreshUrl = `${import.meta.env.VITE_API_BASE_URL}/api/auth/refresh`;
-
-export const useAuthStore = defineStore('auth', {
+const refreshUrl = `${import.meta.env.VITE_API_BASE_URL}/api/auth/refresh`; 
+export const useAuthStore = defineStore("auth", {
   state: () => ({
-    token: localStorage.getItem('jwt') || '', 
-    user: null,
+    token: localStorage.getItem("jwt") ,
+    user : null as UserProfileDto | null,
   }),
-
   getters: {
     isAuthenticated: (state) => !!state.token,
+    profileImageUrl: (state) => `${import.meta.env.VITE_API_BASE_URL}/api/profile/${state.user?.username }/avatar`
   },
 
   actions: {
     async login(username: string, password: string) {
       try {
-
-      const response = await axios.post(loginUrl, { username, password }, {
-            withCredentials: true // Refresh Token이 HttpOnly 쿠키로 전송되도록
-          });
+        const response = await axios.post(
+          loginUrl,
+          { username, password },
+          {
+            withCredentials: true, // Refresh Token이 HttpOnly 쿠키로 전송되도록
+          }
+        );
         const { accessToken } = response.data.data;
-        this.token = accessToken; 
-        localStorage.setItem('jwt', accessToken); 
+        this.token = accessToken;
+        localStorage.setItem("jwt", accessToken);
         await this.fetchUser();
-      } catch (error: any) {
-        console.error('Login failed:', error);
-        throw new Error(error.response.data.message || '로그인 실패');
+      } catch (error: any) {  
+          const message = resolveAxiosError(error);
+          throw new Error( message || "로그인 실패" );
       }
     },
     logout() {
-      this.token = ''; 
+      this.token = "";
       this.user = null;
-      localStorage.removeItem('jwt');
-      localStorage.removeItem('refresh_token');
+      localStorage.removeItem("jwt");
+      localStorage.removeItem("refresh_token");
     },
 
     async refreshTokens() {
       try {
-
         const response = await axios.post(refreshUrl, null, {
           withCredentials: true, // 쿠키 자동 전송
         });
 
         const { accessToken } = response.data.data;
-        this.token = accessToken; 
-        localStorage.setItem('jwt', accessToken); 
+        this.token = accessToken;
+        localStorage.setItem("jwt", accessToken);
 
         return accessToken;
       } catch (error: any) {
@@ -60,7 +67,7 @@ export const useAuthStore = defineStore('auth', {
     async fetchUser() {
       try {
         const response = await api.get("/api/self");
-        this.user = response.data.data;
+        this.user = response.data.data as UserProfileDto;;
       } catch (error: any) {
         const status = error?.response?.status;
         if (status === 401 || status === 403) {

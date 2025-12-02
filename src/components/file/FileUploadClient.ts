@@ -19,7 +19,6 @@ export class FileUploadClient {
     if (meta.tag) {
       formData.append("tag", meta.tag);
     }
-
     const response = await axios.post( "/api/files/upload", formData, {
       signal: opts.signal,
       headers: {
@@ -51,7 +50,6 @@ export class FileUploadClient {
   ): Promise<UploadResult[]> {
     const results: UploadResult[] = [];
     const conc = Math.max(1, opts.concurrency ?? 3);
-
     let index = 0;
     const runNext = async (): Promise<void> => {
       const current = index++;
@@ -59,7 +57,6 @@ export class FileUploadClient {
 
       const file = files[current];
       const ac = new AbortController();
-
       // 외부 취소 시 내부도 취소
       if (opts.signal) {
         const abortHandler = () => ac.abort();

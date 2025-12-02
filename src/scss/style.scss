@@ -11,5 +11,5 @@
 @use './components/VShadow';
 @use './components/VTextField';
 @use './pages/dashboards';
-@use './pages/auth';
-@use 'vue3-perfect-scrollbar/dist/vue3-perfect-scrollbar.css';
+@use './pages/auth'; 
+@use 'vue3-perfect-scrollbar/style.css';

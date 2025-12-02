@@ -77,6 +77,7 @@ const getModel = (): Model | null => {
   };
 };
 
+
 const getFinalValue = () => {
   if (trueSelected.value) {
     return true;
@@ -93,6 +94,7 @@ onMounted(() => {
 });
 
 watch([trueSelected, falseSelected], onFilterChanged);
+
 </script>
 
 <style scoped>

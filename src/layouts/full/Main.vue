@@ -19,18 +19,16 @@ const auth = useAuthStore();
 
 // ✅ 현재 사용자 권한
 const userRoles = computed(() => auth.user?.roles || []);
-console.log('Current user roles:', userRoles.value);
 // ✅ 권한 기반 필터링 함수
-function hasAccess(item) {
+function hasAccess(item:any) {
   if (!item.roles || item.roles.length === 0) return true;
   return item.roles.some(role => userRoles.value.includes(role));
 }
 
-function filterSidebarItems(items) {
+function filterSidebarItems(items:any) {
   return items
     .map(item => {
-      const hasRole = hasAccess(item);
-
+      const hasRole = hasAccess(item); 
       if (item.children) {
         const filteredChildren = filterSidebarItems(item.children);
         if (filteredChildren.length > 0 || hasRole) {
@@ -58,7 +56,6 @@ watch(mdAndDown, (val) => {
   sDrawer.value = !val;
 });
 </script>
-
 <template>
     <!------Sidebar-------->
     <v-navigation-drawer left elevation="0"  app class="leftSidebar" :width="270"  v-model="sDrawer">
@@ -84,7 +81,6 @@ watch(mdAndDown, (val) => {
             </v-list> 
         </perfect-scrollbar>
     </div>
-
     </v-navigation-drawer>
     <!------Header-------->
     <v-app-bar elevation="0" height="70" class="top-header" >

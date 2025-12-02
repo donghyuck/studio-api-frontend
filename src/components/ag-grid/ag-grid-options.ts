@@ -1,13 +1,20 @@
 import "ag-grid-community/styles/ag-grid.css"; // Mandatory CSS required by the grid
-import "ag-grid-community/styles/ag-theme-quartz.css"; // Optional Theme applied to the grid
+import "ag-grid-community/styles/ag-theme-quartz.css"; // Optional Theme applied to the grid 
 
 import CustomLoadingOverlay from "@/components/ag-grid/CustomLoadingOverlay.vue";
 import CheckboxRenderer from "@/components/ag-grid/renderer/CheckboxRenderer.vue";
 import CustomBooleanFilter from "@/components/ag-grid/renderer/CustomBooleanFilter.vue";
 import type { GridOptions } from "ag-grid-community";
+
 import dayjs from "dayjs";
+import { HyperlinksCellRenderer } from "./renderer/HyperlinksCellRenderer";
+import { AG_GRID_LOCALE_KR } from "./locale/ko-KR";
+  
+const textComparator = (a?: any, b?: any) =>
+  (a ?? '').toString().localeCompare((b ?? '').toString());
 
 const gridOptions: GridOptions = {
+  localeText: AG_GRID_LOCALE_KR,
   loadingOverlayComponent: CustomLoadingOverlay,
   paginationPageSizeSelector:[ 15, 30, 50, 100],
   defaultColDef: {
@@ -27,6 +34,12 @@ const gridOptions: GridOptions = {
       filter: "agTextColumnFilter",
       filterParams: { maxNumConditions: 1 },
       cellStyle: { textAlign: "center" },
+    },
+    hyperlinks:{
+      filter: "agTextColumnFilter",
+      cellRenderer: HyperlinksCellRenderer, 
+      filterValueGetter: (p) => (p.value ?? "").toString(),
+      comparator: textComparator,              
     },
     number: {
       filter: "agNumberColumnFilter",
@@ -56,6 +69,6 @@ const gridOptions: GridOptions = {
         return dayjs(params.value).format("YYYY-MM-DD HH:mm:ss");
       },
     },
-  },
+  },  
 };
 export default gridOptions;
