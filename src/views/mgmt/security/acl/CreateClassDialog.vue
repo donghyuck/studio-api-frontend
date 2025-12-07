@@ -28,8 +28,7 @@
                     Save
                 </v-btn>
             </v-card-actions>
-        </v-card>
-
+        </v-card> 
         <v-overlay v-model="overlay" contained class="align-center justify-center">
             <v-progress-circular color="primary" indeterminate size="64" />
         </v-overlay>

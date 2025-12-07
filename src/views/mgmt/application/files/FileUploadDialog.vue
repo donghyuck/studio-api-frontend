@@ -68,7 +68,6 @@ const xhrUploadUrl = `${import.meta.env.VITE_API_BASE_URL}/api/mgmt/files`
 /* ----------------------------------------------
  *  UPPY INSTANCE
  * ---------------------------------------------- */
-
 const uppyContainer = ref<HTMLDivElement | null>(null)
 let uppy: Uppy | null = null
 

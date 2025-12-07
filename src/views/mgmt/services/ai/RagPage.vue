@@ -1,5 +1,5 @@
 <template>
-    <v-breadcrumbs class="pa-0" :items="['서비스 관리', 'AI', 'Vector']" density="compact"></v-breadcrumbs>
+    <v-breadcrumbs class="pa-0" :items="['서비스 관리', 'AI', 'RAG']" density="compact"></v-breadcrumbs>
     <PageToolbar title="검색" label="문서 벡터를 검색합니다." @refresh="refresh" :closeable="false" :divider="false" :prepend-items="[
     ]" :items="[
         { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
@@ -11,11 +11,11 @@
             <v-container fluid class="pa-0">
                 <v-row>
                     <v-col cols="2">
-                        <v-number-input v-model="searchForm.topK" :reverse="false" controlVariant="default" label="topK"
+                        <v-number-input v-model="searchForm.topK" :reverse="false" controlVariant="default" label="topK" density="compact"
                             hide-details :hideInput="false" :min="0" :inset="false"></v-number-input>
                     </v-col>
                     <v-col>
-                        <v-text-field v-model="searchForm.query" label="쿼리" placeholder="쿼리(질문)을 입력하세요." row-height="15"
+                        <v-text-field v-model="searchForm.query" label="쿼리" placeholder="쿼리(질문)을 입력하세요." row-height="15" density="compact"
                             rows="2" hide-details>
                             <template v-slot:append>
                                 <v-btn icon="mdi-text-search" variant="tonal" @click="searchSemantic(false)"></v-btn>
@@ -36,22 +36,22 @@
                 <v-row>
                     <v-col>
                         <v-select prepend-icon="mdi-robot-outline" v-model="provider" :items="providerNames"
-                            hide-details label="Provider" placeholder="provider (옵션)" variant="underlined"
+                            hide-details label="Provider" placeholder="provider (옵션)" variant="underlined" density="compact"
                             @update:model-value="onProviderChange" />
                     </v-col>
                     <v-col>
-                        <v-text-field v-model="model" color="primary" label="LLM Model" placeholder="model (옵션)"
+                        <v-text-field v-model="model" color="primary" label="LLM Model" placeholder="model (옵션)" density="compact"
                             hide-details variant="underlined"></v-text-field>
                     </v-col>
                     <v-col>
                         <v-btn :disabled="!enabledQueryRewrite" variant="outlined"
-                            prepend-icon="mdi-file-replace-outline" rounded="xl" color="red" hide-details width="120"
+                            prepend-icon="mdi-file-replace-outline" rounded="xl" color="red" hide-details width="120" 
                             @click="queryRewrite" :loading="queryRewriting">
                             쿼리 확장
                         </v-btn>
                     </v-col>
                 </v-row>
-                <v-row>
+                <v-row v-if="expandedKeywords.length>0">
                     <v-col>
                         <v-chip-group selected-class="text-primary" column>
                             <v-chip v-for="tag in expandedKeywords" :key="tag">
@@ -62,7 +62,7 @@
                 </v-row>
                 <v-row>
                     <v-col>
-                        <v-text-field v-model="expandedQuery" label="확장 쿼리" placeholder="화장쿼리는 자동 생생됩니다."
+                        <v-text-field v-model="expandedQuery" label="확장 쿼리" placeholder="화장쿼리는 자동 생생됩니다." density="compact"
                             row-height="15" max-rows="3" auto-grow readonly rows="2" hide-details>
                             <template v-slot:append>
                                 <v-btn icon="mdi-text-search" variant="tonal" @click="searchSemantic(true)"></v-btn>
@@ -148,6 +148,7 @@ const buildSearchPayload = (form: SearchFormState): VectorSearchRequestDto => {
     return {
         query: form.query || null,
         topK: Number(form.topK) || 3,
+        hybrid: true,
     };
 };
 

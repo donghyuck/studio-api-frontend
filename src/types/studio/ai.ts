@@ -69,6 +69,7 @@ export interface AclActionMaskDto {
 export interface SearchRequestDto {
   query?: string | null;
   topK?: number;
+  hybrid?:boolean
 }
 
 export interface SearchResultDto {
@@ -108,4 +109,14 @@ export interface QueryRewriteResponseDto {
   keywords: string[]; 
   prompt: string; 
   rawResponse: string;
+}
+
+
+export interface RagIndexRequestDto {
+  documentId?: string;
+  objectType?: string;
+  objectId?: string;
+  metadata?: Record<string, any>;
+  keywords?: string[];
+  useLlmKeywordExtraction?: boolean;
 }

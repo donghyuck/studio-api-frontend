@@ -43,7 +43,7 @@
         </v-card-text>
         <v-card-actions>
             <v-spacer></v-spacer>
-            <v-btn class="pr-5" width="100" variant="outlined" rounded="xl" prepend-icon="mdi-magnify" text="검색"
+            <v-btn class="pr-5" width="100" variant="outlined" rounded="xl" prepend-icon="mdi-magnify" text="조회"
                 :disabled="!validRange" @click="onSearchClick">
             </v-btn>
         </v-card-actions>

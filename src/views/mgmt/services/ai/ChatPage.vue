@@ -3,7 +3,7 @@
   <PageToolbar title="Chat Model" :label="modelLabel" :closeable="false" :divider="true" :items="[
     { icon: 'mdi-refresh', event: 'refresh', }]" @refresh="getData(true)"></PageToolbar>
   <v-card density="compact" class="mt-5">
-    <v-container>
+    <v-container class="pb-0">
       <v-row>
         <v-col>
           <v-select prepend-icon="mdi-robot-outline" v-model="provider" :items="providerNames" label="Provider"
@@ -36,23 +36,25 @@
         </v-col>
       </v-row>
       <v-row no-gutters class="pb-0">
-        <v-checkbox v-show="ragEnabled" v-model="usingRag" :label="ragLable"></v-checkbox>
+        <v-checkbox v-show="ragEnabled" v-model="usingRag" :label="ragLable" hide-details></v-checkbox>
       </v-row>
     </v-container>
     <v-expand-transition v-show="usingRag">
-      <v-container> 
-        <v-row class="pt-0">
-          <v-col><v-text-field variant="outlined" clearable label="object type" hint="예: board"
+      <v-container class="py-0">
+        <v-alert closable rounded="0" icon="mdi-tooltip" class="mb-2" :text="`애래 조건에 해당하는 문서 벡터의 조회 결과를 기반을 답변합니다.`"
+          type="info" max-height="100"></v-alert>
+        <v-row>
+          <v-col><v-text-field variant="outlined" clearable label="object type" hint="예: board" density="compact"
               v-model="objectType"></v-text-field></v-col>
-          <v-col><v-text-field variant="outlined" clearable label="object id" hint="예: board id value"
+          <v-col><v-text-field variant="outlined" clearable label="object id" hint="예: board id value" density="compact"
               v-model="objectId"></v-text-field>
           </v-col>
           <v-col>
-            <v-number-input :reverse="false" controlVariant="default" label="Rag TopK" :hideInput="false" :min="0"
+            <v-number-input :reverse="false" controlVariant="default" label="Rag TopK" :hideInput="false" :min="0" density="compact"
               v-model="ragTopK" :inset="false" variant="outlined"></v-number-input>
           </v-col>
           <v-col>
-            <v-text-field label="질문" placeholder="질문을 입력하세요." row-height="15" rows="2" hide-details v-model="ragQuery"
+            <v-text-field label="쿼리" placeholder="쿼리을 입력하세요." row-height="15" rows="2" hide-details v-model="ragQuery" density="compact"
               variant="outlined"></v-text-field>
           </v-col>
         </v-row>
@@ -140,7 +142,7 @@ const error_message = computed((): string | readonly string[] | null | undefined
 });
 
 const usingRag = ref<boolean>(ragEnabled.value);
-const ragLable = computed(() => usingRag.value ? "RAG 을 사용합니다." : "RAG 를 사용하지 않습니다." )
+const ragLable = computed(() => usingRag.value ? "RAG : 뢀성화" : "RAG : 비활성화")
 const ragQuery = ref<string>();
 const ragTopK = ref<number>();
 const objectType = ref<string>();
@@ -187,7 +189,7 @@ async function onSend() {
     let resp;
 
     if (ragEnabled.value && usingRag.value) {
-      console.log( 'rag chat')
+      console.log('rag chat')
       const ragReq: ChatRagRequestDto = {
         chat: req,
         objectType: objectType.value || undefined,
@@ -198,7 +200,7 @@ async function onSend() {
       resp = await setdRagChat(ragReq)
 
     } else {
-      console.log( 'chat')
+      console.log('chat')
       resp = await sendChat(req);
     }
 
@@ -285,9 +287,10 @@ async function getData(force: boolean = false) {
       setChatModel(provider.value);
     } catch (e: any) {
       toast.error(resolveAxiosError(e));
+    } finally {
+      overlay.value = false;
     }
   }
-  overlay.value = false;
 }
 
 

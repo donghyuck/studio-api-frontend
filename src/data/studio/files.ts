@@ -1,4 +1,4 @@
-import type { SearchRequestDto, SearchResponseDto, SearchResultDto } from "@/types/studio/ai";
+import type { RagIndexRequestDto, SearchRequestDto, SearchResponseDto, SearchResultDto } from "@/types/studio/ai";
 import type { AttachmentDto } from "@/types/studio/files";
 import { api } from "@/utils/http";
 
@@ -20,15 +20,19 @@ export async function embedding(id: number) {
 }
 
 export async function hasEmbedding(id: number) {
-  const data = await api.get(`${API_BASE}/${id}/embedding/exists`);
+  const data = await api.get<boolean>(`${API_BASE}/${id}/embedding/exists`);
   return data;
 }
 
-export async function ragIndex(id: number) {
-  await api.post(`${API_BASE}/${id}/rag/index`);
+export async function ragIndex(id: number, opt?: Partial<RagIndexRequestDto>) {
+  await api.post(`${API_BASE}/${id}/rag/index`, opt ?? {});
 }
 
 export async function ragSearch(req: SearchRequestDto) {
   const data = await api.post<SearchResponseDto>(`${API_BASE}/rag/search`, req);
+  return data;
+}
+export async function ragMetadata(id: number) {
+  const data = await api.get<Record<string, unknown>>(`${API_BASE}/${id}/rag/metadata`);
   return data;
 }

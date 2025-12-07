@@ -156,9 +156,9 @@ const sidebarItem: menu[] = [
         external: false,
       },
       {
-        title: "Vector",
+        title: "RAG",
         icon: VectorIcon,
-        to: "/mgmt/services/ai/vector",
+        to: "/mgmt/services/ai/rag",
         external: false,
       },
     ],

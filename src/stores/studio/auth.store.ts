@@ -1,9 +1,9 @@
 // src/stores/greentogether/auth.ts
 import api from "@/plugins/axios";
+import type { UserDto } from "@/types/studio/user";
 import { resolveAxiosError } from "@/utils/helpers";
 import axios from "axios";
-import { defineStore } from "pinia";
-import {type UserDto } from './users.store'
+import { defineStore } from "pinia"; 
 
 export interface UserProfileDto extends UserDto {
   roles?: string[];
@@ -11,6 +11,7 @@ export interface UserProfileDto extends UserDto {
 
 const loginUrl = `${import.meta.env.VITE_API_BASE_URL}/api/auth/login`;
 const refreshUrl = `${import.meta.env.VITE_API_BASE_URL}/api/auth/refresh`; 
+
 export const useAuthStore = defineStore("auth", {
   state: () => ({
     token: localStorage.getItem("jwt") ,

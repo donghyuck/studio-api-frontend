@@ -4,6 +4,7 @@ import { useRouter, RouterLink } from 'vue-router';
 import { useForm, useField } from 'vee-validate';
 import * as yup from 'yup';
 import { ref, onMounted, nextTick, computed } from 'vue';
+import PasswordResetDialog from './PasswordResetDialog.vue';
 
 // ✅ 스토어, 라우터, 상태
 const auth = useAuthStore();
@@ -66,6 +67,15 @@ const login = handleSubmit(async (values) => {
     loading.value = false;
   }
 });
+
+const dialog = ref({
+  visible: false
+});
+ 
+function passwoard_reset (){
+  dialog.value.visible = true;
+}
+
 </script>
 
 <template>
@@ -73,26 +83,15 @@ const login = handleSubmit(async (values) => {
     <v-row class="d-flex mb-3">
       <v-col cols="12">
         <v-label class="font-weight-bold mb-1">아이디</v-label>
-        <v-text-field
-          ref="usernameRef"
-          v-model="username"
-          :error-messages="usernameErrors"
-          variant="outlined" 
-          color="primary"
-        />
+        <v-text-field ref="usernameRef" v-model="username" :error-messages="usernameErrors" variant="outlined"
+          color="primary" />
       </v-col>
 
       <v-col cols="12">
         <v-label class="font-weight-bold mb-1">비밀번호</v-label>
-        <v-text-field
-          v-model="password"
-          :error-messages="passwordErrors"
-          :type="showPassword ? 'text' : 'password'"
-          variant="outlined" 
-          color="primary"
-          :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-          @click:append-inner="showPassword = !showPassword"
-        />
+        <v-text-field v-model="password" :error-messages="passwordErrors" :type="showPassword ? 'text' : 'password'"
+          variant="outlined" color="primary" :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
+          @click:append-inner="showPassword = !showPassword" />
       </v-col>
 
       <v-col cols="12" class="pt-0">
@@ -102,26 +101,16 @@ const login = handleSubmit(async (values) => {
               <span class="text-body-1">Remember this Device</span>
             </template>
           </v-checkbox>
-          <div class="ml-sm-auto">
-            <RouterLink
-              to="/"
-              class="text-primary text-decoration-none text-body-1 opacity-1 font-weight-medium"
-            >
-              비밀번호 찾기
-            </RouterLink>
+          <div class="ml-sm-auto"> 
+            <v-btn :loading="loading"  color="primary" variant="plain" size="large" @click="passwoard_reset">
+              비밀번호 재설정
+            </v-btn>
           </div>
         </div>
       </v-col>
 
       <v-col cols="12" class="pt-0">
-        <v-btn
-          :loading="loading"
-          type="submit"
-          color="primary"
-          size="large"
-          block
-          flat
-        >
+        <v-btn :loading="loading" type="submit" color="primary" size="large" block flat>
           로그인
         </v-btn>
       </v-col>
@@ -132,4 +121,5 @@ const login = handleSubmit(async (values) => {
       </v-col>
     </v-row>
   </v-form>
+  <PasswordResetDialog v-model="dialog.visible" @close="dialog.visible = false"></PasswordResetDialog>
 </template>
