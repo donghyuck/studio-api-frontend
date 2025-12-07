@@ -1,3 +1,4 @@
+import { DEFAULT_PAGE_SIZE } from "@/data/studio";
 import api from "@/plugins/axios";
 import type { PageableDataSource, PageResult } from "@/types/ag-gird";
 import type { SortModelItem } from "ag-grid-community";
@@ -29,7 +30,7 @@ export abstract class AbstractPageDataSource implements PageableDataSource {
   total = ref(0);
   numberOfElements: Ref<number> = ref(0);
   page = ref<number>(0);
-  pageSize: Ref<number> = ref<number>(15);
+  pageSize: Ref<number> = ref<number>(DEFAULT_PAGE_SIZE);
   sort: Ref<SortModelItem[]> = ref<SortModelItem[]>([]);
   filter: any = ref({});
 

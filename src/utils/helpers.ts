@@ -1,12 +1,12 @@
-import { useAuthStore } from '@/stores/studio/auth.store';
-import type { Property } from '@/types/studio';
-import axios from 'axios';
+import { useAuthStore } from "@/stores/studio/auth.store";
+import type { Property } from "@/types/studio";
+import axios from "axios";
 
-const IN_BROWSER = typeof window !== 'undefined';
-const HTTP = 'http';
+const IN_BROWSER = typeof window !== "undefined";
+const HTTP = "http";
 const API_HEADERS = {
-  Accept: 'application/json',
-  'Content-Type': 'application/json',
+  Accept: "application/json",
+  "Content-Type": "application/json",
 };
 
 const DEFAULT_DOWNLOAD_OPTIONS = {
@@ -18,7 +18,7 @@ const DEFAULT_DOWNLOAD_OPTIONS = {
 
 export function getMatchMedia() {
   if (!IN_BROWSER) return;
-  return window.matchMedia('(prefers-color-scheme: light)');
+  return window.matchMedia("(prefers-color-scheme: light)");
 }
 export { DEFAULT_DOWNLOAD_OPTIONS, IN_BROWSER, API_HEADERS };
 
@@ -26,7 +26,7 @@ export function authHeader() {
   // return authorization header with jwt token
   const auth = useAuthStore();
   if (auth != null && auth.token) {
-    return { Authorization: 'Bearer ' + auth.token };
+    return { Authorization: "Bearer " + auth.token };
   } else {
     return {};
   }
@@ -42,10 +42,10 @@ export function hasHistory() {
 
 export function isAdultOnly(item: { properties: { audltOnly: boolean } }) {
   if (
-    item.hasOwnProperty('properties') &&
-    item.properties.hasOwnProperty('adultOnly')
+    item.hasOwnProperty("properties") &&
+    item.properties.hasOwnProperty("adultOnly")
   ) {
-    return item.properties.hasOwnProperty('adultOnly');
+    return item.properties.hasOwnProperty("adultOnly");
   }
   return false;
 }
@@ -53,7 +53,7 @@ export function isAdultOnly(item: { properties: { audltOnly: boolean } }) {
 export function isSharedImage(image: any) {
   if (
     image != null &&
-    typeof image.imageLink != 'undefined' &&
+    typeof image.imageLink != "undefined" &&
     image.imageLink != null
   ) {
     return true;
@@ -72,7 +72,7 @@ const REG_EX_FOR_PDF = /pdf$/i;
 
 const REG_EX_FOR_EXT = /\.[0-9a-z]+$/i;
 
-export function isVideoOrAudioOrImgOrPdf( contentType: string){
+export function isVideoOrAudioOrImgOrPdf(contentType: string) {
   if (
     REG_EX_FOR_VIDEO.test(contentType) ||
     REG_EX_FOR_AUDIO.test(contentType) ||
@@ -85,23 +85,23 @@ export function isVideoOrAudioOrImgOrPdf( contentType: string){
 
 function getExtenstion(filename: string) {
   let ext = filename.match(REG_EX_FOR_EXT);
-  ext = ext || [''];
+  ext = ext || [""];
   return ext[0].toLowerCase();
 }
 
 export function stringToArray(tags: string) {
   if (tags === null) return [];
-  return tags.split(' ').map((value) => {
+  return tags.split(" ").map((value) => {
     return value;
   });
 }
 
 export function toTags(tags: string) {
   if (tags === null) return [];
-  return tags.split(' ').map((value) => {
+  return tags.split(" ").map((value) => {
     return {
       text: value,
-      color: 'primary',
+      color: "primary",
     };
   });
 }
@@ -122,7 +122,7 @@ export function toUnderscoreCase(str: string) {
   if (str === null) return str;
   return str
     .split(/\.?(?=[A-Z])/)
-    .join('_')
+    .join("_")
     .toUpperCase();
 }
 
@@ -136,20 +136,20 @@ export const convertAgGridFilterToKendo = (agFilterModel: any) => {
     const filter = agFilterModel[colId];
     let operator;
     switch (filter.filterType) {
-      case 'text':
+      case "text":
         operator = convertNumberFilterType(filter.type);
         break;
-      case 'number':
+      case "number":
         operator = convertNumberFilterType(filter.type);
         break;
-      case 'boolean':
-        operator = 'eq';
+      case "boolean":
+        operator = "eq";
         break;
-      case 'date':
+      case "date":
         operator = convertNumberFilterType(filter.type);
         break;
       default:
-        operator = 'eq';
+        operator = "eq";
     }
     return {
       field: colId,
@@ -159,7 +159,7 @@ export const convertAgGridFilterToKendo = (agFilterModel: any) => {
   });
 
   return {
-    logic: 'and',
+    logic: "and",
     filters: kendoFilters,
   };
 };
@@ -167,22 +167,22 @@ export const convertAgGridFilterToKendo = (agFilterModel: any) => {
 // 숫자 필터 타입 변환 함수
 const convertNumberFilterType = (type: string) => {
   switch (type) {
-    case 'equals':
-      return 'eq';
-    case 'notEqual':
-      return 'ne';
-    case 'lessThan':
-      return 'lt';
-    case 'lessThanOrEqual':
-      return 'lte';
-    case 'greaterThan':
-      return 'gt';
-    case 'greaterThanOrEqual':
-      return 'gte';
-    case 'contains':
-      return 'contains';
+    case "equals":
+      return "eq";
+    case "notEqual":
+      return "ne";
+    case "lessThan":
+      return "lt";
+    case "lessThanOrEqual":
+      return "lte";
+    case "greaterThan":
+      return "gt";
+    case "greaterThanOrEqual":
+      return "gte";
+    case "contains":
+      return "contains";
     default:
-      return 'eq';
+      return "eq";
   }
 };
 
@@ -199,27 +199,27 @@ export const convertAgGridFilterToServerFormat: any = (agFilterModel: any) => {
     const filter = agFilterModel[colId];
     let operator;
     switch (filter.filterType) {
-      case 'text':
-        operator = 'contains';
+      case "text":
+        operator = "contains";
         break;
-      case 'number':
+      case "number":
         operator = filter.type; // eq, ne, lt, lte, gt, gte
         break;
-      case 'boolean':
-        operator = 'eq';
+      case "boolean":
+        operator = "eq";
         break;
-      case 'date':
+      case "date":
         operator = filter.type; // eq, ne, lt, lte, gt, gte
         break;
       default:
-        operator = 'eq';
+        operator = "eq";
     }
     return {
       field: colId,
       filterType: filter.filterType,
       operator: operator,
       value: filter.filter,
-      logic: filter.operator ? filter.operator : 'and',
+      logic: filter.operator ? filter.operator : "and",
       filters:
         filter.condition1 && filter.condition2
           ? [
@@ -235,26 +235,25 @@ export const convertAgGridFilterToServerFormat: any = (agFilterModel: any) => {
   });
 };
 
-export const formatDataSize = (params:any) => {
+export const formatDataSize = (params: any) => {
   const value = params.value;
-  if (value === null || value === undefined) return '';
-  if (value < 1024) return value + ' B';
-  else if (value < 1048576) return (value / 1024).toFixed(2) + ' KB';
-  else if (value < 1073741824) return (value / 1048576).toFixed(2) + ' MB';
-  else return (value / 1073741824).toFixed(2) + ' GB';
-}
-
+  if (value === null || value === undefined) return "";
+  if (value < 1024) return value + " B";
+  else if (value < 1048576) return (value / 1024).toFixed(2) + " KB";
+  else if (value < 1073741824) return (value / 1048576).toFixed(2) + " MB";
+  else return (value / 1073741824).toFixed(2) + " GB";
+};
 
 // ApiResponse 래퍼를 쓰는 경우/안 쓰는 경우 모두 대응
 function unwrapApi<T = any>(json: any): T {
   if (json && typeof json === "object") {
-    if ("data" in json) return json.data as T;  // { data, ... }
+    if ("data" in json) return json.data as T; // { data, ... }
     if ("result" in json) return json.result as T;
   }
   return json as T;
 }
- 
-export function toRowData(obj: Record<string, unknown>): Property [] {
+
+export function toRowData(obj: Record<string, unknown>): Property[] {
   return Object.entries(obj).map(([name, value]) => ({ name, value }));
 }
 
@@ -262,8 +261,6 @@ export function toRowData(obj: Record<string, unknown>): Property [] {
 export function fromRowData(rows: Property[]): Record<string, unknown> {
   return Object.fromEntries(rows.map(({ name, value }) => [name, value]));
 }
-
-
 
 export function resolveAxiosError(err: unknown): string {
   // 브라우저 오프라인
@@ -276,18 +273,23 @@ export function resolveAxiosError(err: unknown): string {
 
     // 네트워크 계열 (CORS/서버다운/DNS 등, 응답 없음)
     if (!err.response || err.code === "ERR_NETWORK") {
-      return detail ?? "서버와 통신할 수 없습니다. 잠시 후에 다시 시도해 주세요.";
+      return (
+        detail ?? "서버와 통신할 수 없습니다. 잠시 후에 다시 시도해 주세요."
+      );
     }
 
     // 타임아웃
     if (err.code === "ECONNABORTED") {
-      return detail ?? "요청 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해 주세요.";
+      return (
+        detail ??
+        "요청 시간이 초과되었습니다. 네트워크 상태를 확인하고 다시 시도해 주세요."
+      );
     }
-     
+
     // 서버가 응답한 경우: detail 우선, 없으면 상태코드 기준
     if (detail && detail.length > 0) {
-      if( detail == 'error.unexpected')
-          return "알 수 없는 오류가 발생했습니다.";
+      if (detail == "error.unexpected")
+        return "알 수 없는 오류가 발생했습니다.";
       return detail;
     }
 
@@ -319,12 +321,12 @@ export function resolveAxiosError(err: unknown): string {
   return "알 수 없는 오류가 발생했습니다.";
 }
 
-export const sleep = (ms: number) => new Promise(res => setTimeout(res, ms)); 
+export const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
-
- export const requiredAdminRoles: string[] = (
+export const requiredAdminRoles: string[] = (
   import.meta.env.VITE_REQUIRED_ADMIN_ROLES ?? ""
 )
   .split(",")
   .map((r) => r.trim())
-  .filter(Boolean); 
+  .filter(Boolean);
+

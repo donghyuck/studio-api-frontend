@@ -19,28 +19,49 @@
                 </v-row>
                 <v-row dense>
                     <v-col cols="12" sm="12">
-                        <v-textarea :model-value="extractedText" hide-details :loading="extracting" size="small"
+                        <v-textarea :model-value="extracted_text" hide-details :loading="text_extracting" size="small"
                             readonly variant="filled" label="Text" type="text">
                             <template v-slot:append-inner>
-                                <v-icon v-if="extracted" icon="mdi-content-copy" @click="copy_extracted_text"></v-icon>
+                                <v-icon v-if="text_extracted" icon="mdi-content-copy"
+                                    @click="copy_extracted_text"></v-icon>
                             </template>
                             <template v-slot:append>
                                 <v-tooltip text="콘텐츠에서 텍스트를 추출합니다." location="start">
                                     <template v-slot:activator="{ props }">
-                                        <v-icon v-if="!extracted" :disabled="extracting" icon="mdi-text-recognition"
-                                            color="red" v-bind="props" @click="extract_text_from_content"></v-icon>
+                                        <v-icon v-if="!text_extracted" :disabled="text_extracting"
+                                            icon="mdi-text-recognition" color="red" v-bind="props"
+                                            @click="extract_text_from_content"></v-icon>
                                     </template>
                                 </v-tooltip>
                             </template>
                         </v-textarea>
-
                     </v-col>
                 </v-row>
+            </v-card-text>
+            <v-card-text class="pt-0">
+                <v-table density="compact" striped="even" v-if="rag_indexed" class="border-opacity-100">
+                    <thead>
+                        <tr>
+                            <th class="text-left">
+                                Name
+                            </th>
+                            <th class="text-left">
+                                Value
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(value, key) in rag_metadata" :key="key">
+                            <td>{{ key }}</td>
+                            <td>{{ value }}</td>
+                        </tr>
+                    </tbody>
+                </v-table>
             </v-card-text>
             <v-divider class="border-opacity-100" color="primary" />
             <v-card-actions>
                 <v-btn variant="outlined" prepend-icon="mdi-vector-polyline-plus" rounded="xl" color="red" width="120"
-                    :disabled="embeded" @click="rag_index" :loading="rag_idnexing">
+                    :disabled="rag_indexed" @click="rag_index" :loading="rag_idnexing">
                     RAG 인덱싱
                 </v-btn>
                 <v-spacer />
@@ -55,8 +76,8 @@
     </v-dialog>
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue'
-import { embedding, extractText, hasEmbedding, ragIndex } from '@/data/studio/files';
+import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import { extractText, hasEmbedding, ragIndex, ragMetadata } from '@/data/studio/files';
 import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';
 import { usePageableFilesStore } from '@/stores/studio/files.store';
@@ -108,6 +129,8 @@ watch(dialogOpen, async (open) => {
     }
 });
 
+
+const rag_metadata = ref<Record<string, unknown>>();
 async function getData(force: boolean = false) {
     if (!props.attachmentId) return;
 
@@ -115,21 +138,26 @@ async function getData(force: boolean = false) {
     try {
         const data = await store.byId(props.attachmentId)
         attachment.value = data as AttachmentDto;
-
         const check = await hasEmbedding(props.attachmentId);
-        embeded.value = check as boolean;
-        extracting.value = false;
-        extracted.value = false;
-        extractedText.value = '';
-
+        rag_indexed.value = check as boolean;
+        text_extracting.value = false;
+        text_extracted.value = false;
+        extracted_text.value = '';
+        if (check) {
+            const metadata = await ragMetadata(props.attachmentId);
+            rag_metadata.value = metadata;
+        }
+    } catch (e) {
+        toast.error(resolveAxiosError(e));
+        rag_indexed.value = false;
     } finally {
         overlay.value = false;
     }
 }
 
-const extracting = ref<boolean>(false);
-const extracted = ref<boolean>(false);
-const extractedText = ref<string>('');
+const text_extracting = ref<boolean>(false);
+const text_extracted = ref<boolean>(false);
+const extracted_text = ref<string>('');
 async function extract_text_from_content() {
     if (!props.attachmentId) return;
 
@@ -143,26 +171,26 @@ async function extract_text_from_content() {
     if (!ok) return;
 
     try {
-        extracting.value = true;
+        text_extracting.value = true;
         const data = await extractText(props.attachmentId);
-        extractedText.value = data;
-        extracted.value = true;
+        extracted_text.value = data;
+        text_extracted.value = true;
     } catch (e: any) {
         toast.error(resolveAxiosError(e));
     } finally {
-        extracting.value = false;
+        text_extracting.value = false;
     }
 }
 
-const embeded = ref<boolean>(false);
+const rag_indexed = ref<boolean>(false);
 const rag_idnexing = ref<boolean>(false);
 async function rag_index() {
     if (!props.attachmentId) return;
-    if (embeded.value) return;
+    if (rag_indexed.value) return;
     try {
         rag_idnexing.value = true;
-        await ragIndex(props.attachmentId);
-        embeded.value = true;
+        await ragIndex(props.attachmentId, { useLlmKeywordExtraction: true });
+        rag_indexed.value = true;
         toast.success(`${attachment.value.name} 파일은 문장(조각)으로 나눠 벡터 저장소에 저장되었습니다.`)
     } catch (e) {
         toast.error(resolveAxiosError(e));
@@ -171,7 +199,7 @@ async function rag_index() {
     }
 }
 async function copy_extracted_text() {
-    const text = extractedText.value?.toString() ?? "";
+    const text = extracted_text.value?.toString() ?? "";
 
     // 1) 복사할 텍스트가 없으면 바로 종료
     if (!text.trim()) {

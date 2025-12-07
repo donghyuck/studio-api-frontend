@@ -1,5 +1,5 @@
 <template>
-    <v-breadcrumbs class="pa-0" :items="['시스템관리', '보안관리', '점근권한관리']" density="compact"></v-breadcrumbs>
+    <v-breadcrumbs class="pa-0" :items="['시스템관리', '보안관리', '권한관리']" density="compact"></v-breadcrumbs>
     <v-row>
         <v-col cols="12" md="12">
             <PageToolbar title="종류 (도메인 or 클래스)" label="보호할 클래스(FQCN) 또는 도메인 객체 종류" @refresh="refresh_classes"

@@ -1,36 +1,33 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['응용프로그램', '자원', '파일']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="파일" label="모듈별 첨부 파일을 관리합니다." @refresh="refresh" :closeable="false" :divider="false"
+    <PageToolbar title="파일" label="모듈별 첨부 파일을 관리합니다." @refresh="refresh" :closeable="false" :divider="true"
         @upload="dialogs.upload.visible = true" :prepend-items="[
         ]" :items="[
             { icon: 'mdi-file-plus', tooltip: '새로운 파일 업로드', text: 'File Upload', variant: 'text', event: 'upload', color: 'blue', },
             { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
-    <v-card density="compact" class="mt-2" variant="text">
+    <v-card density="compact" class="mt-2 mb-2" variant="text">
         <v-alert closable rounded="0" icon="mdi-tooltip"
             :text="`객체 유형은 모듈 식별 아이디 값입니다. 객체 식별자는 해당 모듈에 속하는 객체 아이디 값입니다. 예를 들어 객체 유셩이 문서(1) 이라면 각 문서들의 고유한 ID 값이 객체 식별자가 됩니다.`"
             type="info" max-height="100"></v-alert>
-        <v-card-text class="pb-0">
-            <v-container fluid class="pa-0">
+        <v-card-actions class="px-0">
+            <v-container fluid>
                 <v-row>
-                    <v-col>
-                        <v-number-input :reverse="false" controlVariant="default" label="객체 유형" :hideInput="false"
+                    <v-col cols="2">
+                        <v-number-input :reverse="false" controlVariant="default" label="객체 유형" :hideInput="false" hide-details variant="outlined" density="compact"
+                            :min="0" :inset="false"></v-number-input>
+                    </v-col>
+                    <v-col cols="2">
+                        <v-number-input :reverse="false" controlVariant="default" label="객체 식별자" :hideInput="false" hide-details variant="outlined" density="compact"
                             :min="0" :inset="false"></v-number-input>
                     </v-col>
                     <v-col>
-                        <v-number-input :reverse="false" controlVariant="default" label="객체 식별자" :hideInput="false"
-                            :min="0" :inset="false"></v-number-input>
+                        <v-text-field label="검색어" placeholder="파일 이름을 입력하세요." rows="1" hide-details variant="outlined" density="compact">
+                            <template v-slot:append>
+                                <v-btn icon="mdi-text-search" variant="tonal"></v-btn>
+                            </template>
+                        </v-text-field>
                     </v-col>
-                    <v-col></v-col>
                 </v-row>
-            </v-container>
-        </v-card-text>
-        <v-card-actions>
-            <v-container fluid class="pa-0">
-                <v-text-field label="검색어" placeholder="파일 이름을 입력하세요." row-height="15" rows="2" hide-details>
-                    <template v-slot:append>
-                        <v-btn icon="mdi-text-search" variant="tonal"></v-btn>
-                    </template>
-                </v-text-field>
             </v-container>
         </v-card-actions>
     </v-card>
@@ -39,8 +36,8 @@
     </PageableGridContent>
     <FileUploadDialog v-model="dialogs.upload.visible" :attachmentId="0" @close="dialogs.upload.visible = false"
         @complete="refresh"></FileUploadDialog>
-    <FileDialog v-model="dialogs.edit.visible" :attachmentId="dialogs.edit.attachmentId" @close="dialogs.edit.visible = false"
-        @updated="refresh">
+    <FileDialog v-model="dialogs.edit.visible" :attachmentId="dialogs.edit.attachmentId"
+        @close="dialogs.edit.visible = false" @updated="refresh">
     </FileDialog>
 
 </template>

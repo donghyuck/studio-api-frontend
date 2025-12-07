@@ -75,9 +75,9 @@ const StudioRoutes = {
             props: true
         }, 
         {
-            name: 'Vecvtor',
-            path: 'services/ai/vector', 
-            component: () => import('@/views/mgmt/services/ai/VectorPage.vue'),
+            name: 'Rag',
+            path: 'services/ai/rag', 
+            component: () => import('@/views/mgmt/services/ai/RagPage.vue'),
             props: true
         }, 
         // application:files
