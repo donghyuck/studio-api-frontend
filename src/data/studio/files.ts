@@ -1,4 +1,4 @@
-import type { RagIndexRequestDto, SearchRequestDto, SearchResponseDto, SearchResultDto } from "@/types/studio/ai";
+import type { RagIndexRequestDto, SearchRequestDto, SearchResponseDto } from "@/types/studio/ai";
 import type { AttachmentDto } from "@/types/studio/files";
 import { api } from "@/utils/http";
 

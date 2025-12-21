@@ -1,3 +1,4 @@
+import { useAuthStore } from "@/stores/studio/auth.store";
 import axios from "axios";
 
 const api = axios.create({
@@ -16,4 +17,14 @@ export function validateResetToken(token: string) {
 
 export function confirmPasswordReset(token: string, password: string) {
   return api.post(`${API_BASE}/password-reset/confirm`, { token, password });
+}
+
+export function authHeader() {
+  // return authorization header with jwt token
+  const auth = useAuthStore();
+  if (auth?.token) {
+    return { Authorization: "Bearer " + auth.token };
+  } else {
+    return {};
+  }
 }

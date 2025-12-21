@@ -24,6 +24,9 @@ import {
   UsersGroupIcon,
   UsersIcon,
   VectorIcon,
+  MailFastIcon,
+  MailIcon,
+  MailCogIcon,
 } from "vue-tabler-icons";
 
 export interface menu {
@@ -176,6 +179,34 @@ const sidebarItem: menu[] = [
         title: "파일",
         icon: FileDatabaseIcon,
         to: "/mgmt/application/files",
+        external: false,
+      },
+      {
+        title: "템플릿",
+        icon: MailFastIcon,
+        to: "/mgmt/application/templates",
+        external: false,
+      }, 
+    ],
+  },
+  {
+    title: "메일",
+    icon: FolderIcon,
+    chipColor: "primary",
+    chipBgColor: "lightprimary",
+    to: "/",
+    roles: requiredAdminRoles,
+    children: [
+      {
+        title: "메일 동기화",
+        icon: MailCogIcon,
+        to: "/mgmt/application/mail",
+        external: false,
+      },
+      {
+        title: "메일 Inbox",
+        icon: MailIcon,
+        to: "/mgmt/application/mail-inbox",
         external: false,
       },
     ],

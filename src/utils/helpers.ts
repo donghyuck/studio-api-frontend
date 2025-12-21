@@ -1,4 +1,3 @@
-import { useAuthStore } from "@/stores/studio/auth.store";
 import type { Property } from "@/types/studio";
 import axios from "axios";
 
@@ -21,16 +20,6 @@ export function getMatchMedia() {
   return window.matchMedia("(prefers-color-scheme: light)");
 }
 export { DEFAULT_DOWNLOAD_OPTIONS, IN_BROWSER, API_HEADERS };
-
-export function authHeader() {
-  // return authorization header with jwt token
-  const auth = useAuthStore();
-  if (auth != null && auth.token) {
-    return { Authorization: "Bearer " + auth.token };
-  } else {
-    return {};
-  }
-}
 
 /**
  *
@@ -327,6 +316,5 @@ export const requiredAdminRoles: string[] = (
   import.meta.env.VITE_REQUIRED_ADMIN_ROLES ?? ""
 )
   .split(",")
-  .map((r) => r.trim())
+  .map((r:string) => r.trim())
   .filter(Boolean);
-

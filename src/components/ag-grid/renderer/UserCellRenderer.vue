@@ -7,7 +7,7 @@
             :image="profileImageUrl"
           ></v-avatar>
         </template> 
-        <v-list-item-title>{{ profileName }}</v-list-item-title> 
+        <v-list-item-title class="text-body-2">{{ profileName }}</v-list-item-title> 
         <v-list-item-subtitle>{{profileEmail}}</v-list-item-subtitle>  
       </v-list-item>
 </template>

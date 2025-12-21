@@ -39,8 +39,8 @@ import { useToast } from '@/plugins/toast';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import Korean from '@uppy/locales/lib/ko_KR'
 import '@uppy/core/css/style.min.css'
-import '@uppy/dashboard/css/style.min.css'
-import { authHeader } from '@/utils/helpers';
+import '@uppy/dashboard/css/style.min.css' 
+import { authHeader } from '@/data/studio/auth';
 
 const toast = useToast()
 const props = defineProps<{
@@ -96,9 +96,7 @@ function initUppy() {
     formData: true,
     fieldName: "file",
     endpoint: xhrUploadUrl,
-    headers: {
-    ...authHeader(),
-    },
+    headers:{...authHeader()},
   })
  
   uppy.on("upload", async () => {

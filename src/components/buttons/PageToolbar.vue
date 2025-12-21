@@ -1,10 +1,11 @@
 <template>
   <v-toolbar :density="props.density" :class="props.class">
-    <v-btn v-if="previous" size="small" icon="mdi-chevron-left" :title="previousTitle" @click="handlePrevious" />
-    <v-toolbar-title class="ml-4" v-if="title != null">
-      {{ title }}
-      <v-chip size="x-small" variant="plain" v-if="label != null">{{ label }}</v-chip>
-    </v-toolbar-title>
+    <template v-slot:prepend>
+      <v-btn v-if="previous" size="small" icon="mdi-chevron-left" :title="previousTitle" @click="handlePrevious" /> 
+    </template> 
+    <v-toolbar-title class="ml-1" v-if="title != null" :text="title">
+      <v-chip size="x-small" variant="plain" v-if="label != null" :text="label"></v-chip>
+    </v-toolbar-title> 
     <template v-for="a in resolvedPrependItems" :key="a.key"></template>
     <v-spacer></v-spacer>
     <template v-for="a in resolvedItems" :key="a.key">
@@ -19,9 +20,8 @@
       </v-tooltip>
       <v-btn v-else :variant="a.variant" :density="a.density" :size="a.size" :color="a.color || 'default'"
         :disabled="!!a.disabled" :icon="a.iconOnly ? a.icon : undefined" class="d-flex-none"
-        :prepend-icon="!a.iconOnly ? a.prependIcon : undefined" 
-        :append-icon="!a.iconOnly ? a.appendIcon : undefined"
-        @click.stop="onClick(a)" :text="!a.iconOnly ? a.text : undefined" :spaced="a.iconOnly ? undefined : 'end'"  > 
+        :prepend-icon="!a.iconOnly ? a.prependIcon : undefined" :append-icon="!a.iconOnly ? a.appendIcon : undefined"
+        @click.stop="onClick(a)" :text="!a.iconOnly ? a.text : undefined" :spaced="a.iconOnly ? undefined : 'end'">
       </v-btn>
     </template>
     <v-btn icon variant="text" size="small" @click="emits('close')" v-if="closeable">
@@ -33,7 +33,7 @@
 <script setup lang="ts">
 import { hasHistory } from '@/utils/helpers';
 import { computed } from 'vue';
-import { useRouter , type RouteLocationRaw} from 'vue-router';
+import { useRouter, type RouteLocationRaw } from 'vue-router';
 
 type BtnVariant = 'text' | 'flat' | 'elevated' | 'tonal' | 'outlined' | 'plain'
 type BtnDensity = 'default' | 'comfortable' | 'compact'
@@ -86,12 +86,12 @@ interface Props {
   divider_margin?: false;
   closeable?: boolean;
   previous?: boolean;
-  previousTitle?:string;
-  previousIcon?:string;
+  previousTitle?: string;
+  previousIcon?: string;
   /** router.push 로 이동할 목적지 (우선순위 1) */
   previousTo?: RouteLocationRaw | (() => RouteLocationRaw);
   /** router.go(n) 값 (우선순위 2). 예: -1(뒤로), -2(두 단계 뒤로) */
-  previousGo?:number;
+  previousGo?: number;
   prependItems?: Item[];
   items?: Item[];
 }
@@ -106,7 +106,7 @@ const props = withDefaults(defineProps<Props>(), {
   divider: true,
   closeable: false,
   previous: false,
-  prependItems:  () => [],
+  prependItems: () => [],
   items: () => [],
 })
 
@@ -132,7 +132,7 @@ async function handlePrevious() {
     return;
   }
   // 기본 동작: 한 단계 뒤로 
-  if ( hasHistory() ) {
+  if (hasHistory()) {
     router.back();
   } else {
     // 히스토리가 없을 때 fallback (홈 등)
@@ -141,7 +141,7 @@ async function handlePrevious() {
 }
 
 const emits = defineEmits<{
-  (e: "previous"): void;            
+  (e: "previous"): void;
   (e: "close"): void;
   (e: string, payload?: any): void;
 }>();

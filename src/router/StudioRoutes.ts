@@ -1,5 +1,4 @@
 import { requiredAdminRoles } from "@/utils/helpers";
-import path from "path";
 
 const StudioRoutes = {
     path: '/mgmt',
@@ -85,7 +84,23 @@ const StudioRoutes = {
             name: "Files",
             path: "application/files",
             component: () => import("@/views/mgmt/application/files/FilesPage.vue"),
+        },
+        {
+            name: "Mail",
+            path: "application/mail",
+            component: () => import("@/views/mgmt/application/mail/MailPage.vue"),
+        },
+        {
+            name: "MailInbox",
+            path: "application/mail-inbox",
+            component: () => import("@/views/mgmt/application/mail/MailInboxPage.vue"),
+        },
+        {
+            name: "Templates",
+            path: "application/templates",
+            component: () => import("@/views/mgmt/application/templates/TemplatesPage.vue"),
         }
+
     ]
 };
 export default StudioRoutes;
