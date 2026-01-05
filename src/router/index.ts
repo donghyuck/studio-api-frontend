@@ -1,7 +1,6 @@
 import { useAuthStore } from "@/stores/studio/auth.store";
 import { createRouter, createWebHistory } from "vue-router";
-import AuthRoutes from "./AuthRoutes";
-import BoardRoutes from "./BoardRoutes";
+import AuthRoutes from "./AuthRoutes"; 
 import MainRoutes from "./MainRoutes";
 import StudioRoutes from "./StudioRoutes";
 import { useNavStore } from "@/stores/studio/nav.store";
@@ -15,8 +14,7 @@ const router = createRouter({
     },
     MainRoutes,
     StudioRoutes,
-    AuthRoutes,
-    BoardRoutes,
+    AuthRoutes, 
   ],
 });
 

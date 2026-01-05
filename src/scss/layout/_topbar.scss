@@ -1,77 +1,64 @@
 .profileBtn {
-    margin: 0 35px 0 10px !important;
-
-    @media screen and (max-width:1024px) {
-        margin: 0 25px 0 10px !important;
-    }
-
-    @media screen and (max-width:600px) {
-        margin: 0 15px 0 10px !important;
-    }
+  margin: 0 35px 0 10px !important;
+  @media screen and (max-width: 1024px) {
+    margin: 0 25px 0 10px !important;
+  }
+  @media screen and (max-width: 600px) {
+    margin: 0 15px 0 10px !important;
+  }
 }
-
 .feature-topbar {
-    position: sticky;
-    top: 0;
-    z-index: 15;
-    background: linear-gradient(90deg, rgba(var(--v-theme-on-surface)) 0%, #ffffff 100%);
-
-    .text-linear-gradient {
-        background: linear-gradient(90deg, #FFFFFF 0%, #3772FF 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-
-
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--v-theme-on-surface)) 0%,
+    #ffffff 100%
+  );
+  .text-linear-gradient {
+    background: linear-gradient(90deg, #ffffff 0%, #3772ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .border-blue {
+    border-radius: 9px;
+    border: 1px solid rgb(236, 240, 242, 0.5);
+  }
+  .purple-btn {
+    background-color: #8d70f8;
+    border-radius: 9px;
+    &:hover {
+      background-color: #714bff;
     }
-
-    .border-blue {
-        border-radius: 9px;
-        border: 1px solid rgb(236, 240, 242, 0.5);
-
+  }
+  .green-btn {
+    background-color: #b3f143;
+    border-radius: 9px;
+    &:hover {
+      background-color: #90de03;
     }
-
-    .purple-btn {
-        background-color: #8D70F8;
-        border-radius: 9px;
-
-        &:hover {
-            background-color: #714BFF;
-        }
-
-    }
-
-    .green-btn {
-        background-color: #B3F143;
-        border-radius: 9px;
-
-        &:hover {
-            background-color: #90DE03;
-        }
-
-    }
+  }
 }
-
-.top-header{
-    position: relative !important;
-    z-index: 0 !important;
+.top-header {
+  position: relative !important;
+  z-index: 0 !important;
 }
-
 .topbar-links {
-    .v-btn {
-        &:hover {
-            background-color: rgba(var(--v-theme-primary));
-        }
+  .v-btn {
+    &:hover {
+      background-color: rgba(var(--v-theme-primary));
     }
+  }
 }
-
 .topbar-links {
-    a {
-        text-decoration: none;
-        color: rgba(var(--v-theme-surface));
+  a {
+    text-decoration: none;
+    color: rgba(var(--v-theme-surface));
 
-        &:hover {
-            color: rgba(var(--v-theme-primary)) !important;
-        }
+    &:hover {
+      color: rgba(var(--v-theme-primary)) !important;
     }
+  }
 }

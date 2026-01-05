@@ -75,9 +75,7 @@ const dialog = ref({
 function passwoard_reset (){
   dialog.value.visible = true;
 }
-
 </script>
-
 <template>
   <v-form @submit.prevent="login">
     <v-row class="d-flex mb-3">
@@ -86,14 +84,12 @@ function passwoard_reset (){
         <v-text-field ref="usernameRef" v-model="username" :error-messages="usernameErrors" variant="outlined"
           color="primary" />
       </v-col>
-
       <v-col cols="12">
         <v-label class="font-weight-bold mb-1">비밀번호</v-label>
         <v-text-field v-model="password" :error-messages="passwordErrors" :type="showPassword ? 'text' : 'password'"
           variant="outlined" color="primary" :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
           @click:append-inner="showPassword = !showPassword" />
       </v-col>
-
       <v-col cols="12" class="pt-0">
         <div class="d-flex flex-wrap align-center ml-n2">
           <v-checkbox v-model="remember" color="primary" hide-details>
@@ -102,13 +98,12 @@ function passwoard_reset (){
             </template>
           </v-checkbox>
           <div class="ml-sm-auto"> 
-            <v-btn :loading="loading"  color="primary" variant="plain" size="large" @click="passwoard_reset">
+            <v-btn  :disabled="dialog.visible" color="primary" variant="plain" size="large" @click="passwoard_reset">
               비밀번호 재설정
             </v-btn>
           </div>
         </div>
       </v-col>
-
       <v-col cols="12" class="pt-0">
         <v-btn :loading="loading" type="submit" color="primary" size="large" block flat>
           로그인

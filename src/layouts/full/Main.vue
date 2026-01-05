@@ -86,16 +86,14 @@ watch(mdAndDown, (val) => {
     <v-app-bar elevation="0" height="70" class="top-header" >
         <div class="d-flex align-center justify-space-between w-100">
             <div>
-                <v-btn class="hidden-lg-and-up ms-md-3 ms-sm-5 ms-3 text-muted" @click="sDrawer = !sDrawer" icon variant="flat"
-                    size="small">
+              <!--hidden-lg-and-up -->
+                <v-btn class="ms-md-3 ms-sm-5 ms-3 text-muted" @click="sDrawer = !sDrawer" icon variant="flat" size="small">
                     <Menu2Icon size="20" stroke-width="1.5" />
                 </v-btn>
                 <!-- Notification -->
                 <NotificationDD />
             </div>
             <div>
-                <!-- Upgrade button -->
-                <v-btn class="mr-2 bg-primary" href="/" target="_blank">LINK</v-btn>
                 <!-- User Profile -->
                 <ProfileDD />
             </div>

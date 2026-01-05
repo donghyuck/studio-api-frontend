@@ -1,30 +1,15 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['응용프로그램', '메일', '메일 동기화']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="제목" label="설명" @refresh="refresh" @email-sync="email_sync" :closeable="false" :divider="true"
+    <PageToolbar @refresh="refresh" @email-sync="email_sync" :closeable="false" :divider="true"
         :prepend-items="[
         ]" :items="[
             { icon: 'mdi-email-sync', event: 'email-sync', color: 'blue' },
             { icon: 'mdi-refresh', event: 'refresh', }
 
         ]"></PageToolbar>
-    <v-card density="compact"  variant="text" class="mt-1" v-expand-transition>
-        <v-card-text class="pa-0">
-            <v-container fluid class="pa-0">
-                <v-row>
-                    <v-col>
-                        <v-number-input density="compact"  :reverse="false" controlVariant="default" label="dd" :hideInput="false" :min="0"
-                            :inset="false"></v-number-input>
-                    </v-col>
-                    <v-col>
-                        <v-number-input density="compact"  :reverse="false" controlVariant="default" label="dd" :hideInput="false" :min="0"
-                            :inset="false"></v-number-input>
-                    </v-col>
-                    <v-col></v-col>
-                </v-row>
-            </v-container>
-        </v-card-text>
+    <v-card density="compact"  variant="text" class="mt-1" v-expand-transition> 
         <v-card-actions class="pa-0"> 
-                <v-text-field density="compact" label="검색어" placeholder="검색어를 입력하세요." row-height="15" rows="2" hide-details>
+                <v-text-field density="compact" variant="outlined" label="검색어" placeholder="검색어를 입력하세요." row-height="15" rows="2" hide-details>
                     <template v-slot:append>
                         <v-btn icon="mdi-text-search" variant="tonal"></v-btn>
                     </template>

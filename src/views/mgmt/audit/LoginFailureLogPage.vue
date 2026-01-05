@@ -1,11 +1,11 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['시스템관리', '감사', '로그인 실패']" density="compact"></v-breadcrumbs>
-    <PageToolbar @refresh="refresh" :closeable="false" :divider="false" :prepend-items="[
+    <PageToolbar @refresh="refresh" :closeable="false" :divider="true" :prepend-items="[
     ]" :items="[
         { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
-    <v-card class="mb-2" rounded="lg">
-        <v-card-text class="pb-0">
-            <v-row>
+    <v-card density="compact" variant="text" class="mt-1">
+        <v-card-text class="pa-0">
+            <v-row no-gutters class="pb-0 px-0 pt-2">
                 <v-col>
                     <v-menu v-model="dateMenuStart" :close-on-content-click="false" transition="scale-transition"
                         offset-y>
@@ -18,6 +18,8 @@
                         <v-date-picker v-model="dateStart" @update:modelValue="dateMenuStart = false"
                             show-adjacent-months :first-day-of-week="0" />
                     </v-menu>
+                </v-col>
+                <v-col>
                     <v-menu v-model="dateMenuEnd" :close-on-content-click="false" transition="scale-transition"
                         offset-y>
                         <template #activator="{ props }">
@@ -29,23 +31,25 @@
                         <v-date-picker v-model="dateEnd" @update:modelValue="dateMenuEnd = false" show-adjacent-months
                             :first-day-of-week="0" />
                     </v-menu>
-                    <v-btn variant="tonal" class="mr-1" @click="setToday">오늘</v-btn>
-                    <v-btn variant="tonal" class="mr-1" @click="set7days">7일</v-btn>
-                    <v-btn variant="tonal" class="mr-1" @click="set30days">30일</v-btn>
-                    <v-btn variant="tonal" class="mr-1" @click="set6Months">6개월</v-btn>
-                    <v-btn variant="tonal" class="mr-1" @click="setThisMonth">이번달</v-btn>
                 </v-col>
                 <v-col>
                     <v-text-field clearable variant="outlined" label="아이디" density="compact"
                         v-model="usernameLike"></v-text-field>
                 </v-col>
-            </v-row>
+            </v-row> 
         </v-card-text>
-        <v-card-actions>
+        <v-card-actions class="pa-0">
+            <v-btn-toggle color="deep-purple-accent-3" rounded="5" group density="compact">
+                <v-btn @click="setToday"><span class="hidden-sm-and-down">오늘</span></v-btn>
+                <v-btn @click="set7days">7일</v-btn>
+                <v-btn @click="set30days">30일</v-btn>
+                <v-btn @click="set6Months">6개월</v-btn>
+                <v-btn @click="setThisMonth">이번달</v-btn></v-btn-toggle>
             <v-spacer></v-spacer>
-            <v-btn class="pr-5" width="100" variant="outlined" rounded="xl" prepend-icon="mdi-magnify" text="조회"
+            <!-- <v-btn class="pr-5" width="100" variant="outlined" rounded="xl" prepend-icon="mdi-magnify" text="조회"
                 :disabled="!validRange" @click="onSearchClick">
-            </v-btn>
+            </v-btn> -->
+            <v-btn icon="mdi-text-search" variant="tonal" :disabled="!validRange" @click="onSearchClick"></v-btn>
         </v-card-actions>
     </v-card>
     <v-row>
@@ -115,7 +119,7 @@ const columnActions = [
 
 // define grid columns
 const columnDefs: ColDef[] = [
-    { field: 'id', headerName: '이름', filter: false, sortable: true, type: "number", flex: .25 },
+    { field: 'id', headerName: 'ID', filter: false, sortable: true, type: "number", flex: .25 },
     { field: 'occurredAt', headerName: '일시', filter: false, sortable: true, type: 'datetime', flex: .6 },
     { field: 'username', headerName: '아이디', filter: false, sortable: true, type: 'string', flex: .25 },
     { field: 'remoteIp', headerName: 'IP', filter: false, sortable: true, type: 'string', flex: .5 },

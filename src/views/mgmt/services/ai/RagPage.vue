@@ -1,9 +1,9 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['서비스 관리', 'AI', 'RAG']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="검색" label="문서 벡터를 검색합니다." @refresh="refresh" :closeable="false" :divider="false" :prepend-items="[
+    <PageToolbar title="검색" label="문서 벡터를 검색합니다." @refresh="refresh" :closeable="false" :divider="true" :prepend-items="[
     ]" :items="[
         { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
-    <v-card density="compact" class="mt-2">
+    <v-card density="compact" class="mt-5">
         <v-alert closable rounded="0" icon="mdi-tooltip"
             :text="`질문을 벡터로 변환해 전체 문서 벡터와 비교하고, 그중 가장 비슷한 상위 ${searchForm.topK}개(Top-${searchForm.topK})를 찾아 결과를 보여줍니다.`"
             type="info" max-height="100"></v-alert>

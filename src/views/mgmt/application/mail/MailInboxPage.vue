@@ -6,7 +6,7 @@
         { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
     <v-card density="compact" variant="text" class="mt-1" v-expand-transition>
         <v-card-actions class="pa-0">
-                <v-text-field density="compact" label="검색어" placeholder="검색어를 입력하세요." row-height="15" rows="2" hide-details>
+                <v-text-field density="compact" variant="outlined" label="검색어" placeholder="검색어를 입력하세요." row-height="15" rows="2" hide-details>
                     <template v-slot:append>
                         <v-btn icon="mdi-text-search" variant="text"></v-btn>
                     </template>

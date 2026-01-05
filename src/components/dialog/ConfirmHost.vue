@@ -12,7 +12,6 @@
     </v-dialog>
   </teleport>
 </template>
-
 <script setup lang="ts">
 import { useConfirmState, useConfirmResolve } from '@/plugins/confirm';
 const s = useConfirmState();
