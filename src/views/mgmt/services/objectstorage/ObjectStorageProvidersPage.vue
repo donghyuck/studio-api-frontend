@@ -10,7 +10,7 @@
     </v-row>
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import GridContent from '@/components/ag-grid/GridContent.vue';
 import { onMounted, ref } from 'vue';
 import type { ColDef } from 'ag-grid-community';

@@ -40,7 +40,7 @@
 import type { BucketDto, ObjectListItemDto } from '@/types/studio/storage';
 import { createObjectStorageStore } from '@/stores/studio/objectstorage.store.factory';
 import { computed, onMounted, ref } from 'vue';
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import GridContent from '@/components/ag-grid/GridContent.vue';
 import type { ColDef } from 'ag-grid-community';
 import { formatDataSize, resolveAxiosError } from '@/utils/helpers';

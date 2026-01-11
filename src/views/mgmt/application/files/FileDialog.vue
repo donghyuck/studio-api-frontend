@@ -76,7 +76,7 @@
     </v-dialog>
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { extractText, hasEmbedding, ragIndex, ragMetadata } from '@/data/studio/files';
 import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';

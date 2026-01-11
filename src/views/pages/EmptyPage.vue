@@ -31,7 +31,7 @@
     </v-card>
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 
 
 const refresh = () => {

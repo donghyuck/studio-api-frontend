@@ -37,7 +37,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import PageToolbar from '@/components/buttons/PageToolbar.vue'
+import PageToolbar from '@/components/bars/PageToolbar.vue'
 import { usePageableGroupsStore, type GroupDto } from '@/stores/studio/groups.store'
 import { useToast } from '@/plugins/toast';
 import { useConfirm } from '@/plugins/confirm';

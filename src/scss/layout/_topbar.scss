@@ -8,14 +8,12 @@
   }
 }
 .feature-topbar {
+  height: 24px;
+  min-height: 24px;
+  z-index: 15;
   position: sticky;
   top: 0;
-  z-index: 15;
-  background: linear-gradient(
-    90deg,
-    rgba(var(--v-theme-on-surface)) 0%,
-    #ffffff 100%
-  );
+  width: 100%;
   .text-linear-gradient {
     background: linear-gradient(90deg, #ffffff 0%, #3772ff 100%);
     -webkit-background-clip: text;
@@ -41,9 +39,30 @@
     }
   }
 }
+.topbar-tone--normal {
+  background: rgb(252, 252, 253);
+}
+.topbar-tone--soon {
+  background: rgb(253, 248, 238);
+}
+.topbar-tone--grace {
+  background: rgb(253, 242, 238);
+}
+.topbar-tone--expired {
+  background: rgb(252, 238, 238);
+}
 .top-header {
-  position: relative !important;
-  z-index: 0 !important;
+  z-index: 12 !important;
+  background: rgb(255, 255, 255);
+}
+.v-app-bar.v-toolbar.top-header--scrolled,
+.top-header--scrolled {
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(1px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+.top-header--scrolled {
 }
 .topbar-links {
   .v-btn {

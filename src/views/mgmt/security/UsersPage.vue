@@ -1,10 +1,21 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['시스템관리', '보안관리', '회원']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="Users" @refresh="refresh" @download-excel-all="handleExcelDownload" :closeable="false"
-        :divider="false" :items="[
+    <PageToolbar title="회원 목록" @refresh="refresh" @download-excel-all="handleExcelDownload" @selectAll="selectAll"
+        :closeable="false" :divider="true" :items="[
             { icon: 'mdi-download', event: 'download-excel-all', variant: 'text', tooltip: '엑셀 다운로드',  disabled: downloading },
             { icon: 'mdi-account-plus', event: 'create', color: 'blue', variant: 'text', tooltip: '회원 등록' },
+            { icon: 'mdi-format-list-checkbox', event: 'selectAll', variant: 'text', tooltip: selectAllToolTip },
             { icon: 'mdi-refresh', event: 'refresh', variant: 'text' }]"></PageToolbar>
+    <v-card density="compact" class="mt-1" variant="text">
+        <v-card-actions class="pa-0">
+            <v-text-field v-model="q" density="compact" variant="outlined" label="검색어"
+                placeholder="아이디 또는 이름을 입력하세요." @keydown.enter="onSearchClick" hide-details>
+                <template v-slot:append>
+                    <v-btn icon="mdi-text-search" variant="text" @click="onSearchClick"></v-btn>
+                </template>
+            </v-text-field>
+        </v-card-actions>
+    </v-card>
     <v-row>
         <v-col cols="12" md="12">
             <v-progress-linear v-if="downloading" :model-value="progress >= 0 ? progress : undefined"
@@ -15,18 +26,20 @@
             </PageableGridContent>
         </v-col>
     </v-row>
+    <UserRolesDialog v-model="dialog_user_roles.visible" :userId="dialog_user_roles.userId" @updated="refresh" />
 </template>
 <script setup lang="ts">
 import GridContent from '@/components/ag-grid/GridContent.vue';
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
 import ActionCellRenderer from '@/components/ag-grid/renderer/ActionCellRenderer.vue';
 import CheckboxRenderer from '@/components/ag-grid/renderer/CheckboxRenderer.vue';
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { useNavStore } from '@/stores/studio/nav.store';
 import { usePageableUsersStore } from '@/stores/studio/users.store';
 import type { ColDef, RowSelectionOptions } from 'ag-grid-community';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
+import UserRolesDialog from '@/views/mgmt/security/UserRolesDialog.vue';
 
 const nav = useNavStore();
 
@@ -40,10 +53,18 @@ const dataStore = usePageableUsersStore();
 const gridData = ref<any[]>();
 const loader = ref(false);
 const router = useRouter();
+
+const dialog_user_roles = ref({
+    visible: false, userId: 0 
+});
 // define grid columns
 function onAction({ action, row }: { action: string; row: any }) {
+    
     if (action === 'view') {
         router.push({ name: 'UserDetails', params: { userId: row.userId } })
+    } else if (action === 'roles') {
+        dialog_user_roles.value.userId = row.userId;
+        dialog_user_roles.value.visible = true;
     } else if (action === 'delete') {
         if (confirm(`'${row.name}' 을 삭제할까요?`)) {
             //store.remove(row.groupId).then(() => refresh())
@@ -51,6 +72,15 @@ function onAction({ action, row }: { action: string; row: any }) {
     }
 }
 const columnActions = [
+    {
+        label: '권한',
+        variant: 'text',
+        prependIcon:  'mdi-shield-account',
+        color: 'blue',
+        event: 'roles',
+        visible: true,
+        tooltip: '사용자 권한을 변경합니다.',
+    },
     {
         label: '삭제',
         variant: 'outlined',
@@ -83,7 +113,8 @@ const columnDefs: ColDef[] = [
     { field: 'status', headerName: '상태', filter: false, sortable: true, type: 'text', flex: .5, },
     { field: 'creationDate', headerName: '생성일시', filter: false, type: 'datetime', flex: 1 },
     { field: 'modifiedDate', headerName: '수정일시', filter: false, type: 'datetime', flex: 1 },
-    { colId: 'actions', headerName: '', filter: false, sortable: false, flex: 1, cellRenderer: ActionCellRenderer, cellRendererParams: { actions: columnActions, onAction } },
+    { colId: 'actions', headerName: '', filter: false, sortable: false, flex: 1.1, cellRenderer: ActionCellRenderer, cellRendererParams: {
+        actions: columnActions, onAction } },
 ];
 
 const gridContentRef = ref<InstanceType<typeof GridContent> | null>(null);
@@ -99,6 +130,24 @@ const onClearFilters = () => {
     pageableGridContentRef.value?.clearFilters();
 };
 const selectedRows = computed(() => pageableGridContentRef.value?.selectedRows() || []);
+const selectAll = () => {
+    if (selectedRows.value.length > 0)
+        pageableGridContentRef.value?.deselectAll();
+    else
+        pageableGridContentRef.value?.selectAll();
+}
+const selectAllToolTip = computed(() => selectedRows.value.length > 0 ? "선택 해제" : "전체 선택");
+const q = ref<string | null>(null);
+const onSearchClick = () => {
+    const params: Record<string, any> = {};
+    if (q.value && q.value.trim().length > 0) {
+        params.q = q.value.trim();
+        params.in = "username,name,email";
+    }
+    dataStore.setFilter(params);
+    refresh();
+};
+
 // END : define pagable grid content .
 
 // START : excel downloading....

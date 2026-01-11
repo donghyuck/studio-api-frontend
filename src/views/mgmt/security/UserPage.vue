@@ -1,10 +1,10 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['시스템관리', '보안관리', '회원']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="User" :label="values.name" :previous="true" :closeable="false" :divider="true" :items="[
+    <PageToolbar title="회원 목록" :label="values.name" :previous="true" :closeable="false" :divider="true" :items="[
         { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
     <v-row>
         <v-col cols="12" md="12">
-            <v-card>
+            <v-card class="mt-2">
                 <v-card-text>
                     <form @submit.prevent="">
                         <v-row no-gutters>
@@ -77,7 +77,7 @@
     </v-row>
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { usePageableUsersStore } from '@/stores/studio/users.store';
 import type { Property } from '@/types/studio';
 import PropertiesGrid from '../PropertiesGrid.vue';

@@ -82,7 +82,7 @@
 </template>
 <script setup lang="ts">
 import GridContent from '@/components/ag-grid/GridContent.vue';
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { fetchProviders, rewriteQuery, searchVector } from '@/data/studio/ai';
 import { useToast } from '@/plugins/toast';
 import type { AiInfoResponse, ProviderInfo, QueryRewriteRequestDto, VectorSearchRequestDto, VectorSearchResultDto } from '@/types/studio/ai';

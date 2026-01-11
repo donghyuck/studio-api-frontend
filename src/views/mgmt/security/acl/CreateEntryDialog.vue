@@ -53,7 +53,7 @@
     </v-dialog>
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { fetchActions } from '@/data/studio/acl';
 import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';

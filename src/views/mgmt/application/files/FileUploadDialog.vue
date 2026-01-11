@@ -31,7 +31,7 @@
   </v-dialog>
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue'
+import PageToolbar from '@/components/bars/PageToolbar.vue'
 import Uppy from '@uppy/core';
 import Dashboard from "@uppy/dashboard"
 import XHRUpload from "@uppy/xhr-upload"

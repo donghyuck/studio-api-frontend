@@ -29,7 +29,7 @@
     </v-dialog>
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { onMounted, ref } from 'vue';
 import { hasHistory } from '@/utils/helpers';
 

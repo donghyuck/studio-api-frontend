@@ -85,6 +85,17 @@ export function stringToArray(tags: string) {
   });
 }
 
+export function stringToArrayByComma(
+  raw?: string | null,
+  opts?: { dedupe?: boolean }
+): string[] {
+  const arr = (raw ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return opts?.dedupe ? [...new Set(arr)] : arr;
+}
+
 export function toTags(tags: string) {
   if (tags === null) return [];
   return tags.split(" ").map((value) => {
@@ -316,5 +327,5 @@ export const requiredAdminRoles: string[] = (
   import.meta.env.VITE_REQUIRED_ADMIN_ROLES ?? ""
 )
   .split(",")
-  .map((r:string) => r.trim())
+  .map((r: string) => r.trim())
   .filter(Boolean);

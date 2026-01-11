@@ -1,6 +1,6 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['시스템관리', '보안관리', '그룹']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="Group" :label="name" :previous="true" :closeable="false" :divider="true" :items="[
+    <PageToolbar title="그룹 목록" :label="name" :previous="true" :closeable="false" :divider="true" :items="[
         { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
     <v-row>
         <v-col cols="12" md="12">
@@ -38,7 +38,7 @@
     </v-row> 
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { onMounted, ref } from 'vue';
 import { fromRowData, hasHistory, toRowData } from '@/utils/helpers';
 // vee-validate

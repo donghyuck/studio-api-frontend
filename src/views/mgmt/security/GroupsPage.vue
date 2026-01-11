@@ -1,9 +1,19 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['시스템관리', '보안관리', '그룹']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="Groups" class="ba-0 bg-white" @refresh="refresh" @create="onCreate" :closeable="false"
-        :divider="false" :items="[
+    <PageToolbar title="그룹 목록" class="ba-0 bg-white" @refresh="refresh" @create="onCreate" :closeable="false"
+        :divider="true" :items="[
             { icon:'mdi-account-multiple-plus', tooltip:'그룹 생성', text: 'Create Group', variant: 'text', event: 'create', color: 'blue', },
             { icon: 'mdi-refresh', event: 'refresh', }]" ></PageToolbar>
+    <v-card density="compact" class="mt-1" variant="text">
+        <v-card-actions class="pa-0">
+            <v-text-field v-model="q" density="compact" variant="outlined" label="검색어"
+                placeholder="그룹 이름을 입력하세요." @keydown.enter="onSearchClick" hide-details>
+                <template v-slot:append>
+                    <v-btn icon="mdi-text-search" variant="text" @click="onSearchClick"></v-btn>
+                </template>
+            </v-text-field>
+        </v-card-actions>
+    </v-card>
     <v-row>
         <v-col cols="12" md="12">
             <PageableGridContent @filter-actived="onPageableGridFilterActived" ref="pageableGridContentRef"
@@ -20,7 +30,7 @@ import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
 import { computed, onMounted, ref } from 'vue';
 import type { ColDef } from 'ag-grid-community';
 import { usePageableGroupsStore } from '@/stores/studio/groups.store';
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import ActionCellRenderer from '@/components/ag-grid/renderer/ActionCellRenderer.vue';
 import GroupDialog from "./GroupDialog.vue";
 import MembershipDialog from './GroupMembershipDialog.vue';
@@ -54,6 +64,17 @@ async function onAction({ action, row }: { action: string; row: any }) {
     }
 }
 const columnActions = [
+
+    {
+        label: '멤버',
+        color: 'blue',
+        variant: 'icon',
+        prependIcon: 'mdi-account-multiple',
+        event: 'membership',
+        visible: true,
+        tooltip: '그룹 구성원을 관리합니다.',
+        disabled: false,
+    },
     {
         label: '삭제',
         variant: 'outlined',
@@ -62,16 +83,6 @@ const columnActions = [
         event: 'delete',
         visible: true,
         tooltip: '그룹을 삭제합니다.'
-    },
-    {
-        label: '멤버',
-        color: 'blue',
-        variant: 'outlined',
-        prependIcon: 'mdi-account-multiple',
-        event: 'membership',
-        visible: true,
-        tooltip: '그룹 구성원을 관리합니다.',
-        disabled: false,
     },
     {
         label: '상세보기',
@@ -103,6 +114,16 @@ const refresh = () => {
 }
 const onClearFilters = () => {
     pageableGridContentRef.value?.clearFilters();
+};
+const q = ref<string | null>(null);
+const onSearchClick = () => {
+    const params: Record<string, any> = {};
+    if (q.value && q.value.trim().length > 0) {
+        params.q = q.value.trim();
+        params.in = "name,description";
+    }
+    dataStore.setFilter(params);
+    refresh();
 };
 
 const groupDialog = ref({

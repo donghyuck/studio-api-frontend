@@ -43,7 +43,7 @@ import { ref } from 'vue'
 import * as yup from 'yup'
 import { useForm, useField } from 'vee-validate'
 
-import PageToolbar from '@/components/buttons/PageToolbar.vue'
+import PageToolbar from '@/components/bars/PageToolbar.vue'
 import { useConfirm } from '@/plugins/confirm'
 import { useToast } from '@/plugins/toast'
 import { usePageableUsersStore } from '@/stores/studio/users.store'

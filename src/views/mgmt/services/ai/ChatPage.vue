@@ -98,7 +98,7 @@
   </v-card>
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { fetchProviders, sendChat, setdRagChat } from '@/data/studio/ai';
 import { useToast } from '@/plugins/toast';
 import type { AiInfoResponse, ChatMessageDto, ChatRagRequestDto, ChatRequestDto, ProviderInfo, Role, TokenUsageDto } from "@/types/studio/ai";

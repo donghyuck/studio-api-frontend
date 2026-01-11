@@ -106,7 +106,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import type { BucketDto, ObjectInfoDto, PresignedUrlDto } from '@/types/studio/storage';
 import { downloadFile, fetchObjectHead, openInNewTab, presignGet } from '@/data/studio/storage';
 import dayjs from 'dayjs';

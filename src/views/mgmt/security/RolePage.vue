@@ -1,12 +1,12 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['시스템관리', '보안관리', '롤']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="Role" :label="name" :previous="true" :closeable="false" :divider="false" @refresh="refresh"
+    <PageToolbar title="롤 목록" :label="name" :previous="true" :closeable="false" :divider="true" @refresh="refresh"
         :items="[
             { icon: 'mdi-refresh', event: 'refresh' }]"></PageToolbar>
     <v-row>
         <v-col cols="12" md="12">
             <v-skeleton-loader :loading="overlay" type="article, actions">
-                <v-card>
+                <v-card class="mt-2">
                     <v-card-text>
                         <form @submit.prevent="">
                             <v-text-field label="Name*" v-model="name" :error-messages="nameError" />
@@ -43,7 +43,7 @@
 
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { hasHistory } from '@/utils/helpers';
 import { usePageableRolesStore } from '@/stores/studio/roles.store';
 import { onMounted, ref } from 'vue';

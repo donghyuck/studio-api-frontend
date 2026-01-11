@@ -39,7 +39,7 @@
 </template>
 <script setup lang="ts">
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';
 import type { GroupDto } from '@/stores/studio/groups.store';

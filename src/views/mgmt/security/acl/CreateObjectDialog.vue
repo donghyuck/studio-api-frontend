@@ -62,7 +62,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import PageToolbar from '@/components/buttons/PageToolbar.vue'
+import PageToolbar from '@/components/bars/PageToolbar.vue'
 
 // vee-validate
 import { useForm, useField } from 'vee-validate'

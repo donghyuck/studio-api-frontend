@@ -1,5 +1,5 @@
 <template>
-    <v-dialog :key="userId" width="650" :fullscreen="false" :scrim="true" transition="dialog-bottom-transition">
+    <v-dialog v-model="visible" :key="userId" width="650" :fullscreen="false" :scrim="true" transition="dialog-bottom-transition">
         <v-card>
             <PageToolbar title="Roles" @close="handleClose" :closeable="true" :divider="true" @refresh="refresh"
                 :items="[{ icon: 'mdi-refresh', event: 'refresh' }]" />
@@ -37,9 +37,9 @@
     </v-dialog>
 </template>
 <script setup lang="ts">
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { hasHistory, resolveAxiosError } from '@/utils/helpers';
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 
 import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';
@@ -51,17 +51,28 @@ const urStore = useUserRolesStore();
 
 const props = defineProps({
     userId: { type: Number, default: 0 },
+    modelValue: { type: Boolean, default: false },
 });
 
 const emit = defineEmits<{
     (e: 'close'): void
     (e: 'updated', payload: any): void
+    (e: 'update:modelValue', value: boolean): void
 }>()
 
 const toast = useToast();
 const confirm = useConfirm();
 // define overlays
 const overlay = ref(false);
+const visible = ref(props.modelValue);
+
+watch(() => props.modelValue, (v) => {
+    visible.value = v;
+});
+
+watch(visible, (v) => {
+    emit('update:modelValue', v);
+});
 
 const roles = ref<RoleDto[]>();
 const gradtedRoles = ref<RoleDto[]>(); // granted by groups
@@ -85,6 +96,7 @@ async function getData(force: boolean = false) {
 
 /** 닫기: 여기서만 초기화 */
 const handleClose = () => {
+    visible.value = false;
     emit('close')
 }
 

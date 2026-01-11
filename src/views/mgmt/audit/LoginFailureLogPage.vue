@@ -1,11 +1,11 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['시스템관리', '감사', '로그인 실패']" density="compact"></v-breadcrumbs>
-    <PageToolbar @refresh="refresh" :closeable="false" :divider="true" :prepend-items="[
+    <PageToolbar title="" label="로그인 실패 이력" @refresh="refresh" :closeable="false" :divider="true" :prepend-items="[
     ]" :items="[
         { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
     <v-card density="compact" variant="text" class="mt-1">
         <v-card-text class="pa-0">
-            <v-row no-gutters class="pb-0 px-0 pt-2">
+            <v-row no-gutters class="pb-0 px-0 mb-0 pt-3">
                 <v-col>
                     <v-menu v-model="dateMenuStart" :close-on-content-click="false" transition="scale-transition"
                         offset-y>
@@ -34,11 +34,11 @@
                 </v-col>
                 <v-col>
                     <v-text-field clearable variant="outlined" label="아이디" density="compact"
-                        v-model="usernameLike"></v-text-field>
+                        v-model="usernameLike" @keydown.enter="onSearchClick"></v-text-field>
                 </v-col>
             </v-row> 
         </v-card-text>
-        <v-card-actions class="pa-0">
+        <v-card-actions class="pa-0 mt-0">
             <v-btn-toggle color="deep-purple-accent-3" rounded="5" group density="compact">
                 <v-btn @click="setToday"><span class="hidden-sm-and-down">오늘</span></v-btn>
                 <v-btn @click="set7days">7일</v-btn>
@@ -63,7 +63,7 @@
 <script setup lang="ts">
 import GridContent from '@/components/ag-grid/GridContent.vue';
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';
 import { usePageableLoginFailureLogStore } from '@/stores/studio/audit.login-failure-log.store';

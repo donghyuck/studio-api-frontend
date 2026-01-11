@@ -88,6 +88,7 @@ export const usePageableFilesStore = defineStore(
       dataItems: dataSource.dataItems,
       total: dataSource.total,
       pageSize: dataSource.pageSize,
+      page: dataSource.page,
       setPage: dataSource.setPage.bind(dataSource),
       download: dataSource.download.bind(dataSource),
       setSort: dataSource.setSort.bind(dataSource),

@@ -1,8 +1,18 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['시스템관리', '보안관리', '롤']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="Roles" @refresh="refresh" @create="onCreate" :closeable="false" :divider="false" :items="[
+    <PageToolbar title="롤 목록" @refresh="refresh" @create="onCreate" :closeable="false" :divider="true" :items="[
         { icon: 'mdi-plus', event: 'create', color: 'blue' , tooltip:'권한 생성'},
         { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
+    <v-card density="compact" class="mt-1" variant="text">
+        <v-card-actions class="pa-0">
+            <v-text-field v-model="q" density="compact" variant="outlined" label="검색어"
+                placeholder="롤 이름을 입력하세요." @keydown.enter="onSearchClick" hide-details>
+                <template v-slot:append>
+                    <v-btn icon="mdi-text-search" variant="text" @click="onSearchClick"></v-btn>
+                </template>
+            </v-text-field>
+        </v-card-actions>
+    </v-card>
     <v-row>
         <v-col cols="12" md="12">
             <PageableGridContent @filter-actived="onPageableGridFilterActived" ref="pageableGridContentRef"
@@ -21,7 +31,7 @@ import ActionCellRenderer from '@/components/ag-grid/renderer/ActionCellRenderer
 import { computed, onMounted, ref } from 'vue';
 import type { ColDef } from 'ag-grid-community';
 import { usePageableRolesStore } from '@/stores/studio/roles.store';
-import PageToolbar from '@/components/buttons/PageToolbar.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { useRouter } from 'vue-router';
 import RoleDialog from './RoleDialog.vue';
 import { useConfirm } from '@/plugins/confirm';
@@ -37,19 +47,11 @@ const router = useRouter();
 const confirm = useConfirm();
 const toast = useToast();
 const columnActions = [
-    {
-        label: '삭제',
-        variant: 'outlined',
-        prependIcon: 'mdi-delete',
-        color: 'red',
-        event: 'delete',
-        visible: true,
-        tooltip: '롤을 삭제합니다.'
-    },
+
        {
         label: '사용자',
         color: 'blue',
-        variant: 'outlined',
+        variant: 'icon',
         prependIcon: 'mdi-account-multiple',
         event: 'user',
         visible: true,
@@ -59,12 +61,21 @@ const columnActions = [
     {
         label: '그룹',
         color: 'blue',
-        variant: 'outlined',
+        variant: 'icon',
         prependIcon: 'mdi-account-group',
         event: 'group',
         visible: true,
         tooltip: '롤이 부여된 그룹을 관리합니다.',
         disabled: false,
+    },
+        {
+        label: '삭제',
+        variant: 'outlined',
+        prependIcon: 'mdi-delete',
+        color: 'red',
+        event: 'delete',
+        visible: true,
+        tooltip: '롤을 삭제합니다.'
     },
     {
         label: '상세보기',
@@ -73,6 +84,7 @@ const columnActions = [
         visible: true,
         disabled: false,
     }
+
 ];
 
 async function onAction({ action, row }: { action: string; row: any }) {
@@ -123,6 +135,16 @@ const refresh = () => {
 }
 const onClearFilters = () => {
     pageableGridContentRef.value?.clearFilters();
+};
+const q = ref<string | null>(null);
+const onSearchClick = () => {
+    const params: Record<string, any> = {};
+    if (q.value && q.value.trim().length > 0) {
+        params.q = q.value.trim();
+        params.fields = "name,description";
+    }
+    dataStore.setFilter(params);
+    refresh();
 };
 
 

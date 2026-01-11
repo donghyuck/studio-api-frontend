@@ -4,6 +4,24 @@ export interface ResetPasswordRequest {
     reason?: string | null;
 }
 
+export type UserStatus = string;
+
+export interface UserBasicDto {
+  userId?: number;
+  username?: string;
+  name?: string;
+  email?: string | null;
+  enabled: boolean;
+  status?: UserStatus | null;
+}
+
+export interface UserPublicDto {
+  userId?: number;
+  username?: string;
+  name?: string;
+  email?: string | null;
+}
+
 export interface UserDto {
   userId: number;
   username: string;
