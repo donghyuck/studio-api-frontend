@@ -5,8 +5,8 @@ import Topbar from './Topbar.vue';
 </script>
 <template>
     <v-locale-provider >
-        <Topbar/>
         <v-app>
+            <Topbar/>
             <MainView />
             <v-main>
                 <v-container fluid class="page-wrapper">

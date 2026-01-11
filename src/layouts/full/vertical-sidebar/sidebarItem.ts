@@ -181,7 +181,7 @@ const sidebarItem: menu[] = [
       {
         title: "메일 동기화",
         icon: MailCogIcon,
-        to: "/mgmt/application/mail",
+        to: "/mgmt/application/mail-sync",
         external: false,
       },
       {

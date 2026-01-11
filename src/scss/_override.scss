@@ -46,3 +46,10 @@ html {
 @keyframes ag-link-spin { to { transform: rotate(360deg); } }
 
 .ag-link__loading-icon { display: inline-flex; line-height: 0; }
+
+.border-top-1-gray {
+  border-top: 1px solid #e8e8e8;
+}
+.border-bottom-1-gray {
+  border-bottom: 1px solid #e8e8e8;
+}

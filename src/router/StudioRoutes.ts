@@ -85,10 +85,11 @@ const StudioRoutes = {
             path: "application/files",
             component: () => import("@/views/mgmt/application/files/FilesPage.vue"),
         },
+        // application:mail
         {
-            name: "Mail",
-            path: "application/mail",
-            component: () => import("@/views/mgmt/application/mail/MailPage.vue"),
+            name: "MailSync",
+            path: "application/mail-sync",
+            component: () => import("@/views/mgmt/application/mail/MailSyncPage.vue"),
         },
         {
             name: "MailInbox",
@@ -96,10 +97,23 @@ const StudioRoutes = {
             component: () => import("@/views/mgmt/application/mail/MailInboxPage.vue"),
         },
         {
+            name: 'MailDetails',
+            path: 'application/mail-inbox/:mailId',
+            component: () => import('@/views/mgmt/application/mail/MailPage.vue'),
+            props: r => ({ mailId: Number(r.params.mailId) })
+        },   
+        // application:template
+        {
             name: "Templates",
             path: "application/templates",
             component: () => import("@/views/mgmt/application/templates/TemplatesPage.vue"),
-        }
+        },
+        {
+            name: 'TemplateDetails',
+            path: 'application/templates/:templateId',
+            component: () => import('@/views/mgmt/application/templates/TemplateDetails.vue'),
+            props: r => ({ templateId: Number(r.params.templateId) })
+        }, 
 
     ]
 };

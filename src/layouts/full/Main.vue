@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed, shallowRef, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, computed, shallowRef, watch } from 'vue';
 import { useDisplay } from "vuetify";
 import sidebarItems from './vertical-sidebar/sidebarItem';
 import NavGroup from './vertical-sidebar/NavGroup/index.vue';
@@ -49,11 +49,24 @@ const sidebarMenu = shallowRef(sidebarItems);
 
 const { mdAndDown } = useDisplay();
 const sDrawer = ref(true);
+const isScrolled = ref(false);
+let scrollListener: (() => void) | null = null;
 onMounted(() => {
   sDrawer.value = !mdAndDown.value; // hide on mobile, show on desktop
+  const updateScroll = () => {
+    isScrolled.value = window.scrollY > 4;
+  };
+  updateScroll();
+  scrollListener = () => updateScroll();
+  window.addEventListener('scroll', scrollListener, { passive: true });
 });
 watch(mdAndDown, (val) => {
   sDrawer.value = !val;
+});
+onBeforeUnmount(() => {
+  if (scrollListener) {
+    window.removeEventListener('scroll', scrollListener);
+  }
 });
 </script>
 <template>
@@ -83,7 +96,7 @@ watch(mdAndDown, (val) => {
     </div>
     </v-navigation-drawer>
     <!------Header-------->
-    <v-app-bar elevation="0" height="70" class="top-header" >
+    <v-app-bar app elevation="0" height="70" :class="['top-header', { 'top-header--scrolled': isScrolled }]" >
         <div class="d-flex align-center justify-space-between w-100">
             <div>
               <!--hidden-lg-and-up -->

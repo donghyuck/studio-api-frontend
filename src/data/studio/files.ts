@@ -8,6 +8,10 @@ export async function getFileById(id: number) {
   const data = await api.get<AttachmentDto>(`${API_BASE}/${id}`);
   return data;
 }
+export async function deleteFileById(id: number): Promise<void> {
+  const deleted = await api.delete<void>(`${API_BASE}/${id}`);
+  return deleted;
+}
 
 export async function extractText(id: number) {
   const data = await api.get<string>(`${API_BASE}/${id}/text`);

@@ -4,7 +4,9 @@ html {
 
 .v-main {
   margin-right: 20px;
-  --v-layout-top: 0 !important;
+}
+.v-main .v-breadcrumbs {
+  font-size: 12px;
 }
 @media (max-width: 1279px) {
   .v-main {

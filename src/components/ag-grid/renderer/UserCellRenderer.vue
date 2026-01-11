@@ -24,10 +24,11 @@ const user = computed<UserDto | undefined>(() => {
   return props.params.value ?? null
 })
 const profileImageUrl = computed(() => {
-  if (!user.value || !user.value.username) {
+  if (!user.value) {
     return NO_AVATAR
   }
-  return getProfileImageUrl(user.value.username)
+  const identifier = user.value.userId > 0 ? user.value.userId : user.value.username
+  return getProfileImageUrl(identifier)
 })
 const profileName = computed(() => {
     if( user.value?.nameVisible ) {

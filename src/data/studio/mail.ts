@@ -11,6 +11,10 @@ export async function mailSync() {
   return data;
 } 
 
+export async function deleteMail(mailId: number): Promise<void> {
+  await api.delete<void>(`${API_BASE}/${mailId}`);
+}
+
 export function subscribeMailSync(
   onMessage: (payload: MailSyncLogDto) => void,
   onError?: (err: any) => void,

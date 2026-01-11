@@ -50,6 +50,7 @@ function parseEmailList(raw: string) {
             name = nameMatch[1]
                 .replace(/"/g, "")  // 큰따옴표 제거
                 .replace(/\//g, "") // 슬래시 제거
+                .replace(/^\\+|\\+$/g, "") // 백슬래시 제거
                 .trim();
             email = emailMatch[1].trim();
         } else if (emailMatch) {

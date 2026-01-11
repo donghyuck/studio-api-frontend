@@ -1,9 +1,10 @@
 // src/plugins/axios.ts
 import axios from 'axios';
+import { API_BASE_URL } from "@/config/backend";
 import { useAuthStore } from '@/stores/studio/auth.store';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: API_BASE_URL,
 });
 
 let isRefreshing = false;

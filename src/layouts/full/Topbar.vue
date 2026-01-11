@@ -18,6 +18,12 @@ const { showRefresh, showLogin, isExpirySoon, hhmmssToExpiry, hhmmssGraceLeft, i
     clockSkewSec: 3,
     preExpiryWindowSec: 60 * 10 , // 10분
 });
+const topbarTone = computed(() => {
+    if (isExpired.value && inGrace.value) return 'topbar-tone--grace';
+    if (isExpired.value && !inGrace.value) return 'topbar-tone--expired';
+    if (isExpirySoon.value) return 'topbar-tone--soon';
+    return 'topbar-tone--normal';
+});
 const confirm = useConfirm();
 const refreshing = ref(false);
 const refresh = async () => {
@@ -44,17 +50,15 @@ const goLogin = async () => {
 }
 </script>
 <template>
-    <v-layout style="height: 24px">
-        <v-system-bar :color="isExpirySoon ? 'red' : 'indigo-darken-2'">
-            <spin variant="flat">
-                {{ isExpired ? '만료됨' : `인증 만료까지 ${hhmmssToExpiry}` }}
-            </spin>
-            <v-btn v-if="isExpirySoon" plat variant="plain" size="xs" prepend-icon="mdi-refresh" class="ml-2" :loading="refreshing"
-                @click="refresh">
-                연장하기 {{ isExpired ? `${hhmmssGraceLeft} 까지 연장 가능`  : ''}}
-            </v-btn>
-            <v-btn v-if="showLogin && !showRefresh" variant="plain" prepend-icon="mdi-login-variant" size="xs" class="ml-2" @click="goLogin">로그인</v-btn>
-            <v-btn v-else variant="plain" prepend-icon="mdi-logout-variant" size="xs" class="ml-2" >로그아웃</v-btn>
-        </v-system-bar>
-    </v-layout>
+    <v-system-bar app :class="['feature-topbar', topbarTone]">
+        <spin variant="flat">
+            {{ isExpired ? '만료됨' : `인증 만료까지 ${hhmmssToExpiry}` }}
+        </spin>
+        <v-btn v-if="isExpirySoon" plat variant="plain" size="xs" prepend-icon="mdi-refresh" class="ml-2" :loading="refreshing"
+            @click="refresh">
+            연장하기 {{ isExpired ? `${hhmmssGraceLeft} 까지 연장 가능`  : ''}}
+        </v-btn>
+        <v-btn v-if="showLogin && !showRefresh" variant="plain" prepend-icon="mdi-login-variant" size="xs" class="ml-2" @click="goLogin">로그인</v-btn>
+        <v-btn v-else variant="plain" prepend-icon="mdi-logout-variant" size="xs" class="ml-2" >로그아웃</v-btn>
+    </v-system-bar>
 </template>
