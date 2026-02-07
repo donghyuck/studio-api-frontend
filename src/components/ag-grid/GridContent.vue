@@ -14,7 +14,7 @@ import type {
   RowSelectionOptions,
 } from 'ag-grid-community';
 import { AgGridVue } from 'ag-grid-vue3'; // Vue Data Grid Component
-import { ref, defineProps, onMounted, computed, watch, nextTick } from 'vue';
+import { ref, onMounted, computed, watch, nextTick } from 'vue';
 import gridOptions from '@/components/ag-grid/ag-grid-options';
 
 interface Listener {
@@ -26,21 +26,19 @@ const props = defineProps<{
   options?: GridOptions;
   events?: Listener[];
   rowSelection?: RowSelectionOptions | "single" | "multiple";
-  rowData: [];
+  rowData: any[];
   autoResize?: boolean;
   height?: number | undefined;
 }>();
 
 // Grid options 설정
-const gridOptionsDefs: GridOptions = computed(
-  () => props.options || gridOptions
-);
-const rowSelectionDefs: RowSelectionOptions | "single" | "multiple" = computed(
+const gridOptionsDefs = computed<GridOptions>(() => props.options || gridOptions);
+const rowSelectionDefs = computed<RowSelectionOptions | "single" | "multiple">(
   () => props.rowSelection || 'single'
 );
 
 // Grid columns 설정
-const columnDefs: ColDef[] = computed(() => props.columns || []);
+const columnDefs = computed<ColDef[]>(() => props.columns || []);
 
 // 그리드 동적 크기 조정
 const gridContainer = ref<HTMLElement | null>(null);
@@ -72,7 +70,7 @@ const onFilterChanged = () => {
 };
 
 const onRowSelected = (event: any) => {
-  emit('row-selected', event);
+  emit('rowSelected', event);
 };
 
 // filtersActive 값이 변경되면 filtersActive 이벤트 발생
@@ -92,7 +90,7 @@ const clearFilters = () => {
 };
 
 // 선택된 행 관리
-const selectedItems = ref<[]>([]);
+const selectedItems = ref<any[]>([]);
 const onSelectionChanged = (params: SelectionChangedEvent) => {
   selectedItems.value = params.api.getSelectedRows() as [];
 };

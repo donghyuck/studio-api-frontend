@@ -1,6 +1,6 @@
 // src/composables/useAuthImage.ts
 import { ref, onBeforeUnmount, watchEffect } from "vue";
-import { useAuthStore } from "@/stores/studio/auth.store";
+import { useAuthStore } from "@/stores/studio/mgmt/auth.store";
 import { storeToRefs } from "pinia";
 
 const auth = useAuthStore();

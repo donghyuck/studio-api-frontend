@@ -4,7 +4,9 @@
       <v-btn v-if="previous" size="small" icon="mdi-chevron-left" :title="previousTitle" @click="handlePrevious" /> 
     </template> 
     <v-toolbar-title class="ml-1" v-if="title != null" :text="title">
-      <v-chip size="x-small" variant="plain" v-if="label != null" :text="label"></v-chip>
+      <v-chip size="x-small" variant="plain" v-if="label != null || $slots.label">
+        <slot name="label">{{ label }}</slot>
+      </v-chip>
     </v-toolbar-title> 
     <template v-for="a in resolvedPrependItems" :key="a.key"></template>
     <v-spacer></v-spacer>
@@ -13,12 +15,12 @@
         <template #activator="{ props: tip }">
           <v-btn v-bind="tip" :variant="a.variant" :density="a.density" :size="a.size" :color="a.color || 'default'"
             :disabled="!!a.disabled" :icon="a.iconOnly ? a.icon : undefined"
-            :prepend-icon="!a.iconOnly ? a.prependIcon : undefined"
+            :prepend-icon="!a.iconOnly ? a.prependIcon : undefined" class="mr-1"
             :append-icon="!a.iconOnly ? a.appendIcon : undefined" @click.stop="onClick(a)" :text="a.text"
-            :spaced="a.iconOnly ? undefined : 'end'" />
+            :spaced="a.iconOnly ? undefined : 'end'"  />
         </template>
       </v-tooltip>
-      <v-btn v-else :variant="a.variant" :density="a.density" :size="a.size" :color="a.color || 'default'"
+      <v-btn v-else :variant="a.variant" :density="a.density" :size="a.size" :color="a.color || 'default'" 
         :disabled="!!a.disabled" :icon="a.iconOnly ? a.icon : undefined" class="d-flex-none"
         :prepend-icon="!a.iconOnly ? a.prependIcon : undefined" :append-icon="!a.iconOnly ? a.appendIcon : undefined"
         @click.stop="onClick(a)" :text="!a.iconOnly ? a.text : undefined" :spaced="a.iconOnly ? undefined : 'end'">

@@ -67,3 +67,17 @@ export interface PresignedUrlDto {
     url:string; 
     expiresAt:Date | null;  
 }
+
+export interface BreadcrumbItem {
+  label: string;
+  prefix: string;
+  disabled?: boolean;
+}
+
+export interface BuildBreadcrumbOptions {
+  rootLabel?: string;
+  rootDisabled?: boolean;
+  lastDisabled?: boolean;
+  decodeLabel?: boolean;
+  maxDepth?: number;
+}

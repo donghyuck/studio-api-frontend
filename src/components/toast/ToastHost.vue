@@ -5,7 +5,7 @@
       v-model="s.show"
       :timeout="s.timeout"
       :color="s.color"
-      :location="s.location"
+      :location="s.location as any"
       rounded="lg"
       elevation="12"
     >

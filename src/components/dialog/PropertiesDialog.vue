@@ -175,8 +175,8 @@ async function refresh() {
 async function addRow() {
     const newItem: PropertyRow = { name: null, value: null, isEdit: false, isNew: true };
     const newRow = gridApi.value?.applyTransaction({ add: [newItem] });
-    if (newRow.add) {
-        const newRowIndex = newRow.add[0].rowIndex;
+    const newRowIndex = newRow?.add?.[0]?.rowIndex;
+    if (newRowIndex != null) {
         gridApi.value?.startEditingCell({
             rowIndex: newRowIndex,
             colKey: 'name',

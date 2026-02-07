@@ -1,6 +1,26 @@
 import type { ICellRendererParams } from "ag-grid-community";
 import type { Router, RouteLocationRaw } from "vue-router";
 
+/**
+ * Usage (ag-Grid colDef):
+ * {
+ *   field: "name",
+ *   cellRenderer: HyperlinksCellRenderer,
+ *   cellRendererParams: {
+ *     mode: "router" | "href" | "callback",
+ *     to:   (data, p) => ({ name: "routeName", params: { id: data.id } }),
+ *     href: (data, p) => `https://example.com/${data.id}`,
+ *     text: (data, p) => data.name, // defaults to p.value
+ *     title: (data, p) => "tooltip",
+ *     icon: "mdi-open-in-new", // class or SVG string or HTMLElement
+ *     // callback mode: use onClick; return false in beforeClick to cancel
+ *     beforeClick: (data, p, ev) => true,
+ *     onClick: (data, p, ev) => { ... },
+ *     afterClick: (data, p) => { ... },
+ *   }
+ * }
+ */
+
 /* =========================
    타입 정의
    ========================= */
@@ -125,7 +145,8 @@ function resolveIconEl(
     }
     // 아이콘 폰트 클래스
     const i = document.createElement("i");
-    i.className = s;
+    const needsMdiPrefix = s.startsWith("mdi-") && !s.includes("mdi ");
+    i.className = needsMdiPrefix ? `mdi ${s}` : s;
     i.setAttribute("aria-hidden", "true");
     return i;
   }

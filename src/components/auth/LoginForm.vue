@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { useAuthStore } from '@/stores/studio/auth.store';
-import { useRouter, RouterLink } from 'vue-router';
-import { useForm, useField } from 'vee-validate';
+import { useAuthStore } from '@/stores/studio/mgmt/auth.store';
+import { useField, useForm } from 'vee-validate';
+import { computed, nextTick, onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import * as yup from 'yup';
-import { ref, onMounted, nextTick, computed } from 'vue';
 import PasswordResetDialog from './PasswordResetDialog.vue';
 
 // ✅ 스토어, 라우터, 상태
@@ -92,11 +92,11 @@ function passwoard_reset (){
       </v-col>
       <v-col cols="12" class="pt-0">
         <div class="d-flex flex-wrap align-center ml-n2">
-          <v-checkbox v-model="remember" color="primary" hide-details>
+          <!-- <v-checkbox v-model="remember" color="primary" hide-details>
             <template v-slot:label>
               <span class="text-body-1">Remember this Device</span>
             </template>
-          </v-checkbox>
+          </v-checkbox> -->
           <div class="ml-sm-auto"> 
             <v-btn  :disabled="dialog.visible" color="primary" variant="plain" size="large" @click="passwoard_reset">
               비밀번호 재설정

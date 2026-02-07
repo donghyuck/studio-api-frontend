@@ -1,9 +1,10 @@
-import { useAuthStore } from "@/stores/studio/auth.store";
+import { useAuthStore } from "@/stores/studio/mgmt/auth.store";
 import { createRouter, createWebHistory } from "vue-router";
 import AuthRoutes from "./AuthRoutes"; 
 import MainRoutes from "./MainRoutes";
-import StudioRoutes from "./StudioRoutes";
-import { useNavStore } from "@/stores/studio/nav.store";
+import StudioRoutes from "./StudioMgmtRoutes";
+import StudioPublicRoutes from "./StudioPublicRoutes";
+import { useNavStore } from "@/stores/studio/mgmt/nav.store";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -14,6 +15,7 @@ const router = createRouter({
     },
     MainRoutes,
     StudioRoutes,
+    StudioPublicRoutes,
     AuthRoutes, 
   ],
 });

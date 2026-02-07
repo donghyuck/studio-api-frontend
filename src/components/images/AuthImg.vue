@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useAuthImage } from './useAuthImage'
-import { useAuthStore } from '@/stores/studio/auth.store'
+import { useAuthStore } from '@/stores/studio/mgmt/auth.store'
 import { storeToRefs } from 'pinia'
 
 interface Props {

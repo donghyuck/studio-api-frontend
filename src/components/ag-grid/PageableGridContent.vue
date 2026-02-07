@@ -26,7 +26,7 @@ import type {
   SelectionChangedEvent
 } from 'ag-grid-community';
 import { AgGridVue } from 'ag-grid-vue3'; // Vue Data Grid Component
-import { computed, defineProps, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch, unref } from 'vue';
 
 const toast = useToast();
 
@@ -199,8 +199,8 @@ const isWarmUp = () => {
 }
 
 const goToPreviousPage = async () => {
-  const previousPage = props.datasource?.page;
-  if (previousPage > 0 ) {
+  const previousPage = unref(props.datasource?.page) ?? 0;
+  if (previousPage > 0) {
     warm.value = true;
     await sleep(50);
     gridApi.value?.paginationGoToPage(previousPage);
@@ -216,8 +216,9 @@ async function getData(force: boolean = false) {
     console.error('Datasource is not provided.');
     return;
   }
+  const resolveRef = <T,>(value: T | { value: T }) => unref(value as T);
   if (isWarmUp()) {
-    total.value = props.datasource?.total as number;
+    total.value = resolveRef(props.datasource?.total ?? 0);
     gridData.value = [];
     return;
   } else {
@@ -230,8 +231,8 @@ async function getData(force: boolean = false) {
       gridApi.value?.setGridOption('loading', true);
       //console.log( 'fetching ..........')
       await props.datasource?.fetch();
-      gridData.value = props.datasource?.dataItems; 
-      total.value = props.datasource?.total as number;
+      gridData.value = resolveRef(props.datasource?.dataItems ?? []);
+      total.value = resolveRef(props.datasource?.total ?? 0);
       //console.log( gridData.value, total.value)
     } catch (e: any) {
       toast.error(resolveAxiosError(e));

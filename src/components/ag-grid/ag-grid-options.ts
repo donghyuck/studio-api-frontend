@@ -38,7 +38,7 @@ const gridOptions: GridOptions = {
     hyperlinks:{
       filter: "agTextColumnFilter",
       cellRenderer: HyperlinksCellRenderer, 
-      filterValueGetter: (p) => (p.value ?? "").toString(),
+      filterValueGetter: (p: any) => (p?.value ?? "").toString(),
       comparator: textComparator,              
     },
     number: {

@@ -1,5 +1,1 @@
-type Property = {
-    name:string,
-    value:unknown
-}
-export type { Property };
+export type { Property } from "@/types/studio/api-common";

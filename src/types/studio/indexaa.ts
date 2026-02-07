@@ -14,22 +14,28 @@ type Signup = {
 
 type Datasource = {
   isLoaded: Ref<boolean>;
+  loading: Ref<boolean>;
+  error: Ref<unknown | null>;
   dataItems: Ref<any[]>;
   total: Ref<number>;
   pageSize: Ref<number>;
   setSort(newValue: SortModelItem[]): void;
-  setFilter(newValue: any): void;
+  setSearch(q?: string): void;
+  setFilter?(newValue: any): void;
   setPage(newVal: number): void;
   fetch(): Promise<void>;
 };
 
 type PageableDataSource = {
   isLoaded: Ref<boolean>;
+  loading: Ref<boolean>;
+  error: Ref<unknown | null>;
   dataItems: Ref<any[]>;
   total: Ref<number>;
   pageSize: Ref<number>;
   setSort(newValue: SortModelItem[]): void;
-  setFilter(newValue: any): void;
+  setSearch(q?: string): void;
+  setFilter?(newValue: any): void;
   setPage(newVal: number): void;
   fetch(): Promise<void>;
 };
@@ -41,4 +47,3 @@ type EnableActions = {
 };
 
 export type { Datasource, EnableActions, PageableDataSource, Signup };
-

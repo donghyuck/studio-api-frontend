@@ -1,4 +1,5 @@
-export type IsoInstant = string;
+import type { IsoInstant } from "@/types/studio/api-common";
+
 export interface TemplateDto {
   templateId: number;
   objectType: number;

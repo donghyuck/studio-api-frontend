@@ -1,4 +1,34 @@
-import type { recentTrans, productPerformanceType, productsCards } from '@/types/dashboard/index';
+type recentTrans = {
+    title: string;
+    subtitle: string;
+    textcolor: string;
+    boldtext: boolean;
+    line: boolean;
+    link: string;
+    url: string;
+};
+
+type productPerformanceType = {
+    id: number;
+    name: string;
+    post: string;
+    pname: string;
+    status: string;
+    statuscolor: string;
+    budget: string;
+};
+
+type productsCards = {
+    title: string;
+    subtitle?: string;
+    textcolor?: string;
+    icon?: string;
+    link?: string;
+    photo?: string;
+    salesPrice?: string | number;
+    price?: string | number;
+    rating?: number;
+};
 
 /*--Recent Transaction--*/
 const recentTransaction: recentTrans[] = [

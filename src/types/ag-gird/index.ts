@@ -1,22 +1,31 @@
 import type { SortModelItem } from 'ag-grid-community';
 import type { Ref } from 'vue';
- interface PageQuery {
+type MaybeRef<T> = T | Ref<T>;
+interface PageQuery {
   page?: number
   size?: number
   q?: string
-  sort?: string
 }
-interface PageableDataSource<T = unknown> {
-  isLoaded: Ref<boolean>
-  dataItems: Ref<T[]>
-  total: Ref<number>
-  pageSize: Ref<number>
-  page: Ref<number>
-  fetch(query?: PageQuery): Promise<void>
+interface PageableDataSource<T = unknown, R = T> {
+  isLoaded: MaybeRef<boolean>
+  loading: MaybeRef<boolean>
+  error: MaybeRef<unknown | null>
+  dataItems: MaybeRef<T[]>
+  total: MaybeRef<number>
+  pageSize: MaybeRef<number>
+  page: MaybeRef<number>
+  fetch(query?: PageQuery, options?: FetchOptions): Promise<void>
   setPage(p: number): void
   setPageSize(p: number): void
   setSort(sort?: SortModelItem[]): void
-  setFilter(q?: string): void
+  setSearch(q?: string): void
+  setFilter?(q?: string): void
+  getReadUrl?(id: string | number): string
+  getUpdateUrl?(id: string | number): string
+  getDeleteUrl?(id: string | number): string
+  read?(id: string | number): Promise<R | undefined>
+  update?(...args: any[]): Promise<any>
+  remove?(id: string | number): Promise<void>
 }
 interface PageResult<T> {
   items: T[];          // content
@@ -54,4 +63,3 @@ interface CreateOptions {
 }
 
 export type { PageableDataSource, PageResult, PageQuery, RefreshPolicy, CreateOptions, CachePolicy , FetchOptions};
-

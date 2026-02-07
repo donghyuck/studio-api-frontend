@@ -1,22 +1,27 @@
 <template>
-    <v-list-item v-if="userId>0" class="w-100">
+    <v-list-item class="w-100 pa-0" v-if="user">
         <template v-slot:prepend>
-            <v-avatar size="24" color="grey-darken-3" :image="profileImageUrl"></v-avatar>
-        </template>
-        <v-list-item-title class="text-body-2">{{ usernameText }}</v-list-item-title>
-    </v-list-item>
+          <v-avatar
+            size="24"
+            color="grey-darken-3"
+            :image="profileImageUrl"
+          ></v-avatar>
+        </template> 
+        <v-list-item-title class="text-body-2">{{ usernameText }}</v-list-item-title> 
+        <!-- <v-list-item-subtitle v-if="emailText">{{ emailText }}</v-list-item-subtitle>   -->
+      </v-list-item>
 </template>
-
 <script setup lang="ts">
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
-import { getProfileImageUrl, getUserBasic } from "@/data/studio/user";
+import { getProfileImageUrl } from "@/data/studio/public/user";
+import { useUserBasicStore } from "@/stores/studio/mgmt/user.basic.store";
 import type { UserBasicDto } from "@/types/studio/user";
 import { computed, ref, watchEffect } from "vue";
 
 const props = defineProps<{ params: any }>();
 
-const cache = new Map<number, UserBasicDto>();
 const user = ref<UserBasicDto | null>(null);
+const userStore = useUserBasicStore();
 
 const userIdRaw = computed(() => props.params?.value);
 const userId = computed(() => Number(userIdRaw.value ?? 0));
@@ -27,14 +32,8 @@ watchEffect(async () => {
         user.value = null;
         return;
     }
-    const cached = cache.get(id);
-    if (cached) {
-        user.value = cached;
-        return;
-    }
     try {
-        const basic = await getUserBasic(id);
-        cache.set(id, basic);
+        const basic = await userStore.fetch(id);
         user.value = basic;
     } catch {
         user.value = null;
@@ -42,6 +41,8 @@ watchEffect(async () => {
 });
 
 const profileImageUrl = computed(() => {
+    const username = user.value?.username?.trim();
+    if (username) return getProfileImageUrl(username);
     const identifier = userIdRaw.value ?? user.value?.userId;
     if (identifier == null) return NO_AVATAR;
     return getProfileImageUrl(identifier);
@@ -53,5 +54,11 @@ const usernameText = computed(() => {
     const id = userId.value;
     if (!Number.isFinite(id) || id <= 0) return "Unknown";
     return `${id}`;
+});
+
+const emailText = computed(() => {
+    const email = user.value?.email ?? "";
+    const trimmed = email.trim();
+    return trimmed.length > 0 ? trimmed : "";
 });
 </script>

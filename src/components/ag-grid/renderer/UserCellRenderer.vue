@@ -13,7 +13,7 @@
 </template>
 <script setup lang="ts">
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
-import { getProfileImageUrl } from "@/data/studio/user";
+import { getProfileImageUrl } from "@/data/studio/public/user";
 import type { UserDto } from "@/types/studio/user";
 import { computed } from 'vue';
 

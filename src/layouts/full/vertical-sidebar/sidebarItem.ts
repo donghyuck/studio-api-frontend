@@ -21,12 +21,15 @@ import {
   TableIcon,
   TypographyIcon,
   UserPlusIcon,
+  ArticleIcon,
   UsersGroupIcon,
   UsersIcon,
   VectorIcon,
   MailFastIcon,
   MailIcon,
   MailCogIcon,
+  FilesIcon,
+  
 } from "vue-tabler-icons";
 
 export interface menu {
@@ -55,9 +58,16 @@ const sidebarItem: menu[] = [
     to: "/",
     external: false,
   },
+  { header: "커뮤니티" },
+  {
+    title: "게시판",
+    icon: Message2Icon,
+    to: "/community/forums",
+    external: false,
+  },
   { header: "시스템 관리", roles: requiredAdminRoles },
   {
-    title: "보안 관리",
+    title: "회원 관리",
     icon: FolderIcon,
     to: "/",
     roles: requiredAdminRoles,
@@ -76,6 +86,14 @@ const sidebarItem: menu[] = [
         roles: requiredAdminRoles,
         external: false,
       },
+    ],
+  },
+  {
+    title: "보안 관리",
+    icon: FolderIcon,
+    to: "/",
+    roles: requiredAdminRoles,
+    children: [
       {
         title: "롤",
         icon: ShieldLockIcon,
@@ -104,6 +122,31 @@ const sidebarItem: menu[] = [
         title: "로그인 실패",
         icon: DeviceIpadSearchIcon,
         to: "/mgmt/audit/login-failure-log",
+        roles: requiredAdminRoles,
+        external: false,
+      },
+      {
+        title: "게시판 감사",
+        icon: TableIcon,
+        to: "/mgmt/application/forums/audit-log",
+        roles: requiredAdminRoles,
+        external: false,
+      },
+    ],
+  },
+  {
+    title: "정책 관리",
+    icon: FolderIcon,
+    chipColor: "primary",
+    chipBgColor: "lightprimary",
+    to: "/",
+    roles: requiredAdminRoles,
+    children: [
+      {
+        title: "객체 유형",
+        icon: TableIcon,
+        to: "/mgmt/policy/object-types",
+        roles: requiredAdminRoles,
         external: false,
       },
     ],
@@ -121,6 +164,7 @@ const sidebarItem: menu[] = [
         title: "Providers",
         icon: CloudIcon,
         to: "/mgmt/services/objectstorage/providers",
+        roles: requiredAdminRoles,
         external: false,
       },
     ],
@@ -137,17 +181,36 @@ const sidebarItem: menu[] = [
         title: "Chat",
         icon: Message2Icon,
         to: "/mgmt/services/ai/chat",
+        roles: requiredAdminRoles,
         external: false,
       },
       {
         title: "RAG",
         icon: VectorIcon,
         to: "/mgmt/services/ai/rag",
+        roles: requiredAdminRoles,
         external: false,
       },
     ],
   },
-  { header: "응용프로그램" },
+  { header: "응용프로그램" , roles: requiredAdminRoles,},
+  {
+    title: "커뮤니티",
+    icon: FolderIcon,
+    chipColor: "primary",
+    chipBgColor: "lightprimary",
+    to: "/",
+    roles: requiredAdminRoles,
+    children: [
+      {
+        title: "게시판 관리",
+        icon: ArticleIcon,
+        to: "/mgmt/application/forums",
+        roles: requiredAdminRoles,
+        external: false,
+      }
+    ],
+  },
   {
     title: "자원",
     icon: FolderIcon,
@@ -160,14 +223,23 @@ const sidebarItem: menu[] = [
         title: "파일",
         icon: FileDatabaseIcon,
         to: "/mgmt/application/files",
+        roles: requiredAdminRoles,
         external: false,
       },
       {
         title: "템플릿",
         icon: MailFastIcon,
         to: "/mgmt/application/templates",
+        roles: requiredAdminRoles,
         external: false,
-      }, 
+      },
+      {
+        title: "문서",
+        icon: FilesIcon,
+        to: "/mgmt/application/documents",
+        roles: requiredAdminRoles,
+        external: false,
+      },
     ],
   },
   {
@@ -182,16 +254,18 @@ const sidebarItem: menu[] = [
         title: "메일 동기화",
         icon: MailCogIcon,
         to: "/mgmt/application/mail-sync",
+        roles: requiredAdminRoles,
         external: false,
       },
       {
         title: "메일 Inbox",
         icon: MailIcon,
         to: "/mgmt/application/mail-inbox",
+        roles: requiredAdminRoles,
         external: false,
       },
     ],
-  }, 
+  },
   // { header: "auth" },
   // {
   //   title: "Login",
@@ -204,7 +278,7 @@ const sidebarItem: menu[] = [
   //   icon: UserPlusIcon,
   //   to: "/auth/register",
   //   external: false,
-  // }, 
+  // },
 ];
 
 export default sidebarItem;
