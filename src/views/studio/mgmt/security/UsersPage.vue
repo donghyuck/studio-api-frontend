@@ -21,7 +21,7 @@
             <v-progress-linear v-if="downloading" :model-value="progress >= 0 ? progress : undefined"
                 :indeterminate="progress < 0" class="mt-2" />
             <PageableGridContent @filter-actived="onPageableGridFilterActived" :colIdToSnakeCase="false"
-                :options='{ rowSelection: rowSelection , cellSelection: true}' ref="pageableGridContentRef" :datasource="dataStore"  
+                :options='{ rowSelection: rowSelection }' ref="pageableGridContentRef" :datasource="dataStore"  
                 :columns="columnDefs">
             </PageableGridContent>
         </v-col>
@@ -47,8 +47,7 @@ const nav = useNavStore();
 const rowSelection: RowSelectionOptions = {
     mode: 'multiRow',
     enableClickSelection: false,
-    headerCheckbox: true,
-}
+}; 
 const dataStore = usePageableUsersStore();
 const gridData = ref<any[]>();
 const loader = ref(false);
@@ -101,19 +100,19 @@ const columnActions = [
 
 const columnDefs: ColDef[] = [
     {
-        field: 'username', headerName: '아이디', filter: false, sortable: true, type: "hyperlinks", flex: .8, cellRendererParams: {
+        field: 'username', headerName: '아이디', filter: false, sortable: true, type: "hyperlinks", flex: .5, cellRendererParams: {
             mode: 'router',
             to: (d: any) => ({ name: 'UserDetails', params: { userId: d.userId } }),
             router: router,
         }
     },
-    { field: 'name', headerName: '이름', filter: false, sortable: true, type: "hyperlinks", flex: .8 },
+    { field: 'name', headerName: '이름', filter: false, sortable: true, type: "hyperlinks", flex: .5 },
     { field: 'email', headerName: '메일', filter: false, sortable: true, type: 'string', flex: 1, },
-    { field: 'enabled', headerName: '활성화 여부', filter: false, sortable: true, type: 'boolean', flex: .5, cellRenderer: CheckboxRenderer, cellStyle: { textAlign: "center" }, },
-    { field: 'status', headerName: '상태', filter: false, sortable: true, type: 'text', flex: .5, },
-    { field: 'creationDate', headerName: '생성일시', filter: false, type: 'datetime', flex: 1 },
-    { field: 'modifiedDate', headerName: '수정일시', filter: false, type: 'datetime', flex: 1 },
-    { colId: 'actions', headerName: '', filter: false, sortable: false, flex: 1.1, cellRenderer: ActionCellRenderer, cellRendererParams: {
+    { field: 'enabled', headerName: '활성화 여부', filter: false, sortable: true, type: 'boolean', minWidth:80, flex:0.5, cellRenderer: CheckboxRenderer, cellStyle: { textAlign: "center" }, },
+    { field: 'status', headerName: '상태', filter: false, sortable: true, type: 'text', minWidth:80, flex:0.5, },
+    { field: 'creationDate', headerName: '생성일시', filter: false, type: 'datetime', flex:0.8, },
+    { field: 'modifiedDate', headerName: '수정일시', filter: false, type: 'datetime', flex:0.8,},
+    { colId: 'actions', headerName: '', filter: false, sortable: false, flex:1.4, minWidth:200, cellRenderer: ActionCellRenderer, cellRendererParams: {
         actions: columnActions, onAction } },
 ];
 

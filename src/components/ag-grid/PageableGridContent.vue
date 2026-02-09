@@ -1,6 +1,6 @@
 <template>
-  <div ref="gridContainer" class="ag-theme-quartz ag-theme-adapted" :style="{ width: '100%', height: gridHeight + 'px' }">
-    <AgGridVue class="ag-theme-quartz ag-theme-adapted" style="width: 100%; height: 100%" :rowModelType="rowModelType"
+  <div ref="gridContainer" class="ag-theme-adapted" :style="{ width: '100%', height: gridHeight + 'px' }">
+    <AgGridVue class="ag-theme-adapted" style="width: 100%; height: 100%" :rowModelType="rowModelType"
       :gridOptions="gridOptionsDefs" :columnDefs="columnDefs" :pagination="true" :paginationPageSize="pageSize"
       :cacheBlockSize="cacheBlockSize" @paginationChanged="onPaginationChanged" @selectionChanged="onSelectionChanged"
       @grid-ready="onGridReady">
@@ -8,9 +8,6 @@
   </div>
 </template>
 <style lang="css" scoped>
-.ag-paging-panel {
-  border-top: 0px !important;
-}
 </style>
 <script setup lang="ts">
 import gridOptions from '@/components/ag-grid/ag-grid-options';
@@ -69,9 +66,16 @@ const total = ref<number>(0);
 // Grid options 설정 
 
 // 프로퍼티로 전달된 옵션을 사용하거나 기본값 사용
-const gridOptionsDefs = computed<GridOptions>(() =>
-  props.options ? { ...gridOptions, ...props.options } : gridOptions
-)
+const gridOptionsDefs = computed<GridOptions>(() => {
+  const merged: GridOptions = props.options ? { ...gridOptions, ...props.options } : { ...gridOptions };
+  if (rowModelType.value === 'infinite') {
+    const rs = (merged as any).rowSelection;
+    if (rs && typeof rs === 'object') {
+      (merged as any).rowSelection = { ...rs, selectAll: 'none' };
+    }
+  }
+  return merged;
+})
 
 // Grid columns 설정
 // 프로퍼티로 전달된 컬럼을 사용하거나 빈 배열 사용

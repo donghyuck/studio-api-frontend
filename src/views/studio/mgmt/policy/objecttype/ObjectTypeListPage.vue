@@ -134,9 +134,8 @@ const columnDefs: ColDef[] = [
 ];
 
 const gridOptions: GridOptions = {
-  rowSelection: "single",
+  rowSelection: { mode: 'singleRow', enableClickSelection: true },
   rowMultiSelectWithClick: false,
-  suppressRowClickSelection: false,
 };
 
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);

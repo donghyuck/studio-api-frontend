@@ -106,28 +106,28 @@
 </template>
 
 <script setup lang="ts">
-import PageToolbar from '@/components/bars/PageToolbar.vue';
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
+import RemotePublicUserCellRenderer from '@/components/ag-grid/renderer/RemotePublicUserCellRenderer.vue';
+import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { forumsAdminApi } from '@/data/studio/mgmt/forums';
 import { forumsPublicApi } from '@/data/studio/public/forums';
+import { useToast } from '@/plugins/toast';
+import { useAuthStore } from '@/stores/studio/mgmt/auth.store';
+import { usePublicForumAuthzStore } from '@/stores/studio/public/forum.authz.store';
 import { usePublicForumListStore } from '@/stores/studio/public/forum.list.store';
 import { usePublicForumTopicsStore } from '@/stores/studio/public/forum.topics.store';
-import { useAuthStore } from '@/stores/studio/mgmt/auth.store';
-import type { ColDef, GridOptions } from 'ag-grid-community';
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useToast } from '@/plugins/toast';
-import { resolveAxiosError } from '@/utils/helpers';
-import { EditorContent, useEditor } from '@tiptap/vue-3';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import Image from '@tiptap/extension-image';
-import Youtube from '@tiptap/extension-youtube';
-import { Node } from '@tiptap/core';
-import { usePublicForumAuthzStore } from '@/stores/studio/public/forum.authz.store';
 import type { ForumResponse, PermissionAction } from '@/types/studio/forums';
+import { resolveAxiosError } from '@/utils/helpers';
+import { Node } from '@tiptap/core';
+import Image from '@tiptap/extension-image';
+import Placeholder from '@tiptap/extension-placeholder';
+import Youtube from '@tiptap/extension-youtube';
+import StarterKit from '@tiptap/starter-kit';
+import { EditorContent, useEditor } from '@tiptap/vue-3';
+import type { ColDef, GridOptions } from 'ag-grid-community';
 import dayjs from 'dayjs';
-import RemotePublicUserCellRenderer from '@/components/ag-grid/renderer/RemotePublicUserCellRenderer.vue';
+import { computed, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 const route = useRoute();
 const router = useRouter();
@@ -202,9 +202,8 @@ const columnDefs: ColDef[] = [
 ];
 
 const gridOptions: GridOptions = {
-  rowSelection: 'single',
+  rowSelection: { mode: 'singleRow', enableClickSelection: true, checkboxes: false },
   rowMultiSelectWithClick: false,
-  suppressRowClickSelection: false,
 };
 
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);

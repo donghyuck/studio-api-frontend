@@ -8,7 +8,7 @@
                     { icon: 'mdi-plus', event: 'create', color: 'blue', tooltip: '도메인/클래스 생성' },
                     { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
             <GridContent ref="gridContentRef_classes" :height="300" :rowData="gridData_classes" style=""
-                :options='{ cellSelection: true }' :auto-resize="false" :columns="columnDefs_classes"
+                :options='{}' :auto-resize="false" :columns="columnDefs_classes"
                 :rowSelection="rowSelection"></GridContent>
         </v-col>
     </v-row>
@@ -20,7 +20,7 @@
                     { icon: 'mdi-plus', event: 'create', color: 'blue', tooltip: '대상(사용자/롤) 생성' },
                     { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
             <GridContent ref="gridContentRef_sids" :height="300" :rowData="gridData_sids" style="" :auto-resize="false"
-                :options='{ cellSelection: true }' :columns="columnDefs_sids" :rowSelection="rowSelection">
+                :options='{}' :columns="columnDefs_sids" :rowSelection="rowSelection">
             </GridContent>
         </v-col>
     </v-row>
@@ -39,7 +39,7 @@
                 </template>
             </v-banner>
             <GridContent ref="gridContentRef_objects" :height="300" :rowData="gridData_objects" style=""
-                :options='{ cellSelection: true }' :auto-resize="false" :columns="columnDefs_objects"
+                :options='{}' :auto-resize="false" :columns="columnDefs_objects"
                 :rowSelection="rowSelection">
             </GridContent>
         </v-col>
@@ -57,7 +57,7 @@
                 </template>
             </v-banner>
             <GridContent ref="gridContentRef_entries" :height="300" :rowData="gridData_entries" style=""
-                :options='{ cellSelection: true }' :auto-resize="false" :columns="columnDefs_entries"
+                :options='{}' :auto-resize="false" :columns="columnDefs_entries"
                 :rowSelection="rowSelection"></GridContent>
         </v-col>
     </v-row>

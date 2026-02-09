@@ -63,8 +63,7 @@ const emit = defineEmits(['close', 'updated']);
 const overlay = ref(false)
 const columnDefs: ColDef[] = [
     {
-        headerCheckboxSelection: true,                         // 각 행 체크박스
-        headerCheckboxSelectionFilteredOnly: true,
+        // headerCheckboxSelection not supported with infinite row model
         field: 'userId', headerName: 'Id', type: 'number', flex: .3, filter: false, sortable: false
     },
     { field: 'name', headerName: 'Name', type: 'string', sortable: false, filter: false, flex: 1 },
@@ -74,7 +73,7 @@ const columnDefs: ColDef[] = [
 
 const rowSelection: RowSelectionOptions = {
     mode: 'multiRow',
-}
+};
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);
 const filtersActive = ref(false);
 

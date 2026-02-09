@@ -5,6 +5,7 @@ html {
 .v-main {
   margin-right: 20px;
   background-color: rgb(var(--v-theme-background));
+  transition: background-color 200ms ease;
 }
 .v-main .v-breadcrumbs {
   font-size: 12px;

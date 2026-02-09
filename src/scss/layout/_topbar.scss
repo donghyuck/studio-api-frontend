@@ -14,6 +14,7 @@
   position: sticky;
   top: 0;
   width: 100%;
+  transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
   .text-linear-gradient {
     background: linear-gradient(90deg, #ffffff 0%, #3772ff 100%);
     -webkit-background-clip: text;
@@ -54,6 +55,7 @@
 .top-header {
   z-index: 12 !important;
   background: rgb(var(--v-theme-surface));
+  transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease, box-shadow 200ms ease;
 }
 .v-app-bar.v-toolbar.top-header--scrolled,
 .top-header--scrolled {

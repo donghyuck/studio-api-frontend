@@ -1,10 +1,8 @@
-import "ag-grid-community/styles/ag-grid.css"; // Mandatory CSS required by the grid
-import "ag-grid-community/styles/ag-theme-quartz.css"; // Optional Theme applied to the grid 
-
 import CustomLoadingOverlay from "@/components/ag-grid/CustomLoadingOverlay.vue";
 import CheckboxRenderer from "@/components/ag-grid/renderer/CheckboxRenderer.vue";
 import CustomBooleanFilter from "@/components/ag-grid/renderer/CustomBooleanFilter.vue";
 import type { GridOptions } from "ag-grid-community";
+import { themeMaterial } from "ag-grid-community";
 
 import dayjs from "dayjs";
 import { HyperlinksCellRenderer } from "./renderer/HyperlinksCellRenderer";
@@ -14,6 +12,7 @@ const textComparator = (a?: any, b?: any) =>
   (a ?? '').toString().localeCompare((b ?? '').toString());
 
 const gridOptions: GridOptions = {
+  theme: themeMaterial,
   localeText: AG_GRID_LOCALE_KR,
   loadingOverlayComponent: CustomLoadingOverlay,
   paginationPageSizeSelector:[ 15, 30, 50, 100],
@@ -30,6 +29,11 @@ const gridOptions: GridOptions = {
     },
   },
   columnTypes: {
+    text: {
+      filter: "agTextColumnFilter",
+      filterParams: { maxNumConditions: 1 },
+      cellStyle: { textAlign: "center" },
+    },
     string: {
       filter: "agTextColumnFilter",
       filterParams: { maxNumConditions: 1 },

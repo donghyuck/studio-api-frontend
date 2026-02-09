@@ -89,8 +89,7 @@ const assignedGroups = ref<GroupDto[]>(); // granted by groups
 const rowSelection: RowSelectionOptions = {
     mode: 'multiRow',
     enableClickSelection: false,
-    headerCheckbox: true,
-}
+};
 
 const columnDefs: ColDef[] = [
     { field: 'name', headerName: '이름', filter: false, sortable: true, type: "string", flex: .8 },

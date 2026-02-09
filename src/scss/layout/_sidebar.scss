@@ -5,6 +5,7 @@
   box-shadow: none !important;
   border-right: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   top: var(--feature-topbar-height, 0px) !important;
+  transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease;
   .logo {
     padding-left: 7px;
   }

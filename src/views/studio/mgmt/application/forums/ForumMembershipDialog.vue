@@ -150,14 +150,13 @@ const columnDefs: ColDef[] = [
   {
     headerName: "",
     field: "select",
-    maxWidth: 48,
+    maxWidth: 65,
     pinned: "left",
     sortable: false,
     filter: false,
     resizable: false,
     checkboxSelection: true,
-    headerCheckboxSelection: true,
-    headerCheckboxSelectionFilteredOnly: true,
+    headerCheckboxSelection: false,
   },
   { field: "userId", headerName: "멤버", flex: 1, cellRenderer: RemoteMgmtUserCellRenderer },
   {

@@ -68,12 +68,13 @@ const columnDefs: ColDef[] = [
     {
         headerName: '',
         field: 'select',
-        maxWidth: 48,
+        maxWidth: 65,
         pinned: 'left',
         sortable: false,
         filter: false,
         resizable: false,
         checkboxSelection: true,
+        headerCheckboxSelection: false,
     },
     { field: 'documentId', headerName: 'ID', filter: false, sortable: true, type: "number", maxWidth: 80 },
     { field: 'objectType', headerName: '유형', filter: false, type: 'number', maxWidth: 80 },
@@ -93,9 +94,8 @@ const columnDefs: ColDef[] = [
     { field: 'updatedAt', headerName: '수정일시', filter: false, type: 'datetime', flex: 1 },
 ];
 const gridOptions: GridOptions = {
-    rowSelection: 'single',
+    rowSelection: { mode: 'singleRow', enableClickSelection: true },
     rowMultiSelectWithClick: false,
-    suppressRowClickSelection: false,
 };
 
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);

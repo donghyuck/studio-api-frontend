@@ -73,14 +73,13 @@ const columnDefs: ColDef[] = [
     {
         headerName: '',
         field: 'select',
-        maxWidth: 48,
+        maxWidth: 65,
         pinned: 'left',
         sortable: false,
         filter: false,
         resizable: false,
         checkboxSelection: true,
-        headerCheckboxSelection: true,
-        headerCheckboxSelectionFilteredOnly: true,
+        headerCheckboxSelection: false,
     },
     { field: 'attachmentId', headerName: 'ID', filter: false, sortable: true, type: "number", maxWidth: 100 },
     {
@@ -99,9 +98,8 @@ const columnDefs: ColDef[] = [
     { field: 'createdAt', headerName: '생성일시', filter: false, type: 'datetime', flex: 1 },
 ];
 const gridOptions: GridOptions = {
-    rowSelection: 'multiple',
+    rowSelection: { mode: 'multiRow', enableClickSelection: true },
     rowMultiSelectWithClick: true,
-    suppressRowClickSelection: false,
 };
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);
 const filtersActive = ref(false);

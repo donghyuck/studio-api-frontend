@@ -1,6 +1,6 @@
 <template>
-  <div ref="gridContainer" class="ag-theme-quartz ag-theme-adapted" :style="{ width: '100%', height: gridHeight + 'px' }">
-    <AgGridVue class="ag-theme-quartz ag-theme-adapted" style="width: 100%; height: 100%" :gridOptions="gridOptionsDefs"
+  <div ref="gridContainer" class="ag-theme-adapted" :style="{ width: '100%', height: gridHeight + 'px' }">
+    <AgGridVue class="ag-theme-adapted" style="width: 100%; height: 100%" :gridOptions="gridOptionsDefs"
       :rowSelection="rowSelectionDefs" :columnDefs="columnDefs" :rowData="rowData" @row-selected="onRowSelected"
       @row-data-updated="onRowDataUpdated" @selectionChanged="onSelectionChanged" @grid-ready="onGridReady" :defaultColDef="{ resizable: true }"></AgGridVue>
   </div>

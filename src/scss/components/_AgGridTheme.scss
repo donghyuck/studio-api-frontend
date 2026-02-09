@@ -1,4 +1,4 @@
-.ag-theme-quartz.ag-theme-adapted {
+.ag-theme-adapted {
   --ag-background-color: rgb(var(--v-theme-surface));
   --ag-foreground-color: rgb(var(--v-theme-on-surface));
   --ag-header-background-color: rgb(var(--v-theme-surface));
@@ -13,11 +13,51 @@
   --ag-modal-overlay-background-color: rgba(var(--v-theme-surface), 0.7);
 }
 
-.ag-theme-quartz.ag-theme-adapted .ag-root-wrapper {
+.ag-theme-adapted .ag-root-wrapper {
   border-color: rgba(var(--v-border-color), var(--v-border-opacity));
   background-color: rgb(var(--v-theme-surface));
 }
 
-.ag-theme-quartz.ag-theme-adapted .ag-header {
+.ag-theme-adapted .ag-header {
   border-bottom-color: rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.ag-theme-adapted .ag-selection-checkbox,
+.ag-theme-adapted .ag-selection-checkbox .ag-checkbox-input-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ag-theme-adapted .ag-selection-checkbox .ag-checkbox-input-wrapper {
+  margin: 0 auto;
+}
+
+.v-theme--dark .ag-theme-adapted {
+  --ag-header-foreground-color: rgb(var(--v-theme-on-surface));
+}
+
+.v-theme--dark .ag-theme-adapted .ag-header,
+.v-theme--dark .ag-theme-adapted .ag-header-cell,
+.v-theme--dark .ag-theme-adapted .ag-header-cell-text {
+  color: rgb(var(--v-theme-on-surface)) !important;
+}
+
+.ag-theme-adapted .ag-link {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ag-theme-adapted .ag-link:hover {
+  color: rgb(var(--v-theme-primary));
+  opacity: 0.85;
+}
+
+.v-theme--dark .ag-theme-adapted .ag-link {
+  color: rgb(var(--v-theme-primary));
+}
+
+.v-theme--dark .ag-theme-adapted .ag-link:hover {
+  opacity: 0.9;
 }

@@ -144,11 +144,33 @@ async function handlePrevious() {
   }
 }
 
-const emits = defineEmits<{
-  (e: "previous"): void;
-  (e: "close"): void;
-  (e: string, payload?: any): void;
-}>();
+const emits = defineEmits([
+  "previous",
+  "close",
+  "create",
+  "createNewVersion",
+  "custom",
+  "delete",
+  "deleteCurrent",
+  "download-excel-all",
+  "edit",
+  "email-sync",
+  "fullscreen",
+  "lock",
+  "nextTopic",
+  "openAcl",
+  "openCategories",
+  "openPermissions",
+  "openRoleHelp",
+  "pin",
+  "prevTopic",
+  "preview",
+  "refresh",
+  "reload",
+  "remove-membership",
+  "selectAll",
+  "upload",
+]);
 
 function resolve<T>(v: ValueOrFn<T> | undefined, fallback?: T): T {
   if (typeof v === 'function') return (v as any)()

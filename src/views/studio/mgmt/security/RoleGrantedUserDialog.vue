@@ -118,8 +118,7 @@ const handleSearch = async () => {
 const rowSelection: RowSelectionOptions = {
     mode: 'multiRow',
     enableClickSelection: false,
-    headerCheckbox: true,
-}
+};
 
 const columnDefs: ColDef[] = [
     { field: 'username', headerName: '아이디', filter: false, sortable: true, type: "string", flex: .8 },

@@ -40,7 +40,7 @@ function applyTheme(mode: ThemeMode) {
   const next = mode === 'system'
     ? (isSystemDark.value ? 'dark' : 'light')
     : (mode === 'dark' ? 'dark' : 'light');
-  theme.global.name.value = next;
+  theme.change(next);
 }
 
 // ✅ 현재 사용자 권한

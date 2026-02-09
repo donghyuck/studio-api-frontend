@@ -188,6 +188,7 @@ function onProcessFile(error: any, file: any) {
 }
 
 const presence = ref<AvatarPresence>();
+const acceptedFileTypes = ['image/*'];
 
 async function getData(force: boolean = false) {
     const data = await avatars.checkPresence();
@@ -200,11 +201,12 @@ onMounted(async () => {
 });
 </script>
 <template>
-    <FilePond :name="fieldName" :server="server" :files="files" :allow-multiple="false" accepted-file-types="image/*"
-        max-files="1" instant-upload :credits="false" :image-resize-target-width="width"
+    <FilePond :name="fieldName" :server="server" :files="files" :allow-multiple="false"
+        :accepted-file-types="acceptedFileTypes" max-files="1" instant-upload :credits="[]"
+        :image-resize-target-width="width"
         :image-resize-target-height="height" image-resize-mode="cover" image-transform-output-quality="0.9"
         image-transform-output-mime-type="image/jpeg" :label-idle="'이미지를 끌어놓거나 클릭하여 선택'"
-        :label-file-processing="() => '업로드 중...'" :label-file-processing-complete="'완료'" :label-tap-to-cancel="'취소'"
+        label-file-processing="업로드 중..." :label-file-processing-complete="'완료'" :label-tap-to-cancel="'취소'"
         :label-tap-to-retry="'재시도'" :allow-revert="false" :label-tap-to-undo="'되돌리기'" @processfile="onProcessFile"
         :before-remove-file="beforeRemoveFile" :file-rename-function="fileRenameFn" />
 </template>

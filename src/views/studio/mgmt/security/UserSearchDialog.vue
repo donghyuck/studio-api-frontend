@@ -81,9 +81,7 @@ const handleSearch = async () => {
 
 const rowSelection: RowSelectionOptions = {
     mode: 'multiRow',
-    headerCheckbox: false,
-    selectAll: 'currentPage',
-}
+};
 
 const columnDefs: ColDef[] = [
     {

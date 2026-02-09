@@ -10,8 +10,12 @@ import VueApexCharts from 'vue3-apexcharts';
 import VueTablerIcons from 'vue-tabler-icons'; 
 import Toast from '@/plugins/toast';
 import Confirm from '@/plugins/confirm';
+import { ModuleRegistry, AllCommunityModule } from 'ag-grid-community';
 
 const app = createApp(App);
+
+// AG Grid v35+ requires explicit module registration.
+ModuleRegistry.registerModules([AllCommunityModule]);
 function syncHtmlLangFromVuetify() {
   const locale = (vuetify as any)?.locale?.current?.value || 'ko';
   if (typeof document !== 'undefined') {

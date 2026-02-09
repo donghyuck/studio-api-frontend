@@ -3,19 +3,18 @@
         :divider="false" @create="addRow()" :items="[{ icon: 'mdi-plus', event: 'create', tooltip: '추가' },
         { icon: 'mdi-refresh', event: 'refresh' }]">
     </PageToolbar>
-    <AgGridVue class="ag-theme-quartz properties-grid" :columnDefs="columnDefs" :rowData="gridData" :style="gridStyle"
+    <AgGridVue class="properties-grid" :columnDefs="columnDefs" :rowData="gridData" :style="gridStyle"
         :gridOptions="gridOptions" @grid-ready="onGridReady" @cellEditingStarted="onCellEditingStarted"
         @cellEditingStopped="onCellEditingStopped" @cellValueChanged="onCellValueChanged">
     </AgGridVue>
 </template>
 <script setup lang="ts">
-import "ag-grid-community/styles/ag-grid.css"; // Mandatory CSS required by the grid
-import "ag-grid-community/styles/ag-theme-quartz.css"; // Optional Theme applied to the grid
 // define grid componet : ag-gird  
 import ActionCellRenderer from '@/components/ag-grid/renderer/ActionCellRenderer.vue';
 import PageToolbar from '@/components/bars/PageToolbar.vue';
 import type { Property } from '@/types/studio';
 import type { ColDef, GridApi, GridOptions } from 'ag-grid-community';
+import { themeMaterial } from 'ag-grid-community';
 import { AgGridVue } from "ag-grid-vue3"; // Vue Data Grid Component 
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
@@ -42,11 +41,11 @@ type PropertyRow = Property & {
 };
 
 const gridOptions: GridOptions = {
+    theme: themeMaterial,
     getRowHeight: () => 40,
     headerHeight: 36,
     animateRows: true,
-    rowSelection: 'multiple',
-    suppressRowClickSelection: false,
+    rowSelection: { mode: 'multiRow', enableClickSelection: true },
     enableCellTextSelection: true,
     defaultColDef: {
         flex: 1,
@@ -367,7 +366,7 @@ async function pasteRowsFromClipboard() {
 </script>
 <style>
 .ag-paging-panel {
-    border-top: 0px;
+    border-top: 1px solid var(--ag-border-color, rgba(var(--v-border-color), 1));
 }
 
 .properties-grid .cell-error {
