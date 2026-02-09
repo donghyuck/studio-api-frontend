@@ -61,9 +61,9 @@ const StudioRoutes = {
         },
         // services:objectstorage
         {
-            name: 'ObjectStorgaeProviders',
+            name: 'ObjectStorageProviders',
             path: 'services/objectstorage/providers',
-             component: () => import('@/views/studio/mgmt/services/objectstorage/ObjectStorageProvidersPage.vue'),
+             component: () => import('@/views/studio/mgmt/services/objectstorage/ObjectStorageListPage.vue'),
         },    
         {
             name: 'ObjectStorage',

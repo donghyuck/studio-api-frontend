@@ -124,7 +124,7 @@ import { useToast } from "@/plugins/toast";
 import { useForm, useField } from "vee-validate";
 import * as yup from "yup";
 import type { ColDef } from "ag-grid-community";
-import ServerSideUserCellRenderer from '@/components/ag-grid/renderer/ServerSideUserCellRenderer.vue';
+import RemoteMgmtUserCellRenderer from '@/components/ag-grid/renderer/RemoteMgmtUserCellRenderer.vue';
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
 import { useUserBasicStore } from "@/stores/studio/mgmt/user.basic.store";
 
@@ -159,7 +159,7 @@ const columnDefs: ColDef[] = [
     headerCheckboxSelection: true,
     headerCheckboxSelectionFilteredOnly: true,
   },
-  { field: "userId", headerName: "멤버", flex: 1, cellRenderer: ServerSideUserCellRenderer },
+  { field: "userId", headerName: "멤버", flex: 1, cellRenderer: RemoteMgmtUserCellRenderer },
   {
     field: "role",
     headerName: "역할",
@@ -176,7 +176,7 @@ const columnDefs: ColDef[] = [
       },
     },
   },
-  { field: "createdById", headerName: "생성자", maxWidth: 100, cellRenderer: ServerSideUserCellRenderer },
+  { field: "createdById", headerName: "생성자", maxWidth: 100, cellRenderer: RemoteMgmtUserCellRenderer },
   { field: "createdAt", headerName: "생성일", flex: 1, type: 'datetime' },
 ];
 const roles: ForumMemberRole[] = ["OWNER", "ADMIN", "MODERATOR", "MEMBER"];

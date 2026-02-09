@@ -2,7 +2,6 @@ import { createVuetify } from "vuetify";
 import "@mdi/font/css/materialdesignicons.css";
 import * as components from "vuetify/components";
 import * as directives from "vuetify/directives";
-import { BlueTheme } from "@/theme/LightTheme";
 import { ko, en } from "vuetify/locale";
 
 export default createVuetify({
@@ -14,10 +13,7 @@ export default createVuetify({
   components,
   directives,
   theme: {
-    defaultTheme: "BlueTheme",
-    themes: {
-      BlueTheme,
-    },
+    defaultTheme: "light",
   },
   defaults: {
     VBtn: {},

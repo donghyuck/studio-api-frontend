@@ -1,6 +1,6 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['시스템관리', '보안관리', '그룹']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="그룹 목록" class="ba-0 bg-white" @refresh="refresh" @create="onCreate" :closeable="false"
+    <PageToolbar title="그룹 목록" class="ba-0" @refresh="refresh" @create="onCreate" :closeable="false"
         :divider="true" :items="[
             { icon:'mdi-account-multiple-plus', tooltip:'그룹 생성', text: 'Create Group', variant: 'text', event: 'create', color: 'blue', },
             { icon: 'mdi-refresh', event: 'refresh', }]" ></PageToolbar>

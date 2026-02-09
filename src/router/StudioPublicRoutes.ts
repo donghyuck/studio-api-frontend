@@ -3,6 +3,7 @@ const StudioPublicRoutes = {
   component: () => import('@/layouts/full/FullLayout.vue'),
   meta: {
     requiresAuth: false,
+    restoreSession: true,
   },
   redirect: '/community/forums',
   children: [
@@ -14,7 +15,7 @@ const StudioPublicRoutes = {
     {
       name: 'CommunityForumTopics',
       path: 'forums/:forumSlug/topics',
-      component: () => import('@/views/studio/public/community/ForumTopicsPage.vue'),
+      component: () => import('@/views/studio/public/community/ForumTopicListPage.vue'),
     },
     {
       name: 'CommunityForumTopicDetail',

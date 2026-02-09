@@ -33,7 +33,7 @@
                     </v-row>
                 </v-container>
             </v-card-text>
-            <v-divider class="border-opacity-100" color="success" />
+            <v-divider />
             <v-container class="pa-0">
                 <v-card-text class="pa-0">
                     <v-toolbar density="compact" class="pa-2" dense>

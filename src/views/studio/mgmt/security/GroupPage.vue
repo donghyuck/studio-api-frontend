@@ -14,7 +14,7 @@
                             <PropertiesGrid :rowData="properties" @change="handleChange" height="200px"/>
                         </form>
                     </v-card-text>
-                    <v-divider class="border-opacity-100" color="primary" />
+                    <v-divider />
                     <v-card-actions>
                         <v-btn prepend-icon="mdi-shield-account-variant" variant="tonal" color="primary" rounded="xl" width="100">
                             Roles

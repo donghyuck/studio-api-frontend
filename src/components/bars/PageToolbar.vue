@@ -1,5 +1,5 @@
 <template>
-  <v-toolbar :density="props.density" :class="props.class">
+  <v-toolbar :density="props.density" :class="toolbarClass">
     <template v-slot:prepend>
       <v-btn v-if="previous" size="small" icon="mdi-chevron-left" :title="previousTitle" @click="handlePrevious" /> 
     </template> 
@@ -30,7 +30,7 @@
       <v-icon>mdi-close</v-icon>
     </v-btn>
   </v-toolbar>
-  <v-divider v-if="divider" class="border-opacity-100" color="success" />
+  <v-divider v-if="divider" class="page-toolbar-divider" />
 </template>
 <script setup lang="ts">
 import { hasHistory } from '@/utils/helpers';
@@ -104,13 +104,15 @@ const props = withDefaults(defineProps<Props>(), {
   subtitle: undefined,
   label: undefined,
   density: 'compact',
-  class: 'bg-white',
+  class: '',
   divider: true,
   closeable: false,
   previous: false,
   prependItems: () => [],
   items: () => [],
 })
+
+const toolbarClass = computed(() => ['page-toolbar', props.class].filter(Boolean))
 
 const isVisible = (visible?: boolean) => visible !== false
 
@@ -265,3 +267,14 @@ function tooltipText(a: { text?: string, tooltip?: string }): string {
 }
 
 </script>
+
+<style scoped>
+.page-toolbar {
+  background: transparent;
+  color: rgb(var(--v-theme-on-surface));
+}
+
+.page-toolbar-divider {
+  border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+}
+</style>

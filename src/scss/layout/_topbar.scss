@@ -40,27 +40,27 @@
   }
 }
 .topbar-tone--normal {
-  background: rgb(252, 252, 253);
+  background: rgb(var(--v-theme-surface));
 }
 .topbar-tone--soon {
-  background: rgb(253, 248, 238);
+  background: rgba(var(--v-theme-warning), 0.12);
 }
 .topbar-tone--grace {
-  background: rgb(253, 242, 238);
+  background: rgba(var(--v-theme-error), 0.12);
 }
 .topbar-tone--expired {
-  background: rgb(252, 238, 238);
+  background: rgba(var(--v-theme-error), 0.18);
 }
 .top-header {
   z-index: 12 !important;
-  background: rgb(255, 255, 255);
+  background: rgb(var(--v-theme-surface));
 }
 .v-app-bar.v-toolbar.top-header--scrolled,
 .top-header--scrolled {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(var(--v-theme-surface), 0.92);
   backdrop-filter: blur(1px);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  box-shadow: 0 4px 10px rgba(var(--v-theme-on-surface), 0.12);
 }
 .top-header--scrolled {
 }

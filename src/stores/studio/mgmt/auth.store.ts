@@ -14,7 +14,7 @@ const refreshUrl = `${import.meta.env.VITE_API_BASE_URL}/api/auth/refresh`;
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
-    token: localStorage.getItem("jwt") ,
+    token: null as string | null,
     user : null as UserProfileDto | null,
   }),
   getters: {
@@ -34,7 +34,6 @@ export const useAuthStore = defineStore("auth", {
         );
         const { accessToken } = response.data.data;
         this.token = accessToken;
-        localStorage.setItem("jwt", accessToken);
         await this.fetchUser();
       } catch (error: any) {  
           const message = resolveAxiosError(error);
@@ -42,10 +41,8 @@ export const useAuthStore = defineStore("auth", {
       }
     },
     logout() {
-      this.token = "";
+      this.token = null;
       this.user = null;
-      localStorage.removeItem("jwt");
-      localStorage.removeItem("refresh_token");
     },
 
     async refreshTokens() {
@@ -56,7 +53,6 @@ export const useAuthStore = defineStore("auth", {
 
         const { accessToken } = response.data.data;
         this.token = accessToken;
-        localStorage.setItem("jwt", accessToken);
 
         return accessToken;
       } catch (error: any) {

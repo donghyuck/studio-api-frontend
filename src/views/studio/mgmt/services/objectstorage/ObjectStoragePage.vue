@@ -1,6 +1,6 @@
 <template>
     <v-breadcrumbs class="pa-0" :items="['서비스 관리', 'ObjectStorage', providerId ?? 'n/a']" density="compact"></v-breadcrumbs>
-    <PageToolbar title="Buckets" :label="providerId" :previous="true" :previous-to="{ name: 'ObjectStorgaeProviders' }" :closeable="false" :divider="false" :items="[
+    <PageToolbar title="Buckets" :label="providerId" :previous="true" :previous-to="{ name: 'ObjectStorageProviders' }" :closeable="false" :divider="false" :items="[
         { icon: 'mdi-refresh', event: 'refresh', }]"></PageToolbar>
     <GridContent ref="gridContentRef" :rowData="gridData" :height=300 :columns="columnDefs">
     </GridContent>
@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import type { BucketDto, ObjectListItemDto } from '@/types/studio/storage';
 import { createObjectStorageStore } from '@/stores/studio/mgmt/objectstorage.store.factory';
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import PageToolbar from '@/components/bars/PageToolbar.vue';
 import GridContent from '@/components/ag-grid/GridContent.vue';
 import type { ColDef } from 'ag-grid-community';
@@ -209,27 +209,43 @@ const refresh = () => {
 async function getData(force: boolean = false) { 
     loader.value = true;
     gridContentRef.value?.loading(true);
-    if( props.providerId != objectstorage.getProviderId() )
-        objectstorage.setProviderId(props.providerId);
-    if (force || gridData.value?.length == 0) {
-        try{
-        const data = await objectstorage.getBuckets();
-        gridData.value = [...data];
-        gridDataForObjects.value = [];
-        }catch(e:any){
+    try {
+        if (!props.providerId) {
+            gridData.value = [];
+            gridDataForObjects.value = [];
+            return;
+        }
+        if (props.providerId != objectstorage.getProviderId()) {
+            objectstorage.setProviderId(props.providerId);
+        }
+        if (force || gridData.value?.length == 0) {
+            const data = await objectstorage.getBuckets();
+            gridData.value = [...data];
+            gridDataForObjects.value = [];
+        }
+    } catch (e: any) {
             toast.error(resolveAxiosError(e));
             console.log(e);
             gridData.value = [];
             gridDataForObjects.value = [];
-        }finally{
-            loader.value = false;
-            gridContentRef.value?.loading(false);
-        }
+    } finally {
+        loader.value = false;
+        gridContentRef.value?.loading(false);
     }
 }
 
-onMounted(() => {
-    getData(true);
-});
+watch(
+    () => props.providerId,
+    (providerId) => {
+        if (!providerId) return;
+        if (providerId !== objectstorage.getProviderId()) {
+            objectstorage.setProviderId(providerId);
+        }
+        bucket.value = null;
+        prefix.value = "";
+        getData(true);
+    },
+    { immediate: true }
+);
 
 </script>

@@ -67,7 +67,7 @@
 
 <script setup lang="ts">
 import PageableGridContent from "@/components/ag-grid/PageableGridContent.vue";
-import ServerSideUserCellRenderer from "@/components/ag-grid/renderer/ServerSideUserCellRenderer.vue";
+import RemoteMgmtUserCellRenderer from "@/components/ag-grid/renderer/RemoteMgmtUserCellRenderer.vue";
 import PageToolbar from "@/components/bars/PageToolbar.vue";
 import { objectTypeAdminApi } from "@/data/studio/mgmt/objecttype";
 import { useToast } from "@/plugins/toast";
@@ -121,14 +121,14 @@ const columnDefs: ColDef[] = [
     field: "createdById",
     headerName: "생성자",
     flex: 1,
-    cellRenderer: ServerSideUserCellRenderer, filter: false,
+    cellRenderer: RemoteMgmtUserCellRenderer, filter: false,
   },
   { field: "createdAt", headerName: "생성일시", type: "datetime", flex: 1 ,filter: false,},
   {
     field: "updatedById",
     headerName: "수정자",
     flex: 1,
-    cellRenderer: ServerSideUserCellRenderer,filter: false,
+    cellRenderer: RemoteMgmtUserCellRenderer,filter: false,
   },
   { field: "updatedAt", headerName: "수정일시", type: "datetime", flex: 1 ,filter: false,},
 ];

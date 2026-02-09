@@ -5,9 +5,9 @@ import type { AxiosProgressEvent, AxiosResponse } from "axios";
 import type { PageableDataSource } from "@/types/ag-gird";
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";
 import { handleBlobDownloadResponse } from "@/data/http/http-download";
-import type { ResetPasswordRequest, UserDto } from "@/types/studio/user";
+import type { PasswordPolicyDto, ResetPasswordRequest, UserDto } from "@/types/studio/user";
 export type { UserDto } from "@/types/studio/user";
-import { resetPassword } from "@/data/studio/mgmt/user";
+import { getPasswordPolicy, resetPassword } from "@/data/studio/mgmt/user";
 
 // IPageableRoleDataSource를 정의
 type IPageableUserDataSource = PageableDataSource & {
@@ -27,6 +27,7 @@ type IPageableUserDataSource = PageableDataSource & {
   ): Promise<UserDto | undefined>;
 
   resetPassword( id : number, payload:ResetPasswordRequest) :Promise<void>
+  getPasswordPolicy(): Promise<PasswordPolicyDto>
   
   delete(id: number): Promise<void>; 
 };
@@ -79,6 +80,10 @@ class PageableUserDataSource
 
     async resetPassword(id: number, payload: ResetPasswordRequest): Promise<void> {
         await resetPassword(id, payload)
+    }
+
+    async getPasswordPolicy(): Promise<PasswordPolicyDto> {
+        return await getPasswordPolicy()
     }
 
   async delete(id: number): Promise<void> {
@@ -149,7 +154,8 @@ export const usePageableUsersStore = defineStore(
       byId: dataSource.byId.bind(dataSource),
       delete: dataSource.delete.bind(dataSource), 
       update: dataSource.update.bind(dataSource),
-      resetPassword: dataSource.resetPassword.bind(dataSource), 
+      resetPassword: dataSource.resetPassword.bind(dataSource),
+      getPasswordPolicy: dataSource.getPasswordPolicy.bind(dataSource),
     };
   }
 );

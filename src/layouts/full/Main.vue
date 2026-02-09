@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, computed, shallowRef, watch } from 'vue';
-import { useDisplay } from "vuetify";
+import { useDisplay, useTheme } from "vuetify";
 import sidebarItems from './vertical-sidebar/sidebarItem';
 import NavGroup from './vertical-sidebar/NavGroup/index.vue';
 import NavItem from './vertical-sidebar/NavItem/index.vue';
@@ -14,9 +14,35 @@ import NavCollapse from './vertical-sidebar/NavCollapse/NavCollapse.vue';
 
 //auth store import
 import { useAuthStore } from '@/stores/studio/mgmt/auth.store';
+import { usePreferencesStore, type ThemeMode } from '@/stores/studio/mgmt/preferences.store';
 import { useRouter } from 'vue-router';
 
 const auth = useAuthStore();
+const prefs = usePreferencesStore();
+const theme = useTheme();
+
+const themeModeItems: Array<{ title: string; value: ThemeMode }> = [
+  { title: '시스템', value: 'system' },
+  { title: '라이트', value: 'light' },
+  { title: '다크', value: 'dark' },
+];
+
+const themeMode = computed<ThemeMode>({
+  get: () => prefs.themeMode,
+  set: (val) => { prefs.themeMode = val; },
+});
+
+const isSystemDark = ref(false);
+let systemThemeMedia: MediaQueryList | null = null;
+let systemThemeListener: ((e: MediaQueryListEvent) => void) | null = null;
+
+function applyTheme(mode: ThemeMode) {
+  const next = mode === 'system'
+    ? (isSystemDark.value ? 'dark' : 'light')
+    : (mode === 'dark' ? 'dark' : 'light');
+  theme.global.name.value = next;
+}
+
 // ✅ 현재 사용자 권한
 const userRoles = computed(() => auth.user?.roles || []);
 // ✅ 권한 기반 필터링 함수
@@ -59,13 +85,33 @@ onMounted(() => {
   updateScroll();
   scrollListener = () => updateScroll();
   window.addEventListener('scroll', scrollListener, { passive: true });
+
+  if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+    systemThemeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+    isSystemDark.value = systemThemeMedia.matches;
+    systemThemeListener = (e: MediaQueryListEvent) => {
+      isSystemDark.value = e.matches;
+      if (themeMode.value === 'system') {
+        applyTheme('system');
+      }
+    };
+    systemThemeMedia.addEventListener('change', systemThemeListener);
+  }
+
+  applyTheme(themeMode.value);
 });
 watch(mdAndDown, (val) => {
   sDrawer.value = !val;
 });
+watch(themeMode, (mode) => {
+  applyTheme(mode);
+});
 onBeforeUnmount(() => {
   if (scrollListener) {
     window.removeEventListener('scroll', scrollListener);
+  }
+  if (systemThemeMedia && systemThemeListener) {
+    systemThemeMedia.removeEventListener('change', systemThemeListener);
   }
 });
 const router = useRouter();
@@ -110,7 +156,19 @@ const goLogin = async () => {
         <!-- Notification -->
         <NotificationDD />
       </div>
-      <div>
+      <div class="d-flex align-center ga-2">
+        <!-- Theme Switch -->
+        <v-select
+          v-model="themeMode"
+          :items="themeModeItems"
+          item-title="title"
+          item-value="value"
+          density="compact"
+          variant="outlined"
+          hide-details
+          style="max-width: 140px"
+          label="테마"
+        />
         <!-- User Profile -->
         <ProfileDD v-if="auth.isAuthenticated" />
         <v-btn v-else prepend-icon="mdi-login" variant="tonal" color="primary" @click="goLogin" class="mr-5">

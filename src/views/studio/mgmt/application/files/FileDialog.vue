@@ -58,7 +58,7 @@
                     </tbody>
                 </v-table>
             </v-card-text>
-            <v-divider class="border-opacity-100" color="primary" />
+            <v-divider />
             <v-card-actions>
                 <v-btn variant="outlined" prepend-icon="mdi-vector-polyline-plus" rounded="xl" color="red" width="120"
                     :disabled="rag_indexed" @click="rag_index" :loading="rag_idnexing">

@@ -53,7 +53,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
 import type { ColDef, GridOptions, SelectionChangedEvent } from 'ag-grid-community';
-import ServerSideUserCellRenderer from '@/components/ag-grid/renderer/ServerSideUserCellRenderer.vue';
+import RemoteMgmtUserCellRenderer from '@/components/ag-grid/renderer/RemoteMgmtUserCellRenderer.vue';
 import CreateDocumentDialog from './CreateDocumentDialog.vue';
 import DocumentPreviewDialog from './DocumentPreviewDialog.vue';
 
@@ -87,9 +87,9 @@ const columnDefs: ColDef[] = [
     },
     { field: 'title', headerName: '주제', filter: false, sortable: true, type: "string", flex: 2 },
     { field: 'latestVersionId', headerName: '버전', filter: false, type: 'number', maxWidth: 80 },
-    { field: 'createdBy', headerName: '생성자', filter: false, type: 'number', flex: 1, cellRenderer: ServerSideUserCellRenderer },
+    { field: 'createdBy', headerName: '생성자', filter: false, type: 'number', flex: 1, cellRenderer: RemoteMgmtUserCellRenderer },
     { field: 'createdAt', headerName: '생성일시', filter: false, type: 'datetime', flex: 1 },
-    { field: 'updatedBy', headerName: '수정자', filter: false, cellRenderer: ServerSideUserCellRenderer, flex: 1 },
+    { field: 'updatedBy', headerName: '수정자', filter: false, cellRenderer: RemoteMgmtUserCellRenderer, flex: 1 },
     { field: 'updatedAt', headerName: '수정일시', filter: false, type: 'datetime', flex: 1 },
 ];
 const gridOptions: GridOptions = {

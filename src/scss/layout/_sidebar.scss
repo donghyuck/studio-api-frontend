@@ -3,8 +3,8 @@
 /*This is for the logo*/
 .leftSidebar {
   box-shadow: none !important;
-  border-right: 1px solid rgb(var(--v-theme-borderColor));
-  top: 25px !important; 
+  border-right: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  top: var(--feature-topbar-height, 0px) !important;
   .logo {
     padding-left: 7px;
   }
@@ -30,7 +30,7 @@
 
 /*This is for the Vertical sidebar*/
 .scrollnavbar {
-  height: calc(100vh - 150px);
+  height: calc(100vh - 150px - var(--feature-topbar-height, 0px));
 
   .userbottom {
     position: fixed;
@@ -43,7 +43,7 @@
     font-size: 0.875rem;
     font-weight: 500;
     margin-top: 24px;
-    color: rgb(var(--v-theme-textPrimary));
+    color: rgb(var(--v-theme-on-surface));
 
     &:first-child {
       margin-top: 0 !important;
@@ -80,7 +80,7 @@
   }
 
   .v-list {
-    color: rgb(var(--v-theme-textSecondary));
+    color: rgba(var(--v-theme-on-surface), 0.78);
 
     > .v-list-item.v-list-item--active,
     .v-list-item--active > .v-list-item__overlay {
@@ -150,11 +150,5 @@
         opacity: 1;
       }
     }
-  }
-}
-
-@media screen and (max-width: 1280px) {
-  .leftSidebar {
-    top: 0 !important;
   }
 }

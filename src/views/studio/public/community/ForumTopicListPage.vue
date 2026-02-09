@@ -7,6 +7,8 @@
     :closeable="false"
     :divider="true"
     :previous="true"
+    :previous-to="{ name: 'CommunityForums' }"
+    :previous-title="'게시판 목록'"
     :items="toolbarItems"
   >
     <template #label>
@@ -125,7 +127,7 @@ import { Node } from '@tiptap/core';
 import { usePublicForumAuthzStore } from '@/stores/studio/public/forum.authz.store';
 import type { ForumResponse, PermissionAction } from '@/types/studio/forums';
 import dayjs from 'dayjs';
-import ServerSideUserCellRenderer from '@/components/ag-grid/renderer/ServerSideUserCellRenderer.vue';
+import RemotePublicUserCellRenderer from '@/components/ag-grid/renderer/RemotePublicUserCellRenderer.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -194,7 +196,7 @@ const columnDefs: ColDef[] = [
     sortable: false,
     flex: 1,
     width: 150,
-    cellRenderer: ServerSideUserCellRenderer,
+    cellRenderer: RemotePublicUserCellRenderer,
   },
   { field: 'lastActivityAt', headerName: '최근 활동', filter: false, type: 'datetime', flex: 1 },
 ];
@@ -452,23 +454,14 @@ const submitCreate = async () => {
 
 watch(
   () => forumSlug.value,
-  (slug) => {
+  async (slug) => {
     if (!slug) return;
     dataStore.setForumSlug(slug);
-    loadForum();
-    loadForumAuthz(slug);
-    refresh();
+    await loadForum();
+    await loadForumAuthz(slug);
   },
+  { immediate: true }
 );
-
-onMounted(async () => {
-  const slug = forumSlug.value;
-  if (!slug) return;
-  dataStore.setForumSlug(slug);
-  await loadForum();
-  await loadForumAuthz(slug);
-  refresh();
-});
 
 </script>
 

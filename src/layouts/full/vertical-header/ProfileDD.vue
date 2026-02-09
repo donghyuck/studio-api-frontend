@@ -2,8 +2,16 @@
 import { useAuthStore } from '@/stores/studio/mgmt/auth.store';
 import { useRouter } from 'vue-router';
 import { ListCheckIcon, MailIcon, UserIcon } from 'vue-tabler-icons';
+import { ref } from 'vue';
+import MePasswordChangeDialog from '@/components/users/MePasswordChangeDialog.vue';
 const auth = useAuthStore();
 const router = useRouter();
+const dialog = ref(false);
+
+const goProfile = () => {
+    router.push({ name: 'MyProfile' });
+};
+
 const logout = () => {
     auth.logout();
     router.push('/auth/login');
@@ -25,17 +33,23 @@ const logout = () => {
             <v-list>
                 <v-list-item :prepend-avatar="auth.profileImageUrl" :subtitle="auth.user?.email"
                     :title="auth.user?.name">
-                    <template v-slot:append> 
+                    <template v-slot:append>
                     </template>
                 </v-list-item>
             </v-list>
             <v-divider></v-divider>
             <v-list class="py-0" lines="one" density="compact">
-                <v-list-item value="item1" color="primary">
+                <v-list-item value="item1" color="primary" @click="goProfile">
                     <template v-slot:prepend>
                         <UserIcon stroke-width="1.5" size="20" />
                     </template>
                     <v-list-item-title class="pl-4 text-body-1">Profile</v-list-item-title>
+                </v-list-item>
+                <v-list-item value="item2" color="primary" @click="dialog = true">
+                    <template v-slot:prepend>
+                        <ListCheckIcon stroke-width="1.5" size="20" />
+                    </template>
+                    <v-list-item-title class="pl-4 text-body-1">Change Password</v-list-item-title>
                 </v-list-item>
             </v-list>
             <div class="pt-4 pb-4 px-5 text-center">
@@ -43,4 +57,5 @@ const logout = () => {
             </div>
         </v-sheet>
     </v-menu>
+    <MePasswordChangeDialog v-model="dialog" />
 </template>

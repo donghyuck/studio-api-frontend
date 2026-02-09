@@ -1,23 +1,31 @@
 <template>
-    <v-dialog :key="userId" width="650" :fullscreen="false" :scrim="true" transition="dialog-bottom-transition">
+    <v-dialog v-model="model" width="520" :fullscreen="false" :scrim="true" transition="dialog-bottom-transition">
         <v-card>
-            <PageToolbar title="Password Reset" @close="handleClose" :closeable="true" :divider="true"
-                :items="[{ icon: 'mdi-refresh', event: 'refresh' }]" />
+            <PageToolbar title="비밀번호 변경" @close="handleClose" :closeable="true" :divider="true" />
             <v-card-text>
                 <v-row dense>
-                    <v-col cols="12" sm="12">
-                        <v-text-field label="새로운 비밀번호*" v-model="newPassword" :error="!!newPasswordError"
-                            :type="showPassword ? 'text' : 'password'"
-                             :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-                             @click:append-inner="showPassword = !showPassword"
+                    <v-col cols="12">
+                        <v-text-field label="현재 비밀번호*" v-model="currentPassword"
+                            :error="!!currentPasswordError" :type="showCurrent ? 'text' : 'password'"
+                            :append-inner-icon="showCurrent ? 'mdi-eye-off' : 'mdi-eye'"
+                            @click:append-inner="showCurrent = !showCurrent"
+                            :error-messages="currentPasswordError" @blur="validateField('currentPassword')" />
+                    </v-col>
+                    <v-col cols="12">
+                        <v-text-field label="새 비밀번호*" v-model="newPassword" :error="!!newPasswordError"
+                            :type="showNew ? 'text' : 'password'"
+                            :append-inner-icon="showNew ? 'mdi-eye-off' : 'mdi-eye'"
+                            @click:append-inner="showNew = !showNew"
                             :error-messages="newPasswordError" @blur="validateField('newPassword')" />
                     </v-col>
-                    <v-col cols="12" sm="12">
-                        <v-textarea v-model="reason" :error="!!reasonError" :error-messages="reasonError"
-                            @blur="validateField('reason')" class="mx-2" label="변경 사유*" rows="3"
-                            hint="왜 비밀번호를 초기화하는지 간단히 남겨주세요. (예: 계정보안 강화, 사용자 요청 등)" />
+                    <v-col cols="12">
+                        <v-text-field label="새 비밀번호 확인*" v-model="confirmPassword"
+                            :error="!!confirmPasswordError" :type="showConfirm ? 'text' : 'password'"
+                            :append-inner-icon="showConfirm ? 'mdi-eye-off' : 'mdi-eye'"
+                            @click:append-inner="showConfirm = !showConfirm"
+                            :error-messages="confirmPasswordError" @blur="validateField('confirmPassword')" />
                     </v-col>
-                    <v-col cols="12" sm="12">
+                    <v-col cols="12">
                         <PasswordPolicyChecklist :policy="effectivePolicy" :password="newPassword || ''" />
                     </v-col>
                 </v-row>
@@ -28,13 +36,12 @@
                 <v-btn variant="tonal" color="grey" rounded="xl" @click="handleClose" width="100">
                     Cancel
                 </v-btn>
-                <v-btn variant="outlined" prepend-icon="mdi-content-save" rounded="xl" color="primary" width="100"
+                <v-btn variant="outlined" prepend-icon="mdi-content-save" rounded="xl" color="primary" width="120"
                     @click="onSubmit">
                     Save
                 </v-btn>
             </v-card-actions>
         </v-card>
-
         <v-overlay v-model="overlay" contained class="align-center justify-center">
             <v-progress-circular color="primary" indeterminate size="64" />
         </v-overlay>
@@ -42,41 +49,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import * as yup from 'yup'
 import { useForm, useField } from 'vee-validate'
-
 import PageToolbar from '@/components/bars/PageToolbar.vue'
-import { useConfirm } from '@/plugins/confirm'
 import { useToast } from '@/plugins/toast'
-import { usePageableUsersStore } from '@/stores/studio/mgmt/users.store'
 import { resolveAxiosError } from '@/utils/helpers'
-import type { PasswordPolicyDto, ResetPasswordRequest } from '@/types/studio/user'
+import { changeSelfPassword, getSelfPasswordPolicy } from '@/data/studio/auth'
+import type { PasswordPolicyDto } from '@/types/studio/user'
 import PasswordPolicyChecklist from '@/components/users/PasswordPolicyChecklist.vue'
 import { passwordPolicyText } from '@/messages/passwordPolicy'
 
+const model = defineModel<boolean>({ required: true })
 const toast = useToast()
-const confirm = useConfirm()
-const store = usePageableUsersStore()
-
-const props = withDefaults(
-    defineProps<{
-        userId: number
-    }>(),
-    {
-        userId: 0,
-    },
-)
-
-const emit = defineEmits<{
-    (e: 'close'): void
-    (e: 'updated', payload: any): void
-}>()
 
 const overlay = ref(false)
-const showPassword = ref(false);
-const policy = ref<PasswordPolicyDto | null>(null)
+const showCurrent = ref(false)
+const showNew = ref(false)
+const showConfirm = ref(false)
 
+const policy = ref<PasswordPolicyDto | null>(null)
 const defaultPolicy: PasswordPolicyDto = {
     minLength: 8,
     maxLength: 20,
@@ -93,7 +85,7 @@ function buildSchema(p: PasswordPolicyDto) {
         .string()
         .strict(true)
         .trim()
-        .required(passwordPolicyText.requiredResetNewPassword)
+        .required(passwordPolicyText.requiredNewPassword)
         .min(p.minLength, passwordPolicyText.minLength(p.minLength))
         .max(p.maxLength, passwordPolicyText.maxLength(p.maxLength))
 
@@ -119,62 +111,58 @@ function buildSchema(p: PasswordPolicyDto) {
     return rule
 }
 
-/** 유효성 스키마 */
 const schema = computed(() => {
     const p = policy.value ?? defaultPolicy
     return yup.object({
-        newPassword: buildSchema(p),
-        reason: yup
+        currentPassword: yup
             .string()
             .strict(true)
-            .trim()
-            .required(passwordPolicyText.requiredReason),
+            .required(passwordPolicyText.requiredCurrentPassword),
+        newPassword: buildSchema(p),
+        confirmPassword: yup
+            .string()
+            .oneOf([yup.ref('newPassword')], passwordPolicyText.mismatchConfirmPassword)
+            .required(passwordPolicyText.requiredConfirmPassword),
     })
 })
 
 const effectivePolicy = computed<PasswordPolicyDto>(() => policy.value ?? defaultPolicy)
 
-/** 폼 설정 */
 const { handleSubmit, validateField, resetForm } = useForm({
     validationSchema: schema,
-    initialValues: { newPassword: 'P@sswOrd!', reason: '분실에 의한 관리자 리셋' },
+    initialValues: { currentPassword: ' ', newPassword: '', confirmPassword: '' },
     validateOnMount: false,
     validateOnBlur: true,
     validateOnChange: false,
     validateOnInput: false,
 } as any)
 
-/** 필드 단위 상태 */
+const { value: currentPassword, errorMessage: currentPasswordError } =
+    useField<string>('currentPassword')
 const { value: newPassword, errorMessage: newPasswordError } =
     useField<string>('newPassword')
-const { value: reason, errorMessage: reasonError } =
-    useField<string>('reason')
+const { value: confirmPassword, errorMessage: confirmPasswordError } =
+    useField<string>('confirmPassword')
 
 function handleClose() {
     resetForm()
-    emit('close')
+    model.value = false
 }
 
-const onSubmit = handleSubmit(async (form) => {
-    const ok = await confirm({
-        title: '확인',
-        message: `"${form.reason}" 이유로 비밀번호를 초기화 하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
-        okText: '네',
-        cancelText: '아니오',
-        color: 'primary',
-    })
-    if (!ok) return
+watch(model, (opened) => {
+    if (!opened) return
+    // Always open with a clean form state.
+    resetForm({ values: { currentPassword: ' ', newPassword: '', confirmPassword: '' } })
+    showCurrent.value = false
+    showNew.value = false
+    showConfirm.value = false
+})
 
+const onSubmit = handleSubmit(async (form) => {
     overlay.value = true
     try {
-        const payload: ResetPasswordRequest = {
-            currentPassword: form.newPassword,
-            newPassword: form.newPassword,
-            reason: form.reason,
-        }
-        const result = await store.resetPassword(props.userId, payload)
-        toast.success('비밀번호 재설정 완료!');
-        emit('updated', result)
+        await changeSelfPassword(form.currentPassword, form.newPassword)
+        toast.success('비밀번호 변경 완료!')
         handleClose()
     } catch (e) {
         toast.error(resolveAxiosError(e))
@@ -185,7 +173,7 @@ const onSubmit = handleSubmit(async (form) => {
 
 onMounted(async () => {
     try {
-        policy.value = await store.getPasswordPolicy()
+        policy.value = await getSelfPasswordPolicy()
     } catch (e) {
         toast.error(resolveAxiosError(e))
         policy.value = defaultPolicy

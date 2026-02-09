@@ -14,7 +14,7 @@
                     </v-col>
                 </v-row>
             </v-card-text>
-            <v-divider class="border-opacity-100" color="primary" />
+            <v-divider />
             <v-card-actions>
                 <v-btn variant="tonal" color="grey" rounded="xl" @click="handleClose" width="100">
                     닫기

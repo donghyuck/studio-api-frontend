@@ -63,7 +63,7 @@ import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { usePageableForumAuditLogStore } from '@/stores/studio/mgmt/audit.forum-log.store';
 import type { ColDef } from 'ag-grid-community';
 import { computed, onMounted, ref } from 'vue';
-import ServerSideUserCellRenderer from "@/components/ag-grid/renderer/ServerSideUserCellRenderer.vue";
+import RemoteMgmtUserCellRenderer from "@/components/ag-grid/renderer/RemoteMgmtUserCellRenderer.vue";
 
 const dataStore = usePageableForumAuditLogStore();
 
@@ -109,7 +109,7 @@ const columnDefs: ColDef[] = [
         type: 'number',
         flex: 0.35,
         field: "actorId",
-        cellRenderer: ServerSideUserCellRenderer,
+        cellRenderer: RemoteMgmtUserCellRenderer,
        // valueGetter: (params) => params.data?.actorId ?? '',
     },
     {

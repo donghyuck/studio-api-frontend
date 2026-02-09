@@ -2,7 +2,8 @@
   <v-breadcrumbs class="pa-0" :items="['커뮤니티', forumSlug, topic?.title || `토픽 #${topicId}`]" density="compact" />
   <PageToolbar :title="topic?.title || '게시글'" :label="topic?.title ? `'${topic.title}'의 댓글을 확인합니다.` : '토픽의 게시글을 확인합니다.'"
     @refresh="refresh" @create="openReplyDialog" @edit="openEditDialog" @delete="deleteTopic" @pin="togglePinTopic"
-    @lock="toggleLockTopic" :closeable="false" :previous="true" :divider="true" :items="toolbarItems" />
+    @lock="toggleLockTopic" @prevTopic="goPrevTopic" @nextTopic="goNextTopic" :closeable="false" :previous="true"
+    :previous-to="{ name: 'CommunityForumTopics', params: { forumSlug } }" :divider="true" :items="toolbarItems" />
   <v-skeleton-loader :loading="loading" class="mx-auto mt-2" max-width="100%" type="avatar, article, actions">
     <v-card v-if="firstPost" class="mt-2 discourse-outline" variant="outlined">
       <v-card-item class="py-2">
@@ -16,21 +17,18 @@
           </v-card-subtitle>
         </template>
       </v-card-item>
-      <v-divider class="border-opacity-100" />
+      <v-divider />
       <v-card-text class="post-content" v-html="renderContent(firstPost.content)"></v-card-text>
-      <v-divider class="border-opacity-100" />
+      <v-divider />
       <v-card-text class="pt-0 pb-0"
         v-if="canReadAttachments && !firstPostAttachmentsLoading && firstPostAttachments.length">
         <v-list dense>
           <v-list-item v-for="attachment in firstPostAttachments" :key="attachment.attachmentId">
             <template #prepend>
               <v-avatar size="28" color="grey-lighten-3">
-                <v-img
-                  v-if="!hasThumbnailError(attachment.attachmentId)"
-                  :src="thumbnailUrl(firstPost?.id ?? 0, attachment.attachmentId)"
-                  cover
-                  @error="markThumbnailError(attachment.attachmentId)"
-                />
+                <v-img v-if="!hasThumbnailError(attachment.attachmentId)"
+                  :src="thumbnailUrl(firstPost?.id ?? 0, attachment.attachmentId)" cover
+                  @error="markThumbnailError(attachment.attachmentId)" />
                 <v-icon v-else size="16" color="grey-darken-2">mdi-file</v-icon>
               </v-avatar>
             </template>
@@ -69,6 +67,7 @@
       </v-card-actions>
     </v-card>
   </v-skeleton-loader>
+  <v-btn v-if="canReplyTopic" color="blue" icon="mdi-timeline-text-outline" size="60" @click="openReplyDialog" class="reply-fab"></v-btn>
   <v-row class="mt-2" v-if="canModerate">
     <v-col cols="auto">
       <v-switch v-model="includeHiddenPosts" label="숨김 댓글 포함" density="compact" hide-details color="primary" inset />
@@ -102,19 +101,17 @@
           <v-card class="reply-card" variant="outlined">
             <v-card-text>
               <div class="post-content" v-html="renderContent(post.content)"></div>
-              <div v-if="canReadAttachments && !attachmentsLoadingForPost(post.id) && attachmentsForPost(post.id).length"
+              <div
+                v-if="canReadAttachments && !attachmentsLoadingForPost(post.id) && attachmentsForPost(post.id).length"
                 class="mt-3">
                 <v-list dense>
                   <v-list-item v-for="attachment in attachmentsForPost(post.id)"
                     :key="`reply-${post.id}-${attachment.attachmentId}`">
                     <template #prepend>
                       <v-avatar size="28" color="grey-lighten-3">
-                        <v-img
-                          v-if="!hasThumbnailError(attachment.attachmentId)"
-                          :src="thumbnailUrl(post.id, attachment.attachmentId)"
-                          cover
-                          @error="markThumbnailError(attachment.attachmentId)"
-                        />
+                        <v-img v-if="!hasThumbnailError(attachment.attachmentId)"
+                          :src="thumbnailUrl(post.id, attachment.attachmentId)" cover
+                          @error="markThumbnailError(attachment.attachmentId)" />
                         <v-icon v-else size="16" color="grey-darken-2">mdi-file</v-icon>
                       </v-avatar>
                     </template>
@@ -161,20 +158,20 @@
         </v-timeline-item>
       </template>
     </v-timeline>
-    <v-divider />
-    <v-fab v-if="canReplyTopic" class="ms-4 mr-5" color="blue" icon="mdi-timeline-text-outline" absolute location="right bottom" size="60"
-      @click="openReplyDialog"></v-fab>
-    <v-card-actions class="justify-space-between">
-      <v-btn variant="text" :disabled="!hasPrev" @click="goPrev">
-        이전
-      </v-btn>
-      <div class="text-caption text-grey-darken-1">
-        {{ pageLabel }}
-      </div>
-      <v-btn variant="text" :disabled="!hasNext" @click="goNext">
-        다음
-      </v-btn>
-    </v-card-actions>
+     
+    <v-skeleton-loader type="actions">
+      <v-card-actions class="justify-space-between">
+        <v-btn variant="text" :disabled="!prevTopicId || topicNavLoading" @click="goPrevTopic">
+          이전
+        </v-btn>
+        <v-btn variant="text" @click="goTopicList">
+          목록
+        </v-btn>
+        <v-btn variant="text" :disabled="!nextTopicId || topicNavLoading" @click="goNextTopic">
+          다음
+        </v-btn>
+      </v-card-actions>
+    </v-skeleton-loader>
   </v-card>
 
   <v-dialog v-model="dialogs.reply" max-width="720">
@@ -212,15 +209,16 @@
               title="MP4 추가" />
             <v-divider vertical class="mx-2" />
             <v-btn size="small" variant="tonal" :color="isImageActive ? 'primary' : 'grey'"
-              icon="mdi-image-size-select-small" @click="promptMediaSize('image', editor ?? null)" :disabled="!isImageActive"
-              title="이미지 크기 조정" />
+              icon="mdi-image-size-select-small" @click="promptMediaSize('image', editor ?? null)"
+              :disabled="!isImageActive" title="이미지 크기 조정" />
             <v-btn size="small" variant="tonal" :color="isVideoActive ? 'primary' : 'grey'" icon="mdi-video-box"
-              @click="promptMediaSize('video', editor ?? null)" :disabled="!isVideoActive" title="동영상 크기 조정" />
+              @click="promptMediaSize(getActiveVideoType(editor ?? null) ?? 'video', editor ?? null)"
+              :disabled="!isVideoActive" title="동영상 크기 조정" />
             <v-divider vertical class="mx-2" />
             <v-btn size="small" variant="tonal" :color="isLinkActive ? 'primary' : 'grey'" icon="mdi-link-off"
               @click="removeLink(editor ?? null)" title="링크 제거" />
-            <v-btn size="small" variant="tonal" color="grey" icon="mdi-format-clear" @click="clearFormatting(editor ?? null)"
-              title="서식 지우기" />
+            <v-btn size="small" variant="tonal" color="grey" icon="mdi-format-clear"
+              @click="clearFormatting(editor ?? null)" title="서식 지우기" />
           </div>
           <div v-if="isLinkActive" class="link-edit-row">
             <v-text-field v-model="replyLinkUrl" dense hide-details label="링크 주소" class="me-2" />
@@ -271,6 +269,7 @@
       </v-card-actions>
     </v-card>
   </v-dialog>
+
   <v-dialog v-model="dialogs.edit" max-width="900">
     <v-card>
       <v-card-title class="text-subtitle-1">게시글 수정</v-card-title>
@@ -279,7 +278,6 @@
           hide-details />
         <v-text-field v-model="editTags" label="태그 (쉼표로 구분)" density="compact" variant="outlined" class="mt-3"
           :disabled="saving" />
-
         <div class="tiptap-shell">
           <div class="tiptap-toolbar">
             <v-btn size="small" variant="tonal" :color="editEditor?.isActive('bold') ? 'primary' : 'grey'"
@@ -312,7 +310,8 @@
               icon="mdi-image-size-select-small" @click="promptMediaSize('image', editEditor ?? null)"
               :disabled="!isEditImageActive" title="이미지 크기 조정" />
             <v-btn size="small" variant="tonal" :color="isEditVideoActive ? 'primary' : 'grey'" icon="mdi-video-box"
-              @click="promptMediaSize('video', editEditor ?? null)" :disabled="!isEditVideoActive" title="동영상 크기 조정" />
+              @click="promptMediaSize(getActiveVideoType(editEditor ?? null) ?? 'video', editEditor ?? null)"
+              :disabled="!isEditVideoActive" title="동영상 크기 조정" />
             <v-divider vertical class="mx-2" />
             <v-btn size="small" variant="tonal" :color="isEditLinkActive ? 'primary' : 'grey'" icon="mdi-link-off"
               @click="removeLink(editEditor ?? null)" title="링크 제거" />
@@ -353,12 +352,9 @@
           <v-list-item v-for="attachment in firstPostAttachments" :key="`edit-${attachment.attachmentId}`">
             <template #prepend>
               <v-avatar size="28" color="grey-lighten-3">
-                <v-img
-                  v-if="!hasThumbnailError(attachment.attachmentId)"
-                  :src="thumbnailUrl(firstPost?.id ?? 0, attachment.attachmentId)"
-                  cover
-                  @error="markThumbnailError(attachment.attachmentId)"
-                />
+                <v-img v-if="!hasThumbnailError(attachment.attachmentId)"
+                  :src="thumbnailUrl(firstPost?.id ?? 0, attachment.attachmentId)" cover
+                  @error="markThumbnailError(attachment.attachmentId)" />
                 <v-icon v-else size="16" color="grey-darken-2">mdi-file</v-icon>
               </v-avatar>
             </template>
@@ -447,7 +443,8 @@
               icon="mdi-image-size-select-small" @click="promptMediaSize('image', editReplyEditor ?? null)"
               :disabled="!isReplyImageActive" title="이미지 크기 조정" />
             <v-btn size="small" variant="tonal" :color="isReplyVideoActive ? 'primary' : 'grey'" icon="mdi-video-box"
-              @click="promptMediaSize('video', editReplyEditor ?? null)" :disabled="!isReplyVideoActive" title="동영상 크기 조정" />
+              @click="promptMediaSize(getActiveVideoType(editReplyEditor ?? null) ?? 'video', editReplyEditor ?? null)"
+              :disabled="!isReplyVideoActive" title="동영상 크기 조정" />
             <v-divider vertical class="mx-2" />
             <v-btn size="small" variant="tonal" :color="isReplyLinkActive ? 'primary' : 'grey'" icon="mdi-link-off"
               @click="removeLink(editReplyEditor ?? null)" title="링크 제거" />
@@ -469,7 +466,7 @@
               </div>
               <div class="text-caption">
                 너비: {{ editReplySelectedMedia.attrs.width ?? '자동' }} · 높이: {{ editReplySelectedMedia.attrs.height ??
-                '자동'
+                  '자동'
                 }}
               </div>
             </div>
@@ -520,7 +517,7 @@ import { forumsAdminApi } from '@/data/studio/mgmt/forums';
 import { forumsPublicApi } from '@/data/studio/public/forums';
 import { usePublicForumPostsStore } from '@/stores/studio/public/forum.posts.store';
 import { usePublicForumAuthzStore } from '@/stores/studio/public/forum.authz.store';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useToast } from '@/plugins/toast';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
@@ -552,6 +549,9 @@ const forumSlug = computed(() => String(route.params.forumSlug || ""));
 const topicId = computed(() => Number(route.params.topicId || 0));
 const topic = ref<TopicResponse | null>(null);
 const topicEtag = ref<string | null>(null);
+const prevTopicId = ref<number | null>(null);
+const nextTopicId = ref<number | null>(null);
+const topicNavLoading = ref(false);
 
 const VideoNode = Node.create({
   name: 'video',
@@ -763,12 +763,19 @@ const canEditReply = computed(() => {
   const html = editReplyEditor.value?.getHTML() ?? '';
   return /<(img|iframe|video)\b/i.test(html) && !saving.value;
 });
+const getActiveVideoType = (editorInstance: Editor | null) => {
+  if (!editorInstance) return null;
+  if (editorInstance.isActive("video")) return "video";
+  if (editorInstance.isActive("youtube")) return "youtube";
+  return null;
+};
+
 const isImageActive = computed(() => editor.value?.isActive("image") ?? false);
-const isVideoActive = computed(() => editor.value?.isActive("video") ?? false);
+const isVideoActive = computed(() => !!getActiveVideoType(editor.value ?? null));
 const isEditImageActive = computed(() => editEditor.value?.isActive("image") ?? false);
-const isEditVideoActive = computed(() => editEditor.value?.isActive("video") ?? false);
+const isEditVideoActive = computed(() => !!getActiveVideoType(editEditor.value ?? null));
 const isReplyImageActive = computed(() => editReplyEditor.value?.isActive("image") ?? false);
-const isReplyVideoActive = computed(() => editReplyEditor.value?.isActive("video") ?? false);
+const isReplyVideoActive = computed(() => !!getActiveVideoType(editReplyEditor.value ?? null));
 const isLinkActive = computed(() => editor.value?.isActive("link") ?? false);
 const isEditLinkActive = computed(() => editEditor.value?.isActive("link") ?? false);
 const isReplyLinkActive = computed(() => editReplyEditor.value?.isActive("link") ?? false);
@@ -797,8 +804,9 @@ const replySelectedMedia = computed(() => {
   if (isImageActive.value) {
     return { type: 'image', attrs: editor.value?.getAttributes('image') ?? {} };
   }
-  if (isVideoActive.value) {
-    return { type: 'video', attrs: editor.value?.getAttributes('video') ?? {} };
+  const activeVideo = getActiveVideoType(editor.value ?? null);
+  if (activeVideo) {
+    return { type: activeVideo, attrs: editor.value?.getAttributes(activeVideo) ?? {} };
   }
   return null;
 });
@@ -807,8 +815,9 @@ const editSelectedMedia = computed(() => {
   if (isEditImageActive.value) {
     return { type: 'image', attrs: editEditor.value?.getAttributes('image') ?? {} };
   }
-  if (isEditVideoActive.value) {
-    return { type: 'video', attrs: editEditor.value?.getAttributes('video') ?? {} };
+  const activeVideo = getActiveVideoType(editEditor.value ?? null);
+  if (activeVideo) {
+    return { type: activeVideo, attrs: editEditor.value?.getAttributes(activeVideo) ?? {} };
   }
   return null;
 });
@@ -817,13 +826,18 @@ const editReplySelectedMedia = computed(() => {
   if (isReplyImageActive.value) {
     return { type: 'image', attrs: editReplyEditor.value?.getAttributes('image') ?? {} };
   }
-  if (isReplyVideoActive.value) {
-    return { type: 'video', attrs: editReplyEditor.value?.getAttributes('video') ?? {} };
+  const activeVideo = getActiveVideoType(editReplyEditor.value ?? null);
+  if (activeVideo) {
+    return { type: activeVideo, attrs: editReplyEditor.value?.getAttributes(activeVideo) ?? {} };
   }
   return null;
 });
 
-const normalizeMediaType = (value: string) => (value === "video" ? "video" : "image");
+const normalizeMediaType = (value: string) => {
+  if (value === "youtube") return "youtube";
+  if (value === "video") return "video";
+  return "image";
+};
 
 const insertImageUrl = () => {
   const url = window.prompt('이미지 URL을 입력하세요.');
@@ -844,7 +858,7 @@ const insertMp4Url = () => {
   editor.value?.chain().focus().insertContent({ type: 'video', attrs: { src: safeUrl, controls: true } }).run();
 };
 
-const promptMediaSize = (media: 'image' | 'video', editorInstance: Editor | null) => {
+const promptMediaSize = (media: 'image' | 'video' | 'youtube', editorInstance: Editor | null) => {
   if (!editorInstance) return;
   const width = window.prompt('넓이값(예: 400px, 80%)을 입력하세요. 비워두면 기본으로 유지됩니다.', '');
   if (width === null) return;
@@ -1232,6 +1246,18 @@ const canDeleteTopic = computed(() => {
 
 const toolbarItems = computed(() => {
   const items: { icon: string; event: string; tooltip: string; color?: string; disabled?: boolean }[] = [];
+  items.push({
+    icon: 'mdi-chevron-left',
+    event: 'prevTopic',
+    tooltip: '이전 토픽',
+    disabled: topicNavLoading.value || !prevTopicId.value,
+  });
+  items.push({
+    icon: 'mdi-chevron-right',
+    event: 'nextTopic',
+    tooltip: '다음 토픽',
+    disabled: topicNavLoading.value || !nextTopicId.value,
+  });
   if (canDeleteTopic.value) {
     items.push({
       icon: 'mdi-forum-remove',
@@ -1277,6 +1303,30 @@ const pageLabel = computed(() => `페이지 ${page.value + 1}`);
 
 const refresh = () => {
   dataStore.fetch();
+};
+
+const goPrevTopic = async () => {
+  if (!prevTopicId.value) return;
+  await router.push({
+    name: 'CommunityForumTopicDetail',
+    params: { forumSlug: forumSlug.value, topicId: prevTopicId.value },
+  });
+};
+
+const goNextTopic = async () => {
+  if (!nextTopicId.value) return;
+  await router.push({
+    name: 'CommunityForumTopicDetail',
+    params: { forumSlug: forumSlug.value, topicId: nextTopicId.value },
+  });
+};
+
+const goTopicList = async () => {
+  if (!forumSlug.value) return;
+  await router.push({
+    name: 'CommunityForumTopics',
+    params: { forumSlug: forumSlug.value },
+  });
 };
 
 const goPrev = async () => {
@@ -1361,6 +1411,75 @@ const loadTopic = async () => {
     topicEtag.value = null;
   } finally {
     loading.value = false;
+  }
+};
+
+const loadTopicNeighbors = async () => {
+  const slug = forumSlug.value;
+  const currentId = topicId.value;
+  if (!slug || !Number.isFinite(currentId) || currentId <= 0) {
+    prevTopicId.value = null;
+    nextTopicId.value = null;
+    return;
+  }
+
+  topicNavLoading.value = true;
+  try {
+    const pageSize = 50;
+    let page = 0;
+    let foundPage = -1;
+    let foundIndex = -1;
+    let foundContent: Array<{ id: number }> = [];
+    let totalPages = 0;
+
+    while (true) {
+      const res = await forumsPublicApi.listTopics(slug, { page, size: pageSize });
+      const content = Array.isArray(res?.content) ? res.content : [];
+      totalPages = Number(res?.totalPages ?? 0);
+      const idx = content.findIndex((item: any) => Number(item?.id) === currentId);
+      if (idx >= 0) {
+        foundPage = page;
+        foundIndex = idx;
+        foundContent = content as Array<{ id: number }>;
+        break;
+      }
+      if (page >= Math.max(0, totalPages - 1)) break;
+      page += 1;
+    }
+
+    if (foundPage < 0 || foundIndex < 0) {
+      prevTopicId.value = null;
+      nextTopicId.value = null;
+      return;
+    }
+
+    const left = foundContent[foundIndex - 1];
+    const right = foundContent[foundIndex + 1];
+
+    if (left?.id) {
+      prevTopicId.value = Number(left.id);
+    } else if (foundPage > 0) {
+      const prevPageRes = await forumsPublicApi.listTopics(slug, { page: foundPage - 1, size: pageSize });
+      const prevPageContent = Array.isArray(prevPageRes?.content) ? prevPageRes.content : [];
+      prevTopicId.value = prevPageContent.length ? Number(prevPageContent[prevPageContent.length - 1]?.id ?? 0) || null : null;
+    } else {
+      prevTopicId.value = null;
+    }
+
+    if (right?.id) {
+      nextTopicId.value = Number(right.id);
+    } else if (foundPage < Math.max(0, totalPages - 1)) {
+      const nextPageRes = await forumsPublicApi.listTopics(slug, { page: foundPage + 1, size: pageSize });
+      const nextPageContent = Array.isArray(nextPageRes?.content) ? nextPageRes.content : [];
+      nextTopicId.value = nextPageContent.length ? Number(nextPageContent[0]?.id ?? 0) || null : null;
+    } else {
+      nextTopicId.value = null;
+    }
+  } catch {
+    prevTopicId.value = null;
+    nextTopicId.value = null;
+  } finally {
+    topicNavLoading.value = false;
   }
 };
 
@@ -1479,22 +1598,30 @@ const applyPostFilter = () => {
 };
 applyPostFilter();
 
+// initial load + param change
 watch(
   () => [forumSlug.value, topicId.value],
-  ([slug, id]) => {
+  async ([slug, id]) => {
     const slugValue = String(slug ?? "");
     const idValue = Number(id);
     if (!slugValue || !Number.isFinite(idValue) || idValue <= 0) return;
     dataStore.setForumSlug(slugValue);
     dataStore.setTopicId(idValue);
+    await loadTopic();
+    await loadTopicNeighbors();
     refresh();
-  }
+  },
+  { immediate: true }
 );
 
-watch(forumSlug, (slug) => {
-  if (!slug) return;
-  authzStore.loadForumAuthz(slug).catch(() => { });
-});
+watch(
+  forumSlug,
+  (slug) => {
+    if (!slug) return;
+    authzStore.loadForumAuthz(slug).catch(() => { });
+  },
+  { immediate: true }
+);
 
 watch(
   canReadAttachments,
@@ -1541,16 +1668,6 @@ watch(includeHiddenPosts, () => {
   refresh();
 });
 
-onMounted(async () => {
-  const slug = forumSlug.value;
-  const id = topicId.value;
-  if (!slug || !Number.isFinite(id) || id <= 0) return;
-  dataStore.setForumSlug(slug);
-  dataStore.setTopicId(id);
-  await loadTopic();
-  await authzStore.loadForumAuthz(slug).catch(() => { });
-  refresh();
-});
 </script>
 
 <style scoped>
@@ -1592,15 +1709,14 @@ onMounted(async () => {
 
 .tiptap-shell :deep(iframe) {
   max-width: 100%;
-  width: 100%;
-  aspect-ratio: 16 / 9;
+  width: auto;
   height: auto;
   display: block;
 }
 
 .tiptap-shell :deep(video) {
   max-width: 100%;
-  width: 100%;
+  width: auto;
   height: auto;
   display: block;
 }
@@ -1645,15 +1761,14 @@ onMounted(async () => {
 
 .post-content :deep(iframe) {
   max-width: 100%;
-  width: 100%;
-  aspect-ratio: 16 / 9;
+  width: auto;
   height: auto;
   display: block;
 }
 
 .post-content :deep(video) {
   max-width: 100%;
-  width: 100%;
+  width: auto;
   height: auto;
   display: block;
 }
@@ -1672,6 +1787,12 @@ onMounted(async () => {
 .post-content :deep(p:last-child),
 .post-content :deep(li:last-child) {
   margin-bottom: 0;
+}
+.reply-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
 }
 
 .reply-card {

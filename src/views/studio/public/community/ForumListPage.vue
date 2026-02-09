@@ -67,7 +67,7 @@
 import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { usePublicForumListStore } from '@/stores/studio/public/forum.list.store';
 import dayjs from 'dayjs';
-import { computed, onMounted, ref, unref, watch } from 'vue';
+import { computed, ref, unref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 
 const dataStore = usePublicForumListStore();
@@ -123,16 +123,15 @@ const goForum = (slug: string) => {
   router.push({ name: 'CommunityForumTopics', params: { forumSlug: slug } });
 };
 
-watch(pageUi, async (val) => {
-  const nextPage = Math.max(0, val - 1);
-  dataStore.setPage(nextPage);
-  await fetchForums();
-});
-
-onMounted(() => {
-  pageUi.value = (dataStore.page ?? 0) + 1;
-  fetchForums();
-});
+watch(
+  pageUi,
+  async (val) => {
+    const nextPage = Math.max(0, val - 1);
+    dataStore.setPage(nextPage);
+    await fetchForums();
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>

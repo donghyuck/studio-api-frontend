@@ -18,7 +18,7 @@
                     </v-col>
                 </v-row>
             </v-card-text>
-            <v-divider class="border-opacity-100" color="primary" />
+            <v-divider />
             <v-card-actions>
                 <v-spacer />
                 <v-btn variant="tonal" color="grey" rounded="xl" width="100"
@@ -79,16 +79,22 @@ const gradtedRoles = ref<RoleDto[]>(); // granted by groups
 const gradtedUserRoles = ref<RoleDto[]>(); // granted by user
 
 async function getData(force: boolean = false) {
+    if (!visible.value || !props.userId) {
+        gradtedRoles.value = [];
+        gradtedUserRoles.value = [];
+        return;
+    }
+
     overlay.value = true;
     try {
-        if (!dataStore.isLoaded)
+        if (!dataStore.isLoaded || force) {
             await dataStore.fetch();
+        }
         roles.value = dataStore.dataItems;
 
         urStore.setUserId(props.userId);
         gradtedRoles.value = await urStore.getUserGroupsRoles();
         gradtedUserRoles.value = await urStore.getUserRoles();
-
     } finally {
         overlay.value = false;
     }
@@ -122,11 +128,22 @@ const saveOrUpdate = async () => {
 }
 
 const refresh = () => {
-    getData()
+    getData(true)
 }
 
+watch(
+    () => [visible.value, props.userId] as const,
+    ([isOpen, userId]) => {
+        if (!isOpen || !userId) return;
+        getData();
+    },
+    { immediate: true }
+);
+
 onMounted(() => {
-    getData();
+    if (visible.value && props.userId) {
+        getData();
+    }
 });
 
 </script>

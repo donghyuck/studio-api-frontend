@@ -16,44 +16,72 @@ const router = createRouter({
     MainRoutes,
     StudioRoutes,
     StudioPublicRoutes,
-    AuthRoutes, 
+    AuthRoutes,
   ],
 });
 
+let restoreSessionPromise: Promise<boolean> | null = null;
+
+async function restoreSessionIfNeeded(): Promise<boolean> {
+  const auth = useAuthStore();
+  if (auth.isAuthenticated) {
+    return true;
+  }
+  if (restoreSessionPromise) {
+    return restoreSessionPromise;
+  }
+  restoreSessionPromise = (async () => {
+    try {
+      await auth.refreshTokens();
+      await auth.fetchUser();
+      return !!auth.isAuthenticated;
+    } catch {
+      auth.logout();
+      return false;
+    } finally {
+      restoreSessionPromise = null;
+    }
+  })();
+  return restoreSessionPromise;
+}
+
 router.beforeEach(async (to, from, next) => {
   const auth = useAuthStore();
+
+  const needsRestore = Boolean(to.meta.requiresAuth || to.meta.restoreSession);
+  if (needsRestore) {
+    await restoreSessionIfNeeded();
+  }
+
   if (to.meta.requiresAuth) {
-    // 로그인 안 되어 있으면 로그인 페이지로
     if (!auth.isAuthenticated) {
       return next(`/auth/login?returnUrl=${to.fullPath}`);
     }
 
-    // 로그인 되어 있지만 user 정보가 없으면 fetch
     if (!auth.user) {
       try {
         await auth.fetchUser();
-      } catch (error) {
-        console.warn("사용자 정보 로드 실패, 로그아웃 처리");
-        // auth.logout();
-        // return next(`/auth/login?returnUrl=${to.fullPath}`);
+      } catch {
+        auth.logout();
+        return next(`/auth/login?returnUrl=${to.fullPath}`);
       }
     }
 
-    // roles 확인 (권한 체크)
-    if ( to.meta.roles) {
-      const allowedRoles = to.meta.roles as string[] || [];
+    if (to.meta.roles) {
+      const allowedRoles = (to.meta.roles as string[]) || [];
       const userRoles = auth.user?.roles || [];
       const hasRole = allowedRoles.some((role) => userRoles.includes(role));
       if (!hasRole) {
-        next("/unauthorized"); // 혹은 403 페이지로
+        next("/unauthorized");
         return;
       }
     }
   }
-  // 모든 조건 통과
-  const nav = useNavStore()
-  if(from.name)
+
+  const nav = useNavStore();
+  if (from.name) {
     nav.setPreviousRoute(from);
+  }
   next();
 });
 

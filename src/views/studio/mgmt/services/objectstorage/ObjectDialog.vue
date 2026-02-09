@@ -81,7 +81,7 @@
                     </template>
                 </v-img>
             </v-card-text>
-            <v-divider class="border-opacity-100" color="primary" />
+            <v-divider />
             <v-card-actions>
                 <v-btn variant="tonal" color="blue" prepend-icon="mdi-download-network" rounded="xl"
                     :disabled="!downloadable" @click="download_object"  width="130">
@@ -105,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import PageToolbar from '@/components/bars/PageToolbar.vue';
 import type { BucketDto, ObjectInfoDto, PresignedUrlDto } from '@/types/studio/storage';
 import { downloadFile, fetchObjectHead, openInNewTab, presignGet } from '@/data/studio/mgmt/storage';
@@ -180,12 +180,16 @@ function handleClose() {
     emit('close')
 }
 
-watch(() => props.objectKey, (val, oldVal) => {
-    if (val) {
-        if (val != oldVal)
-            getData(true);
-    }
-});
+watch(
+    () => props.objectKey,
+    (val, oldVal) => {
+        if (val) {
+            if (val != oldVal)
+                getData(true);
+        }
+    },
+    { immediate: true }
+);
 
 const formatDate = (date: Date | null | undefined) => {
     if (date)
@@ -209,9 +213,5 @@ async function getData(force: boolean = false) {
     }
     overlay.value = false;
 }
-
-onMounted(() => {
-    getData(true);
-});
 
 </script>

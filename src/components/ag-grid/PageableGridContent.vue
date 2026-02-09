@@ -1,6 +1,6 @@
 <template>
-  <div ref="gridContainer" class="ag-theme-alpine" :style="{ width: '100%', height: gridHeight + 'px' }">
-    <AgGridVue class="ag-theme-quartz" style="width: 100%; height: 100%" :rowModelType="rowModelType"
+  <div ref="gridContainer" class="ag-theme-quartz ag-theme-adapted" :style="{ width: '100%', height: gridHeight + 'px' }">
+    <AgGridVue class="ag-theme-quartz ag-theme-adapted" style="width: 100%; height: 100%" :rowModelType="rowModelType"
       :gridOptions="gridOptionsDefs" :columnDefs="columnDefs" :pagination="true" :paginationPageSize="pageSize"
       :cacheBlockSize="cacheBlockSize" @paginationChanged="onPaginationChanged" @selectionChanged="onSelectionChanged"
       @grid-ready="onGridReady">

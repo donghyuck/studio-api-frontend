@@ -4,7 +4,8 @@
         { icon: 'mdi-refresh', event: 'refresh', variant: 'text' }]"></PageToolbar>
     <v-row>
         <v-col cols="12" md="12">
-            <GridContent ref="gridContentRef" :rowData="gridData" style="" :auto-resize="false" :columns="columnDefs">
+            <GridContent ref="gridContentRef" :rowData="gridData" style="" :auto-resize="false" :columns="columnDefs"
+                :options="gridOptions">
             </GridContent>
         </v-col>
     </v-row>
@@ -19,6 +20,7 @@ import { fetchProviders } from '@/data/studio/mgmt/storage';
 import router from '@/router';
 import { resolveAxiosError } from '@/utils/helpers';
 import { useToast } from '@/plugins/toast';
+import type { GridOptions } from 'ag-grid-community';
 const toast = useToast();
 const gridData = ref<ProviderDto[]>([]);
 const loader = ref(false);
@@ -36,6 +38,15 @@ const columnDefs: ColDef[] = [
     { field: 'region', headerName: '리즌', filter: false, sortable: true, type: 'text', flex: .5 },
     { field: 'endpointMasked', headerName: '엔드포인트', filter: false, sortable: false, type: 'text', flex: 2 },
 ];
+
+const gridOptions: GridOptions = {
+    onRowClicked: (event: any) => {
+        const row = event?.data as ProviderDto | undefined;
+        const providerId = row?.name;
+        if (!providerId) return;
+        router.push({ name: 'ObjectStorage', params: { providerId } });
+    },
+};
 
 const gridContentRef = ref<InstanceType<typeof GridContent> | null>(null);
 

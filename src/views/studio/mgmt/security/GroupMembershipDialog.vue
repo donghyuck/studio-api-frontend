@@ -16,7 +16,7 @@
                         </PageableGridContent> 
                     </v-col></v-row>
             </v-card-text>
-            <v-divider class="border-opacity-100" color="primary" />
+            <v-divider />
             <v-card-actions>
                 <v-btn variant="tonal" color="red" prepend-icon="mdi-account-multiple-remove" rounded="xl"
                     :disabled="!deleteable" @click="removeMembership" width="130">
@@ -36,7 +36,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, watch, computed } from 'vue'
 import PageToolbar from '@/components/bars/PageToolbar.vue'
 import { usePageableGroupsStore, type GroupDto } from '@/stores/studio/mgmt/groups.store'
 import { useToast } from '@/plugins/toast';
@@ -93,14 +93,18 @@ const selectedRows = computed(() => pageableGridContentRef.value?.selectedRows()
 const deleteable = computed(() => {
     return selectedRows.value.length > 0;
 });
-watch(() => props.groupId, (val, oldVal) => {
-    if (val > 0) {
-        if (props.groupId != dataRef.value.groupId)
-            getData();
-    } else {
-        dataRef.value = { groupId: 0, name: "", description: "", properties: {} };
-    }
-});
+watch(
+    () => props.groupId,
+    (val) => {
+        if (val > 0) {
+            if (props.groupId != dataRef.value.groupId)
+                getData();
+        } else {
+            dataRef.value = { groupId: 0, name: "", description: "", properties: {} };
+        }
+    },
+    { immediate: true }
+);
 
 const handleClose = () => {
     emit('close')
@@ -171,11 +175,5 @@ async function getData(force: boolean = false) {
         overlay.value = false;
     }
 }
-
-onMounted(() => {
-    if (props.groupId > 0) {
-        getData();
-    }
-})
 
 </script>

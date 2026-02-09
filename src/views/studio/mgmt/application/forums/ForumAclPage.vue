@@ -93,7 +93,7 @@
         </v-col>
       </v-row>
     </v-card-text>
-    <v-divider class="border-opacity-100" />
+    <v-divider />
     <v-card-actions>
       <v-btn color="pink-darken-2" text prepend-icon="mdi-help-circle" @click="matrixDialog = true" rounded="xl">
         권한 매트릭스 보기
@@ -172,7 +172,7 @@ import type { UserBasicDto } from "@/types/studio/user";
 import { resolveAxiosError } from "@/utils/helpers";
 import UserSearchDialog from "@/views/studio/mgmt/security/UserSearchDialog.vue";
 import type { ColDef } from "ag-grid-community";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import ForumRoleMatrixGuide from "./ForumRoleMatrixGuide.vue";
 
@@ -329,13 +329,13 @@ const reload = () => {
   load();
 };
 
-watch(forumSlug, () => {
-  load();
-});
-
-onMounted(() => {
-  load();
-});
+watch(
+  forumSlug,
+  () => {
+    load();
+  },
+  { immediate: true }
+);
 
 const submitRule = async () => {
   if (!forumSlug.value) return;

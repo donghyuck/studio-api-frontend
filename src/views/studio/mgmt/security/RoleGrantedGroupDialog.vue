@@ -19,7 +19,7 @@
                     </v-col>
                 </v-row>
             </v-card-text>
-            <v-divider class="border-opacity-100" color="primary" />
+            <v-divider />
             <v-card-actions>
                 <v-btn variant="tonal" color="red" prepend-icon="mdi-account-multiple-remove" rounded="xl"
                     :disabled="!revokeable" @click="revokeRoleFromGroup" width="130">
@@ -48,7 +48,7 @@ import { type AssigneeScope } from '@/stores/studio/mgmt/role.assignees.store.fa
 import { EMPTY_ROLE, usePageableRolesStore, type RoleDto } from '@/stores/studio/mgmt/roles.store';
 import { hasHistory } from '@/utils/helpers';
 import type { ColDef, RowSelectionOptions } from 'ag-grid-community';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 const roleDataSource = usePageableRolesStore();
 const dataStore = useGroupGrantedStore();
@@ -67,10 +67,16 @@ const confirm = useConfirm();
 // define overlays
 const overlay = ref(false);
 
-watch(() => props.roleId, async (roleId) => {
-    dataStore.setContext({ target: props.scope, targetId: props.roleId });
-    getData();
-}, { immediate: false });
+watch(
+    () => [props.roleId, props.scope],
+    ([roleId, scope]) => {
+        if (!roleId) return;
+        const target = (scope ?? 'group') as AssigneeScope;
+        dataStore.setContext({ target, targetId: Number(roleId) });
+        getData();
+    },
+    { immediate: true }
+);
 
 const q = ref('');
 const search = async () => {
@@ -154,10 +160,5 @@ const handleClose = () => {
     emit('close')
 }
 
-
-onMounted(() => {
-    dataStore.init({ target: props.scope, targetId: props.roleId });
-    getData();
-});
 
 </script>

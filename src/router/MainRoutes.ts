@@ -12,7 +12,19 @@ const MainRoutes = {
       name: "Dashboard",
       path: "/",
       component: () => import("@/views/dashboard/index.vue"),
-    }, 
+      meta: {
+        requiresAuth: false,
+        restoreSession: true,
+      },
+    },
+    {
+      name: "MyProfile",
+      path: "/self/profile",
+      component: () => import("@/views/studio/profile/MyProfilePage.vue"),
+      meta: {
+        requiresAuth: true,
+      },
+    },
     {
       name: "Starter",
       path: "/sample-page",

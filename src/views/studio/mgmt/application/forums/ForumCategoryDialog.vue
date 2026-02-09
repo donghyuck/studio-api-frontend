@@ -14,7 +14,7 @@
         <GridContent ref="gridRef" :columns="columnDefs" :row-data="categories" :row-selection="'multiple'"
           :height="320" /> 
       </v-card-text>      
-      <v-divider class="border-opacity-100" />
+      <v-divider />
       <v-card-text class="bg-grey-lighten-5">  
         <v-container>
           <v-row>
@@ -37,7 +37,7 @@
           </v-row>
         </v-container>
       </v-card-text>
-      <v-divider class="border-opacity-100" />
+      <v-divider />
       <v-card-actions>
         <v-spacer />
         <v-btn variant="tonal" color="grey" rounded="xl" width="100" @click="close" :disabled="saving">

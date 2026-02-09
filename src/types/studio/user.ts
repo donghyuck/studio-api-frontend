@@ -4,6 +4,17 @@ export interface ResetPasswordRequest {
     reason?: string | null;
 }
 
+export interface PasswordPolicyDto {
+  minLength: number;
+  maxLength: number;
+  requireUpper: boolean;
+  requireLower: boolean;
+  requireDigit: boolean;
+  requireSpecial: boolean;
+  allowedSpecials?: string | null;
+  allowWhitespace: boolean;
+}
+
 export type UserStatus = string;
 
 export interface UserBasicDto {
@@ -47,3 +58,24 @@ const _EMPTY_USER: UserDto = {
   properties: {},
 };
 export const EMPTY_USER: Readonly<UserDto> = Object.freeze(_EMPTY_USER);
+
+export interface MeProfileDto {
+  userId: number;
+  username: string;
+  name: string;
+  email?: string | null;
+  enabled?: boolean;
+  roles?: string[];
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface MeProfilePatchRequest {
+  name?: string;
+  email?: string | null;
+  emailVisible?: boolean;
+  nameVisible?: boolean;
+  firstName?: string | null;
+  lastName?: string | null;
+  properties?: Record<string, string>;
+}

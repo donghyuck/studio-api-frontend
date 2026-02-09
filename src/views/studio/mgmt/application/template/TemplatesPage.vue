@@ -50,7 +50,7 @@ import type { ColDef, GridOptions, SelectionChangedEvent } from 'ag-grid-communi
 import { computed, onMounted, ref } from 'vue';
 import CreateTemplateDialog from './CreateTemplateDialog.vue';
 import { useRouter } from 'vue-router';
-import ServerSideUserCellRenderer from '@/components/ag-grid/renderer/ServerSideUserCellRenderer.vue';
+import RemoteMgmtUserCellRenderer from '@/components/ag-grid/renderer/RemoteMgmtUserCellRenderer.vue';
 import { deleteTemplate } from '@/data/studio/mgmt/template';
 import { resolveAxiosError } from '@/utils/helpers';
 
@@ -84,9 +84,9 @@ const columnDefs: ColDef[] = [
         }
     },
     { field: 'displayName', headerName: '한글 이름', filter: false, sortable: true, type: "string", flex: 2 },
-    { field: 'createdBy', headerName: '생성자', filter: false, type: 'number', flex: 1, cellRenderer: ServerSideUserCellRenderer },
+    { field: 'createdBy', headerName: '생성자', filter: false, type: 'number', flex: 1, cellRenderer: RemoteMgmtUserCellRenderer },
     { field: 'createdAt', headerName: '생성일시', filter: false, type: 'datetime', flex: 1 },
-    { field: 'updatedBy', headerName: '수정자', filter: false, cellRenderer: ServerSideUserCellRenderer, flex: 1 },
+    { field: 'updatedBy', headerName: '수정자', filter: false, cellRenderer: RemoteMgmtUserCellRenderer, flex: 1 },
     { field: 'updatedAt', headerName: '수정일시', filter: false, type: 'datetime', flex: 1 },
 ];
 const gridOptions: GridOptions = {

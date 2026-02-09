@@ -4,6 +4,7 @@ html {
 
 .v-main {
   margin-right: 20px;
+  background-color: rgb(var(--v-theme-background));
 }
 .v-main .v-breadcrumbs {
   font-size: 12px;
@@ -28,6 +29,7 @@ html {
   min-height: calc(100vh - 100px);
   padding-left: 10px; //24px;
   padding-bottom: 30px;
+  background-color: transparent;
   @media screen and (max-width: 600px) {
     padding: 10px;
   }
@@ -104,16 +106,16 @@ $sizes: (
 }
 // border
 .border-right {
-  border-right: 1px solid rgba(0, 0, 0, 0.12);
+  border-right: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 .border-bottom {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
 }
 .opacity-50 {
   opacity: 0.5;
 }
 .link {
-  color: rgb(var(--v-theme-lightText));
+  color: rgb(var(--v-theme-on-surface));
   text-decoration: none;
   &:hover {
     color: rgb(var(--v-theme-primary));

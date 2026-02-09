@@ -22,7 +22,7 @@
                     </v-col>
                 </v-row>
             </v-card-text>
-            <v-divider class="border-opacity-100" color="primary" />
+            <v-divider />
             <v-card-actions>
                 <v-btn variant="tonal" prepend-icon="mdi-account-multiple-plus" color="primary" rounded="xl" spaced="end"
                     class="pr-5">
@@ -63,7 +63,7 @@ import { usePageableRolesStore, EMPTY_ROLE, type RoleDto } from '@/stores/studio
 import type { UserDto } from '@/stores/studio/mgmt/users.store';
 import { hasHistory } from '@/utils/helpers';
 import type { ColDef, RowSelectionOptions } from 'ag-grid-community';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import UserSearchDialog from './UserSearchDialog.vue';
 
 const roleDataSource = usePageableRolesStore();
@@ -95,10 +95,16 @@ const fullscreenIcon = computed(() => {
         return 'mdi-fullscreen';
 });
 
-watch(() => props.roleId, async (roleId) => {
-    dataStore.setContext({ target: props.scope, targetId: props.roleId });
-    getData();
-}, { immediate: false });
+watch(
+    () => [props.roleId, props.scope],
+    ([roleId, scope]) => {
+        if (!roleId) return;
+        const target = (scope ?? 'user') as AssigneeScope;
+        dataStore.setContext({ target, targetId: Number(roleId) });
+        getData();
+    },
+    { immediate: true }
+);
 
 
 const role = ref<RoleDto>(EMPTY_ROLE);
@@ -191,9 +197,4 @@ const handleClose = () => {
     emit('close')
 }
  
-onMounted(() => {
-    dataStore.init({ target: props.scope, targetId: props.roleId });
-    getData();
-});
-
 </script>

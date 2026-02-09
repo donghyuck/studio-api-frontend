@@ -54,7 +54,7 @@
                     </v-row>
                 </v-container>
             </v-card-text> 
-            <v-divider class="border-opacity-100"/>
+            <v-divider />
             <v-card-actions>
                 <v-spacer />
                 <v-btn variant="tonal" color="grey" rounded="xl" @click="handleClose" width="100" :disabled="overlay">

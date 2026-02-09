@@ -38,7 +38,7 @@
                 </v-col>
             </v-row>
         </v-card-text>
-        <v-divider class="border-opacity-100" color="success" />
+        <v-divider />
         <v-card-item class="pa-0">
             <v-toolbar density="compact" dense class="pa-2">
                 <v-select class="ml-2" v-model="aceLangSelected" :items="aceLangOptions" label="Language" density="compact"

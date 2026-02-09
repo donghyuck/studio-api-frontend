@@ -1,0 +1,23 @@
+.ag-theme-quartz.ag-theme-adapted {
+  --ag-background-color: rgb(var(--v-theme-surface));
+  --ag-foreground-color: rgb(var(--v-theme-on-surface));
+  --ag-header-background-color: rgb(var(--v-theme-surface));
+  --ag-header-foreground-color: rgb(var(--v-theme-on-surface));
+  --ag-odd-row-background-color: rgba(var(--v-theme-on-surface), 0.02);
+  --ag-row-hover-color: rgba(var(--v-theme-primary), 0.12);
+  --ag-selected-row-background-color: rgba(var(--v-theme-primary), 0.2);
+  --ag-border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+  --ag-row-border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+  --ag-secondary-border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+  --ag-input-border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+  --ag-modal-overlay-background-color: rgba(var(--v-theme-surface), 0.7);
+}
+
+.ag-theme-quartz.ag-theme-adapted .ag-root-wrapper {
+  border-color: rgba(var(--v-border-color), var(--v-border-opacity));
+  background-color: rgb(var(--v-theme-surface));
+}
+
+.ag-theme-quartz.ag-theme-adapted .ag-header {
+  border-bottom-color: rgba(var(--v-border-color), var(--v-border-opacity));
+}

@@ -12,7 +12,7 @@
                     </v-col>
                 </v-row>
             </v-card-text>
-            <v-divider class="border-opacity-100" color="primary" />
+            <v-divider />
             <v-card-actions>
                 <v-spacer />
                 <v-btn variant="tonal" color="grey" rounded="xl" width="100" @click="hasHistory() ? $router.go(-1) : $router.push('/')">
@@ -30,7 +30,7 @@
 </template>
 <script setup lang="ts">
 import PageToolbar from '@/components/bars/PageToolbar.vue';
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { hasHistory } from '@/utils/helpers';
 
 import { useConfirm } from '@/plugins/confirm';
@@ -59,14 +59,20 @@ const roles = ref<RoleDto[]>();
 const gradtedRoles = ref<RoleDto[]>(); // granted by groups
 
 async function getData(force: boolean = false) {
+    if (!props.groupId) {
+        gradtedRoles.value = [];
+        return;
+    }
+
     overlay.value = true;
     try {
-        if( !dataStore.isLoaded )
+        if (!dataStore.isLoaded || force) {
             await dataStore.fetch();
-        roles.value = dataStore.dataItems;    
-        grStore.setGroupId(props.groupId); 
+        }
+        roles.value = dataStore.dataItems;
+        grStore.setGroupId(props.groupId);
         await grStore.fetch();
-        gradtedRoles.value = grStore.dataItems; 
+        gradtedRoles.value = grStore.dataItems;
     } finally {
         overlay.value = false;
     }
@@ -97,11 +103,22 @@ const saveOrUpdate = async () => {
 }
 
 const refresh = () => {
-    getData()
+    getData(true)
 }
 
+watch(
+    () => props.groupId,
+    (groupId) => {
+        if (!groupId) return;
+        getData();
+    },
+    { immediate: true }
+);
+
 onMounted(() => {
-    getData();
+    if (props.groupId) {
+        getData();
+    }
 });
 
 </script>
