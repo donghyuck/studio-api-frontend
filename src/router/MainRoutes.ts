@@ -4,6 +4,7 @@ const MainRoutes = {
   path: "/main",
   meta: {
     requiresAuth: false,
+    restoreSession: true,
   },
   redirect: "/main",
   component: () => import("@/layouts/full/FullLayout.vue"),

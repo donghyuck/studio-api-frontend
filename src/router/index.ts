@@ -24,8 +24,17 @@ let restoreSessionPromise: Promise<boolean> | null = null;
 
 async function restoreSessionIfNeeded(): Promise<boolean> {
   const auth = useAuthStore();
+  // If we already have a token but user is not loaded yet, fetch the profile so
+  // role-based UI (admin menus, route guards) can work reliably.
   if (auth.isAuthenticated) {
-    return true;
+    if (auth.user) return true;
+    try {
+      await auth.fetchUser();
+      return true;
+    } catch {
+      auth.logout();
+      return false;
+    }
   }
   if (restoreSessionPromise) {
     return restoreSessionPromise;
@@ -69,11 +78,15 @@ router.beforeEach(async (to, from, next) => {
 
     if (to.meta.roles) {
       const allowedRoles = (to.meta.roles as string[]) || [];
-      const userRoles = auth.user?.roles || [];
-      const hasRole = allowedRoles.some((role) => userRoles.includes(role));
-      if (!hasRole) {
-        next("/unauthorized");
-        return;
+      // Treat an empty roles list as "no restriction" to avoid accidental lockouts
+      // when env/config is missing.
+      if (allowedRoles.length > 0) {
+        const userRoles = auth.user?.roles || [];
+        const hasRole = allowedRoles.some((role) => userRoles.includes(role));
+        if (!hasRole) {
+          next("/unauthorized");
+          return;
+        }
       }
     }
   }
