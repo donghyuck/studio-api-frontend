@@ -112,9 +112,7 @@ const systemPrompt = ref<string>();
 const temperature = ref<number>();
 const topP = ref<number>();
 const maxOutputTokens = ref<number>();
-const stopSequences = ref<string[]>();
 const ragEnabled = ref<boolean>(false);
-const shwoRag = ref<boolean>(false);
 const provider = ref("google-ai-gemini");                    // 필요시 사용
 const input = ref("");
 
@@ -231,10 +229,6 @@ async function onSend() {
   }
 }
 
-function roleLabel(role: Role) {
-  return role === "user" ? "나" : role === "assistant" ? "AI" : "시스템";
-}
-
 const roleColor = (role: Role) => {
   if (role == 'assistant') return 'transparent';
   else return 'grey-lighten-2';
@@ -262,7 +256,6 @@ function findProvider(name?: string | null): ProviderInfo | undefined {
   return providers.value.find(p => p.name.toLowerCase() === key);
 }
 function setChatModel(name?: string | null): void {
-  const chatEnable = isChatEnabled(name);
   const chatModel = getChatModel(name);
   if (chatModel)
     model.value = chatModel;

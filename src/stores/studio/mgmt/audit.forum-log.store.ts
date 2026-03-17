@@ -1,5 +1,4 @@
 import { defineStore } from "pinia";
-import type { PageableDataSource } from "@/types/ag-gird";
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";
 
 export interface ForumAuditLogDto {
@@ -12,8 +11,6 @@ export interface ForumAuditLogDto {
   at?: string;
   detail?: Record<string, unknown>;
 }
-
-type IPageableForumAuditLogDataSource = PageableDataSource & {};
 
 const fetchUrl = "/api/mgmt/forums/audit-logs";
 

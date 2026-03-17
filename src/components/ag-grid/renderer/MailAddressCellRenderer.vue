@@ -1,7 +1,7 @@
 <template>
     <div class="mail-list">
         <div v-for="(m, idx) in parsedList" :key="idx" class="mail-item">
-            <v-hover v-slot="{ props, isHovering }">
+            <v-hover v-slot="{ props }">
                 <div v-bind="props" class="hover-target">
                     <span class="name" v-if="m.name">{{ m.name }}</span>
                     <span class="email" v-else>{{ m.email }}</span>
@@ -10,10 +10,10 @@
                         :close-on-content-click="false">
                         <v-card class="pa-3" width="250" rounded="15">
                             <template v-slot:title>
-                                <v-card-title class="text-body-2" v-text="m.name || m.email"></v-card-title>
+                                <v-card-title class="text-body-2">{{ m.name || m.email }}</v-card-title>
                             </template>
                             <template v-slot:subtitle>
-                                <v-card-subtitle v-text="m.email"></v-card-subtitle>
+                                <v-card-subtitle>{{ m.email }}</v-card-subtitle>
                             </template> 
                             <template v-slot:prepend>
                                 <v-avatar color="blue-darken-2" :image="ANONYMOUS_IMAGE">
@@ -34,28 +34,29 @@
 import { computed, ref } from "vue";
 import ANONYMOUS_IMAGE from "@/assets/images/users/anonymous.png";
 const props = defineProps<{ params: any }>();
-const column = props.params.column;
 const parsedList = computed(() => parseEmailList(props.params.value));
 const showMenu = ref<boolean[]>([]);
-function parseEmailList(raw: string) {
+function parseEmailList(raw?: string | null) {
     if (!raw) return [];
     // 쉼표 기준 분리
     const parts = raw.split(",").map(v => v.trim());
     return parts.map(p => {
-        let nameMatch = p.match(/"?(.*?)"?\s*</);
-        let emailMatch = p.match(/<(.*?)>/);
+        const nameMatch = p.match(/"?(.*?)"?\s*</);
+        const emailMatch = p.match(/<(.*?)>/);
+        const nameGroup = nameMatch?.[1];
+        const emailGroup = emailMatch?.[1];
         let name: string | null = null;
         let email: string | null = null;
-        if (nameMatch && emailMatch) {
-            name = nameMatch[1]
+        if (nameGroup && emailGroup) {
+            name = nameGroup
                 .replace(/"/g, "")  // 큰따옴표 제거
                 .replace(/\//g, "") // 슬래시 제거
                 .replace(/^\\+|\\+$/g, "") // 백슬래시 제거
                 .trim();
-            email = emailMatch[1].trim();
-        } else if (emailMatch) {
+            email = emailGroup.trim();
+        } else if (emailGroup) {
             // <email> 만 있을 때
-            email = emailMatch[1].trim();
+            email = emailGroup.trim();
         } else {
             // 순수 email
             email = p.trim();

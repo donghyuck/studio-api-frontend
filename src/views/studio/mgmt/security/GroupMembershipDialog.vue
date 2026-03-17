@@ -164,7 +164,7 @@ const removeMembership = async () => {
 }
 
 
-async function getData(force: boolean = false) {
+async function getData(_force: boolean = false) {
     overlay.value = true;
     try {
         mbStore.setGroupId(props.groupId);

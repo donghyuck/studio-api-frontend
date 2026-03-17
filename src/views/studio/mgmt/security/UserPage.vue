@@ -83,7 +83,7 @@ import { usePageableUsersStore } from '@/stores/studio/mgmt/users.store';
 import type { Property } from '@/types/studio';
 import PropertiesGrid from '../PropertiesGrid.vue';
 import { fromRowData, hasHistory, toRowData } from '@/utils/helpers';
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useForm } from 'vee-validate'
 import * as yup from 'yup'
 import { toTypedSchema } from '@vee-validate/yup'
@@ -92,13 +92,7 @@ import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';
 import UserRolesDialog from './UserRolesDialog.vue';
 import PasswordResetDialog from './PasswordResetDialog.vue';
-import { useAuthStore } from '@/stores/studio/mgmt/auth.store';
-import { storeToRefs } from 'pinia'; 
 import AvatarUploader from '@/components/users/AvatarUploader.vue';
-
-const auth = useAuthStore();
-
-const { token } = storeToRefs(auth);
 
 const props = defineProps({
     userId: { type: Number, default: 0 },
@@ -153,7 +147,6 @@ const {
     handleSubmit,
     validateField,
     resetForm,
-    setFieldValue,
     useFieldModel,
 } = useForm({
     validationSchema: schema,
@@ -185,7 +178,7 @@ function mapServerToForm(u: any) {
 const loading = ref(true);
 const properties = ref<Property[]>([]);
 
-async function getData(force: boolean = false) {
+async function getData(_force: boolean = false) {
     overlay.value = true;
     try {
         const data = await store.byId(props.userId, { revalidate: false })
@@ -232,10 +225,6 @@ function handleChange(all: Property[]) {
 const refresh = () => {
     getData()
 }
-
-const encodedUrl = computed(() => {
-    return `${import.meta.env.VITE_API_BASE_URL}/api/mgmt/users/${props.userId}/avatars/primary`;
-});
 
 onMounted(() => {
     if (props.userId > 0) {

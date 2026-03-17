@@ -173,8 +173,6 @@ const actionLabels: Record<string, string> = {
   MANAGE_BOARD: "게시판 관리",
 };
 
-const TYPE_ACTIONS: RolePermissionAction[] = [...ROLE_PERMISSION_ACTIONS];
-
 const forumTypeFriendlyLabels: Record<ForumType, string> = {
   COMMON: "COMMON (일반형)",
   NOTICE: "NOTICE (공지형)",
@@ -188,43 +186,11 @@ const forumTypeNotes = FORUM_TYPES.map((type) => ({
   hint: FORUM_TYPE_HINTS[type],
 }));
 
-const TYPE_DEFAULT_ACTIONS: Record<ForumType, RolePermissionAction[]> = {
-  COMMON: [
-    "READ_BOARD",
-    "READ_TOPIC_LIST",
-    "READ_TOPIC_CONTENT",
-    "READ_ATTACHMENT",
-    "CREATE_TOPIC",
-    "REPLY_POST",
-    "UPLOAD_ATTACHMENT",
-    "EDIT_TOPIC",
-    "DELETE_TOPIC",
-    "EDIT_POST",
-    "DELETE_POST",
-  ],
-  NOTICE: ["READ_BOARD", "READ_TOPIC_LIST", "READ_TOPIC_CONTENT", "READ_ATTACHMENT"],
-  SECRET: ["READ_BOARD", "READ_TOPIC_LIST"],
-  ADMIN_ONLY: [],
-};
-
-const forumTypeActionRows = FORUM_TYPES.map((type) => ({
-  type,
-  actions: TYPE_ACTIONS.reduce((acc, action) => {
-    acc[action] = TYPE_DEFAULT_ACTIONS[type]?.includes(action) ?? false;
-    return acc;
-  }, {} as Record<RolePermissionAction, boolean>),
-}));
-
 const selectedForumType = ref<ForumType>("COMMON");
 const forumTypeSelectItems = FORUM_TYPES.map((type) => ({
   value: type,
   text: forumTypeFriendlyLabels[type],
 }));
-const selectedTypeHint = computed(() => FORUM_TYPE_HINTS[selectedForumType.value]);
-const filteredTypeActionRows = computed(() =>
-  forumTypeActionRows.filter((row) => row.type === selectedForumType.value),
-);
-
 type AudienceKey = "anonymous" | "member" | "admin";
 
 const TYPE_AUDIENCE_ACTIONS: Record<ForumType, Record<AudienceKey, RolePermissionAction[]>> = {

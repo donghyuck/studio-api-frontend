@@ -55,10 +55,6 @@ const refresh = () => {
     pageableGridContentRef.value?.refresh();
 }
 
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
-
 const email_sync = async () => {
     const ok = await confirm({
         title: '확인',
@@ -70,7 +66,7 @@ const email_sync = async () => {
     if (!ok) return;
     try {
         overlay.value = true;
-        const data = await mailSync();
+        await mailSync();
         // 전역 실시간 알림에서 완료/실패 메시지를 표시합니다.
     } catch (e: any) {
         toast.error(resolveAxiosError(e));

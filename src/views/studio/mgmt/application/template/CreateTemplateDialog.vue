@@ -136,7 +136,7 @@ const toggleFullscreen = () => {
     fullscreen.value = !fullscreen.value;
 }
 const fullscreenIcon = computed(() => {
-    if (fullscreen)
+    if (fullscreen.value)
         return 'mdi-fullscreen-exit';
     else
         return 'mdi-fullscreen';

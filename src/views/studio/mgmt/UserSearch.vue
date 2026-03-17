@@ -65,10 +65,6 @@ watch(search, (q) => {
   }, 300)
 })
 
-watch(select, (u) => {
-
-})
-
 const canAdd = computed(() =>
   !!select.value &&
   !selectedList.value.some(u => u.userId === select.value!.userId)

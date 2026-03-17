@@ -136,16 +136,12 @@
 <script setup lang="ts">
 import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { loadAce } from '@/components/ace';
-import { useConfirm } from '@/plugins/confirm';
-import { useToast } from '@/plugins/toast';
 import { usePageableMailInboxStore } from '@/stores/studio/mgmt/mail.inbox.store';
 import type { MailMessageDto } from '@/types/studio/mail';
 import { parseEmailHeader } from '@/utils/mail';
 import { computed, onMounted, ref, watch } from 'vue';
 import { VAceEditor } from 'vue3-ace-editor';
 
-const toast = useToast();
-const confirm = useConfirm();
 const overlay = ref(false);
 const showHtml = ref(false);
 const aceReady = ref(false);
@@ -193,7 +189,7 @@ function formatBytes(bytes?: number) {
 
 
 const dataStore = usePageableMailInboxStore();
-async function getData(force: boolean = false) {
+async function getData() {
     overlay.value = true;
     try {
         const data = await dataStore.byId(props.mailId)
@@ -205,10 +201,6 @@ async function getData(force: boolean = false) {
         overlay.value = false;
     }
 }
-const refresh = () => {
-    getData()
-}
-
 onMounted(() => {
     if (props.mailId > 0) {
         getData();

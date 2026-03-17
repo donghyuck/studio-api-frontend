@@ -43,7 +43,6 @@ const columnDefs = computed<ColDef[]>(() => props.columns || []);
 // 그리드 동적 크기 조정
 const gridContainer = ref<HTMLElement | null>(null);
 const gridHeight = ref(props.height ?? 400); // initial height 
-const hasHeight = computed(() => props.height != null);
 const resizeGrid = () => {
   if (gridContainer.value) {
     gridHeight.value = window.innerHeight - gridContainer.value.getBoundingClientRect().top - 25; // Adjust as needed
@@ -64,17 +63,13 @@ const onGridReady = (params: any) => {
 // 필터 관리
 const emit = defineEmits(['filterActived', 'rowSelected']);
 const filtersActive = ref(false);
-const onFilterChanged = () => {
-  const filterModel = gridApi.value?.getFilterModel();
-  filtersActive.value = Object.keys(filterModel || {}).length > 0;
-};
 
 const onRowSelected = (event: any) => {
   emit('rowSelected', event);
 };
 
 // filtersActive 값이 변경되면 filtersActive 이벤트 발생
-watch(filtersActive, (val, oldVal) => {
+watch(filtersActive, (val) => {
   emit('filterActived', val);
 });
 

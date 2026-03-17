@@ -2,36 +2,32 @@
 import axios from 'axios';
 import { API_BASE_URL } from "@/config/backend";
 import { useAuthStore } from '@/stores/studio/mgmt/auth.store';
+import { parseJwtExp } from "@/utils/jwt";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
 let isRefreshing = false;
-let failedQueue: any[] = [];
+type RefreshQueueItem = {
+  resolve: () => void;
+  reject: (err: unknown) => void;
+};
+let failedQueue: RefreshQueueItem[] = [];
 
-function processQueue(error: any, token: string | null = null) {
-  failedQueue.forEach(prom => {
+function processQueue(error?: unknown) {
+  failedQueue.forEach((prom) => {
     if (error) prom.reject(error);
-    else prom.resolve(token);
+    else prom.resolve();
   });
   failedQueue = [];
 }
 
-function parseJwt(token: string) {
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return payload;
-  } catch {
-    return null;
-  }
-}
-
 function isTokenExpired(token: string, skewSeconds = 30): boolean {
-  const payload = parseJwt(token); 
-  if (!payload?.exp) return true;
+  const exp = parseJwtExp(token);
+  if (!exp) return true;
   const now = Math.floor(Date.now() / 1000);
-  return payload.exp < now + skewSeconds;
+  return exp < now + skewSeconds;
 }
 
 // ✅ 요청 인터셉터
@@ -40,21 +36,25 @@ api.interceptors.request.use(async config => {
   if (auth.token) {
     // 🔍 토큰 만료 확인
     if (isTokenExpired(auth.token)) {
-      console.log( isRefreshing ? '토큰 갱신 중...' : '토큰 만료, 갱신 시도 중...');
+      if (import.meta.env.DEV) {
+        console.debug(
+          isRefreshing ? "토큰 갱신 중..." : "토큰 만료, 갱신 시도 중..."
+        );
+      }
       if (!isRefreshing) {
         isRefreshing = true;
         try {
-          const newToken = await auth.refreshTokens();
-          processQueue(null, newToken);
+          await auth.refreshTokens();
+          processQueue();
         } catch (error) {
-          processQueue(error, null);
+          processQueue(error);
           auth.logout();
         } finally {
           isRefreshing = false;
         }
       }
       // 이미 갱신 중이면 큐에 넣고 기다리기
-      await new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         failedQueue.push({ resolve, reject });
       });
     }

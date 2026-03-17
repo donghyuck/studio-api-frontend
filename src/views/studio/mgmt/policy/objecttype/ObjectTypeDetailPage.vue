@@ -29,7 +29,7 @@
         </v-alert>
         <v-row>
           <v-col cols="3" class="pb-0">
-            <v-number-input v-model="objectType" :reverse="false" controlVariant="default" label="객체 유형"
+            <v-number-input v-model="objectTypeField" :reverse="false" controlVariant="default" label="객체 유형"
               :hideInput="false" hide-details density="compact" :min="0" :inset="false" :disabled="!isCreate" />
           </v-col>
           <v-col cols="3" class="pb-0">
@@ -189,7 +189,7 @@ const {
   validateOnInput: false,
 } as any);
 
-const [objectType, code, name, domain, status, description] = useFieldModel([
+const fieldModels = useFieldModel([
   "objectType",
   "code",
   "name",
@@ -197,9 +197,15 @@ const [objectType, code, name, domain, status, description] = useFieldModel([
   "status",
   "description",
 ]);
+const objectTypeField = fieldModels[0] ?? ref<number | null>(null);
+const code = fieldModels[1] ?? ref<string>("");
+const name = fieldModels[2] ?? ref<string>("");
+const domain = fieldModels[3] ?? ref<string>("");
+const status = fieldModels[4] ?? ref<string>("ACTIVE");
+const description = fieldModels[5] ?? ref<string | null>("");
 
 const showPolicy = computed(
-  () => !props.isCreate && Number(objectType.value ?? 0) > 0
+  () => !props.isCreate && Number(objectTypeField.value ?? 0) > 0
 );
 
 const policy = ref<ObjectTypePolicyDto | null>(null);
@@ -282,7 +288,7 @@ const buildUpsertPayload = (base?: Partial<ObjectTypeUpsertRequest>) => {
     throw new Error("사용자 정보를 확인할 수 없습니다.");
   }
   return {
-    objectType: objectType.value ?? null,
+    objectType: objectTypeField.value ?? null,
     code: String(code.value ?? "").trim(),
     name: String(name.value ?? "").trim(),
     domain: String(domain.value ?? "").trim(),
@@ -299,7 +305,7 @@ const buildUpsertPayload = (base?: Partial<ObjectTypeUpsertRequest>) => {
 const onSubmit = handleSubmit(async () => {
   saving.value = true;
   try {
-    const id = Number(objectType.value ?? 0);
+    const id = Number(objectTypeField.value ?? 0);
     if (props.isCreate || id <= 0) {
       const payload = buildUpsertPayload();
       const created = await objectTypeAdminApi.create(payload);
@@ -334,7 +340,7 @@ const onSubmit = handleSubmit(async () => {
 });
 
 const savePolicy = async () => {
-  const id = Number(objectType.value ?? 0);
+  const id = Number(objectTypeField.value ?? 0);
   if (!id) return;
   const userId = auth.user?.userId ?? 0;
   const username = auth.user?.username ?? "";

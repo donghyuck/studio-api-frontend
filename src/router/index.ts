@@ -64,7 +64,7 @@ router.beforeEach(async (to, from, next) => {
 
   if (to.meta.requiresAuth) {
     if (!auth.isAuthenticated) {
-      return next(`/auth/login?returnUrl=${to.fullPath}`);
+      return next(`/auth/login?returnUrl=${encodeURIComponent(to.fullPath)}`);
     }
 
     if (!auth.user) {
@@ -72,7 +72,7 @@ router.beforeEach(async (to, from, next) => {
         await auth.fetchUser();
       } catch {
         auth.logout();
-        return next(`/auth/login?returnUrl=${to.fullPath}`);
+        return next(`/auth/login?returnUrl=${encodeURIComponent(to.fullPath)}`);
       }
     }
 

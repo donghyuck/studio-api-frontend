@@ -421,7 +421,10 @@ const load = async () => {
             store.setSelectedBlockId(null);
         }
         if (!store.selectedBlockId && store.blocks.length > 0) {
-            store.setSelectedBlockId(store.blocks[0].blockId);
+            const firstBlock = store.blocks[0];
+            if (firstBlock) {
+                store.setSelectedBlockId(firstBlock.blockId);
+            }
         }
         expandAll();
     } catch (err: any) {
@@ -570,10 +573,6 @@ const copyDraft = async () => {
     } catch {
         toast.error("클립보드 복사에 실패했습니다.");
     }
-};
-
-const goBack = () => {
-    router.back();
 };
 
 watch(

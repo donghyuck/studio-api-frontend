@@ -85,7 +85,6 @@ const search = async () => {
 };
 
 const role = ref<RoleDto>(EMPTY_ROLE);
-const assignedGroups = ref<GroupDto[]>(); // granted by groups
 const rowSelection: RowSelectionOptions = {
     mode: 'multiRow',
     enableClickSelection: false,
@@ -105,9 +104,6 @@ function onPageableGridFilterActived(event: any) {
 const refresh = () => {
     pageableGridContentRef.value?.refresh();
 }
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
 const selectedRows = computed(() => pageableGridContentRef.value?.selectedRows() || []);
 const revokeable = computed(() => {
     return selectedRows.value.length > 0;
@@ -143,7 +139,7 @@ const revokeRoleFromGroup = async () => {
     }
 }
 
-async function getData(force: boolean = false) {
+async function getData(_force: boolean = false) {
     if (props.roleId === 0)
         return;
     overlay.value = true;

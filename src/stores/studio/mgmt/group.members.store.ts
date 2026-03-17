@@ -67,16 +67,16 @@ class PageableGroupMembersDataSource
     userIds: number[],
     opts: CreateOptions & { refresh?: "none" | "current" | "first" } = {}
   ): Promise<number> {
-    const { refresh = "none", optimistic = true } = opts;
+    const { refresh = "none" } = opts;
     if (!userIds?.length) return 0;
 
     // POST /groups/{gid}/members  body: { userIds:[], joinedBy? }
-    const res = await api.post<number>(
+    await api.post<number>(
       this.getFetchUrl(),
       userIds
     );
 
-    let affected = 0;
+    const affected = userIds.length;
     // 새로고침 정책
     if (refresh === "current") {
       await this.fetch();
@@ -95,7 +95,7 @@ class PageableGroupMembersDataSource
     if (!userIds?.length) return 0;
 
     
-    let removed = await api.delete<number>(this.getFetchUrl(), userIds);
+    const removed = await api.delete<number>(this.getFetchUrl(), userIds);
 
     if (refresh === "current") {
       await this.fetch();

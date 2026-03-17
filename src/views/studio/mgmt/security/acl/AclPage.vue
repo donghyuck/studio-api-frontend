@@ -89,7 +89,6 @@ import CreateEntyyDialog from './CreateEntryDialog.vue'
 import type { AclActionMaskDto } from '@/types/studio/ai';
 import { fetchActions } from '@/data/studio/mgmt/acl';
 import { useConfirm } from '@/plugins/confirm';
-import { number } from 'yup';
 
 const toast = useToast();
 const confirm = useConfirm();

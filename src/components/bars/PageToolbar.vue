@@ -114,8 +114,6 @@ const props = withDefaults(defineProps<Props>(), {
 
 const toolbarClass = computed(() => ['page-toolbar', props.class].filter(Boolean))
 
-const isVisible = (visible?: boolean) => visible !== false
-
 /** PREVIOUS HANDLE */
 const router = useRouter();
 const previousTitle = computed(() => props.previousTitle ?? "이전");
@@ -144,33 +142,7 @@ async function handlePrevious() {
   }
 }
 
-const emits = defineEmits([
-  "previous",
-  "close",
-  "create",
-  "createNewVersion",
-  "custom",
-  "delete",
-  "deleteCurrent",
-  "download-excel-all",
-  "edit",
-  "email-sync",
-  "fullscreen",
-  "lock",
-  "nextTopic",
-  "openAcl",
-  "openCategories",
-  "openPermissions",
-  "openRoleHelp",
-  "pin",
-  "prevTopic",
-  "preview",
-  "refresh",
-  "reload",
-  "remove-membership",
-  "selectAll",
-  "upload",
-]);
+const emits = defineEmits<(event: string, payload?: unknown) => void>();
 
 function resolve<T>(v: ValueOrFn<T> | undefined, fallback?: T): T {
   if (typeof v === 'function') return (v as any)()
@@ -189,7 +161,7 @@ const resolvedPrependItems = computed<ResolvedItem[]>(() => {
       const appendIcon = resolve<string | undefined>(raw.appendIcon, undefined)
       const color = resolve<string | undefined>(raw.color, undefined)
 
-      let disabled = resolve<boolean>(raw.disabled, false)
+      const disabled = resolve<boolean>(raw.disabled, false)
       const baseTooltip = resolve<string | undefined>(raw.tooltip, undefined)
       const disabledTooltip = resolve<string | undefined>(raw.tooltipWhenDisabled, undefined)
       const tooltip =
@@ -238,7 +210,7 @@ const resolvedItems = computed<ResolvedItem[]>(() => {
       const appendIcon = resolve<string | undefined>(raw.appendIcon, undefined)
       const color = resolve<string | undefined>(raw.color, undefined)
 
-      let disabled = resolve<boolean>(raw.disabled, false)
+      const disabled = resolve<boolean>(raw.disabled, false)
       const baseTooltip = resolve<string | undefined>(raw.tooltip, undefined)
       const disabledTooltip = resolve<string | undefined>(raw.tooltipWhenDisabled, undefined)
       const tooltip =

@@ -45,7 +45,6 @@
 </template>
 <script setup lang="ts">
 import PageToolbar from '@/components/bars/PageToolbar.vue';
-import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';
 import { usePageableDocumentListStore } from '@/stores/studio/mgmt/document.list.store';
 import { useNavStore } from '@/stores/studio/mgmt/nav.store';
@@ -57,7 +56,6 @@ import RemoteMgmtUserCellRenderer from '@/components/ag-grid/renderer/RemoteMgmt
 import CreateDocumentDialog from './CreateDocumentDialog.vue';
 import DocumentPreviewDialog from './DocumentPreviewDialog.vue';
 
-const confirm = useConfirm();
 const toast = useToast();
 const router = useRouter();
 const nav = useNavStore();
@@ -103,7 +101,6 @@ const filtersActive = ref(false);
 const selectedCount = ref(0);
 const selectedIds = ref<number[]>([]);
 const selectedTitle = ref<string | null>(null);
-const isDeleteDisabled = computed(() => selectedCount.value === 0);
 const isPreviewDisabled = computed(() => selectedCount.value !== 1);
 const gridEvents = [
     {
@@ -162,7 +159,12 @@ const openPreview = () => {
         toast.error('문서 1건을 선택하세요.');
         return;
     }
-    dialogs.value.preview.documentId = selectedIds.value[0];
+    const selectedId = selectedIds.value[0];
+    if (selectedId == null) {
+        toast.error('선택한 문서를 확인할 수 없습니다.');
+        return;
+    }
+    dialogs.value.preview.documentId = selectedId;
     dialogs.value.preview.title = selectedTitle.value;
     dialogs.value.preview.visible = true;
 };

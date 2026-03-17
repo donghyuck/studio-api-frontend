@@ -66,8 +66,6 @@ const toast = useToast();
 const nav = useNavStore();
 
 // grid 
-const gridData = ref<AttachmentDto[]>();
-const loader = ref(false);
 // define grid columns
 const columnDefs: ColDef[] = [
     {
@@ -124,9 +122,6 @@ function onPageableGridFilterActived(event: any) {
 const refresh = () => {
     pageableGridContentRef.value?.refresh();
 }
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
 
 const dialogs = ref({
     upload: { visible: false },

@@ -46,12 +46,6 @@ import { usePageableGroupsStore } from '@/stores/studio/mgmt/groups.store'
 import { useForm, useField } from 'vee-validate'
 import * as yup from 'yup'
 
-import { useToast } from '@/plugins/toast'
-import { useConfirm } from '@/plugins/confirm'
-
-const toast = useToast();
-const confirm = useConfirm();
-
 const props = defineProps({
     groupId: { type: Number, default: 0 },
     // 수정 모드 초기 데이터

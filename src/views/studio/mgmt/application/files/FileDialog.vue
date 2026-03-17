@@ -110,8 +110,6 @@ const dialogOpen = computed({
     set: (v: boolean) => emit('update:modelValue', v),
 })
 
-const objectType = ref<number | null>(0)
-const objectId = ref<number | null>(0)
 const attachment = ref<AttachmentDto>(
     emptyAttachment()
 );
@@ -131,7 +129,7 @@ watch(dialogOpen, async (open) => {
 
 
 const rag_metadata = ref<Record<string, unknown>>();
-async function getData(force: boolean = false) {
+async function getData(_force: boolean = false) {
     if (!props.attachmentId) return;
 
     overlay.value = true;

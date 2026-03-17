@@ -81,7 +81,7 @@ class PageableGroupDataSource
     id: number,
     opts: { revalidate?: boolean; syncList?: boolean } = {}
   ): Promise<GroupDto | undefined> {
-    const { revalidate = true, syncList = true } = opts;
+    const { revalidate = true } = opts;
     const cached = this.byIdCache.get(id)?.item;
     if (cached && !revalidate) return cached;
     // 2) 서버 재조회
@@ -93,7 +93,7 @@ class PageableGroupDataSource
   async update(
     id: number,
     dto: UpdateGroupDto,
-    opts: { refreshList?: boolean } = {}
+    _opts: { refreshList?: boolean } = {}
   ): Promise<GroupDto> {
     // PUT/PATCH 중 하나를 선택 (서버에 맞추세요)
     const updated = await api.put<GroupDto>(`${this.getFetchUrl()}/${id}`, dto);

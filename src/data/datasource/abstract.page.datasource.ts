@@ -1,17 +1,8 @@
 import { DEFAULT_PAGE_SIZE } from "@/data/studio/public";
 import { api } from "@/data/http";
-import type { FetchOptions, PageQuery, PageableDataSource, PageResult } from "@/types/ag-gird";
+import type { FetchOptions, PageQuery, PageableDataSource } from "@/types/ag-gird";
 import type { SortModelItem } from "ag-grid-community";
 import { ref, type Ref } from "vue";
-
-type IdGetter<T> = (item: T) => number | string | undefined;
-interface ByIdOptions {
-  revalidate?: boolean; // 기본 true (SWR)
-  ttlMs?: number; // 기본 30s
-  syncList?: boolean; // 목록에도 반영할지(기본 true)
-}
-
-type CacheEntry<T> = { result: PageResult<T>; ts: number };
 
 function getFieldValue(obj: any, path: string): any {
   return path.split(".").reduce((acc, part) => acc?.[part], obj);
@@ -92,7 +83,7 @@ export abstract class AbstractPageDataSource<T = unknown, R = T>
   }
 
   pageable_params() {
-    var pageable = {
+    const pageable = {
       page: this.page.value,
       size: this.pageSize.value,
       sort: this.sort_string(),
@@ -119,15 +110,17 @@ export abstract class AbstractPageDataSource<T = unknown, R = T>
   }
 
   sort_field() {
-    if (this.sort.value.length > 0) {
-      return this.sort.value[0].colId;
+    const firstSort = this.sort.value[0];
+    if (firstSort) {
+      return firstSort.colId;
     }
     return null;
   }
 
   sort_dir() {
-    if (this.sort.value.length > 0) {
-      return this.sort.value[0].sort;
+    const firstSort = this.sort.value[0];
+    if (firstSort) {
+      return firstSort.sort;
     }
     return null;
   }

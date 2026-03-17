@@ -57,7 +57,7 @@ class PageableUserDataSource
     id: number,
     opts: { revalidate?: boolean; syncList?: boolean } = {}
   ): Promise<UserDto | undefined> {
-    const { revalidate = true, syncList = true } = opts;
+    const { revalidate = true } = opts;
     const cached = this.byIdCache.get(id)?.item;
     if (cached && !revalidate) return cached;
     // 2) 서버 재조회
@@ -69,7 +69,7 @@ class PageableUserDataSource
     async update(
       id: number,
       dto: UserDto,
-      opts: { refreshList?: boolean } = {}
+      _opts: { refreshList?: boolean } = {}
     ): Promise<UserDto> {
       // PUT/PATCH 중 하나를 선택 (서버에 맞추세요)
       const updated = await httpApi.put<UserDto>(`${this.getFetchUrl()}/${id}`, dto);

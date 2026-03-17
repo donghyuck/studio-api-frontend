@@ -2,7 +2,7 @@ import type { Property } from "@/types/studio";
 import axios from "axios";
 
 const IN_BROWSER = typeof window !== "undefined";
-const HTTP = "http";
+const _HTTP = "http";
 const API_HEADERS = {
   Accept: "application/json",
   "Content-Type": "application/json",
@@ -72,7 +72,7 @@ export function isVideoOrAudioOrImgOrPdf(contentType: string) {
   return false;
 }
 
-function getExtenstion(filename: string) {
+function _getExtenstion(filename: string) {
   let ext = filename.match(REG_EX_FOR_EXT);
   ext = ext || [""];
   return ext[0].toLowerCase();
@@ -108,9 +108,10 @@ export function toTags(tags: string) {
 
 export function camelToSnakeCase(str: string) {
   if (str === null) return str;
+  if (str.length === 0) return str;
   else {
     return (
-      str[0].toLowerCase() +
+      str.charAt(0).toLowerCase() +
       str
         .slice(1, str.length)
         .replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
@@ -245,7 +246,7 @@ export const formatDataSize = (params: any) => {
 };
 
 // ApiResponse 래퍼를 쓰는 경우/안 쓰는 경우 모두 대응
-function unwrapApi<T = any>(json: any): T {
+function _unwrapApi<T = any>(json: any): T {
   if (json && typeof json === "object") {
     if ("data" in json) return json.data as T; // { data, ... }
     if ("result" in json) return json.result as T;

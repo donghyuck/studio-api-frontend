@@ -18,7 +18,9 @@
         </template>
       </v-card-item>
       <v-divider />
-      <v-card-text class="post-content" v-html="renderContent(firstPost.content)"></v-card-text>
+      <v-card-text class="post-content">
+        <div v-html="renderContent(firstPost.content)"></div>
+      </v-card-text>
       <v-divider />
       <v-card-text class="pt-0 pb-0"
         v-if="canReadAttachments && !firstPostAttachmentsLoading && firstPostAttachments.length">
@@ -86,7 +88,7 @@
         </v-timeline-item>
       </template>
       <template v-else>
-        <v-timeline-item v-for="(post, idx) in replies" :key="post.id" dot-color="grey-lighten-5" fill-dot
+        <v-timeline-item v-for="post in replies" :key="post.id" dot-color="grey-lighten-5" fill-dot
           class="reply-item">
           <template #icon>
             <UserAvatar :username="post.createdBy" :show-name="false" :show-email="false" :show-image="true" />
@@ -1095,7 +1097,7 @@ const submitReply = async () => {
     toast.success('댓글이 등록되었습니다.');
     closeReplyDialog(true);
     refresh();
-  } catch (e: any) {
+  } catch {
     toast.error('댓글 등록에 실패했습니다.');
   } finally {
     saving.value = false;
@@ -1192,11 +1194,7 @@ const canManageAttachments = computed(() => {
 const topicPinned = computed(() => topic.value?.pinned ?? false);
 const topicLocked = computed(() => topic.value?.locked ?? false);
 const replies = computed(() => posts.value.slice(1));
-const page = computed(() => dataStore.page ?? 0);
-const pageSize = computed(() => dataStore.pageSize ?? 20);
 const totalCount = computed(() => Number(dataStore.total ?? posts.value.length));
-const hasPrev = computed(() => page.value > 0);
-const hasNext = computed(() => posts.value.length >= pageSize.value);
 const firstPostAttachments = computed(() => {
   const postId = firstPost.value?.id;
   return postId ? postAttachments.value[postId] ?? [] : [];
@@ -1299,8 +1297,6 @@ const toolbarItems = computed(() => {
   items.push({ icon: 'mdi-refresh', event: 'refresh', tooltip: '새로고침' });
   return items;
 });
-const pageLabel = computed(() => `페이지 ${page.value + 1}`);
-
 const refresh = () => {
   dataStore.fetch();
 };
@@ -1327,18 +1323,6 @@ const goTopicList = async () => {
     name: 'CommunityForumTopics',
     params: { forumSlug: forumSlug.value },
   });
-};
-
-const goPrev = async () => {
-  if (!hasPrev.value) return;
-  dataStore.setPage(page.value - 1);
-  await dataStore.fetch();
-};
-
-const goNext = async () => {
-  if (!hasNext.value) return;
-  dataStore.setPage(page.value + 1);
-  await dataStore.fetch();
 };
 
 const deleteTopic = async () => {

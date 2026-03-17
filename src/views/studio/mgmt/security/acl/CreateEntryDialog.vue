@@ -57,7 +57,6 @@ import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { fetchActions } from '@/data/studio/mgmt/acl';
 import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';
-import { useAclClassesStore } from '@/stores/studio/mgmt/acl.classes.store';
 import { useAclEntriesStore } from '@/stores/studio/mgmt/acl.entries.store';
 import { useAclObjectsStore } from '@/stores/studio/mgmt/acl.objects.store';
 import { useAclSidsStore } from '@/stores/studio/mgmt/acl.sids.store';
@@ -68,7 +67,6 @@ import { useField, useForm } from 'vee-validate';
 import { computed, onMounted, ref, watch } from 'vue';
 import * as yup from 'yup';
 
-const classesStore = useAclClassesStore();
 const sidsStore = useAclSidsStore();
 const objectsStore = useAclObjectsStore();
 const entriesStore = useAclEntriesStore();
@@ -164,7 +162,7 @@ const { value: sidId, errorMessage: sidIdError } =
 const { value: aceOrder } =
     useField<number | null>('aceOrder')
 
-const { value: mask, errorMessage: maskError } =
+const { value: mask } =
     useField<number | null>('mask')
 
 const { value: granting } =

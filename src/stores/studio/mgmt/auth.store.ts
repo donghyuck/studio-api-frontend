@@ -4,13 +4,14 @@ import type { UserDto } from "@/types/studio/user";
 import { resolveAxiosError } from "@/utils/helpers";
 import axios from "axios";
 import { defineStore } from "pinia"; 
+import { API_BASE_URL } from "@/config/backend";
 
 export interface UserProfileDto extends UserDto {
   roles?: string[];
 }
 
-const loginUrl = `${import.meta.env.VITE_API_BASE_URL}/api/auth/login`;
-const refreshUrl = `${import.meta.env.VITE_API_BASE_URL}/api/auth/refresh`; 
+const loginUrl = `${API_BASE_URL}/api/auth/login`;
+const refreshUrl = `${API_BASE_URL}/api/auth/refresh`;
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
@@ -19,7 +20,12 @@ export const useAuthStore = defineStore("auth", {
   }),
   getters: {
     isAuthenticated: (state) => !!state.token,
-    profileImageUrl: (state) => `${import.meta.env.VITE_API_BASE_URL}/api/profile/${state.user?.username }/avatar`
+    profileImageUrl: (state) =>
+      state.user?.username
+        ? `${API_BASE_URL}/api/profile/${encodeURIComponent(
+            state.user.username
+          )}/avatar`
+        : "",
   },
 
   actions: {
@@ -57,14 +63,14 @@ export const useAuthStore = defineStore("auth", {
         return accessToken;
       } catch (error: any) {
         this.logout();
-        throw new Error(error.response.data.message || "토큰 갱신 실패");
+        throw new Error(resolveAxiosError(error) || "토큰 갱신 실패");
       }
     },
 
     async fetchUser() {
       try {
         const response = await api.get("/api/self");
-        this.user = response.data.data as UserProfileDto;;
+        this.user = response.data.data as UserProfileDto;
       } catch (error: any) {
         const status = error?.response?.status;
         if (status === 401 || status === 403) {

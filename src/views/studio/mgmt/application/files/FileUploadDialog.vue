@@ -35,14 +35,13 @@ import PageToolbar from '@/components/bars/PageToolbar.vue'
 import Uppy from '@uppy/core';
 import Dashboard from "@uppy/dashboard"
 import XHRUpload from "@uppy/xhr-upload"
-import { useToast } from '@/plugins/toast';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import Korean from '@uppy/locales/lib/ko_KR'
 import '@uppy/core/css/style.min.css'
 import '@uppy/dashboard/css/style.min.css' 
 import { authHeader } from '@/data/studio/auth';
+import { API_BASE_URL } from '@/config/backend';
 
-const toast = useToast()
 const props = defineProps<{
   modelValue: boolean
 }>()
@@ -64,7 +63,7 @@ const dialogOpen = computed({
 
 const objectType = ref<number | null>(0)
 const objectId = ref<number | null>(0)
-const xhrUploadUrl = `${import.meta.env.VITE_API_BASE_URL}/api/mgmt/files`
+const xhrUploadUrl = `${API_BASE_URL}/api/mgmt/files`
 /* ----------------------------------------------
  *  UPPY INSTANCE
  * ---------------------------------------------- */

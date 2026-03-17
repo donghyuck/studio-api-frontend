@@ -1,6 +1,4 @@
 import { defineStore } from "pinia";
-import { api } from "@/data/http";
-import type { PageableDataSource } from "@/types/ag-gird";
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource"; 
 
 export interface LoginFailureDto {
@@ -12,9 +10,6 @@ export interface LoginFailureDto {
     failureType:string;
     message:string;
 }
-
-type IPageableLoginFailureLogDataSource = PageableDataSource & {
-};
 
 const fetchUrl = "/api/mgmt/audit/login-failure-log";
 

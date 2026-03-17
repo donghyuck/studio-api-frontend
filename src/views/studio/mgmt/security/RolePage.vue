@@ -81,7 +81,7 @@ const { handleSubmit } = useForm({ validationSchema: schema })
 const { value: name, errorMessage: nameError } = useField<string>('name')
 const { value: description, errorMessage: descError } = useField<string>('description')
 
-async function getData(force: boolean = false) {
+async function getData(_force: boolean = false) {
     overlay.value = true;
     try {
         const data = await store.byId( props.roleId, { revalidate:false } )
@@ -98,7 +98,7 @@ const refresh = () => {
     getData()
 }
 
-const onSubmit = handleSubmit(async (form) => {
+const onSubmit = handleSubmit(async (_form) => {
     if (!Number.isFinite(props.roleId)) return
     const ok = await confirm({
         title: '저장 확인',

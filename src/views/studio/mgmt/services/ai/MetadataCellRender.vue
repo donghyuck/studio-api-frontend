@@ -14,7 +14,6 @@
 <script setup lang="ts"> 
 import { computed } from 'vue';
 const props = defineProps<{ params: any }>();
-const column = props.params.column;
 const metadata = computed<Record<string, unknown> | null>(() => {
   return (props.params.value as Record<string, unknown> | null) ?? null;
 });

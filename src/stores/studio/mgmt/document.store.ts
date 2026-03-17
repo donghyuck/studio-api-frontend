@@ -281,12 +281,14 @@ export const useDocumentStore = defineStore(
       if (targetIndex < 0 || targetIndex >= siblings.length) return;
       const reordered = siblings.slice();
       const [moved] = reordered.splice(index, 1);
+      if (!moved) return;
       reordered.splice(targetIndex, 0, moved);
 
       const parentBlockId = found.parent?.block.blockId ?? null;
       try {
         for (let i = 0; i < reordered.length; i += 1) {
           const node = reordered[i];
+          if (!node) continue;
           const nextSortOrder = (i + 1) * 10;
           if (node.block.sortOrder === nextSortOrder) continue;
           await documentApi.moveBlock(
@@ -313,6 +315,7 @@ export const useDocumentStore = defineStore(
       try {
         for (let i = 0; i < orderedIds.length; i += 1) {
           const blockId = orderedIds[i];
+          if (blockId == null) continue;
           const nextSortOrder = (i + 1) * 10;
           await documentApi.moveBlock(
             currentDocumentId.value,

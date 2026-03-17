@@ -20,6 +20,7 @@ import type {
   GridOptions,
   IGetRowsParams,
   PaginationChangedEvent,
+  RowModelType,
   SelectionChangedEvent
 } from 'ag-grid-community';
 import { AgGridVue } from 'ag-grid-vue3'; // Vue Data Grid Component
@@ -38,13 +39,13 @@ const props = defineProps<{
   columns?: ColDef[];
   options?: GridOptions;
   events?: Listener[];
-  rowModelType?: string;
+  rowModelType?: RowModelType;
   datasource: PageableDataSource;
   colIdToSnakeCase?: boolean;
   height?: number | undefined;
 }>();
 
-const rowModelType = computed<string>(() =>
+const rowModelType = computed<RowModelType>(() =>
   props.rowModelType ?? 'infinite'
 )
 //  페이지 크기 및 캐시 크기 설정
@@ -137,13 +138,9 @@ const onGridReady = (params: any) => {
 // 필터 관리
 const emit = defineEmits(['filterActived']);
 const filtersActive = ref(false);
-const onFilterChanged = () => {
-  const filterModel = gridApi.value?.getFilterModel();
-  filtersActive.value = Object.keys(filterModel || {}).length > 0;
-};
 
 // filtersActive 값이 변경되면 filtersActive 이벤트 발생
-watch(filtersActive, (val, oldVal) => {
+watch(filtersActive, (val) => {
   emit('filterActived', val);
 });
 
@@ -191,10 +188,6 @@ const displayedRowCount = () => {
 
 const warm = ref<boolean>(false);
 
-const warmUp = () => {
-  warm.value = true;
-};
-
 const isWarmUp = () => {
   const old = warm.value;
   if (old)
@@ -210,8 +203,6 @@ const goToPreviousPage = async () => {
     gridApi.value?.paginationGoToPage(previousPage);
   }
 }
-
-const tooltipShowDelay = ref(null);
 
 // 데이터 가져오기
 // force : true 인 경우 데이터를 강제로 가져옴

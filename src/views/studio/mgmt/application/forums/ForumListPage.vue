@@ -29,33 +29,31 @@
 </template>
 <script setup lang="ts">
 import PageToolbar from '@/components/bars/PageToolbar.vue';
-import { useToast } from '@/plugins/toast';
 import { usePageableForumListStore } from '@/stores/studio/mgmt/forum.list.store';
 import { useNavStore } from '@/stores/studio/mgmt/nav.store';
-import { computed, onMounted, ref } from 'vue';
+import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
 import type { ColDef, GridOptions, SelectionChangedEvent } from 'ag-grid-community';
 import ForumCreateDialog from './ForumCreateDialog.vue';
 
-const toast = useToast();
 const router = useRouter();
 const nav = useNavStore();
 
 // GRID
 const dataStore = usePageableForumListStore();
 const columnDefs: ColDef[] = [
-    {
-        headerName: '',
-        field: 'select',
-        maxWidth: 65,
-        pinned: 'left',
-        sortable: false,
-        filter: false,
-        resizable: false,
-        checkboxSelection: true,
-        headerCheckboxSelection: false,
-    },
+    // {
+    //     headerName: '',
+    //     field: 'select',
+    //     maxWidth: 65,
+    //     pinned: 'left',
+    //     sortable: false,
+    //     filter: false,
+    //     resizable: false,
+    //     checkboxSelection: true,
+    //     headerCheckboxSelection: false,
+    // },
     {
         field: 'name',
         headerName: '게시판',
@@ -102,7 +100,6 @@ const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | nu
 const filtersActive = ref(false);
 const selectedCount = ref(0);
 const selectedIds = ref<string[]>([]);
-const isDeleteDisabled = computed(() => selectedCount.value === 0);
 const gridEvents = [
     {
         type: 'selectionChanged',

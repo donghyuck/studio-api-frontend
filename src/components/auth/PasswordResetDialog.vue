@@ -32,13 +32,11 @@
 </template>
 <script setup lang="ts">
 import { requestPasswordReset } from '@/data/studio/auth';
-import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';
 import { resolveAxiosError } from '@/utils/helpers';
 import { ref } from 'vue';
 import * as yup from 'yup';
 
-const confirm = useConfirm();
 const toast = useToast()
 const overlay = ref<boolean>(false);
 const email = ref<string>("");

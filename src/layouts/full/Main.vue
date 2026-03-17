@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, computed, shallowRef, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, computed, watch } from 'vue';
 import { useDisplay, useTheme } from "vuetify";
 import sidebarItems from './vertical-sidebar/sidebarItem';
 import NavGroup from './vertical-sidebar/NavGroup/index.vue';
@@ -71,7 +71,6 @@ function filterSidebarItems(items: any) {
     .filter(Boolean);
 }
 const filteredItems = computed(() => filterSidebarItems(sidebarItems));
-const sidebarMenu = shallowRef(sidebarItems);
 
 const { mdAndDown } = useDisplay();
 const sDrawer = ref(true);
@@ -133,9 +132,9 @@ const goLogin = async () => {
       <perfect-scrollbar class="scrollnavbar">
         <v-list class="pa-6">
           <!---Menu Loop -->
-          <template v-for="(item, i) in filteredItems">
+          <template v-for="item in filteredItems" :key="item.title ?? item.header">
             <!---Item Sub Header -->
-            <NavGroup :item="item" v-if="item.header" :key="item.title" />
+            <NavGroup :item="item" v-if="item.header" />
             <NavCollapse class="leftPadding" :item="item" :level="0" v-else-if="item.children" />
             <!---Single Item-->
             <NavItem :item="item" v-else class="leftPadding" />

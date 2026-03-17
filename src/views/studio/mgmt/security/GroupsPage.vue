@@ -27,7 +27,7 @@
 </template>
 <script setup lang="ts">
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
-import { computed, onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import type { ColDef } from 'ag-grid-community';
 import { usePageableGroupsStore } from '@/stores/studio/mgmt/groups.store';
 import PageToolbar from '@/components/bars/PageToolbar.vue';
@@ -40,8 +40,6 @@ import { useConfirm } from '@/plugins/confirm';
 // grid 
 const dataStore = usePageableGroupsStore();
 const router = useRouter()
-const gridData = ref<any[]>();
-const loader = ref(false);
 const confirm = useConfirm();
 const toast = useToast();
 // define grid columns
@@ -105,16 +103,11 @@ const columnDefs: ColDef[] = [
     { colId: 'actions', headerName: '', filter: false, sortable: false, flex: 1.2, cellRenderer: ActionCellRenderer, cellRendererParams: { actions: columnActions, onAction } },
 ];
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);
-const filtersActive = ref(false);
-function onPageableGridFilterActived(event: any) {
-    filtersActive.value = event;
+function onPageableGridFilterActived(_event: any) {
 }
 const refresh = () => {
     pageableGridContentRef.value?.refresh();
 }
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
 const q = ref<string | null>(null);
 const onSearchClick = () => {
     const params: Record<string, any> = {};
@@ -139,10 +132,5 @@ const groupMembershipDialog = ref({
 const onCreate = () => {
     groupDialog.value.visible = true;
 };
-
-const selectedRows = computed(() => pageableGridContentRef.value?.selectedRows() || []);
-
-onMounted(() => {
-});
 
 </script>

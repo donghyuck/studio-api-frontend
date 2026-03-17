@@ -1,26 +1,14 @@
 import { requiredAdminRoles } from "@/utils/helpers";
 import {
-  AlertHexagonIcon,
-  AlignBoxBottomLeftIcon,
-  AppWindowIcon,
-  CardboardsIcon,
   CloudIcon,
-  CopyIcon,
   DeviceIpadSearchIcon,
   FileDatabaseIcon,
-  FileIcon,
-  FileUploadIcon,
   FolderIcon,
   LayoutDashboardIcon,
-  LoginIcon,
   Message2Icon,
-  MoodHappyIcon,
-  PointIcon,
   ShieldCogIcon,
   ShieldLockIcon,
   TableIcon,
-  TypographyIcon,
-  UserPlusIcon,
   ArticleIcon,
   UsersGroupIcon,
   UsersIcon,
@@ -29,7 +17,6 @@ import {
   MailIcon,
   MailCogIcon,
   FilesIcon,
-  
 } from "vue-tabler-icons";
 
 export interface menu {

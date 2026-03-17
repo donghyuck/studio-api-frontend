@@ -89,7 +89,7 @@ const toggleFullscreen = () => {
 }
 
 const fullscreenIcon = computed(() => {
-    if (fullscreen)
+    if (fullscreen.value)
         return 'mdi-fullscreen-exit';
     else
         return 'mdi-fullscreen';
@@ -108,7 +108,6 @@ watch(
 
 
 const role = ref<RoleDto>(EMPTY_ROLE);
-const assignedUsers = ref<UserDto[]>(); // granted by groups
 const q = ref('');
 const handleSearch = async () => {
     dataStore.setFilter({ q: q.value?.trim() });
@@ -135,9 +134,6 @@ function onPageableGridFilterActived(event: any) {
 const refresh = () => {
     pageableGridContentRef.value?.refresh();
 }
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
 
 const selectedRows = computed(() => pageableGridContentRef.value?.selectedRows() || []);
 const revokeable = computed(() => {
@@ -180,7 +176,7 @@ const assignRoleToUsers = async (users: UserDto[]) => {
     toast.success(`총 ${userIds.length}명의 사용자를에게 권한을 부여하였습니다.`)
     refresh();
 }
-async function getData(force: boolean = false) {
+async function getData(_force: boolean = false) {
     if (props.roleId === 0)
         return;
     overlay.value = true;

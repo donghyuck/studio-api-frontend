@@ -72,7 +72,7 @@ const shortText = computed(() => {
   const text = fullText.value;
   if (!text) return "";
 
-  const firstLine = text.split("\n")[0]; // 첫 줄만
+  const firstLine = text.split("\n")[0] ?? ""; // 첫 줄만
   const maxLen = 50;
 
   if (firstLine.length <= maxLen) return firstLine;

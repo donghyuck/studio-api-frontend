@@ -77,7 +77,7 @@ const columnActions = [
 
 async function onAction({ action, row }: { action: string; row: any }) {
     if (action === 'save') {
-        handleSave({ data: row });
+        handleSave();
     } else if (action === 'delete') {
         gridApi.value?.applyTransaction({ remove: [row] });
         emitAll();
@@ -124,7 +124,7 @@ watch(() => props.rowData, () => {
 }, { deep: true })
 
 
-function emitAll(reason = 'change') {
+function emitAll() {
     const all: Property[] = []
     if (gridApi.value) {
         gridApi.value.forEachNode((n: any) => all.push({ ...n.data }))
@@ -280,19 +280,10 @@ const onCellValueChanged = (event: any) => {
     }
 };
 
-const handleSave = async (event: any) => {
+const handleSave = async () => {
     gridApi.value?.showLoadingOverlay();
     gridApi.value?.hideOverlay();
     gridApi.value?.refreshCells({ force: true });
-};
-
-const handleDelete = async (event: any) => {
-    console.log("handleDelete", event);
-    //event.api
-    gridApi.value?.showLoadingOverlay();
-    gridApi.value?.hideOverlay();
-    gridApi.value?.applyTransaction({ remove: [event.data] });
-    queueMicrotask(() => emitAll());
 };
 
 async function addRow() {
@@ -300,9 +291,10 @@ async function addRow() {
     const newRow = gridApi.value?.applyTransaction({ add: [newItem] });
     if (newRow?.add) {
         gridData.value = [...gridData.value, newItem];
-        const newRowIndex = newRow.add[0].rowIndex;
+        const addedRow = newRow.add[0];
+        const newRowIndex = addedRow?.rowIndex ?? 0;
         gridApi.value?.startEditingCell({
-            rowIndex: newRowIndex || 0,
+            rowIndex: newRowIndex,
             colKey: 'name',
         });
     }

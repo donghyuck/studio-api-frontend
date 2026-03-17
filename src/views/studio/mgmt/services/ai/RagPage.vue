@@ -193,16 +193,12 @@ const model = ref("gemini-2.0-flash"); // 필요시 기본값 교체
 function getChatModel(name?: string | null): string | null {
     return findProvider(name)?.chat?.model ?? null;
 }
-function isChatEnabled(name?: string | null): boolean {
-    return !!findProvider(name)?.chat?.enabled;
-}
 function findProvider(name?: string | null): ProviderInfo | undefined {
     const key = (name ?? aiInfo.value?.defaultProvider ?? "").toLowerCase();
     return providers.value.find(p => p.name.toLowerCase() === key);
 }
 
 function setChatModel(name?: string | null): void {
-    const chatEnable = isChatEnabled(name);
     const chatModel = getChatModel(name);
     if (chatModel)
         model.value = chatModel;
@@ -215,7 +211,7 @@ const onProviderChange = (val: string | null) => {
         setChatModel(val);
 }
 
-async function getData(force: boolean = false) {
+async function getData() {
 
     try {
         const data = await fetchProviders(false);
@@ -230,7 +226,7 @@ async function getData(force: boolean = false) {
 }
 
 onMounted(() => {
-    getData(false);
+    getData();
 });
 
 

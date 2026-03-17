@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/studio/mgmt/auth.store';
 import { useRouter } from 'vue-router';
-import { ListCheckIcon, MailIcon, UserIcon } from 'vue-tabler-icons';
+import { ListCheckIcon, UserIcon } from 'vue-tabler-icons';
 import { ref } from 'vue';
 import MePasswordChangeDialog from '@/components/users/MePasswordChangeDialog.vue';
 const auth = useAuthStore();

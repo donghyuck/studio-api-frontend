@@ -117,9 +117,6 @@ const refresh = () => {
     selectedIds.value = [];
     pageableGridContentRef.value?.refresh();
 }
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
 const q = ref<string | null>(null)
 const objectType = ref<number | null>(null)
 const objectId = ref<number | null>(null)

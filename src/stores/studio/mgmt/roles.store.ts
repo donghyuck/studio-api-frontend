@@ -70,7 +70,7 @@ class PageableRoleDataSource
     id: number,
     opts: { revalidate?: boolean; syncList?: boolean } = {}
   ): Promise<RoleDto | undefined> {
-    const { revalidate = true, syncList = true } = opts;
+    const { revalidate = true } = opts;
     const cached = this.byIdCache.get(id)?.item;
     if (cached && !revalidate) return cached;
     // 2) 서버 재조회
@@ -100,7 +100,7 @@ class PageableRoleDataSource
   async update(
     id: number,
     dto: UpdateRoleDto,
-    opts: { refreshList?: boolean } = {}
+    _opts: { refreshList?: boolean } = {}
   ): Promise<RoleDto> {
     // PUT/PATCH 중 하나를 선택 (서버에 맞추세요)
     const updated = await api.put<RoleDto>(`${this.getFetchUrl()}/${id}`, dto);

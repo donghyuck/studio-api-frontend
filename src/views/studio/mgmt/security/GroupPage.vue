@@ -80,7 +80,7 @@ const groupRolesDialog = ref({
     groupId: 0,
 });
 
-async function getData(force: boolean = false) {
+async function getData(_force: boolean = false) {
     overlay.value = true;
     try {
         const data = await store.byId(props.groupId, { revalidate: false })
@@ -102,7 +102,7 @@ const refresh = () => {
     getData()
 }
 
-const onSubmit = handleSubmit(async (form) => {
+const onSubmit = handleSubmit(async (_form) => {
     if (!Number.isFinite(props.groupId)) return
     const ok = await confirm({
         title: '저장 확인',

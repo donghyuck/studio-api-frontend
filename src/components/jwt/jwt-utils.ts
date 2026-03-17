@@ -1,16 +1,7 @@
 // jwt-utils.ts
-export function parseJwtExp(token: string | null | undefined): number | null {
-  if (!token) return null;
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  try {
-    const payload = JSON.parse(atob(parts[1]));
-    // exp는 초 단위 Unix time
-    return typeof payload.exp === "number" ? payload.exp : null;
-  } catch {
-    return null;
-  }
-}
+import { parseJwtExp } from "@/utils/jwt";
+
+export { parseJwtExp };
 export function formatHMS(ms: number): string {
   if (ms <= 0) return "00:00";
   const totalSec = Math.floor(ms / 1000);

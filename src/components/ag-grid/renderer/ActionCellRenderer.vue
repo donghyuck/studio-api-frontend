@@ -115,10 +115,6 @@ const visible = computed(() => {
     return false;
 });
 
-const hasTextButton = computed(() =>
-  resolvedActions.value.some(a => !a.iconOnly)
-)
-
 const cellStyle = computed(() => ({
   display: 'inline-flex',
   gap: '6px',

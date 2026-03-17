@@ -25,10 +25,9 @@
    <RoleGrantedGroupDialog v-model="roleGrantedDialog.group.visible" :roleId="roleGrantedDialog.roleId"  @close="roleGrantedDialog.group.visible = false"  @updated="refresh"></RoleGrantedGroupDialog>
 </template>
 <script setup lang="ts">
-import GridContent from '@/components/ag-grid/GridContent.vue';
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
 import ActionCellRenderer from '@/components/ag-grid/renderer/ActionCellRenderer.vue';
-import { computed, onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import type { ColDef } from 'ag-grid-community';
 import { usePageableRolesStore } from '@/stores/studio/mgmt/roles.store';
 import PageToolbar from '@/components/bars/PageToolbar.vue';
@@ -41,8 +40,6 @@ import RoleGrantedGroupDialog from './RoleGrantedGroupDialog.vue';
 
 // grid 
 const dataStore = usePageableRolesStore();
-const gridData = ref<any[]>();
-const loader = ref(false);
 const router = useRouter();
 const confirm = useConfirm();
 const toast = useToast();
@@ -123,19 +120,13 @@ const columnDefs: ColDef[] = [
     { field: 'modifiedDate', headerName: '수정일', filter: false, type: 'date', flex: 1 },
     { colId: 'actions', headerName: '', filter: false, sortable: false, flex: 2, cellRenderer: ActionCellRenderer, cellRendererParams: { actions: columnActions, onAction } },
 ];
-const gridContentRef = ref<InstanceType<typeof GridContent> | null>(null);
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);
-const filtersActive = ref(false);
 
-function onPageableGridFilterActived(event: any) {
-    filtersActive.value = event;
+function onPageableGridFilterActived(_event: any) {
 }
 const refresh = () => {
     pageableGridContentRef.value?.refresh();
 }
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
 const q = ref<string | null>(null);
 const onSearchClick = () => {
     const params: Record<string, any> = {};
@@ -163,11 +154,5 @@ const onCreate = () => {
     createDialog.value.visible = true;
 };
 
-
-const selectedRows = computed(() => pageableGridContentRef.value?.selectedRows() || []);
-
-onMounted(() => {
-
-});
 
 </script>

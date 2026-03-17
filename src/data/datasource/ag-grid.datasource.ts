@@ -9,8 +9,6 @@ type AgGridFilterModel = Record<string, any>;
 
 type CacheEntry<T> = { result: T; ts: number };
 
-type IdGetter<T> = (item: T) => number | string | undefined;
-
 function getFieldValue(obj: any, path: string): any {
   return path.split(".").reduce((acc, part) => acc?.[part], obj);
 }
@@ -136,9 +134,10 @@ export abstract class AgGridDataSource<T = unknown, R = T>
   }
 
   sortString() {
-    if (this.sort.value.length > 0) {
-      const field = this.sort.value[0].colId || "";
-      const dir = this.sort.value[0].sort || "";
+    const firstSort = this.sort.value[0];
+    if (firstSort) {
+      const field = firstSort.colId || "";
+      const dir = firstSort.sort || "";
       return `${field},${dir}`;
     }
     return null;

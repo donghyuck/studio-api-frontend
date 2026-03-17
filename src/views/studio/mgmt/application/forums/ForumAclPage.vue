@@ -164,7 +164,6 @@ import type {
 import {
   IDENTIFIER_TYPES,
   OWNERSHIP_SCOPES,
-  PERMISSION_ACTIONS,
   PERMISSION_EFFECTS,
   SUBJECT_TYPES,
 } from "@/types/studio/forums";
@@ -187,7 +186,6 @@ const subjectTypes = SUBJECT_TYPES;
 const identifierOptions = IDENTIFIER_TYPES;
 const ownershipOptions = OWNERSHIP_SCOPES;
 const effectOptions = PERMISSION_EFFECTS;
-const permissionActionOptions = PERMISSION_ACTIONS;
 const ownershipDescriptions: Record<PermissionOwnership, string> = {
   ANY: "작성자 여부와 관계없이 룰이 적용됩니다 (예: MODERATE, PIN_TOPIC).",
   OWNER_ONLY: "콘텐츠 작성자 본인에게만 룰이 적용됩니다 (예: 본인 글의 EDIT).",
@@ -228,7 +226,6 @@ const identifierHint = computed(
   () => identifierDescriptions[selectedIdentifier.value]
 );
 const isRoleSubject = computed(() => form.value.subjectType === "ROLE");
-const isUserSubject = computed(() => form.value.subjectType === "USER");
 const subjectIdHint = computed(
   () => "사용자 ID는 숫자(예: 사용자 ID)로 입력하세요."
 );
@@ -311,6 +308,7 @@ const userSearchConfirmMessage = computed(() => "해당 사용자 정보를 적�
 const applySelectedUser = (users: UserBasicDto[]) => {
   if (!users?.length) return;
   const user = users[0];
+  if (!user) return;
   if (selectedIdentifier.value === "ID") {
     form.value.subjectId = user.userId ?? undefined;
   } else {
@@ -350,7 +348,7 @@ const submitRule = async () => {
       toast.success("ACL 룰이 생성되었습니다.");
     }
     resetForm();
-  } catch (error) {
+  } catch {
     // error handled by store
   }
 };
@@ -419,7 +417,7 @@ const columnDefs: ColDef[] = [
   {
     field: "action", headerName: "권한", flex: 1, type: "hyperlinks", cellRendererParams: {
       mode: 'callback',
-      onClick: (data: ForumAclRuleResponse, p: unknown, ev: Event) => {
+      onClick: (data: ForumAclRuleResponse) => {
         prepareEdit(data);
       },
     }

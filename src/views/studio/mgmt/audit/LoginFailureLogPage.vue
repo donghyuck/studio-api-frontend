@@ -61,61 +61,14 @@
     </v-row>
 </template>
 <script setup lang="ts">
-import GridContent from '@/components/ag-grid/GridContent.vue';
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
 import PageToolbar from '@/components/bars/PageToolbar.vue';
-import { useConfirm } from '@/plugins/confirm';
-import { useToast } from '@/plugins/toast';
 import { usePageableLoginFailureLogStore } from '@/stores/studio/mgmt/audit.login-failure-log.store';
 import type { ColDef } from 'ag-grid-community';
-import { computed, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, ref } from 'vue';
 
 // grid 
 const dataStore = usePageableLoginFailureLogStore();
-const gridData = ref<any[]>();
-const loader = ref(false);
-const router = useRouter();
-const confirm = useConfirm();
-const toast = useToast();
-const columnActions = [
-    {
-        label: '삭제',
-        variant: 'outlined',
-        prependIcon: 'mdi-delete',
-        color: 'red',
-        event: 'delete',
-        visible: true,
-        tooltip: '롤을 삭제합니다.'
-    },
-    {
-        label: '사용자',
-        color: 'blue',
-        variant: 'outlined',
-        prependIcon: 'mdi-account-multiple',
-        event: 'user',
-        visible: true,
-        tooltip: '롤이 부여된 사용자를 관리합니다.',
-        disabled: false,
-    },
-    {
-        label: '그룹',
-        color: 'blue',
-        variant: 'outlined',
-        prependIcon: 'mdi-account-group',
-        event: 'group',
-        visible: true,
-        tooltip: '롤이 부여된 그룹을 관리합니다.',
-        disabled: false,
-    },
-    {
-        label: '상세보기',
-        icon: 'mdi-chevron-right',
-        event: 'view',
-        visible: true,
-        disabled: false,
-    }
-];
 
 // define grid columns
 const columnDefs: ColDef[] = [
@@ -127,7 +80,6 @@ const columnDefs: ColDef[] = [
     { field: 'userAgent', headerName: 'UserAgent', filter: false, sortable: false, type: 'string', },
 ];
 
-const gridContentRef = ref<InstanceType<typeof GridContent> | null>(null);
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);
 const filtersActive = ref(false);
 
@@ -137,12 +89,6 @@ function onPageableGridFilterActived(event: any) {
 const refresh = () => {
     pageableGridContentRef.value?.refresh();
 }
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
-
-const selectedRows = computed(() => pageableGridContentRef.value?.selectedRows() || []);
-
 const fmtKo = new Intl.DateTimeFormat('ko-KR', {
     year: 'numeric', month: 'long', day: 'numeric',
     weekday: 'short', timeZone: 'Asia/Seoul',
@@ -155,19 +101,12 @@ const dateEnd = ref<string | null>(null) // 'YYYY-MM-DD'
 const dateMenuStart = ref(false)
 const dateMenuEnd = ref(false)
 
-// v-data-table-server 모델
-const page = ref(1)       // v-data-table는 1-based
-const itemsPerPage = ref(15)
-const sortBy = ref<{ key: string, order: 'asc' | 'desc' }[]>([
-    { key: 'occurredAt', order: 'desc' }
-])
-
 // ====== 유틸: 로컬 날짜를 ISO(UTC)로 변환 ======
 /**
  * YYYY-MM-DD -> 로컬타임 기준 00:00의 ISO UTC
  */
 function startOfDayLocalToIso(dateStr: string): string {
-    const [y, m, d] = dateStr.split('-').map(Number)
+    const [y = 0, m = 1, d = 1] = dateStr.split('-').map(Number)
     const dt = new Date(y, m - 1, d, 0, 0, 0, 0) // local
     return dt.toISOString()
 }
@@ -175,7 +114,7 @@ function startOfDayLocalToIso(dateStr: string): string {
  * YYYY-MM-DD -> 로컬타임 기준 다음날 00:00의 ISO UTC (end-exclusive)
  */
 function endOfDayExclusiveLocalToIso(dateStr: string): string {
-    const [y, m, d] = dateStr.split('-').map(Number)
+    const [y = 0, m = 1, d = 1] = dateStr.split('-').map(Number)
     const dt = new Date(y, m - 1, d + 1, 0, 0, 0, 0) // 다음날 00:00
     return dt.toISOString()
 }

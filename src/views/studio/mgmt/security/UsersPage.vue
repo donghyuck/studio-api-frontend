@@ -29,7 +29,6 @@
     <UserRolesDialog v-model="dialog_user_roles.visible" :userId="dialog_user_roles.userId" @updated="refresh" />
 </template>
 <script setup lang="ts">
-import GridContent from '@/components/ag-grid/GridContent.vue';
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
 import ActionCellRenderer from '@/components/ag-grid/renderer/ActionCellRenderer.vue';
 import CheckboxRenderer from '@/components/ag-grid/renderer/CheckboxRenderer.vue';
@@ -49,8 +48,6 @@ const rowSelection: RowSelectionOptions = {
     enableClickSelection: false,
 }; 
 const dataStore = usePageableUsersStore();
-const gridData = ref<any[]>();
-const loader = ref(false);
 const router = useRouter();
 
 const dialog_user_roles = ref({
@@ -116,18 +113,12 @@ const columnDefs: ColDef[] = [
         actions: columnActions, onAction } },
 ];
 
-const gridContentRef = ref<InstanceType<typeof GridContent> | null>(null);
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);
-const filtersActive = ref(false);
-function onPageableGridFilterActived(event: any) {
-    filtersActive.value = event;
+function onPageableGridFilterActived(_event: any) {
 }
 const refresh = () => {
     pageableGridContentRef.value?.refresh();
 }
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
 const selectedRows = computed(() => pageableGridContentRef.value?.selectedRows() || []);
 const selectAll = () => {
     if (selectedRows.value.length > 0)

@@ -100,7 +100,7 @@ const onSubmit = handleSubmit(async (form) => {
     if (!ok) return;
     overlay.value = true
     try {
-        const create = await classesStore.createClass(form.name); 
+        await classesStore.createClass(form.name); 
         handleClose()
     } catch (e) {
         toast.error(resolveAxiosError(e));

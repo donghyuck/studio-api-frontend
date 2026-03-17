@@ -127,6 +127,7 @@ export function buildBreadcrumb(
 
   for (let i = 0; i < limit; i++) {
     const part = parts[i];
+    if (part == null) continue;
     acc += part + "/";
 
     const label = decodeLabel ? safeDecode(part) : part;

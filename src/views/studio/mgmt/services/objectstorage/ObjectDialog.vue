@@ -1,7 +1,7 @@
 <template>
     <v-dialog width="650" :fullscreen="false" :scrim="true" transition="dialog-bottom-transition">
         <v-card>
-            <PageToolbar title="Object" :label="bucket.bucket" @refresh="getData(true)" @close="handleClose"
+            <PageToolbar title="Object" :label="bucketLabel" @refresh="getData(true)" @close="handleClose"
                 :closeable="true" :divider="true" :items="[{ icon: 'mdi-refresh', event: 'refresh' }]" />
             <v-card-item>
                 <v-table density="compact" striped="even" theme="dark">
@@ -125,6 +125,8 @@ const head = ref<ObjectInfoDto>();
 const downloadable = ref<boolean>(false);
 
 const loading = ref(false);
+
+const bucketLabel = computed(() => props.bucket?.bucket ?? "");
 
 const is_image = computed(() => is_head_loaded.value && head.value?.contentType?.startsWith("image/") && presign_get_url_generatored)
 

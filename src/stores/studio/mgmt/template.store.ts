@@ -1,6 +1,5 @@
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";
 import type { PageableDataSource } from "@/types/ag-gird";
-import type { MailMessageDto } from "@/types/studio/mail";
 import type { TemplateDto } from "@/types/studio/template";
 import { api } from "@/data/http";
 import { defineStore } from "pinia";

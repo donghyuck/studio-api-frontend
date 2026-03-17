@@ -6,14 +6,9 @@ import { useAuthStore } from '@/stores/studio/mgmt/auth.store';
 import { usePreferencesStore } from '@/stores/studio/mgmt/preferences.store';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-const items = [
-    { text: 'Top Menu1', icon: 'mdi-wifi-strength-3', url: '/' },
-    { text: 'Top Menu2', icon: 'mdi-signal-cellular-outline', url: '/' },
-    { text: 'Top Menu3', icon: 'mdi-timer-sand', url: '/' }
-];
 const auth = useAuthStore();
 const tokenRef = computed(() => auth.token);
-const { exp, showRefresh, showLogin, secondsToExpiry, hhmmssToExpiry, hhmmssGraceLeft, inGrace, statusText, isExpired } = useJwtCountdown(tokenRef, {
+const { exp, showRefresh, showLogin, secondsToExpiry, hhmmssToExpiry, hhmmssGraceLeft, inGrace, isExpired } = useJwtCountdown(tokenRef, {
     // 없으면 생략 -> 내부 default 파서 사용
     graceSeconds: 1 * 60, // 5분
     tickMs: 1000,

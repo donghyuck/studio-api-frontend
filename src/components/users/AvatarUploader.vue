@@ -5,9 +5,10 @@ import { useAuthStore } from '@/stores/studio/mgmt/auth.store'
 import { type AvatarPresence, useUserAvatarsStore } from '@/stores/studio/mgmt/user.avatars.store'
 import { storeToRefs } from 'pinia'
 import { computed, onMounted, ref } from 'vue'
-import { guessFilenameFromUrl, parseFilenameFromContentDisposition } from '@/components/images/filename'
+import { parseFilenameFromContentDisposition } from '@/components/images/filename'
 import type { FilePondFile } from 'filepond'
 import { useConfirm } from '@/plugins/confirm';
+import { API_BASE_URL } from '@/config/backend';
 
 interface Props {
     userId: number
@@ -38,18 +39,12 @@ const auth = useAuthStore()
 const { token } = storeToRefs(auth)
 
 // 엔드포인트
-const base = import.meta.env.VITE_API_BASE_URL
+const base = API_BASE_URL
 const uploadUrl = computed(() => `${base}/api/mgmt/users/${props.userId}/avatars`)
 const sourceUrl = computed(() => props.initialUrl ?? `${base}/api/mgmt/users/${props.userId}/avatars/primary`)
 
-// FilePond 파일 리스트 (reactive)
-const pondFiles = ref<any[]>([])
-
 // server.load에서 파싱한 정확 파일명을 임시로 저장할 Map
 const lastResolvedNameMap = new Map<string, string>()
-
-// 초기 표시 이름(추정값). 서버에서 정확값을 얻으면 file-rename 플러그인으로 대체.
-const displayNameGuess = ref(guessFilenameFromUrl(sourceUrl.value, 'avatar.jpg'))
 
 // 초기 files: URL을 "로컬 파일처럼 보이게" 세팅 (FilePond가 server.load를 호출)
 const files = computed(() =>
@@ -82,7 +77,7 @@ const server = computed(() => ({
                     console.log('AvatarUploader: upload complete, server returned', id);
                     return String(id);
                 }
-            } catch (e) {
+            } catch {
                 if (typeof res === 'string' && res.trim()) {
                     console.log('AvatarUploader: upload complete (plain id)', res.trim());
                     return res.trim();
@@ -190,13 +185,13 @@ function onProcessFile(error: any, file: any) {
 const presence = ref<AvatarPresence>();
 const acceptedFileTypes = ['image/*'];
 
-async function getData(force: boolean = false) {
+async function getData() {
     const data = await avatars.checkPresence();
     presence.value = data;
 }
 onMounted(async () => {
     if (props.userId > 0) {
-        getData(true);
+        getData();
     }
 });
 </script>

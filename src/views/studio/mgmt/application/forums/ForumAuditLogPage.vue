@@ -57,7 +57,6 @@
 </template>
 
 <script setup lang="ts">
-import GridContent from '@/components/ag-grid/GridContent.vue';
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
 import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { usePageableForumAuditLogStore } from '@/stores/studio/mgmt/audit.forum-log.store';
@@ -130,7 +129,6 @@ const columnDefs: ColDef[] = [
     },
 ];
 
-const gridContentRef = ref<InstanceType<typeof GridContent> | null>(null);
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);
 const filtersActive = ref(false);
 
@@ -154,13 +152,13 @@ const dateMenuStart = ref(false);
 const dateMenuEnd = ref(false);
 
 function startOfDayLocalToIso(dateStr: string): string {
-    const [y, m, d] = dateStr.split('-').map(Number);
+    const [y = 0, m = 1, d = 1] = dateStr.split('-').map(Number);
     const dt = new Date(y, m - 1, d, 0, 0, 0, 0); // local
     return dt.toISOString();
 }
 
 function endOfDayExclusiveLocalToIso(dateStr: string): string {
-    const [y, m, d] = dateStr.split('-').map(Number);
+    const [y = 0, m = 1, d = 1] = dateStr.split('-').map(Number);
     const dt = new Date(y, m - 1, d + 1, 0, 0, 0, 0); // next day 00:00
     return dt.toISOString();
 }

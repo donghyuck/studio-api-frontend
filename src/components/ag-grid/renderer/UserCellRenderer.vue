@@ -18,7 +18,6 @@ import type { UserDto } from "@/types/studio/user";
 import { computed } from 'vue';
 
 const props = defineProps<{ params: any }>();
-const column = props.params.column; 
 
 const user = computed<UserDto | undefined>(() => {
   return props.params.value ?? null

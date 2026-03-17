@@ -95,28 +95,17 @@ const columnDefs: ColDef[] = [
 ];
 
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);
-const filtersActive = ref(false);
-function onPageableGridFilterActived(event: any) {
-    filtersActive.value = event;
+function onPageableGridFilterActived(_event: any) {
 }
 const refresh = () => {
     pageableGridContentRef.value?.refresh();
 }
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
 const selectedRows = computed(() => pageableGridContentRef.value?.selectedRows() || []);
 const selected = computed(() => selectedRows.value.length > 0);
 const rowCount = computed(() => dataStore.dataItems.length ?? 0);
 const canSelectAllDisplayed = computed(() => rowCount.value > 1);
 
 const checked = ref(false);
-const toggleSelectAllBtnText = computed(() => {
-    if( checked.value )
-        return '해제';
-    else 
-        return ''
-});
 const toggleSelectAll = () => { 
     const on = !checked.value;
     if( on ){
@@ -127,7 +116,7 @@ const toggleSelectAll = () => {
     checked.value = on;
 };
 
-const select = async (members: UserDto[] = []) => {
+const select = async () => {
     const ok = await confirm({
         title: '확인',
         message: props.confirmMessage,

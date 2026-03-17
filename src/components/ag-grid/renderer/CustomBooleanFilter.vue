@@ -95,6 +95,13 @@ onMounted(() => {
 
 watch([trueSelected, falseSelected], onFilterChanged);
 
+defineExpose({
+  isFilterActive,
+  doesFilterPass,
+  getModel,
+  setModel,
+});
+
 </script>
 
 <style scoped>

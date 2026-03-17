@@ -44,7 +44,7 @@ import PageToolbar from '@/components/bars/PageToolbar.vue';
 import GridContent from '@/components/ag-grid/GridContent.vue';
 import type { ColDef } from 'ag-grid-community';
 import { formatDataSize, resolveAxiosError } from '@/utils/helpers';
-import { buildBreadcrumb, type BreadcrumbItem } from '@/data/studio/mgmt/storage';
+import { buildBreadcrumb } from '@/data/studio/mgmt/storage';
 import ObjectDialog from './ObjectDialog.vue';
 import { useToast } from '@/plugins/toast';
 
@@ -200,12 +200,6 @@ const columnDefs: ColDef[] = [
 ];
 
 const gridContentRef = ref<InstanceType<typeof GridContent> | null>(null);
-const refresh = () => {
-    getData(true);
-    bucket.value = null;
-    prefix.value = "";
-}
-
 async function getData(force: boolean = false) { 
     loader.value = true;
     gridContentRef.value?.loading(true);

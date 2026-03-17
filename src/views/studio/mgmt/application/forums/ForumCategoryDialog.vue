@@ -81,7 +81,6 @@ const saving = ref(false);
 const errorMessage = ref<string | null>(null);
 
 const categories = ref<Array<{ id: number; name: string; description?: string; position: number }>>([]);
-const gridRef = ref<InstanceType<typeof GridContent> | null>(null);
 
 const columnActions = [
   {
@@ -187,40 +186,6 @@ const create = async () => {
     toast.success("카테고리를 추가했습니다.");
     resetForm({ values: { name: "" } });
     description.value = "";
-    await load();
-  } catch (e: any) {
-    errorMessage.value = resolveAxiosError(e);
-    toast.error(errorMessage.value);
-  } finally {
-    saving.value = false;
-  }
-};
-
-const removeSelected = async () => {
-  const rows = (gridRef.value?.selectedRows?.() ?? []) as Array<{
-    id?: number;
-    name?: string;
-  }>;
-  const ids = rows.map((row) => row.id).filter((id): id is number => !!id);
-  if (ids.length === 0) {
-    toast.error("삭제할 카테고리를 선택하세요.");
-    return;
-  }
-  const ok = await confirm({
-    title: "확인",
-    message: `선택한 카테고리 ${ids.length}건을 삭제하시겠습니까?`,
-    okText: "예",
-    cancelText: "아니오",
-    color: "error",
-  });
-  if (!ok) return;
-  saving.value = true;
-  errorMessage.value = null;
-  try {
-    for (const id of ids) {
-      await forumsAdminApi.deleteCategory(props.forumSlug, id);
-    }
-    toast.success("카테고리를 삭제했습니다.");
     await load();
   } catch (e: any) {
     errorMessage.value = resolveAxiosError(e);

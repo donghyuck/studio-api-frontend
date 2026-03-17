@@ -41,7 +41,6 @@ import { resolveAxiosError } from '@/utils/helpers';
 const confirm = useConfirm();
 const toast = useToast()
 const overlay = ref<boolean>(false);
-const show = ref<boolean>(false)
 const router = useRouter();
 const nav = useNavStore();
 
@@ -106,10 +105,6 @@ const selectAll = () => {
         pageableGridContentRef.value?.selectAll();
 }
 const selectAllToolTip = computed(() => selectedRows.value.length > 0 ? "선택 해제" : "전체 선택");
-
-const onClearFilters = () => {
-    pageableGridContentRef.value?.clearFilters();
-};
 
 const onDeleteSelected = async () => {
     const ids = selectedIds.value;
