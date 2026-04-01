@@ -67,7 +67,7 @@ import RemoteMgmtUserCellRenderer from "@/components/ag-grid/renderer/RemoteMgmt
 const dataStore = usePageableForumAuditLogStore();
 
 const columnDefs: ColDef[] = [
-    { field: 'auditId', headerName: 'ID', filter: false, sortable: true, type: 'number', flex: 0.25 },
+    { field: 'auditId', headerName: 'ID', filter: false, sortable: true, type: 'number', maxWidth: 90},
     { field: 'at', headerName: '일시', filter: false, sortable: true, type: 'datetime', flex: 0.6 },
     {
         headerName: '액션',

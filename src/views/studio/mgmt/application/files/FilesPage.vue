@@ -68,18 +68,7 @@ const nav = useNavStore();
 // grid 
 // define grid columns
 const columnDefs: ColDef[] = [
-    {
-        headerName: '',
-        field: 'select',
-        maxWidth: 65,
-        pinned: 'left',
-        sortable: false,
-        filter: false,
-        resizable: false,
-        checkboxSelection: true,
-        headerCheckboxSelection: false,
-    },
-    { field: 'attachmentId', headerName: 'ID', filter: false, sortable: true, type: "number", maxWidth: 100 },
+    { field: 'attachmentId', headerName: 'ID', filter: false, sortable: true, type: "number", maxWidth: 100},
     {
         field: 'name', headerName: '파일', filter: false, sortable: true, type: "hyperlinks", flex: 2, cellRendererParams: {
             mode: 'callback',
@@ -96,7 +85,16 @@ const columnDefs: ColDef[] = [
     { field: 'createdAt', headerName: '생성일시', filter: false, type: 'datetime', flex: 1 },
 ];
 const gridOptions: GridOptions = {
-    rowSelection: { mode: 'multiRow', enableClickSelection: true },
+    rowSelection: { mode: 'multiRow', enableClickSelection: true, checkboxes: true, headerCheckbox: false },
+    selectionColumnDef: {
+        width: 65,
+        minWidth: 65,
+        maxWidth: 65,
+        pinned: 'left',
+        sortable: false,
+        filter: false,
+        resizable: false,
+    },
     rowMultiSelectWithClick: true,
 };
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);

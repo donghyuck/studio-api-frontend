@@ -24,6 +24,10 @@ let restoreSessionPromise: Promise<boolean> | null = null;
 
 async function restoreSessionIfNeeded(): Promise<boolean> {
   const auth = useAuthStore();
+  if (auth.isExplicitlyLoggedOut()) {
+    auth.logout();
+    return false;
+  }
   // If we already have a token but user is not loaded yet, fetch the profile so
   // role-based UI (admin menus, route guards) can work reliably.
   if (auth.isAuthenticated) {

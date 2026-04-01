@@ -124,7 +124,7 @@ const logout = async () => {
         color: 'primary',
     });
     if (!ok) return;
-    auth.logout();
+    await auth.logoutEverywhere();
     router.push({ path: '/' });
 }
 </script>

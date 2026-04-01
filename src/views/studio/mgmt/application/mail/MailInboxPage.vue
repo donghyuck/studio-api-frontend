@@ -17,7 +17,7 @@
         </v-card-actions>
     </v-card>
     <PageableGridContent class="mt-1" @filter-actived="onPageableGridFilterActived" ref="pageableGridContentRef"
-        :colIdToSnakeCase="false" :options='{ rowSelection: rowSelection }' :datasource="dataStore"
+        :colIdToSnakeCase="false" :options="gridOptions" :datasource="dataStore"
         :columns="columnDefs" :events="gridEvents">
     </PageableGridContent>
     <v-overlay v-model="overlay" contained class="align-center justify-center">
@@ -30,7 +30,7 @@ import { useConfirm } from '@/plugins/confirm';
 import { useToast } from '@/plugins/toast';
 import { usePageableMailInboxStore } from '@/stores/studio/mgmt/mail.inbox.store';
 import { computed, onMounted, ref } from 'vue';
-import type { ColDef, RowSelectionOptions, SelectionChangedEvent } from 'ag-grid-community';
+import type { ColDef, GridOptions, RowSelectionOptions, SelectionChangedEvent } from 'ag-grid-community';
 import PageableGridContent from '@/components/ag-grid/PageableGridContent.vue';
 import MailAddressCellRenderer from '@/components/ag-grid/renderer/MailAddressCellRenderer.vue';
 import { useRouter } from 'vue-router';
@@ -49,6 +49,20 @@ const dataStore = usePageableMailInboxStore();
 const rowSelection: RowSelectionOptions = {
     mode: 'multiRow',
     enableClickSelection: false,
+    checkboxes: true,
+    headerCheckbox: false,
+};
+const gridOptions: GridOptions = {
+    rowSelection,
+    selectionColumnDef: {
+        width: 65,
+        minWidth: 65,
+        maxWidth: 65,
+        pinned: 'left',
+        sortable: false,
+        filter: false,
+        resizable: false,
+    },
 };
 const columnDefs: ColDef[] = [
     { field: 'fromAddress', headerName: '보낸 사람', filter: false, type: "text", flex: .5, cellRenderer: MailAddressCellRenderer },

@@ -72,12 +72,12 @@ const dataStore = usePageableLoginFailureLogStore();
 
 // define grid columns
 const columnDefs: ColDef[] = [
-    { field: 'id', headerName: 'ID', filter: false, sortable: true, type: "number", flex: .25 },
-    { field: 'occurredAt', headerName: '일시', filter: false, sortable: true, type: 'datetime', flex: .6 },
-    { field: 'username', headerName: '아이디', filter: false, sortable: true, type: 'string', flex: .25 },
-    { field: 'remoteIp', headerName: 'IP', filter: false, sortable: true, type: 'string', flex: .5 },
-    { field: 'message', headerName: '메시지', filter: false, sortable: false, type: 'string', flex: 1 },
-    { field: 'userAgent', headerName: 'UserAgent', filter: false, sortable: false, type: 'string', },
+    { field: 'id', headerName: 'ID', filter: false, sortable: true, type: "number", maxWidth: 90 },
+    { field: 'occurredAt', headerName: '일시', filter: false, sortable: true, type: 'datetime', maxWidth: 180 },
+    { field: 'username', headerName: '아이디', filter: false, sortable: true, type: 'string', maxWidth: 100},
+    { field: 'remoteIp', headerName: 'IP', filter: false, sortable: true, type: 'string', maxWidth: 150 },
+    { field: 'message', headerName: '메시지', filter: false, sortable: false, type: 'string', maxWidth: 200 },
+    { field: 'userAgent', headerName: 'UserAgent', filter: false, sortable: false, type: 'string'},
 ];
 
 const pageableGridContentRef = ref<InstanceType<typeof PageableGridContent> | null>(null);

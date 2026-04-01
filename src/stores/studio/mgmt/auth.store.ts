@@ -12,6 +12,8 @@ export interface UserProfileDto extends UserDto {
 
 const loginUrl = `${API_BASE_URL}/api/auth/login`;
 const refreshUrl = `${API_BASE_URL}/api/auth/refresh`;
+const logoutUrl = `${API_BASE_URL}/api/auth/logout`;
+const explicitLogoutKey = "auth.explicitLogout";
 
 export const useAuthStore = defineStore("auth", {
   state: () => ({
@@ -29,6 +31,21 @@ export const useAuthStore = defineStore("auth", {
   },
 
   actions: {
+    isExplicitlyLoggedOut() {
+      if (typeof window === "undefined") return false;
+      return window.localStorage.getItem(explicitLogoutKey) === "1";
+    },
+
+    clearExplicitLogout() {
+      if (typeof window === "undefined") return;
+      window.localStorage.removeItem(explicitLogoutKey);
+    },
+
+    markExplicitLogout() {
+      if (typeof window === "undefined") return;
+      window.localStorage.setItem(explicitLogoutKey, "1");
+    },
+
     async login(username: string, password: string) {
       try {
         const response = await axios.post(
@@ -40,6 +57,7 @@ export const useAuthStore = defineStore("auth", {
         );
         const { accessToken } = response.data.data;
         this.token = accessToken;
+        this.clearExplicitLogout();
         await this.fetchUser();
       } catch (error: any) {  
           const message = resolveAxiosError(error);
@@ -49,6 +67,19 @@ export const useAuthStore = defineStore("auth", {
     logout() {
       this.token = null;
       this.user = null;
+    },
+
+    async logoutEverywhere() {
+      this.markExplicitLogout();
+      try {
+        await axios.post(logoutUrl, null, {
+          withCredentials: true,
+        });
+      } catch (error) {
+        console.warn("서버 로그아웃 요청 실패", error);
+      } finally {
+        this.logout();
+      }
     },
 
     async refreshTokens() {

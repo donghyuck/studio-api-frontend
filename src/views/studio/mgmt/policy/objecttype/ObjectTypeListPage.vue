@@ -134,7 +134,16 @@ const columnDefs: ColDef[] = [
 ];
 
 const gridOptions: GridOptions = {
-  rowSelection: { mode: 'singleRow', enableClickSelection: true },
+  rowSelection: { mode: 'singleRow', enableClickSelection: true, checkboxes: true, headerCheckbox: false },
+  selectionColumnDef: {
+    width: 65,
+    minWidth: 65,
+    maxWidth: 65,
+    pinned: "left",
+    sortable: false,
+    filter: false,
+    resizable: false,
+  },
   rowMultiSelectWithClick: false,
 };
 

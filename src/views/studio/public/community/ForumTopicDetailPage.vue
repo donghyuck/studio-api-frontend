@@ -28,7 +28,7 @@
           <v-list-item v-for="attachment in firstPostAttachments" :key="attachment.attachmentId">
             <template #prepend>
               <v-avatar size="28" color="grey-lighten-3">
-                <v-img v-if="!hasThumbnailError(attachment.attachmentId)"
+                <v-img v-if="isImageAttachment(attachment) && !hasThumbnailError(attachment.attachmentId)"
                   :src="thumbnailUrl(firstPost?.id ?? 0, attachment.attachmentId)" cover
                   @error="markThumbnailError(attachment.attachmentId)" />
                 <v-icon v-else size="16" color="grey-darken-2">mdi-file</v-icon>
@@ -111,7 +111,7 @@
                     :key="`reply-${post.id}-${attachment.attachmentId}`">
                     <template #prepend>
                       <v-avatar size="28" color="grey-lighten-3">
-                        <v-img v-if="!hasThumbnailError(attachment.attachmentId)"
+                        <v-img v-if="isImageAttachment(attachment) && !hasThumbnailError(attachment.attachmentId)"
                           :src="thumbnailUrl(post.id, attachment.attachmentId)" cover
                           @error="markThumbnailError(attachment.attachmentId)" />
                         <v-icon v-else size="16" color="grey-darken-2">mdi-file</v-icon>
@@ -354,7 +354,7 @@
           <v-list-item v-for="attachment in firstPostAttachments" :key="`edit-${attachment.attachmentId}`">
             <template #prepend>
               <v-avatar size="28" color="grey-lighten-3">
-                <v-img v-if="!hasThumbnailError(attachment.attachmentId)"
+                <v-img v-if="isImageAttachment(attachment) && !hasThumbnailError(attachment.attachmentId)"
                   :src="thumbnailUrl(firstPost?.id ?? 0, attachment.attachmentId)" cover
                   @error="markThumbnailError(attachment.attachmentId)" />
                 <v-icon v-else size="16" color="grey-darken-2">mdi-file</v-icon>
@@ -722,6 +722,11 @@ const thumbnailUrl = (postId?: number, attachmentId?: number) => {
   if (!slug || !Number.isFinite(topic) || topic <= 0) return "";
   if (!postId || !attachmentId) return "";
   return `${API_BASE_URL}/api/forums/${slug}/topics/${topic}/posts/${postId}/attachments/${attachmentId}/thumbnail?size=48`;
+};
+
+const isImageAttachment = (attachment?: PostAttachmentResponse | null) => {
+  const contentType = attachment?.contentType?.trim().toLowerCase() ?? "";
+  return contentType.startsWith("image/");
 };
 
 const hasThumbnailError = (attachmentId?: number) => {

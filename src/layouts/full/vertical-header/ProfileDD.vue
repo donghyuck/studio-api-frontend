@@ -12,8 +12,8 @@ const goProfile = () => {
     router.push({ name: 'MyProfile' });
 };
 
-const logout = () => {
-    auth.logout();
+const logout = async () => {
+    await auth.logoutEverywhere();
     router.push('/auth/login');
 };
 </script>

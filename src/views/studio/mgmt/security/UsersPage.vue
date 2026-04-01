@@ -21,7 +21,7 @@
             <v-progress-linear v-if="downloading" :model-value="progress >= 0 ? progress : undefined"
                 :indeterminate="progress < 0" class="mt-2" />
             <PageableGridContent @filter-actived="onPageableGridFilterActived" :colIdToSnakeCase="false"
-                :options='{ rowSelection: rowSelection }' ref="pageableGridContentRef" :datasource="dataStore"  
+                :options="gridOptions" ref="pageableGridContentRef" :datasource="dataStore"  
                 :columns="columnDefs">
             </PageableGridContent>
         </v-col>
@@ -35,7 +35,7 @@ import CheckboxRenderer from '@/components/ag-grid/renderer/CheckboxRenderer.vue
 import PageToolbar from '@/components/bars/PageToolbar.vue';
 import { useNavStore } from '@/stores/studio/mgmt/nav.store';
 import { usePageableUsersStore } from '@/stores/studio/mgmt/users.store';
-import type { ColDef, RowSelectionOptions } from 'ag-grid-community';
+import type { ColDef, GridOptions, RowSelectionOptions } from 'ag-grid-community';
 import { computed, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import UserRolesDialog from '@/views/studio/mgmt/security/UserRolesDialog.vue';
@@ -46,7 +46,21 @@ const nav = useNavStore();
 const rowSelection: RowSelectionOptions = {
     mode: 'multiRow',
     enableClickSelection: false,
+    checkboxes: true,
+    headerCheckbox: false,
 }; 
+const gridOptions: GridOptions = {
+    rowSelection,
+    selectionColumnDef: {
+        width: 65,
+        minWidth: 65,
+        maxWidth: 65,
+        pinned: 'left',
+        sortable: false,
+        filter: false,
+        resizable: false,
+    },
+};
 const dataStore = usePageableUsersStore();
 const router = useRouter();
 

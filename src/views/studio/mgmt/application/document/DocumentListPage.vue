@@ -63,17 +63,6 @@ const nav = useNavStore();
 const dataStore = usePageableDocumentListStore();
 // Grid
 const columnDefs: ColDef[] = [
-    {
-        headerName: '',
-        field: 'select',
-        maxWidth: 65,
-        pinned: 'left',
-        sortable: false,
-        filter: false,
-        resizable: false,
-        checkboxSelection: true,
-        headerCheckboxSelection: false,
-    },
     { field: 'documentId', headerName: 'ID', filter: false, sortable: true, type: "number", maxWidth: 80 },
     { field: 'objectType', headerName: '유형', filter: false, type: 'number', maxWidth: 80 },
     { field: 'objectId', headerName: '식별자', filter: false, type: 'number', maxWidth: 80 },
@@ -92,7 +81,16 @@ const columnDefs: ColDef[] = [
     { field: 'updatedAt', headerName: '수정일시', filter: false, type: 'datetime', flex: 1 },
 ];
 const gridOptions: GridOptions = {
-    rowSelection: { mode: 'singleRow', enableClickSelection: true },
+    rowSelection: { mode: 'singleRow', enableClickSelection: true, checkboxes: true, headerCheckbox: false },
+    selectionColumnDef: {
+        width: 65,
+        minWidth: 65,
+        maxWidth: 65,
+        pinned: 'left',
+        sortable: false,
+        filter: false,
+        resizable: false,
+    },
     rowMultiSelectWithClick: false,
 };
 
