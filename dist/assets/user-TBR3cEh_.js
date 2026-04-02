@@ -1,1 +1,0 @@
-import{aY as a}from"./index-BlaaDlC-.js";const t="/api/mgmt/users";async function o(s,r){await a.post(`${t}/${s}/password`,r)}async function c(s){return await a.get(`${t}/basic/${s}`)}async function n(){return await a.get(`${t}/password-policy`)}export{c as a,n as g,o as r};
