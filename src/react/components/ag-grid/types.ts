@@ -29,6 +29,7 @@ export interface PageableGridContentProps<TData = unknown> {
   options?: GridOptions<TData>;
   events?: GridEventListener[];
   rowModelType?: RowModelType;
+  rowSelection?: RowSelectionOptions<TData> | "single" | "multiple";
   datasource: PageableDataSource<TData>;
   colIdToSnakeCase?: boolean;
   height?: number;

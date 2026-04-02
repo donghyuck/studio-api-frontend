@@ -9,6 +9,7 @@ import {
 } from "react";
 import type {
   ColDef,
+  FilterChangedEvent,
   GridApi,
   GridOptions,
   GridReadyEvent,
@@ -76,11 +77,13 @@ function GridContentInner<TData = unknown>(
         )
       );
 
+      onFilterActived?.(event.api.isAnyFilterPresent());
+
       if (shouldAutoResize) {
         resizeGrid();
       }
     },
-    [events, resizeGrid, shouldAutoResize]
+    [events, onFilterActived, resizeGrid, shouldAutoResize]
   );
 
   const handleSelectionChanged = useCallback(
@@ -88,6 +91,13 @@ function GridContentInner<TData = unknown>(
       setSelectedItems(event.api.getSelectedRows());
     },
     []
+  );
+
+  const handleFilterChanged = useCallback(
+    (event: FilterChangedEvent<TData>) => {
+      onFilterActived?.(event.api.isAnyFilterPresent());
+    },
+    [onFilterActived]
   );
 
   useEffect(() => {
@@ -98,10 +108,6 @@ function GridContentInner<TData = unknown>(
     gridApiRef.current?.ensureIndexVisible(reservedScrollIndexRef.current, "middle");
     reservedScrollIndexRef.current = -1;
   }, [rowData]);
-
-  useEffect(() => {
-    onFilterActived?.(false);
-  }, [onFilterActived]);
 
   useEffect(() => {
     if (!shouldAutoResize) {
@@ -151,8 +157,8 @@ function GridContentInner<TData = unknown>(
         rowSelection={normalizedRowSelection}
         columnDefs={columnDefs}
         rowData={rowData}
-        defaultColDef={{ resizable: true }}
         onRowSelected={onRowSelected}
+        onFilterChanged={handleFilterChanged}
         onSelectionChanged={handleSelectionChanged}
         onGridReady={handleGridReady}
       />
