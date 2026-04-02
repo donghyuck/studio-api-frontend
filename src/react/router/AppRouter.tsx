@@ -19,7 +19,6 @@ export function AppRouter() {
       <Route element={<ProtectedRoute />}>
         <Route element={<FullLayout />}>
           <Route index element={<DashboardPage />} />
-          <Route path="/" element={<DashboardPage />} />
         </Route>
       </Route>
 

@@ -107,6 +107,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const token = get().token;
       const response = await axios.get(`${API_BASE_URL}/api/self`, {
+        withCredentials: true,
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       const user = response.data?.data as UserProfileDto;
