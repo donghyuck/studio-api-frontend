@@ -1,1 +1,0 @@
-import{c as r,A as t}from"./ag-grid.datasource-BO35GbjE.js";class o extends t{getFetchUrl(){return"/api/forums"}getReadUrl(e){return`/api/forums/${encodeURIComponent(String(e))}`}}const u=r("public-pageable-forum-list-store",()=>new o);export{u};

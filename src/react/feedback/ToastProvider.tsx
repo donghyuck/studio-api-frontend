@@ -28,6 +28,10 @@ type ToastState = {
   message: string;
   severity: ToastSeverity;
   timeout: number;
+  // key increments on every show() so React unmounts the previous Snackbar
+  // instance and mounts a new one, guaranteeing autoHideDuration always
+  // starts from zero regardless of whether a previous toast was still open.
+  key: number;
 };
 
 // Module-level ref for imperative access outside the React tree
@@ -51,15 +55,18 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     message: "",
     severity: "success",
     timeout: 2500,
+    key: 0,
   });
 
   const show = useCallback((message: string, opts: ToastOptions = {}) => {
-    setState({
+    setState((prev) => ({
       open: true,
       message,
       severity: opts.severity ?? "success",
       timeout: opts.timeout ?? 2500,
-    });
+      // Increment key to force a fresh Snackbar mount with a clean timer.
+      key: prev.key + 1,
+    }));
   }, []);
 
   const close = useCallback(() => {
@@ -85,6 +92,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={api}>
       {children}
       <Snackbar
+        key={state.key}
         open={state.open}
         autoHideDuration={state.timeout}
         onClose={close}

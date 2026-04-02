@@ -23,6 +23,12 @@ export type ConfirmOptions = {
 
 export type ConfirmFn = (opts?: ConfirmOptions) => Promise<boolean>;
 
+// Each queued confirm() call waits here until the current dialog exits.
+type QueueEntry = {
+  opts: ConfirmOptions;
+  resolve: (ok: boolean) => void;
+};
+
 type ConfirmState = {
   open: boolean;
   title: string;
@@ -51,26 +57,54 @@ const ConfirmContext = createContext<ConfirmFn | null>(null);
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<ConfirmState>(DEFAULT_STATE);
-  const resolveRef = useRef<((ok: boolean) => void) | null>(null);
 
-  const confirmFn = useCallback<ConfirmFn>((opts = {}) => {
+  // Pending confirm() calls that arrived while a dialog is already open.
+  const queueRef = useRef<QueueEntry[]>([]);
+  // Resolver belonging to the dialog currently on screen; null = idle.
+  const activeResolveRef = useRef<((ok: boolean) => void) | null>(null);
+
+  // Promote the next queued entry to the active dialog.
+  // No-op when a dialog is already active; safe to call at any time.
+  const processQueue = useCallback(() => {
+    if (activeResolveRef.current !== null) return;
+
+    const next = queueRef.current.shift();
+    if (!next) return;
+
+    activeResolveRef.current = next.resolve;
     setState({
       open: true,
-      title: opts.title ?? "확인",
-      message: opts.message ?? "",
-      okText: opts.okText ?? "확인",
-      cancelText: opts.cancelText ?? "취소",
-    });
-    return new Promise<boolean>((resolve) => {
-      resolveRef.current = resolve;
+      title: next.opts.title ?? "확인",
+      message: next.opts.message ?? "",
+      okText: next.opts.okText ?? "확인",
+      cancelText: next.opts.cancelText ?? "취소",
     });
   }, []);
 
+  const confirmFn = useCallback<ConfirmFn>(
+    (opts = {}) =>
+      new Promise<boolean>((resolve) => {
+        // Push every call to the queue, then immediately try to promote it.
+        // If nothing is showing, processQueue opens it right away.
+        // If a dialog is open, the entry waits until handleExited fires.
+        queueRef.current.push({ opts, resolve });
+        processQueue();
+      }),
+    [processQueue]
+  );
+
   const handleClose = useCallback((ok: boolean) => {
-    resolveRef.current?.(ok);
-    resolveRef.current = null;
+    activeResolveRef.current?.(ok);
+    activeResolveRef.current = null;
     setState((s) => ({ ...s, open: false }));
+    // processQueue is deferred to handleExited so the exit animation
+    // completes before the next dialog opens, preventing visual overlap.
   }, []);
+
+  // Fired by MUI after the exit transition finishes.
+  const handleExited = useCallback(() => {
+    processQueue();
+  }, [processQueue]);
 
   // Keep module-level singleton in sync with the mounted provider
   _ref.current = confirmFn;
@@ -81,6 +115,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
       <Dialog
         open={state.open}
         onClose={() => handleClose(false)}
+        TransitionProps={{ onExited: handleExited }}
         maxWidth="xs"
         fullWidth
       >
