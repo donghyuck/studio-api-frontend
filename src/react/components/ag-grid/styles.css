@@ -1,0 +1,19 @@
+@import "ag-grid-community/styles/ag-grid.css";
+@import "ag-grid-community/styles/ag-theme-material.css";
+
+.react-grid-host {
+  width: 100%;
+  height: 100%;
+}
+
+.react-grid-host .ag-root-wrapper {
+  border-radius: 8px;
+}
+
+.react-grid-loading-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
