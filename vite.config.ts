@@ -1,17 +1,12 @@
 import { fileURLToPath, URL } from "url";
 import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
-import vuetify from "vite-plugin-vuetify";
-
+import react from "@vitejs/plugin-react"; // Import React plugin
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
-    vue(),
-    vuetify({
-      autoImport: true,
-      //styles: "expose",
-    }),
+    react(), // Use React plugin instead of Vue and Vuetify
+    // Removed vuetify()
   ],
   resolve: {
     alias: {
@@ -24,9 +19,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['vuetify'],
-    entries: [
-      './src/**/*.vue',
-    ],
+    // Remove Vue-specific exclusions and entries.
+    // Vite will handle React dependencies automatically.
   },
 });

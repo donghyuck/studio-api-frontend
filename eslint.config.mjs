@@ -15,6 +15,10 @@ configureVueProject({
 export default defineConfigWithVueTs(
   {
     ignores: [
+      ".claude/**",
+      ".codex/**",
+      ".policy-backup-*/**",
+      ".vscode/**",
       "dist/**",
       "node_modules/**",
       "public/**",
@@ -25,6 +29,13 @@ export default defineConfigWithVueTs(
   pluginVue.configs["flat/essential"],
   vueTsConfigs.recommended,
   prettierSkipFormatting,
+  {
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
   {
     rules: {
       // Existing codebase uses `any` in a few integration-heavy areas (ag-grid, renderers).
