@@ -43,10 +43,4 @@ export function createQueryKeys(scope: string) {
 
 export const appQueryKeys = {
   all: [QUERY_KEY_ROOT] as const,
-  auth: {
-    all: [QUERY_KEY_ROOT, "auth"] as const,
-    session: () => [QUERY_KEY_ROOT, "auth", "session"] as const,
-    currentUser: () => [QUERY_KEY_ROOT, "auth", "user", "me"] as const,
-  },
 };
-
