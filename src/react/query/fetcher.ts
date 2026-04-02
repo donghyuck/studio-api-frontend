@@ -12,14 +12,17 @@ interface ApiResponseEnvelope<T> {
 interface ApiRequestOptions<TBody>
   extends Omit<AxiosRequestConfig<TBody>, "data" | "method" | "url"> {
   data?: TBody;
+  unwrapData?: boolean;
 }
 
 function unwrapApiResponse<T>(
-  response: AxiosResponse<ApiResponseEnvelope<T> | T>
+  response: AxiosResponse<ApiResponseEnvelope<T> | T>,
+  unwrapData: boolean
 ): T {
   const payload = response.data;
 
   if (
+    unwrapData &&
     payload &&
     typeof payload === "object" &&
     !Array.isArray(payload) &&
@@ -36,15 +39,16 @@ export async function apiRequest<TResponse, TBody = unknown>(
   url: string,
   options?: ApiRequestOptions<TBody>
 ) {
+  const { unwrapData = true, ...requestOptions } = options ?? {};
   const response = await apiClient.request<ApiResponseEnvelope<TResponse> | TResponse>({
-    ...options,
+    ...requestOptions,
     method,
     url,
-    data: options?.data,
-    withCredentials: options?.withCredentials ?? true,
+    data: requestOptions.data,
+    withCredentials: requestOptions.withCredentials ?? true,
   });
 
-  return unwrapApiResponse(response);
+  return unwrapApiResponse(response, unwrapData);
 }
 
 export function apiQuery<TResponse>(

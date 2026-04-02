@@ -10,6 +10,8 @@ function shouldRetryRequest(failureCount: number, error: unknown) {
     }
   }
 
+  // Keep retries conservative during the initial React Query rollout:
+  // one retry for transient failures, none for auth failures.
   return failureCount < 1;
 }
 
@@ -26,4 +28,3 @@ export function createAppQueryClient() {
     },
   });
 }
-
