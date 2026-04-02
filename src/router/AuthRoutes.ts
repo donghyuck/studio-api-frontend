@@ -5,11 +5,7 @@ const AuthRoutes = {
         requiresAuth: false
     },
     children: [
-        {
-            name: 'Login',
-            path: 'login',
-            component: () => import('@/views/auth/Login.vue')
-        },
+
         {
             name: 'Register',
             path: 'register',

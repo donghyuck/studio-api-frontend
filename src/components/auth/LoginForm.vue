@@ -6,7 +6,6 @@ import { useRouter } from 'vue-router';
 import * as yup from 'yup';
 import PasswordResetDialog from './PasswordResetDialog.vue';
 
-// ✅ 스토어, 라우터, 상태
 const auth = useAuthStore();
 const router = useRouter();
 const errorMessage = ref('');
@@ -15,12 +14,10 @@ const remember = ref(false);
 const showPassword = ref(false);
 const usernameRef = ref<HTMLInputElement | null>(null);
 
-// ✅ Remember me 초기화
 onMounted(() => {
   remember.value = localStorage.getItem('remember_device') === 'yes';
 });
 
-// ✅ 유효성 검사 스키마
 const schema = yup.object({
   username: yup.string().required('아이디를 입력하세요'),
   password: yup
@@ -29,14 +26,10 @@ const schema = yup.object({
     .required('비밀번호를 입력하세요'),
 });
 
-// ✅ vee-validate form 초기화
 const { handleSubmit } = useForm({ validationSchema: schema });
-
-// ✅ 각 필드 선언 (useField)
 const { value: username, errorMessage: usernameError } = useField('username');
 const { value: password, errorMessage: passwordError } = useField('password');
 
-// ✅ Vuetify용 errorMessages 변환 (배열)
 const usernameErrors = computed(() =>
   usernameError.value ? [usernameError.value] : []
 );
@@ -44,12 +37,10 @@ const passwordErrors = computed(() =>
   passwordError.value ? [passwordError.value] : []
 );
 
-// ✅ 로그인 처리
 const login = handleSubmit(async (values) => {
   errorMessage.value = '';
   loading.value = true;
   try {
-    // remember 처리
     if (remember.value) {
       localStorage.setItem('remember_device', 'yes');
     } else {
@@ -92,11 +83,6 @@ function passwoard_reset (){
       </v-col>
       <v-col cols="12" class="pt-0">
         <div class="d-flex flex-wrap align-center ml-n2">
-          <!-- <v-checkbox v-model="remember" color="primary" hide-details>
-            <template v-slot:label>
-              <span class="text-body-1">Remember this Device</span>
-            </template>
-          </v-checkbox> -->
           <div class="ml-sm-auto"> 
             <v-btn  :disabled="dialog.visible" color="primary" variant="plain" size="large" @click="passwoard_reset">
               비밀번호 재설정

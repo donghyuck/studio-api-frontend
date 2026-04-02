@@ -65,7 +65,6 @@ const emit = defineEmits<{
     (e: 'close'): void
 }>()
 
-/** 닫기: 여기서만 초기화 */
 function handleClose() {
     emit('close')
 }

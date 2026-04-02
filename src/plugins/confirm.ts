@@ -1,4 +1,3 @@
-// src/plugins/confirm.ts
 import { type App, inject, reactive } from 'vue';
 
 type ConfirmOptions = {
@@ -6,8 +5,8 @@ type ConfirmOptions = {
   message?: string;
   okText?: string;
   cancelText?: string;
-  color?: string;       // 'primary' | 'error' | ...
-  persistent?: boolean; // 배경 클릭 닫힘 방지
+  color?: string;
+  persistent?: boolean;
 };
 
 const STATE = Symbol('confirm-state');
@@ -47,7 +46,7 @@ export default {
   install(app: App) {
     app.provide(STATE, state);
     app.provide(API, { confirm, resolve });
-    (app.config.globalProperties as any).$confirm = confirm; // Options API 지원
+    (app.config.globalProperties as any).$confirm = confirm;
   },
 };
 

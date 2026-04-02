@@ -1,16 +1,30 @@
 {
-  "extends": "@vue/tsconfig/tsconfig.dom.json",
-  "include": ["env.d.ts", "src/**/*", "src/**/*.vue"],
   "compilerOptions": {
-    "preserveValueImports": false,
-    "importsNotUsedAsValues": "remove",
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
     "verbatimModuleSyntax": true,
+    "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
-    "allowJs": true
+    "allowJs": true,
+    "skipLibCheck": true,
+    "noEmit": true
   },
+  "include": [
+    "env.d.ts",
+    "src/main.tsx",
+    "src/react/**/*",
+    "src/config/**/*.ts",
+    "src/utils/**/*.ts",
+    "src/types/**/*.ts"
+  ],
   "references": [
     {
       "path": "./tsconfig.vite-config.json"
