@@ -26,6 +26,7 @@ import type {
 } from "@/react/components/ag-grid/types";
 import {
   getAutoGridHeight,
+  normalizeRowSelection,
   readMaybeRef,
   selectViewportRows,
 } from "@/react/components/ag-grid/utils";
@@ -46,6 +47,7 @@ function PageableGridContentInner<TData = unknown>(
     options,
     events,
     rowModelType,
+    rowSelection,
     datasource,
     colIdToSnakeCase,
     height,
@@ -66,6 +68,10 @@ function PageableGridContentInner<TData = unknown>(
   const gridOptions = useMemo<GridOptions<TData>>(
     () => ({ ...defaultGridOptions, ...options }),
     [options]
+  );
+  const normalizedRowSelection = useMemo(
+    () => normalizeRowSelection(rowSelection),
+    [rowSelection]
   );
 
   const columnDefs = useMemo<ColDef<TData>[]>(
@@ -216,6 +222,7 @@ function PageableGridContentInner<TData = unknown>(
       <AgGridReact<TData>
         rowModelType={effectiveRowModelType}
         gridOptions={gridOptions}
+        rowSelection={normalizedRowSelection}
         columnDefs={columnDefs}
         pagination
         paginationPageSize={pageSize}

@@ -157,7 +157,6 @@ function GridContentInner<TData = unknown>(
         rowSelection={normalizedRowSelection}
         columnDefs={columnDefs}
         rowData={rowData}
-        defaultColDef={{ resizable: true }}
         onRowSelected={onRowSelected}
         onFilterChanged={handleFilterChanged}
         onSelectionChanged={handleSelectionChanged}
