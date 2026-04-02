@@ -77,11 +77,13 @@ function GridContentInner<TData = unknown>(
         )
       );
 
+      onFilterActived?.(event.api.isAnyFilterPresent());
+
       if (shouldAutoResize) {
         resizeGrid();
       }
     },
-    [events, resizeGrid, shouldAutoResize]
+    [events, onFilterActived, resizeGrid, shouldAutoResize]
   );
 
   const handleSelectionChanged = useCallback(
