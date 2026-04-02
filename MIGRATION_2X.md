@@ -18,6 +18,127 @@ This document defines the working rules and migration plan for converting the cu
 - Existing backend APIs remain reusable unless a separate backend change is explicitly planned.
 - The migration should minimize unrelated refactors and keep each change traceable.
 
+## 진행 현황 (Progress Tracker)
+
+> 마지막 업데이트: 2026-04-02
+
+### 이슈 및 PR 현황
+
+| Issue | 제목 | Phase | 브랜치 | PR | PR 상태 | 이슈 상태 |
+|-------|------|-------|--------|----|---------|---------|
+| [#4](../../issues/4) | React bootstrap baseline | Phase 1 | `feature/react-migration-phase4-6` | [#16](../../pull/16) | ✅ MERGED | ✅ CLOSED |
+| [#5](../../issues/5) | React routing shell | Phase 2 | `feature/react-migration-phase4-6` | [#16](../../pull/16) | ✅ MERGED | ✅ CLOSED |
+| [#6](../../issues/6) | React auth bootstrap gate | Phase 3 | `feature/react-migration-phase4-6` | [#16](../../pull/16) | ✅ MERGED | ✅ CLOSED |
+| [#7](../../issues/7) | Shared feedback providers (Toast/Confirm) | Phase 4 | `feature/react-shared-feedback` | [#18](../../pull/18) | ✅ MERGED | ✅ CLOSED |
+| [#8](../../issues/8) | TanStack Query adapters | Phase 4 | `feature/react-query-adapters` | [#17](../../pull/17) | ✅ MERGED | ✅ CLOSED |
+| [#9](../../issues/9) | AG Grid shared wrapper | Phase 4 | — | [#20](../../pull/20) | 🔍 OPEN (리뷰 대기) | 🔄 OPEN |
+| [#10](../../issues/10) | Auth pages migration (Login/Password Reset) | Phase 5 | — | [#19](../../pull/19) | 🔍 OPEN (리뷰 대기) | 🔄 OPEN |
+| [#11](../../issues/11) | Dashboard migration | Phase 5 | — | — | ⏳ 미시작 | 🔄 OPEN |
+| [#12](../../issues/12) | Public community pages | Phase 5 | — | — | ⏳ 미시작 | 🔄 OPEN |
+| [#13](../../issues/13) | Admin/security pages | Phase 5 | — | — | ⏳ 미시작 | 🔄 OPEN |
+| [#14](../../issues/14) | Editor/upload integration | Phase 5 | — | — | ⏳ 미시작 | 🔄 OPEN |
+| [#15](../../issues/15) | Vue cleanup & dependency removal | Phase 6 | — | — | ⏳ 미시작 | 🔄 OPEN |
+
+### Phase별 완료율
+
+| Phase | 내용 | 상태 |
+|-------|------|------|
+| Phase 1 — Bootstrap | React 진입점, 빌드 기반 확립 | ✅ 완료 (Issue #4, PR#16) |
+| Phase 2 — Routing & Shell | React Router, 레이아웃 골격, 404/Unauthorized | ✅ 완료 (Issue #5, PR#16) |
+| Phase 3 — Auth & API Foundation | Zustand auth store, Axios interceptor, 세션 복원 | ✅ 완료 (Issue #6, PR#16) |
+| Phase 4 — Shared UI & State | Toast/Confirm providers, TanStack Query, AG Grid wrapper | 🔄 진행 중 (Issues #7✅ #8✅ #9🔍) |
+| Phase 5 — Page Migration | 인증 페이지, Dashboard, Community, Admin, Editor | 🔄 진행 중 (Issue #10🔍 / #11~#14 미시작) |
+| Phase 6 — Vue Removal | Vue 런타임 제거, 패키지 정리 | ⏳ 미시작 (Issue #15) |
+
+### 현재 블로커 및 주의사항
+
+- **PR#20 (Issue #9)**: AG Grid wrapper 리뷰 완료 후 merge 필요. Phase 5 페이지들이 그리드를 사용하기 전에 먼저 완료되어야 함.
+- **PR#19 (Issue #10)**: 로그인 페이지 리뷰 완료 후 merge 필요. Issue #11 (Dashboard) 착수의 선행 조건.
+- **PR#17 (Issue #8) 후속 반영 완료**: `unwrapData` 옵션 추가, `appQueryKeys.auth` 제거, retry 정책 주석 보강까지 반영됨.
+- **Issue #11~#14**: Phase 4가 완전히 완료(PR#20 merge)된 후 착수 권장.
+
+## 현재 React 구현 구조
+
+> `src/react/` 하위에 실제로 존재하는 파일 트리와 각 모듈의 역할입니다.
+> 신규 기여자는 이 구조를 기준으로 파일을 배치하고 기존 패턴을 따르세요.
+
+```
+src/
+├── main.tsx                        # React 진입점 (ReactDOM.createRoot)
+└── react/
+    ├── App.tsx                     # 루트 컴포넌트: BrowserRouter > FeedbackProvider > AuthBootstrapGate > AppRouter
+    │
+    ├── api/
+    │   └── client.ts               # Axios 인스턴스 (apiClient) + 토큰 갱신 인터셉터 큐
+    │
+    ├── auth/
+    │   ├── store.ts                # Zustand auth store: token, user, bootstrapState, login/logout/refresh
+    │   ├── AuthBootstrapGate.tsx   # 앱 시작 시 세션 복원 완료까지 전체 화면 로딩 표시
+    │   └── ProtectedRoute.tsx      # 미인증 → /auth/login 리디렉트, roles prop으로 역할 제한
+    │
+    ├── feedback/
+    │   ├── FeedbackProvider.tsx    # ToastProvider + ConfirmProvider 합성
+    │   ├── ToastProvider.tsx       # Snackbar 기반 전역 토스트 (key remount 방식)
+    │   ├── ConfirmProvider.tsx     # Promise<boolean> 다이얼로그 (큐 방식 순차 처리)
+    │   └── index.ts                # 외부 공개 API: FeedbackProvider, toast, useToast, confirm, useConfirm
+    │
+    ├── query/
+    │   ├── client.ts               # QueryClient 설정 (401/403 재시도 없음, 그 외 1회)
+    │   ├── provider.tsx            # QueryClientProvider 래퍼
+    │   ├── fetcher.ts              # apiRequest / apiQuery / createApiQueryFn (응답 envelope 언래핑 포함)
+    │   └── keys.ts                 # createQueryKeys() 팩토리 + normalizeKeyRecord()
+    │
+    ├── layouts/
+    │   ├── BlankLayout.tsx         # 인증 전 페이지용 (로그인 등): <Outlet /> 단순 래핑
+    │   └── FullLayout.tsx          # 인증 후 페이지용: AppBar(로고·유저명·로그아웃) + <Outlet />
+    │                               #   ⚠ 향후 사이드바·내비게이션 추가 필요 (Issue #11 착수 시)
+    │
+    ├── router/
+    │   └── AppRouter.tsx           # 전체 Route 트리 정의 (현재: /auth/login, /, /unauthorized, /404)
+    │
+    ├── pages/
+    │   ├── LoginPage.tsx           # 로그인 폼 + 비밀번호 재설정 Dialog (PR#19)
+    │   ├── DashboardPage.tsx       # 대시보드 (스텁 상태, Issue #11에서 구현)
+    │   ├── UnauthorizedPage.tsx    # 403 페이지
+    │   └── NotFoundPage.tsx        # 404 페이지
+    │
+    └── components/
+        └── ag-grid/
+            ├── GridContent.tsx         # 일반 그리드 래퍼 (forwardRef, GridContentHandle 노출)
+            ├── PageableGridContent.tsx # 페이지네이션 그리드 래퍼
+            ├── CustomLoadingOverlay.tsx
+            ├── gridOptions.ts          # defaultGridOptions 프리셋
+            ├── types.ts                # GridContentProps, GridContentHandle 등 타입 정의
+            ├── utils.ts                # getAutoGridHeight, normalizeRowSelection 등
+            ├── styles.css
+            └── index.ts
+```
+
+### 모듈 간 의존 관계
+
+```
+main.tsx
+  └── App.tsx
+        ├── BrowserRouter (react-router-dom)
+        ├── FeedbackProvider  ← feedback/index.ts
+        └── AuthBootstrapGate ← auth/store.ts
+              └── AppRouter   ← router/AppRouter.tsx
+                    ├── ProtectedRoute ← auth/store.ts
+                    ├── BlankLayout / FullLayout ← auth/store.ts (user, logout)
+                    └── Page components
+                          ├── useAuthStore() ← auth/store.ts
+                          ├── useQuery / useMutation ← query/fetcher.ts + query/keys.ts
+                          ├── apiClient ← api/client.ts  (auth store와 순환 의존 없음)
+                          └── toast / confirm ← feedback/index.ts (명령형 접근)
+
+api/client.ts (apiClient)
+  └── authStore.getState()  ← auth/store.ts  (subscribe 없이 getState만 호출하여 순환 방지)
+```
+
+> **핵심 설계 결정:** `auth/store.ts`의 `login`, `refreshTokens`, `fetchUser`는 모두 **raw `axios`** 직접 호출.
+> `apiClient`에서는 `authStore.getState()`만 호출하여 토큰을 읽음.
+> 이 구조가 "auth store → apiClient → auth store" 순환 의존을 차단합니다.
+
 ## Branch Strategy
 
 ### Roles
@@ -31,13 +152,22 @@ This document defines the working rules and migration plan for converting the cu
 
 ### Recommended Branch Names
 
-- `feature/react-bootstrap`
-- `feature/react-routing`
-- `feature/react-auth`
-- `feature/react-layout`
-- `feature/react-shared-components`
-- `feature/react-forum-pages`
-- `feature/react-admin-pages`
+아래는 권장 브랜치명과 실제 사용된 브랜치명을 병기한 목록입니다.
+
+| 목적 | 권장 브랜치명 | 실제 사용 브랜치명 |
+|------|-------------|-----------------|
+| Bootstrap + Routing + Auth 기반 (Issues #4–#6) | `feature/react-bootstrap`, `feature/react-routing`, `feature/react-auth` | `feature/react-migration-phase4-6` |
+| Shared feedback (Toast/Confirm) | `feature/react-shared-feedback` | `feature/react-shared-feedback` |
+| TanStack Query adapters | `feature/react-query-adapters` | `feature/react-query-adapters` |
+| AG Grid wrapper | `feature/react-grid-wrapper` | `feature/react-grid-wrapper` |
+| Auth pages | `feature/react-auth-pages` | `feature/react-auth-pages` |
+| Dashboard | `feature/react-dashboard` | — |
+| Public community pages | `feature/react-public-community` | — |
+| Admin/security pages | `feature/react-admin-security` | — |
+| Editor & upload | `feature/react-editor-upload` | — |
+| Vue cleanup | `feature/vue-cleanup` | — |
+
+> **참고:** Issues #4–#6은 단일 브랜치로 묶어 처리했으나, 이후 작업은 이슈별로 독립 브랜치를 사용하여 추적성을 높이고 있습니다.
 
 ### Operating Rules
 
@@ -173,6 +303,8 @@ Recommended parallel branches after that baseline:
 
 ### Phase 1. Bootstrap
 
+> **이슈:** [#4](../../issues/4) | **PR:** [#16](../../pull/16) | **상태:** ✅ 완료
+
 Goal:
 
 - Establish the React app baseline on `2.x`
@@ -234,6 +366,8 @@ Verify:
 
 ### Phase 2. Routing and Shell
 
+> **이슈:** [#5](../../issues/5) | **PR:** [#16](../../pull/16) | **상태:** ✅ 완료
+
 Goal:
 
 - Rebuild the application shell and base routes
@@ -294,6 +428,8 @@ Verify:
 - Base layout renders without runtime errors
 
 ### Phase 3. Auth and API Foundation
+
+> **이슈:** [#6](../../issues/6) | **PR:** [#16](../../pull/16) | **상태:** ✅ 완료
 
 Goal:
 
@@ -371,6 +507,8 @@ Verify:
 - Protected routes redirect correctly
 
 ### Phase 4. Shared UI and State
+
+> **이슈:** [#7](../../issues/7) PR [#18](../../pull/18) ✅, [#8](../../issues/8) PR [#17](../../pull/17) ✅, [#9](../../issues/9) PR [#20](../../pull/20) 🔍 | **상태:** 🔄 진행 중
 
 Goal:
 
@@ -476,6 +614,8 @@ Verify:
 
 ### Phase 5. Page-by-Page Migration
 
+> **이슈:** [#10](../../issues/10) PR [#19](../../pull/19) 🔍, [#11](../../issues/11) ⏳, [#12](../../issues/12) ⏳, [#13](../../issues/13) ⏳, [#14](../../issues/14) ⏳ | **상태:** 🔄 진행 중
+
 Goal:
 
 - Move user-facing pages incrementally inside the React-owned shell
@@ -537,6 +677,8 @@ Verify:
 
 ### Phase 6. Vue Dependency Removal
 
+> **이슈:** [#15](../../issues/15) | **상태:** ⏳ 미시작 (Phase 5 완료 후 착수)
+
 Goal:
 
 - Remove Vue runtime and unused Vue-specific packages when parity is sufficient
@@ -581,6 +723,348 @@ Verify:
 - `npm run lint`
 - Application runs without Vue packages
 
+## 핵심 구현 패턴 (Page Authors Guide)
+
+> 새 페이지를 마이그레이션할 때 반드시 따라야 하는 확립된 패턴입니다.
+> 아래 패턴을 벗어나는 구현은 PR 리뷰에서 반려될 수 있습니다.
+
+### 1. 라우트 등록
+
+새 페이지는 `src/react/router/AppRouter.tsx`에 Route를 추가해야 합니다.
+
+```tsx
+// AppRouter.tsx의 기본 구조
+<Routes>
+  {/* 인증 불필요 페이지: BlankLayout 아래 배치 */}
+  <Route element={<BlankLayout />}>
+    <Route path="/auth/login" element={<LoginPage />} />
+  </Route>
+
+  {/* 인증 필요 페이지: ProtectedRoute > FullLayout 아래 배치 */}
+  <Route element={<ProtectedRoute />}>
+    <Route element={<FullLayout />}>
+      <Route index element={<DashboardPage />} />
+      {/* 여기에 새 페이지 Route 추가 */}
+    </Route>
+  </Route>
+
+  {/* 특정 역할 필요 페이지 */}
+  <Route element={<ProtectedRoute roles={["ROLE_ADMIN"]} />}>
+    <Route element={<FullLayout />}>
+      {/* 관리자 전용 페이지 */}
+    </Route>
+  </Route>
+</Routes>
+```
+
+### 2. 인증 상태 접근
+
+컴포넌트에서 인증 정보가 필요하면 `useAuthStore` selector를 사용합니다.
+
+```tsx
+import { useAuthStore } from "@/react/auth/store";
+
+// 필요한 값만 selector로 구독 (불필요한 리렌더링 방지)
+const user = useAuthStore((state) => state.user);
+const token = useAuthStore((state) => state.token);
+const logout = useAuthStore((state) => state.logoutEverywhere);
+```
+
+> **주의:** 컴포넌트 바깥(Axios interceptor, 초기화 함수 등)에서는 `authStore.getState().token`을 사용합니다.
+
+### 3. API 데이터 조회 (TanStack Query)
+
+서버 데이터를 조회하는 표준 패턴은 `apiQuery` + `useQuery` 조합입니다.
+
+```tsx
+import { useQuery } from "@tanstack/react-query";
+import { apiQuery, apiRequest } from "@/react/query/fetcher";
+import { appQueryKeys } from "@/react/query/keys";
+
+// 조회
+function usePostList() {
+  return useQuery({
+    queryKey: appQueryKeys.posts.list(),
+    queryFn: () => apiQuery<PostDto[]>("/api/studio/public/posts"),
+  });
+}
+
+// 변이 (생성/수정/삭제)
+function useCreatePost() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreatePostDto) =>
+      apiRequest<PostDto, CreatePostDto>("post", "/api/studio/public/posts", { data: body }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: appQueryKeys.posts.list() });
+    },
+  });
+}
+```
+
+> **`unwrapData`:** 기본값 `true`. 응답이 `{ data: T }` envelope 구조가 아닌 경우 `apiQuery(url, { unwrapData: false })`로 호출합니다.
+
+### 4. 피드백 (Toast / Confirm)
+
+```tsx
+import { toast, confirm } from "@/react/feedback";
+// 또는 React 컴포넌트 안에서는 훅도 사용 가능:
+// import { useToast, useConfirm } from "@/react/feedback";
+
+// Toast: 명령형 (컴포넌트 밖에서도 호출 가능)
+toast.success("저장되었습니다.");
+toast.error("오류가 발생했습니다.", { timeout: 5000 });
+
+// Confirm: await 가능한 Promise 반환
+async function handleDelete(id: number) {
+  const ok = await confirm({
+    title: "삭제 확인",
+    message: "정말 삭제하시겠습니까?",
+    okText: "삭제",
+    cancelText: "취소",
+  });
+  if (!ok) return;
+
+  try {
+    await apiRequest("delete", `/api/posts/${id}`);
+    toast.success("삭제되었습니다.");
+  } catch (error) {
+    toast.error(resolveAxiosError(error));
+  }
+}
+```
+
+### 5. AG Grid 사용
+
+```tsx
+import { useRef } from "react";
+import { GridContent } from "@/react/components/ag-grid";
+import type { GridContentHandle } from "@/react/components/ag-grid";
+import type { ColDef } from "ag-grid-community";
+
+// 컬럼 정의는 useMemo 또는 컴포넌트 외부 상수로 정의 (리렌더마다 재정의 방지)
+const columns: ColDef<MyDto>[] = [
+  { field: "id", headerName: "ID", width: 80 },
+  { field: "name", headerName: "이름", flex: 1 },
+];
+
+function MyPage() {
+  const gridRef = useRef<GridContentHandle<MyDto>>(null);
+  const { data = [] } = useQuery({ ... });
+
+  return (
+    <GridContent<MyDto>
+      ref={gridRef}
+      columns={columns}
+      rowData={data}
+      rowSelection="single"   // "single" | "multiple" | RowSelectionOptions
+    />
+  );
+}
+
+// 명령형 GridApi 접근
+gridRef.current?.refresh();
+gridRef.current?.selectedRows();    // 선택된 행 배열 반환
+gridRef.current?.clearFilters();
+```
+
+### 6. 폼 처리 (React Hook Form + yup)
+
+```tsx
+import { Controller, useForm } from "react-hook-form";
+import { yupResolver } from "@hookform/resolvers/yup";
+import * as yup from "yup";
+import { TextField, Button } from "@mui/material";
+
+const schema = yup.object({
+  title: yup.string().required("제목을 입력하세요"),
+});
+
+type FormValues = yup.InferType<typeof schema>;
+
+function MyForm() {
+  const { control, handleSubmit, formState: { errors } } = useForm({
+    resolver: yupResolver(schema),
+    defaultValues: { title: "" },
+  });
+
+  const onSubmit = handleSubmit(async (values) => {
+    // ...
+  });
+
+  return (
+    <Box component="form" onSubmit={onSubmit} noValidate>
+      <Controller
+        name="title"
+        control={control}
+        render={({ field }) => (
+          <TextField
+            {...field}
+            label="제목"
+            error={!!errors.title}
+            helperText={errors.title?.message}
+          />
+        )}
+      />
+      <Button type="submit">저장</Button>
+    </Box>
+  );
+}
+```
+
+> **MUI v7 주의:** `InputProps` 대신 `slotProps={{ input: { ... } }}`를 사용합니다.
+
+### 7. 에러 처리 패턴
+
+```tsx
+import { resolveAxiosError } from "@/utils/helpers";
+
+try {
+  await someApiCall();
+} catch (error) {
+  // Axios 오류에서 사람이 읽을 수 있는 메시지 추출
+  toast.error(resolveAxiosError(error) || "오류가 발생했습니다.");
+}
+```
+
+### 8. 쿼리 키 추가
+
+`src/react/query/keys.ts`의 `appQueryKeys`에 새 도메인 키를 추가합니다.
+
+```typescript
+// keys.ts 예시 구조
+export const appQueryKeys = {
+  // 기존 키들 ...
+  posts: createQueryKeys("posts", {
+    list: () => [],
+    detail: (id: number) => [id],
+  }),
+};
+```
+
+> **주의:** `appQueryKeys.auth`처럼 auth 도메인을 Query Key로 관리하면 Zustand store와의 이중 관리가 발생할 수 있습니다. auth 관련 서버 상태(user 프로필 등)는 `useAuthStore`를 통해 접근하는 것이 원칙입니다.
+
+## 남은 작업 세부 계획 검토
+
+> 작성일: 2026-04-02. PR#19·PR#20 merge 기준으로 Phase 5 본격 착수 직전 단계.
+
+### PR#20 — Issue #9: AG Grid Shared Wrapper (리뷰 대기)
+
+**검토 포인트:**
+- `GridContent.vue`의 `gridContainer` ref를 이용한 동적 높이 리사이징 로직이 `useEffect` + `ResizeObserver`로 올바르게 이식되었는지 확인.
+- `GridApi` 노출(`useImperativeHandle` 또는 `ref` 포워딩)이 부모 컴포넌트에서 사용 가능한 형태인지 확인.
+- `rowSelection` props 처리: `"single"` / `"multiple"` 타입이 AG Grid React v35 API(`rowSelection` 객체 타입)와 일치하는지 확인.
+- AG Grid React의 `onGridReady` 콜백을 통해 `GridApi`를 획득하는 패턴인지 확인 (Vue의 `expose`와 달리 이벤트 기반).
+
+**주의 사항:**
+- AG Grid v35부터 `rowSelection`이 객체 타입으로 변경됨 — 문자열 `"single"` 사용 시 deprecation 경고 또는 타입 오류 발생 가능.
+- `columnDefs` memoization 누락 시 리렌더링마다 컬럼이 재정의되어 성능 저하 발생.
+
+---
+
+### PR#19 — Issue #10: Auth Pages Migration (리뷰 대기)
+
+**구현 완료 사항:**
+- `LoginPage.tsx`: React Hook Form + yup, 비밀번호 표시/숨김, 비밀번호 재설정 Dialog.
+- 재설정 성공/실패 피드백을 `toast.success()` / `toast.error()`로 처리 (inline Alert 제거).
+- MUI v7 `slotProps.input` API 사용 (deprecated `InputProps` 대체).
+
+**향후 검토 필요:**
+- `PasswordResetConfirmPage` (재설정 링크 클릭 후 새 비밀번호 입력 화면) 구현 여부 — Issue #10 범위에 포함되어 있는지 확인 필요.
+- `RegisterPage` (회원가입)가 Vue에 존재한다면 Issue #10 또는 별도 이슈로 처리 결정 필요.
+
+---
+
+### Issue #11: Dashboard Migration (미시작)
+
+**범위 파악 필요:**
+- Vue `src/views/dashboard/` 하위의 위젯 목록 확인 필요 (ApexCharts 기반 차트, 통계 카드, 알림 패널 등).
+- `useNotificationsStore` (Pinia) → Zustand 혹은 TanStack Query로 대체 전략 결정 필요.
+  - 폴링 기반이라면 TanStack Query `refetchInterval` 활용.
+  - WebSocket/STOMP 기반이라면 별도 Zustand store 또는 Effect 기반 구독.
+- ApexCharts → `react-apexcharts` 패키지 확인 (동일 벤더, 대응 API 유사).
+
+**권장 브랜치:** `feature/react-dashboard`
+
+**선행 조건:** PR#19, PR#20 merge 완료.
+
+---
+
+### Issue #12: Public Community Pages (미시작)
+
+**범위 파악 필요:**
+- 게시판 목록, 게시글 상세, 댓글 목록 등 `src/views/studio/public/` 하위 뷰 확인.
+- 페이지네이션/무한스크롤 패턴 확인 — TanStack Query `useInfiniteQuery` 적용 여부 결정.
+- AG Grid 사용 페이지가 있다면 Issue #9의 `GridContent` React wrapper 완료 후 착수.
+
+**권장 브랜치:** `feature/react-public-community`
+
+**주의 사항:**
+- Vue `StudioPublicRoutes`에 정의된 경로와 React Router 트리의 경로가 1:1 매핑되어야 기존 공유 링크가 유효함.
+
+---
+
+### Issue #13: Admin/Security Pages (미시작)
+
+**범위 파악 필요:**
+- `src/views/studio/mgmt/` 하위 관리자 뷰 목록 확인.
+- 역할 기반 접근 제어(role guard)가 React Router 레이어에서 올바르게 동작하는지 통합 테스트 필요.
+- 사용자 관리 테이블이 AG Grid를 사용한다면 Issue #9 wrapper 완료 선행 필수.
+
+**권장 브랜치:** `feature/react-admin-security`
+
+**주의 사항:**
+- 관리자 전용 API 엔드포인트는 403 응답 시 React Router redirect 처리가 auth guard와 이중으로 작동하지 않도록 주의.
+
+---
+
+### Issue #14: Editor & Upload Integration (미시작)
+
+**범위 및 고위험 영역:**
+- **TipTap**: `@tiptap/react` 패키지로 전환. Vue 3용 Extension 설정과 React용 설정이 대부분 동일하나 `EditorContent` 컴포넌트 API 차이 확인.
+- **파일 업로드**: `vue-filepond` → `react-filepond` 또는 `@uppy/react` 전환. Uppy의 경우 `@uppy/core` + `@uppy/react` 조합으로 사용.
+- **Ace Editor**: `vue3-ace-editor` → `react-ace` 전환.
+
+**권장 브랜치:** `feature/react-editor-upload`
+
+**주의 사항:**
+- TipTap Extension 커스터마이징이 있다면 Vue 전용 NodeView를 React NodeView로 재구현 필요.
+- 파일 업로드는 백엔드 API 엔드포인트 변경 없이 프론트엔드 라이브러리만 교체이므로 비교적 안전.
+- 이 Phase는 다른 페이지 마이그레이션과 독립적이므로 Issue #12, #13과 병렬 진행 가능.
+
+---
+
+### Issue #15: Vue Cleanup & Dependency Removal (미시작)
+
+**실행 순서 (순차 필수):**
+1. `src/views/`, `src/components/`, `src/stores/`, `src/plugins/`, `src/router/` 에서 `.vue` 파일 및 Vue 전용 모듈 삭제.
+2. `src/main.ts`, `src/App.vue` 삭제 (React `src/main.tsx`가 이미 진입점).
+3. `package.json`에서 Vue 관련 패키지 제거 (`vue`, `vue-router`, `pinia`, `vuetify`, `ag-grid-vue3`, `@tiptap/vue-3`, `vue-filepond`, `vue3-ace-editor`, `vue3-apexcharts`, `@vitejs/plugin-vue`, `vue-tsc` 등).
+4. `vite.config.ts`에서 `@vitejs/plugin-vue` 설정 제거.
+5. `tsconfig.json`에서 Vue 전용 설정 제거 (`@vue/tsconfig` 참조 등).
+6. ESLint config에서 `eslint-plugin-vue`, `@vue/eslint-config-*` 제거.
+7. `npm run build` + `npm run lint` 통과 확인.
+
+**주의 사항:**
+- `src/config/`, `src/utils/`, `src/types/`, `src/data/`, `src/messages/` 하위의 순수 TypeScript 모듈은 Vue에 종속되지 않는 한 유지.
+- Phase 5의 모든 이슈(#10~#14)가 완료·merge된 후에만 착수.
+
+---
+
+### 세부 계획 검토 요약
+
+**현재 계획의 모호한 부분:**
+
+1. **Issue #4~#6의 단일 브랜치 처리**: 세 이슈를 `feature/react-migration-phase4-6` 하나로 묶어 처리함. 이후 이슈는 각각 독립 브랜치로 분리하고 있어 일관성 개선이 필요. 추후 이슈에서는 이슈당 브랜치 1:1 원칙 유지 권장.
+
+2. **Phase 4의 범위 확장**: 원래 계획에서 Phase 4는 "Shared UI and State"였으나 실제로는 TanStack Query(Issue #8), Toast/Confirm(Issue #7), AG Grid(Issue #9)까지 포함됨. 이는 타당한 범위이나, 각 항목의 완료 정의(acceptance criteria)가 충분히 구체화되어야 함.
+
+3. **Issue #10 (Auth Pages) 범위**: LoginPage는 구현되었으나 PasswordResetConfirmPage 및 RegisterPage 포함 여부가 명시되지 않음. 이슈 닫기 전에 범위 재확인 필요.
+
+4. **PR#17 (Issue #8) 미해결 지적사항**: `unwrapApiResponse` 취약성과 `appQueryKeys.auth` 충돌 가능성이 리뷰에서 지적되었으나 별도 이슈로 추적되지 않음. 페이지 마이그레이션 전에 Issue를 생성하여 해결 권장.
+
+5. **테스트 전략 부재**: 현재 테스트 런너가 미구성 상태. 피드백 레이어(Toast/Confirm)의 singleton 경로 및 concurrent 호출 시나리오는 단위 테스트가 없으면 회귀 위험이 높음. Vitest + Testing Library 도입을 Issue로 등록하는 것을 권장하나 마이그레이션 블로커는 아님.
+
 ## Definition of Done for `2.x`
 
 The migration line is ready for merge review when:
@@ -609,12 +1093,66 @@ The migration line is ready for merge review when:
 
 ## Validation Record Template
 
-Use this format in commits or merge requests:
+PR 및 커밋 메시지에 아래 형식을 사용하세요.
+
+### 기본 체크리스트
 
 ```text
 Validation
-- npm run build
-- npm run lint
-- manual: login flow
-- manual: route navigation
+- [ ] npm run build  (타입 오류 없음)
+- [ ] npm run lint   (ESLint 오류 없음)
+- [ ] npm run typecheck
+```
+
+### Phase별 추가 검증 항목
+
+**Phase 3 (Auth):**
+```text
+- [ ] manual: 로그인 성공 후 대시보드 이동
+- [ ] manual: 잘못된 자격증명으로 로그인 시 오류 메시지 표시
+- [ ] manual: 보호된 경로에 미인증 상태로 접근 시 /auth/login?returnUrl=... 리디렉트
+- [ ] manual: 로그인 후 returnUrl로 정상 복귀
+- [ ] manual: 로그아웃 후 재접근 시 리디렉트 유지
+- [ ] manual: 탭/브라우저 새로고침 후 세션 유지 (리프레시 토큰 정상 작동)
+```
+
+**Phase 4 (Shared UI):**
+```text
+- [ ] manual: toast.success / toast.error 정상 표시 및 자동 닫힘
+- [ ] manual: 연속 토스트 호출 시 각각 독립적인 타이머로 동작
+- [ ] manual: confirm() 사용자 확인 → true 반환
+- [ ] manual: confirm() 사용자 취소 → false 반환
+- [ ] manual: confirm() 연속 2회 호출 시 순차 처리 (겹치지 않음)
+- [ ] manual: GridContent 렌더링, 행 선택, 컬럼 자동 너비
+```
+
+**Phase 5 (Page Migration):**
+```text
+- [ ] manual: 페이지 핵심 시나리오 (CRUD 또는 조회) 완료
+- [ ] manual: 폼 유효성 검사 오류 메시지 표시
+- [ ] manual: API 오류 시 toast 피드백 표시
+- [ ] manual: 역할 제한 페이지 접근 시 /unauthorized 리디렉트
+- [ ] manual: 기존 Vue 경로와 동일한 URL 경로 유지
+```
+
+**Phase 6 (Vue Cleanup):**
+```text
+- [ ] npm run build  (.vue 파일 참조 없음)
+- [ ] npm run lint   (Vue 플러그인 규칙 없음)
+- [ ] manual: 전체 핵심 시나리오 재검증 (Phase 3 체크리스트 반복)
+```
+
+### AI-assisted 커밋 메시지 형식
+
+```text
+[ai-assisted] feat(react-pages): migrate community post list page
+
+Validation
+- npm run build ✅
+- npm run lint ✅
+- manual: 게시글 목록 조회 ✅
+- manual: 페이지네이션 동작 ✅
+- manual: 미인증 접근 시 리디렉트 ✅
+
+Co-authored-by: Claude Sonnet 4.6 <noreply@anthropic.com>
 ```
