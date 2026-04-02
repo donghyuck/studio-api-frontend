@@ -25,6 +25,7 @@ import axios from "axios";
 import { API_BASE_URL } from "@/config/backend";
 import { resolveAxiosError } from "@/utils/helpers";
 import { useAuthStore } from "@/react/auth/store";
+import { useToast } from "@/react/feedback";
 
 const loginSchema = yup.object({
   username: yup.string().required("아이디를 입력하세요"),
@@ -49,13 +50,12 @@ export function LoginPage() {
   const navigate = useNavigate();
   const token = useAuthStore((state) => state.token);
   const login = useAuthStore((state) => state.login);
+  const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetSubmitting, setResetSubmitting] = useState(false);
-  const [resetError, setResetError] = useState("");
-  const [resetMessage, setResetMessage] = useState("");
 
   const returnUrl = useMemo(() => {
     const params = new URLSearchParams(location.search);
@@ -98,18 +98,17 @@ export function LoginPage() {
 
   const submitReset = resetForm.handleSubmit(async (values: ResetFormValues) => {
     setResetSubmitting(true);
-    setResetError("");
-    setResetMessage("");
     try {
       await axios.post(
         `${API_BASE_URL}/api/auth/password-reset/request`,
         { email: values.email },
         { withCredentials: true }
       );
-      setResetMessage("비밀번호 재설정 메일이 발송되었습니다.");
+      toast.success("비밀번호 재설정 메일이 발송되었습니다.");
       resetForm.reset();
+      setResetOpen(false);
     } catch (error) {
-      setResetError(resolveAxiosError(error));
+      toast.error(resolveAxiosError(error));
     } finally {
       setResetSubmitting(false);
     }
@@ -127,16 +126,8 @@ export function LoginPage() {
     >
       <Container maxWidth="sm">
         <Paper elevation={10} sx={{ p: { xs: 3, sm: 5 }, borderRadius: 3 }}>
-          <Typography variant="h4" textAlign="center" gutterBottom>
+          <Typography variant="h4" textAlign="center" sx={{ mb: 4 }}>
             Studio One Platform
-          </Typography>
-          <Typography
-            variant="body2"
-            textAlign="center"
-            color="text.secondary"
-            sx={{ mb: 4 }}
-          >
-            React bootstrap gate 기준 로그인 화면
           </Typography>
 
           <Box component="form" onSubmit={submitLogin} noValidate>
@@ -165,14 +156,19 @@ export function LoginPage() {
                     type={showPassword ? "text" : "password"}
                     error={!!loginForm.formState.errors.password}
                     helperText={loginForm.formState.errors.password?.message}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton onClick={() => setShowPassword((value) => !value)}>
-                            {showPassword ? <VisibilityOff /> : <Visibility />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
+                    slotProps={{
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              onClick={() => setShowPassword((v) => !v)}
+                              edge="end"
+                            >
+                              {showPassword ? <VisibilityOff /> : <Visibility />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      },
                     }}
                   />
                 )}
@@ -202,7 +198,7 @@ export function LoginPage() {
       <Dialog open={resetOpen} onClose={() => setResetOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>비밀번호 재설정</DialogTitle>
         <DialogContent>
-          <Alert severity="info" variant="outlined" sx={{ mb: 2 }}>
+          <Alert severity="info" variant="outlined" sx={{ mb: 2, mt: 1 }}>
             입력하신 이메일로 비밀번호 재설정 링크를 전송합니다.
           </Alert>
           <Box component="form" id="password-reset-form" onSubmit={submitReset}>
@@ -213,7 +209,6 @@ export function LoginPage() {
                 <TextField
                   {...field}
                   fullWidth
-                  margin="normal"
                   label="이메일"
                   type="email"
                   error={!!resetForm.formState.errors.email}
@@ -222,8 +217,6 @@ export function LoginPage() {
               )}
             />
           </Box>
-          {resetMessage ? <Alert severity="success">{resetMessage}</Alert> : null}
-          {resetError ? <Alert severity="error">{resetError}</Alert> : null}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setResetOpen(false)} disabled={resetSubmitting}>
