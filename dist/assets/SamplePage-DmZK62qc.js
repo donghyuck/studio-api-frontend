@@ -1,0 +1,1 @@
+import{_ as t}from"./_plugin-vue_export-helper-DlAUqK2U.js";import{f as o,o as s,w as a,b as r,m as l,a as c,l as n}from"./index-BlaaDlC-.js";const f={};function d(_,e){return s(),o(n,null,{default:a(()=>[r(l,null,{default:a(()=>[...e[0]||(e[0]=[c("div",{class:"text-body-1 pa-4"},"Sample Page",-1)])]),_:1})]),_:1})}const u=t(f,[["render",d]]);export{u as default};
