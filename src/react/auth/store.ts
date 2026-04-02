@@ -3,7 +3,6 @@ import { create } from "zustand";
 import { API_BASE_URL } from "@/config/backend";
 import type { UserDto } from "@/types/studio/user";
 import { resolveAxiosError } from "@/utils/helpers";
-import { apiClient } from "@/react/api/client";
 
 export interface UserProfileDto extends UserDto {
   roles?: string[];
@@ -106,7 +105,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   async fetchUser() {
     try {
-      const response = await apiClient.get("/api/self");
+      const token = get().token;
+      const response = await axios.get(`${API_BASE_URL}/api/self`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       const user = response.data?.data as UserProfileDto;
       set({ user });
       return user;
