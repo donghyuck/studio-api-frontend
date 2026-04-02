@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 import { App } from "@/react/App";
+import { AppQueryProvider } from "@/react/query/provider";
 
 const container = document.getElementById("app");
 
@@ -27,9 +28,11 @@ const theme = createTheme({
 
 createRoot(container).render(
   <StrictMode>
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <App />
-    </ThemeProvider>
+    <AppQueryProvider>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <App />
+      </ThemeProvider>
+    </AppQueryProvider>
   </StrictMode>
 );
