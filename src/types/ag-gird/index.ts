@@ -1,6 +1,6 @@
 import type { SortModelItem } from 'ag-grid-community';
-import type { Ref } from 'vue';
-type MaybeRef<T> = T | Ref<T>;
+type RefLike<T> = { value: T };
+type MaybeRef<T> = T | RefLike<T>;
 interface PageQuery {
   page?: number
   size?: number
