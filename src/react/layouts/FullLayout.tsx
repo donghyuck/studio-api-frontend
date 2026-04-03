@@ -17,14 +17,14 @@ export function FullLayout() {
       {/* TODO: FullLayout is a minimal implementation with only an AppBar.
                  Future enhancements will include sidebar/navigation components. */}
       <AppShellHeader>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Typography variant="body2" color="text.secondary">
-              {user?.name ?? user?.username ?? "사용자"}
-            </Typography>
-            <Button variant="outlined" size="small" onClick={() => void logoutEverywhere()}>
-              로그아웃
-            </Button>
-          </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            {user?.name ?? user?.username ?? "사용자"}
+          </Typography>
+          <Button variant="outlined" size="small" onClick={() => void logoutEverywhere()}>
+            로그아웃
+          </Button>
+        </Box>
       </AppShellHeader>
       <Container sx={{ py: 4 }}>
         <Outlet />
