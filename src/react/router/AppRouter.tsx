@@ -6,6 +6,7 @@ import { DashboardPage } from "@/react/pages/DashboardPage";
 import { LoginPage } from "@/react/pages/LoginPage";
 import { NotFoundPage } from "@/react/pages/NotFoundPage";
 import { UnauthorizedPage } from "@/react/pages/UnauthorizedPage";
+import { AdminRoutes } from "@/react/router/AdminRoutes";
 
 export function AppRouter() {
   return (
@@ -19,6 +20,8 @@ export function AppRouter() {
       <Route element={<ProtectedRoute />}>
         <Route element={<FullLayout />}>
           <Route index element={<DashboardPage />} />
+          {/* Admin and Security Pages */}
+          <Route path="admin/*" element={<AdminRoutes />} />
         </Route>
       </Route>
 
