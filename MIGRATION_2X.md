@@ -18,6 +18,106 @@ This document defines the working rules and migration plan for converting the cu
 - Existing backend APIs remain reusable unless a separate backend change is explicitly planned.
 - The migration should minimize unrelated refactors and keep each change traceable.
 
+## Progress Tracker
+
+> Last updated: 2026-04-03
+
+### Issues and PRs
+
+| Issue | Title | Phase | Branch | PR | PR Status | Issue Status |
+|------|-------|-------|--------|----|-----------|--------------|
+| `#4` | React bootstrap baseline | Phase 1 | `feature/react-migration-phase4-6` | `#16` | Merged | Closed |
+| `#5` | React routing shell and base layouts | Phase 2 | `feature/react-migration-phase4-6` | `#16` | Merged | Closed |
+| `#6` | React auth bootstrap gate and session flow | Phase 3 | `feature/react-migration-phase4-6` | `#16` | Merged | Closed |
+| `#7` | Shared feedback providers for React shell | Phase 4 | `feature/react-shared-feedback` | `#18` | Merged | Closed |
+| `#8` | Shared TanStack Query adapters and conventions | Phase 4 | `feature/react-query-adapters` | `#17` | Merged | Closed |
+| `#9` | React AG Grid shared wrapper | Phase 4 | `feature/react-grid-wrapper` | `#20` | Merged | Closed |
+| `#10` | Migrate auth pages to React shell | Phase 5 | `feature/react-auth-pages` | `#19` | Merged | Closed |
+| `#11` | Migrate dashboard to React | Phase 5 | `feature/react-dashboard` | `#22` | Merged | Closed |
+| `#12` | Migrate public community pages to React | Phase 5 | `feature/react-public-community` | `#21` | Merged | Closed |
+| `#13` | Migrate admin and security pages to React | Phase 5 | - | - | Not started | Open |
+| `#14` | React editor and upload integration | Phase 5 | - | - | Not started | Open |
+| `#15` | Final Vue runtime cleanup and dependency removal | Phase 6 | - | - | Not started | Open |
+
+### Phase Status
+
+| Phase | Scope | Status |
+|------|-------|--------|
+| Phase 1 | Bootstrap | Complete |
+| Phase 2 | Routing and Shell | Complete |
+| Phase 3 | Auth and API Foundation | Complete |
+| Phase 4 | Shared UI and State Baselines | Complete |
+| Phase 5 | Page-by-page migration | In progress |
+| Phase 6 | Vue runtime cleanup | Not started |
+
+### Current React Structure
+
+The current React runtime owner under `src/react/` is:
+
+```text
+src/react/
+├── App.tsx
+├── api/
+│   └── client.ts
+├── auth/
+│   ├── AuthBootstrapGate.tsx
+│   ├── ProtectedRoute.tsx
+│   └── store.ts
+├── components/
+│   └── ag-grid/
+│       ├── CustomLoadingOverlay.tsx
+│       ├── GridContent.tsx
+│       ├── PageableGridContent.tsx
+│       ├── gridOptions.ts
+│       ├── index.ts
+│       ├── styles.css
+│       ├── types.ts
+│       └── utils.ts
+├── feedback/
+│   ├── ConfirmProvider.tsx
+│   ├── FeedbackProvider.tsx
+│   ├── ToastProvider.tsx
+│   └── index.ts
+├── layouts/
+│   ├── AppShellHeader.tsx
+│   ├── BlankLayout.tsx
+│   ├── FullLayout.tsx
+│   └── PublicLayout.tsx
+├── pages/
+│   ├── DashboardPage.tsx
+│   ├── LoginPage.tsx
+│   ├── NotFoundPage.tsx
+│   ├── UnauthorizedPage.tsx
+│   └── community/
+│       ├── ForumListPage.tsx
+│       ├── ForumTopicDetailPage.tsx
+│       ├── ForumTopicListPage.tsx
+│       ├── api.ts
+│       ├── format.ts
+│       └── queryKeys.ts
+├── query/
+│   ├── client.ts
+│   ├── fetcher.ts
+│   ├── keys.ts
+│   └── provider.tsx
+└── router/
+    └── AppRouter.tsx
+```
+
+### Current Boundaries
+
+- `#13` should own admin/security page migration only.
+- `#14` should own editor/upload integration only.
+- `#15` should remove Vue runtime and Vue-specific dependencies only after all required page migrations are complete.
+- New work should keep `2.x` as the PR base branch.
+- Page migrations must not redefine auth/session, feedback, query baseline, or grid wrapper behavior unless the issue explicitly says so.
+
+### Recommended Next Work
+
+1. `#13` Admin/security pages
+2. `#14` Editor/upload integration
+3. `#15` Final Vue cleanup and dependency removal
+
 ## Branch Strategy
 
 ### Roles
