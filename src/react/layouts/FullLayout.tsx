@@ -15,6 +15,8 @@ export function FullLayout() {
 
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "background.default" }}>
+      {/* TODO: FullLayout is a minimal implementation with only an AppBar.
+                 Future enhancements will include sidebar/navigation components. */}
       <AppBar position="static" color="inherit" elevation={1}>
         <Toolbar sx={{ justifyContent: "space-between" }}>
           <Typography variant="h6" color="text.primary">
