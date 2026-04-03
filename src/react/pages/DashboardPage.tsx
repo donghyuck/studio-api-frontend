@@ -1,45 +1,44 @@
-import { useEffect, useState } from "react";
 import { Alert, CircularProgress, Paper, Stack, Typography } from "@mui/material";
+import { useQuery } from "@tanstack/react-query";
+import { createApiQueryFn } from "@/react/query/fetcher";
+
+interface SelfApiData {
+  username: string;
+  name?: string;
+  email?: string;
+}
 
 export function DashboardPage() {
-  const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState<string | null>(null);
-
-  useEffect(() => {
-    // Simulate data fetching
-    const fetchData = async () => {
-      setLoading(true);
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          resolve("Simulated Dashboard Data Loaded!");
-        }, 1500); // Simulate network delay
-      });
-    };
-
-    fetchData().then((data) => {
-      setDashboardData(data as string);
-      setLoading(false);
-    });
-  }, []);
+  // Use useQuery to fetch data from /api/self
+  // The 'any' type is used here for simplicity as we don't have the full API response type.
+  // In a real application, a specific interface would be used.
+  const { data, isLoading, error } = useQuery<SelfApiData>({
+    queryKey: ["selfData"],
+    queryFn: createApiQueryFn<SelfApiData>("/api/self"),
+  });
 
   return (
     <Stack spacing={3}>
-      <Typography variant="h4">Dashboard Content</Typography>
+      <Typography variant="h4">대시보드 콘텐츠</Typography> {/* Changed to Korean */}
       <Alert severity="info" variant="outlined">
         `#4`~`#6` 기준선이 적용된 상태입니다. 이후 페이지 이관은 이 React 셸과 auth
         bootstrap 흐름 위에서 진행합니다.
       </Alert>
       <Paper sx={{ p: 3 }}>
-        {loading ? (
+        {isLoading ? (
           <Stack direction="row" spacing={1} alignItems="center">
             <CircularProgress size={20} />
             <Typography variant="body1" color="text.secondary">
-              Loading dashboard data...
+              대시보드 데이터를 불러오는 중... {/* Changed to Korean */}
             </Typography>
           </Stack>
+        ) : error ? (
+          <Alert severity="error" variant="outlined">
+            데이터 로딩 중 오류 발생: {error.message}
+          </Alert>
         ) : (
           <Typography variant="body1" color="text.secondary">
-            {dashboardData}
+            환영합니다, {data?.name ?? data?.username ?? "사용자"}! {/* Using fetched data */}
             <br />
             이 화면은 보호 라우트, React 런타임, session restore 기준선이 정상적으로
             동작하는지 확인하기 위한 임시 대시보드입니다.

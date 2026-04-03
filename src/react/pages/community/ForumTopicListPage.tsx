@@ -38,13 +38,7 @@ export function ForumTopicListPage() {
   });
 
   const topicsQuery = useQuery({
-    queryKey: forumPublicQueryKeys.custom(
-      forumSlug,
-      "topics",
-      forumSlug,
-      page,
-      search || null
-    ),
+    queryKey: forumPublicQueryKeys.custom(forumSlug, "topics", page, search || null),
     queryFn: () =>
       reactForumsPublicApi.listTopics(forumSlug, {
         page: page - 1,

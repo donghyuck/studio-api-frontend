@@ -1,12 +1,11 @@
 import {
-  AppBar,
   Box,
   Button,
   Container,
-  Toolbar,
   Typography,
 } from "@mui/material";
 import { Outlet } from "react-router-dom";
+import { AppShellHeader } from "@/react/layouts/AppShellHeader";
 import { useAuthStore } from "@/react/auth/store";
 
 export function FullLayout() {
@@ -15,11 +14,9 @@ export function FullLayout() {
 
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "background.default" }}>
-      <AppBar position="static" color="inherit" elevation={1}>
-        <Toolbar sx={{ justifyContent: "space-between" }}>
-          <Typography variant="h6" color="text.primary">
-            Studio One Platform
-          </Typography>
+      {/* TODO: FullLayout is a minimal implementation with only an AppBar.
+                 Future enhancements will include sidebar/navigation components. */}
+      <AppShellHeader>
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <Typography variant="body2" color="text.secondary">
               {user?.name ?? user?.username ?? "사용자"}
@@ -28,8 +25,7 @@ export function FullLayout() {
               로그아웃
             </Button>
           </Box>
-        </Toolbar>
-      </AppBar>
+      </AppShellHeader>
       <Container sx={{ py: 4 }}>
         <Outlet />
       </Container>
