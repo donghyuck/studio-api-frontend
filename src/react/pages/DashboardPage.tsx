@@ -10,7 +10,7 @@ interface SelfApiData {
 
 export function DashboardPage() {
   const { data, isLoading, error } = useQuery<SelfApiData>({
-    queryKey: ["selfData"],
+    queryKey: ["studio", "dashboard", "selfData"],
     queryFn: createApiQueryFn<SelfApiData>("/api/self"),
   });
 
