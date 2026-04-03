@@ -1,8 +1,8 @@
 // src/plugins/axios.ts
 import axios from 'axios';
 import { API_BASE_URL } from "@/config/backend";
-import { useAuthStore } from '@/stores/studio/mgmt/auth.store';
 import { parseJwtExp } from "@/utils/jwt";
+import { authStore } from "@/react/auth/store";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -32,7 +32,7 @@ function isTokenExpired(token: string, skewSeconds = 30): boolean {
 
 // ✅ 요청 인터셉터
 api.interceptors.request.use(async config => {
-  const auth = useAuthStore(); 
+  const auth = authStore.getState();
   if (auth.token) {
     // 🔍 토큰 만료 확인
     if (isTokenExpired(auth.token)) {
@@ -58,8 +58,11 @@ api.interceptors.request.use(async config => {
         failedQueue.push({ resolve, reject });
       });
     }
-    config.headers = config.headers || {};
-    config.headers.Authorization = `Bearer ${auth.token}`;
+    const freshToken = authStore.getState().token;
+    config.headers = config.headers ?? new axios.AxiosHeaders();
+    if (freshToken) {
+      config.headers.Authorization = `Bearer ${freshToken}`;
+    }
   }
   return config;
 });
