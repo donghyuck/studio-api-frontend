@@ -1,6 +1,8 @@
 import type {
   DocumentBlock,
   DocumentBlockNode,
+  DocumentBlockCreateRequest,
+  DocumentBlockUpdateRequest,
   DocumentCreateRequest,
   DocumentCreateResponse,
   DocumentVersionBundle,
@@ -69,7 +71,17 @@ export const documentApi = {
     };
   },
 
-  async createBlock(documentId: number, payload: any) {
+  async getBlock(documentId: number, blockId: number) {
+    const res = await api.getWithMeta<DocumentBlock>(
+      `${API_BASE}/${documentId}/blocks/${blockId}`
+    );
+    return {
+      data: res.data,
+      etag: res.headers?.["etag"] as string | undefined,
+    };
+  },
+
+  async createBlock(documentId: number, payload: DocumentBlockCreateRequest) {
     return api.post<{ blockId: number }>(
       `${API_BASE}/${documentId}/blocks`,
       payload
@@ -79,7 +91,7 @@ export const documentApi = {
   async updateBlock(
     documentId: number,
     blockId: number,
-    payload: any,
+    payload: DocumentBlockUpdateRequest,
     ifMatch?: string
   ) {
     await api.put<void>(`${API_BASE}/${documentId}/blocks/${blockId}`, payload, {

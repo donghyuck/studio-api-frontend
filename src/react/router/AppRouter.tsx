@@ -7,9 +7,12 @@ import { ForumListPage } from "@/react/pages/community/ForumListPage";
 import { ForumTopicDetailPage } from "@/react/pages/community/ForumTopicDetailPage";
 import { ForumTopicListPage } from "@/react/pages/community/ForumTopicListPage";
 import { DashboardPage } from "@/react/pages/DashboardPage";
+import { DocumentEditorPage } from "@/react/pages/documents/DocumentEditorPage";
+import { FilesPage } from "@/react/pages/files/FilesPage";
 import { LoginPage } from "@/react/pages/LoginPage";
 import { NotFoundPage } from "@/react/pages/NotFoundPage";
 import { UnauthorizedPage } from "@/react/pages/UnauthorizedPage";
+import { AdminRoutes } from "@/react/router/AdminRoutes";
 
 export function AppRouter() {
   return (
@@ -32,6 +35,13 @@ export function AppRouter() {
       <Route element={<ProtectedRoute />}>
         <Route element={<FullLayout />}>
           <Route index element={<DashboardPage />} />
+          <Route path="application/files" element={<FilesPage />} />
+          <Route
+            path="application/documents/:documentId"
+            element={<DocumentEditorPage />}
+          />
+          {/* Admin and Security Pages */}
+          <Route path="admin/*" element={<AdminRoutes />} />
         </Route>
       </Route>
 

@@ -73,3 +73,17 @@ export interface DocumentBlockNode {
   block: DocumentBlock;
   children: DocumentBlockNode[];
 }
+
+export interface DocumentBlockCreateRequest {
+  parentBlockId?: number | null;
+  blockType: string;
+  blockData?: string | null;
+  sortOrder?: number | null;
+}
+
+export interface DocumentBlockUpdateRequest {
+  parentBlockId?: number | null;
+  blockType: string;
+  blockData?: string | null;
+  sortOrder?: number | null;
+}
