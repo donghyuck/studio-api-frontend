@@ -15,20 +15,12 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import dayjs from "dayjs";
 import type { ForumSummaryResponse } from "@/types/studio/forums";
 import { reactForumsPublicApi } from "@/react/pages/community/api";
-import { forumListQueryKeys } from "@/react/pages/community/queryKeys";
+import { forumPublicQueryKeys } from "@/react/pages/community/queryKeys";
+import { formatDateTime } from "@/react/pages/community/format";
 
 const PAGE_SIZE = 10;
-
-function formatUpdatedAt(value?: string) {
-  if (!value) {
-    return "-";
-  }
-
-  return dayjs(value).format("YYYY-MM-DD HH:mm:ss");
-}
 
 export function ForumListPage() {
   const [searchInput, setSearchInput] = useState("");
@@ -36,7 +28,7 @@ export function ForumListPage() {
   const [page, setPage] = useState(1);
 
   const forumsQuery = useQuery({
-    queryKey: forumListQueryKeys.list({ page, q: search || undefined }),
+    queryKey: forumPublicQueryKeys.list({ page, q: search || undefined }),
     queryFn: () =>
       reactForumsPublicApi.listForums({
         page: page - 1,
@@ -115,7 +107,7 @@ export function ForumListPage() {
                       {forum.slug}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      최근 수정: {formatUpdatedAt(forum.updatedAt)}
+                      최근 수정: {formatDateTime(forum.updatedAt)}
                     </Typography>
                   </Stack>
                 </CardContent>

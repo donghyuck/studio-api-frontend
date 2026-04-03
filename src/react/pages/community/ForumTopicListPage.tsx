@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -15,20 +15,15 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import dayjs from "dayjs";
-import { forumTopicQueryKeys } from "@/react/pages/community/queryKeys";
+import { forumPublicQueryKeys } from "@/react/pages/community/queryKeys";
 import { reactForumsPublicApi } from "@/react/pages/community/api";
 import type { TopicSummaryResponse } from "@/types/studio/forums";
+import {
+  formatDateTime,
+  formatTopicStatus,
+} from "@/react/pages/community/format";
 
 const PAGE_SIZE = 20;
-
-function formatDateTime(value?: string) {
-  if (!value) {
-    return "-";
-  }
-
-  return dayjs(value).format("YYYY-MM-DD HH:mm:ss");
-}
 
 export function ForumTopicListPage() {
   const { forumSlug = "" } = useParams();
@@ -37,17 +32,19 @@ export function ForumTopicListPage() {
   const [page, setPage] = useState(1);
 
   const forumQuery = useQuery({
-    queryKey: forumTopicQueryKeys.detail(`${forumSlug}-forum`),
+    queryKey: forumPublicQueryKeys.detail(forumSlug),
     queryFn: () => reactForumsPublicApi.getForum(forumSlug),
     enabled: Boolean(forumSlug),
   });
 
   const topicsQuery = useQuery({
-    queryKey: forumTopicQueryKeys.list({
+    queryKey: forumPublicQueryKeys.custom(
+      forumSlug,
+      "topics",
       forumSlug,
       page,
-      q: search || undefined,
-    }),
+      search || null
+    ),
     queryFn: () =>
       reactForumsPublicApi.listTopics(forumSlug, {
         page: page - 1,
@@ -69,13 +66,7 @@ export function ForumTopicListPage() {
     setSearch(searchInput.trim());
   };
 
-  const description = useMemo(() => {
-    if (!forumQuery.data?.description) {
-      return "게시글 목록을 확인합니다.";
-    }
-
-    return forumQuery.data.description;
-  }, [forumQuery.data]);
+  const description = forumQuery.data?.description ?? "게시글 목록을 확인합니다.";
 
   return (
     <Stack spacing={3}>
@@ -137,7 +128,7 @@ export function ForumTopicListPage() {
                       {topic.title}
                     </Link>
                     <Typography variant="body2" color="text.secondary">
-                      상태: {topic.status ?? "OPEN"}
+                      상태: {formatTopicStatus(topic.status)}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
                       최근 활동: {formatDateTime(topic.lastActivityAt ?? topic.updatedAt)}

@@ -13,37 +13,33 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
-import dayjs from "dayjs";
+import DOMPurify from "dompurify";
 import { reactForumsPublicApi } from "@/react/pages/community/api";
-import { forumTopicDetailQueryKeys } from "@/react/pages/community/queryKeys";
+import { forumPublicQueryKeys } from "@/react/pages/community/queryKeys";
 import type { PostResponse } from "@/types/studio/forums";
-
-function formatDateTime(value?: string) {
-  if (!value) {
-    return "-";
-  }
-
-  return dayjs(value).format("YYYY-MM-DD HH:mm:ss");
-}
+import {
+  formatDateTime,
+  formatTopicStatus,
+} from "@/react/pages/community/format";
 
 export function ForumTopicDetailPage() {
   const { forumSlug = "", topicId = "" } = useParams();
   const parsedTopicId = Number(topicId);
 
   const forumQuery = useQuery({
-    queryKey: forumTopicDetailQueryKeys.detail(`${forumSlug}-forum`),
+    queryKey: forumPublicQueryKeys.detail(forumSlug),
     queryFn: () => reactForumsPublicApi.getForum(forumSlug),
     enabled: Boolean(forumSlug),
   });
 
   const topicQuery = useQuery({
-    queryKey: forumTopicDetailQueryKeys.detail(`${forumSlug}-${topicId}`),
+    queryKey: forumPublicQueryKeys.custom(forumSlug, "topic", topicId),
     queryFn: () => reactForumsPublicApi.getTopic(forumSlug, parsedTopicId),
     enabled: Boolean(forumSlug) && Number.isFinite(parsedTopicId),
   });
 
   const postsQuery = useQuery({
-    queryKey: forumTopicDetailQueryKeys.custom(forumSlug, "posts", parsedTopicId),
+    queryKey: forumPublicQueryKeys.custom(forumSlug, "topic", topicId, "posts"),
     queryFn: () => reactForumsPublicApi.listPosts(forumSlug, parsedTopicId),
     enabled: Boolean(forumSlug) && Number.isFinite(parsedTopicId),
   });
@@ -87,7 +83,7 @@ export function ForumTopicDetailPage() {
               <Stack spacing={2}>
                 <Typography variant="h4">{topic?.title}</Typography>
                 <Typography variant="body2" color="text.secondary">
-                  상태: {topic?.status ?? "OPEN"}
+                  상태: {formatTopicStatus(topic?.status)}
                 </Typography>
                 <Divider />
                 {firstPost ? (
@@ -98,7 +94,9 @@ export function ForumTopicDetailPage() {
                     </Typography>
                     <Box
                       sx={{ "& img": { maxWidth: "100%" } }}
-                      dangerouslySetInnerHTML={{ __html: firstPost.content }}
+                      dangerouslySetInnerHTML={{
+                        __html: DOMPurify.sanitize(firstPost.content),
+                      }}
                     />
                   </>
                 ) : (
@@ -121,7 +119,9 @@ export function ForumTopicDetailPage() {
                       </Typography>
                       <Box
                         sx={{ "& img": { maxWidth: "100%" } }}
-                        dangerouslySetInnerHTML={{ __html: post.content }}
+                        dangerouslySetInnerHTML={{
+                          __html: DOMPurify.sanitize(post.content),
+                        }}
                       />
                     </Stack>
                   </CardContent>

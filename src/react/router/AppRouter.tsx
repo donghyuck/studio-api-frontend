@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "@/react/auth/ProtectedRoute";
 import { BlankLayout } from "@/react/layouts/BlankLayout";
 import { FullLayout } from "@/react/layouts/FullLayout";
+import { PublicLayout } from "@/react/layouts/PublicLayout";
 import { ForumListPage } from "@/react/pages/community/ForumListPage";
 import { ForumTopicDetailPage } from "@/react/pages/community/ForumTopicDetailPage";
 import { ForumTopicListPage } from "@/react/pages/community/ForumTopicListPage";
@@ -15,6 +16,9 @@ export function AppRouter() {
     <Routes>
       <Route element={<BlankLayout />}>
         <Route path="/auth/login" element={<LoginPage />} />
+      </Route>
+
+      <Route element={<PublicLayout />}>
         <Route path="/forums" element={<ForumListPage />} />
         <Route path="/forums/:forumSlug" element={<ForumTopicListPage />} />
         <Route
