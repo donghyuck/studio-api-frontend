@@ -45,6 +45,7 @@
         "apexcharts": "5.10.4",
         "axios": "^1.13.6",
         "dayjs": "^1.11.20",
+        "dompurify": "^3.3.3",
         "event-source-polyfill": "^1.0.31",
         "filepond": "^4.32.12",
         "filepond-plugin-file-rename": "^1.1.8",
