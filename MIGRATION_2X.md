@@ -6,9 +6,10 @@ This document defines the working rules and migration plan for converting the cu
 
 ## Current Assessment
 
-- The current application is built on Vue 3, Vite, TypeScript, Vuetify, Pinia, and Vue Router.
-- The project contains a large number of Vue single-file components and Vue-specific dependencies.
-- Because of this, the move to React is not a small refactor. It should be treated as a major-version migration.
+- The active `2.x` application runtime is now React-based and builds through `src/main.tsx`.
+- Core frontend concerns are operating on React + TypeScript + React Router + TanStack Query + Zustand + AG Grid React.
+- Legacy Vue source still exists in the repository as inactive reference code, but it is no longer part of the active `2.x` runtime or TypeScript build path.
+- The migration has been completed as a major-version runtime transition, with optional follow-up cleanup remaining for dormant legacy files only.
 
 ## Assumptions
 
@@ -37,7 +38,7 @@ This document defines the working rules and migration plan for converting the cu
 | `#12` | Migrate public community pages to React | Phase 5 | `feature/react-public-community` | `#21` | Merged | Closed |
 | `#13` | Migrate admin and security pages to React | Phase 5 | `feature/react-admin-security` | `#24` | Merged | Closed |
 | `#14` | React editor and upload integration | Phase 5 | `feature/react-editor-upload` | `#23` | Merged | Closed |
-| `#15` | Final Vue runtime cleanup and dependency removal | Phase 6 | - | - | Not started | Open |
+| `#15` | Final Vue runtime cleanup and dependency removal | Phase 6 | `feature/react-vue-cleanup` | `#25` | Merged | Closed |
 
 ### Phase Status
 
@@ -48,7 +49,7 @@ This document defines the working rules and migration plan for converting the cu
 | Phase 3 | Auth and API Foundation | Complete |
 | Phase 4 | Shared UI and State Baselines | Complete |
 | Phase 5 | Page-by-page migration | Complete |
-| Phase 6 | Vue runtime cleanup | Not started |
+| Phase 6 | Vue runtime cleanup | Complete |
 
 ### Current React Structure
 
@@ -125,13 +126,14 @@ src/react/
 
 - `#13` admin/security page migration is complete.
 - `#14` editor/upload integration is complete.
-- `#15` should remove Vue runtime and Vue-specific dependencies only after all required page migrations are complete.
+- `#15` Vue runtime cleanup and dependency removal is complete.
 - New work should keep `2.x` as the PR base branch.
-- Page migrations must not redefine auth/session, feedback, query baseline, or grid wrapper behavior unless the issue explicitly says so.
+- Follow-up cleanup may remove dormant legacy Vue files, but should not redefine the active React runtime baseline without a separate issue.
 
 ### Recommended Next Work
 
-1. `#15` Final Vue runtime cleanup and dependency removal
+1. Optional follow-up: delete inactive legacy Vue source trees that are no longer referenced by the `2.x` runtime.
+2. Optional follow-up: tighten lint/config cleanup once Vue-specific ESLint support is no longer needed for archived source.
 
 ## Branch Strategy
 
@@ -202,6 +204,13 @@ The migration will use a shell-first strategy instead of route-by-route dual run
 - Page migration remains incremental at the implementation level, but runtime ownership moves to React early to avoid split routing and split auth behavior.
 
 This choice is intentional because the current application relies on centralized router guards, shared plugin registration, and app-wide auth/session behavior. A mixed Vue/React runtime would add complexity to routing, token refresh, and layout consistency without reducing the core rewrite cost enough.
+
+## Completion Summary
+
+- The `2.x` line now boots through React only.
+- Phase 1 through Phase 6 migration issues (`#4` to `#15`) are complete.
+- Vue runtime dependencies and the Vue entrypoint were removed from the active runtime path in PR `#25`.
+- Some Vue source files remain in the repository as inactive legacy reference code and may be deleted in a later cleanup-only change set.
 
 ## Parallel Work Strategy
 
