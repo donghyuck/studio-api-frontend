@@ -35,8 +35,8 @@ This document defines the working rules and migration plan for converting the cu
 | `#10` | Migrate auth pages to React shell | Phase 5 | `feature/react-auth-pages` | `#19` | Merged | Closed |
 | `#11` | Migrate dashboard to React | Phase 5 | `feature/react-dashboard` | `#22` | Merged | Closed |
 | `#12` | Migrate public community pages to React | Phase 5 | `feature/react-public-community` | `#21` | Merged | Closed |
-| `#13` | Migrate admin and security pages to React | Phase 5 | - | - | Not started | Open |
-| `#14` | React editor and upload integration | Phase 5 | - | - | Not started | Open |
+| `#13` | Migrate admin and security pages to React | Phase 5 | `feature/react-admin-security` | `#24` | Merged | Closed |
+| `#14` | React editor and upload integration | Phase 5 | `feature/react-editor-upload` | `#23` | Merged | Closed |
 | `#15` | Final Vue runtime cleanup and dependency removal | Phase 6 | - | - | Not started | Open |
 
 ### Phase Status
@@ -47,7 +47,7 @@ This document defines the working rules and migration plan for converting the cu
 | Phase 2 | Routing and Shell | Complete |
 | Phase 3 | Auth and API Foundation | Complete |
 | Phase 4 | Shared UI and State Baselines | Complete |
-| Phase 5 | Page-by-page migration | In progress |
+| Phase 5 | Page-by-page migration | Complete |
 | Phase 6 | Vue runtime cleanup | Not started |
 
 ### Current React Structure
@@ -88,12 +88,28 @@ src/react/
 │   ├── LoginPage.tsx
 │   ├── NotFoundPage.tsx
 │   ├── UnauthorizedPage.tsx
-│   └── community/
+│   ├── admin/
+│   │   ├── GroupsPage.tsx
+│   │   ├── RolesPage.tsx
+│   │   ├── UsersPage.tsx
+│   │   ├── datasource.ts
+│   │   └── index.ts
+│   ├── community/
 │       ├── ForumListPage.tsx
 │       ├── ForumTopicDetailPage.tsx
 │       ├── ForumTopicListPage.tsx
 │       ├── api.ts
 │       ├── format.ts
+│       └── queryKeys.ts
+│   ├── documents/
+│   │   ├── DocumentEditorPage.tsx
+│   │   ├── DocumentPreviewDialog.tsx
+│   │   ├── api.ts
+│   │   └── queryKeys.ts
+│   └── files/
+│       ├── FileUploadDialog.tsx
+│       ├── FilesPage.tsx
+│       ├── api.ts
 │       └── queryKeys.ts
 ├── query/
 │   ├── client.ts
@@ -101,22 +117,21 @@ src/react/
 │   ├── keys.ts
 │   └── provider.tsx
 └── router/
+    ├── AdminRoutes.tsx
     └── AppRouter.tsx
 ```
 
 ### Current Boundaries
 
-- `#13` should own admin/security page migration only.
-- `#14` should own editor/upload integration only.
+- `#13` admin/security page migration is complete.
+- `#14` editor/upload integration is complete.
 - `#15` should remove Vue runtime and Vue-specific dependencies only after all required page migrations are complete.
 - New work should keep `2.x` as the PR base branch.
 - Page migrations must not redefine auth/session, feedback, query baseline, or grid wrapper behavior unless the issue explicitly says so.
 
 ### Recommended Next Work
 
-1. `#13` Admin/security pages
-2. `#14` Editor/upload integration
-3. `#15` Final Vue cleanup and dependency removal
+1. `#15` Final Vue runtime cleanup and dependency removal
 
 ## Branch Strategy
 
@@ -138,6 +153,7 @@ src/react/
 - `feature/react-shared-components`
 - `feature/react-forum-pages`
 - `feature/react-admin-pages`
+- `feature/react-editor-upload`
 
 ### Operating Rules
 
