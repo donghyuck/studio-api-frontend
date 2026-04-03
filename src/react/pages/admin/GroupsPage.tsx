@@ -22,11 +22,10 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import type { GroupDto } from "@/react/pages/admin/datasource";
 import { GroupsDataSource } from "@/react/pages/admin/datasource";
 
-const dataSource = new GroupsDataSource();
-
 export function GroupsPage() {
   const navigate = useNavigate();
   const gridRef = useRef<PageableGridContentHandle<GroupDto>>(null);
+  const dataSource = useMemo(() => new GroupsDataSource(), []);
   const [searchInput, setSearchInput] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
 

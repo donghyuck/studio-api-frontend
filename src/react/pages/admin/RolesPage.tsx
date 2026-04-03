@@ -23,11 +23,10 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import type { RoleDto } from "@/react/pages/admin/datasource";
 import { RolesDataSource } from "@/react/pages/admin/datasource";
 
-const dataSource = new RolesDataSource();
-
 export function RolesPage() {
   const navigate = useNavigate();
   const gridRef = useRef<PageableGridContentHandle<RoleDto>>(null);
+  const dataSource = useMemo(() => new RolesDataSource(), []);
   const [searchInput, setSearchInput] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
 

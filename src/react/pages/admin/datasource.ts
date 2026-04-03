@@ -1,6 +1,6 @@
 import type { SortModelItem } from "ag-grid-community";
-import { apiClient } from "@/react/api/client";
 import type { AgGridCompatibleDataSource } from "@/react/components/ag-grid/types";
+import { apiRequest } from "@/react/query/fetcher";
 import type { PageResponse } from "@/types/studio/api-common";
 import type { UserDto } from "@/types/studio/user";
 
@@ -20,6 +20,12 @@ export interface RoleDto {
   description?: string | null;
   creationDate?: string;
   modifiedDate?: string;
+}
+
+function unwrapPageResponse<T>(payload: { data?: PageResponse<T> } | PageResponse<T>) {
+  return payload && typeof payload === "object" && "data" in payload && payload.data
+    ? (payload.data as PageResponse<T>)
+    : (payload as PageResponse<T>);
 }
 
 export class ReactPageDataSource<T> implements AgGridCompatibleDataSource<T> {
@@ -71,25 +77,18 @@ export class ReactPageDataSource<T> implements AgGridCompatibleDataSource<T> {
         this.sort.length > 0
           ? `${this.sort[0].colId},${this.sort[0].sort}`
           : undefined;
-      const response = await apiClient.get<
+      const payload = await apiRequest<
         { data?: PageResponse<T> } | PageResponse<T>
-      >(this.fetchUrl, {
+      >("get", this.fetchUrl, {
         params: { page: this.page, size: this.pageSize, sort, ...this.filter },
-        withCredentials: true,
       });
-      const payload = response.data;
-      const page: PageResponse<T> =
-        payload &&
-        typeof payload === "object" &&
-        "data" in payload &&
-        payload.data
-          ? (payload.data as PageResponse<T>)
-          : (payload as PageResponse<T>);
+      const page = unwrapPageResponse(payload);
       this.dataItems = page.content ?? [];
       this.total = page.totalElements ?? 0;
       this.isLoaded = true;
     } catch (err) {
       this.error = err;
+      throw err;
     } finally {
       this.loading = false;
     }
@@ -124,17 +123,10 @@ export class ReactPageDataSource<T> implements AgGridCompatibleDataSource<T> {
 
     const params = { page, size, sort, ...this.filter, ...agFilter };
 
-    const response = await apiClient.get<
+    const payload = await apiRequest<
       { data?: PageResponse<T> } | PageResponse<T>
-    >(this.fetchUrl, { params, withCredentials: true });
-    const payload = response.data;
-    const pageData: PageResponse<T> =
-      payload &&
-      typeof payload === "object" &&
-      "data" in payload &&
-      payload.data
-        ? (payload.data as PageResponse<T>)
-        : (payload as PageResponse<T>);
+    >("get", this.fetchUrl, { params });
+    const pageData = unwrapPageResponse(payload);
 
     return {
       rows: pageData.content ?? [],

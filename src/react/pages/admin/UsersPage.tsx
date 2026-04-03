@@ -23,11 +23,10 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import type { UserDto } from "@/types/studio/user";
 import { UsersDataSource } from "@/react/pages/admin/datasource";
 
-const dataSource = new UsersDataSource();
-
 export function UsersPage() {
   const navigate = useNavigate();
   const gridRef = useRef<PageableGridContentHandle<UserDto>>(null);
+  const dataSource = useMemo(() => new UsersDataSource(), []);
   const [searchInput, setSearchInput] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
 
