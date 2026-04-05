@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-04-06
+
+### Changed
+
+- `docs/remaining-react-migration-plan.md` now defines a parallel wave-based execution order instead of a purely sequential five-track order.
+- The remaining React migration plan now includes an umbrella issue plus child issue registration set for parallel delivery planning.
+
+### Verification
+
+- Reviewed the updated migration plan structure against `AGENTS.md`, `AI_DEVELOPMENT_POLICY.md`, and `.gitlab/issue_templates/default.md`.
+
 ## 2026-04-03
 
 ### Changed
