@@ -13,10 +13,7 @@ import type {
   ForumPermissionDecision,
   ForumResponse,
   ForumSummaryResponse,
-  ListPostsParams,
   PermissionActionMetadata,
-  PostResponse,
-  TopicResponse,
   UpdateForumSettingsRequest,
   UpsertForumMemberRequest,
 } from "@/types/studio/forums";
@@ -225,25 +222,6 @@ export const reactForumsAdminApi = {
     return apiRequest<PageResponse<ForumAuditEvent>>(
       "get",
       `${ADMIN_BASE}/${encodeURIComponent(forumSlug)}/audit`,
-      { params }
-    );
-  },
-
-  getTopic(forumSlug: string, topicId: number) {
-    return requestWithMeta<TopicResponse>({
-      method: "get",
-      url: `${ADMIN_BASE}/${encodeURIComponent(forumSlug)}/topics/${topicId}`,
-    });
-  },
-
-  listPosts(
-    forumSlug: string,
-    topicId: number,
-    params?: ListPostsParams
-  ) {
-    return apiRequest<PostResponse[]>(
-      "get",
-      `${ADMIN_BASE}/${encodeURIComponent(forumSlug)}/topics/${topicId}/posts`,
       { params }
     );
   },

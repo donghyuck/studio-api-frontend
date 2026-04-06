@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
@@ -11,11 +12,6 @@ import {
   MenuItem,
   Select,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from "@mui/material";
@@ -25,12 +21,13 @@ import {
   PersonSearchOutlined,
   RefreshOutlined,
 } from "@mui/icons-material";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { GridContent } from "@/react/components/ag-grid";
 import { useConfirm, useToast } from "@/react/feedback";
 import { UserSearchDialog } from "@/react/pages/admin/UserSearchDialog";
-import {
-  ForumRoleMatrixGuide,
-} from "@/react/pages/forums/admin/ForumRoleMatrixGuide";
+import { ForumRoleMatrixGuide } from "@/react/pages/forums/admin/ForumRoleMatrixGuide";
 import { reactForumsAdminApi } from "@/react/pages/forums/admin/api";
+import { forumAdminQueryKeys } from "@/react/pages/forums/admin/queryKeys";
 import {
   IDENTIFIER_TYPES,
   OWNERSHIP_SCOPES,
@@ -80,16 +77,30 @@ export function ForumAclPage() {
   const { forumSlug = "" } = useParams();
   const toast = useToast();
   const confirm = useConfirm();
-  const [actions, setActions] = useState<Array<{ action: PermissionAction; description: string; displayName: string }>>([]);
-  const [rules, setRules] = useState<ForumAclRuleResponse[]>([]);
+  const queryClient = useQueryClient();
   const [form, setForm] = useState<RuleFormState>(INITIAL_FORM);
   const [editingRuleId, setEditingRuleId] = useState<number | null>(null);
   const [simulation, setSimulation] = useState<ForumPermissionDecision | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [userSearchOpen, setUserSearchOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+
+  const actionsQuery = useQuery({
+    queryKey: forumAdminQueryKeys.custom("permission-actions", forumSlug),
+    queryFn: () => reactForumsAdminApi.listPermissionActions(forumSlug),
+    enabled: Boolean(forumSlug),
+  });
+
+  const rulesQuery = useQuery({
+    queryKey: forumAdminQueryKeys.custom("permission-rules", forumSlug),
+    queryFn: () => reactForumsAdminApi.listPermissionRules(forumSlug),
+    enabled: Boolean(forumSlug),
+  });
+
+  const actions = actionsQuery.data ?? [];
+  const rules = rulesQuery.data ?? [];
+  const loading = actionsQuery.isLoading || rulesQuery.isLoading;
+  const mutating = false;
 
   const canSubmit = useMemo(() => {
     if (!form.action) {
@@ -104,40 +115,40 @@ export function ForumAclPage() {
     return form.subjectName.trim().length > 0;
   }, [form]);
 
-  async function loadAcl() {
-    if (!forumSlug) {
+  useEffect(() => {
+    if (actions.length === 0) {
       return;
     }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const [loadedActions, loadedRules] = await Promise.all([
-        reactForumsAdminApi.listPermissionActions(forumSlug),
-        reactForumsAdminApi.listPermissionRules(forumSlug),
-      ]);
-      setActions(loadedActions);
-      setRules(loadedRules);
-      setForm((current) => ({
-        ...current,
-        action: current.action || loadedActions[0]?.action || "",
-      }));
-    } catch (loadError) {
-      const message = resolveAxiosError(loadError);
-      setError(message);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  }
+    setForm((current) => ({
+      ...current,
+      action: current.action || actions[0]?.action || "",
+    }));
+  }, [actions]);
 
   useEffect(() => {
-    void loadAcl();
-  }, [forumSlug]);
+    const loadError = actionsQuery.error ?? rulesQuery.error;
+    if (!loadError) {
+      return;
+    }
+    const message = resolveAxiosError(loadError);
+    setError(message);
+  }, [actionsQuery.error, rulesQuery.error]);
+
+  async function refreshAcl() {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: forumAdminQueryKeys.custom("permission-actions", forumSlug),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: forumAdminQueryKeys.custom("permission-rules", forumSlug),
+      }),
+    ]);
+  }
 
   function resetForm() {
     setEditingRuleId(null);
     setSimulation(null);
+    setError(null);
     setForm({
       ...INITIAL_FORM,
       action: actions[0]?.action || "",
@@ -166,31 +177,31 @@ export function ForumAclPage() {
     };
   }
 
+  const saveRuleMutation = useMutation({
+    mutationFn: async (payload: ForumAclRuleRequest) => {
+      if (editingRuleId) {
+        return reactForumsAdminApi.updatePermissionRule(forumSlug, editingRuleId, payload);
+      }
+      return reactForumsAdminApi.createPermissionRule(forumSlug, payload);
+    },
+    onSuccess: async () => {
+      toast.success(editingRuleId ? "ACL 룰이 수정되었습니다." : "ACL 룰이 추가되었습니다.");
+      resetForm();
+      await refreshAcl();
+    },
+    onError: (submitError) => {
+      const message = resolveAxiosError(submitError);
+      setError(message);
+      toast.error(message);
+    },
+  });
+
   async function handleSubmit() {
     if (!canSubmit) {
       return;
     }
-
-    setSaving(true);
     setError(null);
-    try {
-      const payload = buildPayload();
-      if (editingRuleId) {
-        await reactForumsAdminApi.updatePermissionRule(forumSlug, editingRuleId, payload);
-        toast.success("ACL 룰이 수정되었습니다.");
-      } else {
-        await reactForumsAdminApi.createPermissionRule(forumSlug, payload);
-        toast.success("ACL 룰이 추가되었습니다.");
-      }
-      resetForm();
-      await loadAcl();
-    } catch (submitError) {
-      const message = resolveAxiosError(submitError);
-      setError(message);
-      toast.error(message);
-    } finally {
-      setSaving(false);
-    }
+    await saveRuleMutation.mutateAsync(buildPayload());
   }
 
   function handleEdit(rule: ForumAclRuleResponse) {
@@ -222,17 +233,14 @@ export function ForumAclPage() {
       return;
     }
 
-    setSaving(true);
     try {
       await reactForumsAdminApi.deletePermissionRule(forumSlug, rule.ruleId);
       toast.success("ACL 룰이 삭제되었습니다.");
-      await loadAcl();
+      await refreshAcl();
     } catch (deleteError) {
       const message = resolveAxiosError(deleteError);
       setError(message);
       toast.error(message);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -276,6 +284,57 @@ export function ForumAclPage() {
     setUserSearchOpen(false);
   }
 
+  const columns = useMemo<ColDef<ForumAclRuleResponse>[]>(
+    () => [
+      { field: "ruleId", headerName: "ID", flex: 0.4 },
+      {
+        colId: "subject",
+        headerName: "대상",
+        flex: 1,
+        valueGetter: (params) =>
+          params.data?.subjectType === "ROLE"
+            ? `ROLE:${params.data.role ?? "-"}`
+            : params.data?.identifierType === "ID"
+              ? `USER ID:${params.data.subjectId ?? "-"}`
+              : `USER NAME:${params.data?.subjectName ?? "-"}`,
+      },
+      { field: "action", headerName: "액션", flex: 0.9 },
+      { field: "effect", headerName: "효과", flex: 0.5 },
+      { field: "ownership", headerName: "Ownership", flex: 0.7 },
+      { field: "priority", headerName: "우선순위", flex: 0.5 },
+      {
+        field: "enabled",
+        headerName: "활성",
+        flex: 0.4,
+        cellRenderer: (params: ICellRendererParams<ForumAclRuleResponse>) =>
+          params.value ? "Y" : "N",
+      },
+      { field: "description", headerName: "설명", flex: 1.1 },
+      {
+        colId: "actions",
+        headerName: "",
+        flex: 0.9,
+        minWidth: 170,
+        cellRenderer: (params: ICellRendererParams<ForumAclRuleResponse>) => (
+          <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+            <Button size="small" onClick={() => params.data && handleEdit(params.data)}>
+              편집
+            </Button>
+            <Button
+              size="small"
+              color="error"
+              startIcon={<DeleteOutlined fontSize="small" />}
+              onClick={() => params.data && void handleDelete(params.data)}
+            >
+              삭제
+            </Button>
+          </Stack>
+        ),
+      },
+    ],
+    []
+  );
+
   return (
     <>
       <Stack spacing={2}>
@@ -310,7 +369,7 @@ export function ForumAclPage() {
             <Button
               variant="text"
               startIcon={<RefreshOutlined />}
-              onClick={() => void loadAcl()}
+              onClick={() => void refreshAcl()}
             >
               새로고침
             </Button>
@@ -519,10 +578,18 @@ export function ForumAclPage() {
           />
 
           <Stack direction="row" spacing={1}>
-            <Button variant="contained" onClick={() => void handleSubmit()} disabled={saving || !canSubmit}>
+            <Button
+              variant="contained"
+              onClick={() => void handleSubmit()}
+              disabled={saveRuleMutation.isPending || !canSubmit}
+            >
               {editingRuleId ? "ACL 수정" : "ACL 추가"}
             </Button>
-            <Button variant="outlined" onClick={() => void handleSimulate()} disabled={saving || !form.action}>
+            <Button
+              variant="outlined"
+              onClick={() => void handleSimulate()}
+              disabled={saveRuleMutation.isPending || !form.action}
+            >
               시뮬레이션
             </Button>
             {editingRuleId ? (
@@ -534,62 +601,11 @@ export function ForumAclPage() {
         </Stack>
 
         <Typography variant="subtitle1">현재 ACL 룰</Typography>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>ID</TableCell>
-              <TableCell>대상</TableCell>
-              <TableCell>액션</TableCell>
-              <TableCell>효과</TableCell>
-              <TableCell>Ownership</TableCell>
-              <TableCell>우선순위</TableCell>
-              <TableCell>활성</TableCell>
-              <TableCell>설명</TableCell>
-              <TableCell align="right">작업</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rules.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} align="center">
-                  {loading ? "불러오는 중..." : "ACL 룰이 없습니다."}
-                </TableCell>
-              </TableRow>
-            ) : (
-              rules.map((rule) => (
-                <TableRow key={rule.ruleId} hover>
-                  <TableCell>{rule.ruleId}</TableCell>
-                  <TableCell>
-                    {rule.subjectType === "ROLE"
-                      ? `ROLE:${rule.role ?? "-"}`
-                      : rule.identifierType === "ID"
-                        ? `USER ID:${rule.subjectId ?? "-"}`
-                        : `USER NAME:${rule.subjectName ?? "-"}`}
-                  </TableCell>
-                  <TableCell>{rule.action}</TableCell>
-                  <TableCell>{rule.effect}</TableCell>
-                  <TableCell>{rule.ownership}</TableCell>
-                  <TableCell>{rule.priority}</TableCell>
-                  <TableCell>{rule.enabled ? "Y" : "N"}</TableCell>
-                  <TableCell>{rule.description || "-"}</TableCell>
-                  <TableCell align="right">
-                    <Button size="small" onClick={() => handleEdit(rule)}>
-                      편집
-                    </Button>
-                    <Button
-                      size="small"
-                      color="error"
-                      startIcon={<DeleteOutlined fontSize="small" />}
-                      onClick={() => void handleDelete(rule)}
-                    >
-                      삭제
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+        <GridContent<ForumAclRuleResponse>
+          columns={columns}
+          rowData={rules}
+          height={360}
+        />
       </Stack>
 
       <UserSearchDialog

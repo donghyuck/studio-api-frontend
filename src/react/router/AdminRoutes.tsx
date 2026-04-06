@@ -9,7 +9,6 @@ import { ForumAclPage } from "@/react/pages/forums/admin/ForumAclPage";
 import { ForumAuditLogPage } from "@/react/pages/forums/admin/ForumAuditLogPage";
 import { ForumListPage } from "@/react/pages/forums/admin/ForumListPage";
 import { ForumSettingsPage } from "@/react/pages/forums/admin/ForumSettingsPage";
-import { TopicDetailsPage } from "@/react/pages/forums/admin/TopicDetailsPage";
 
 export function AdminRoutes() {
   return (
@@ -32,10 +31,6 @@ export function AdminRoutes() {
         element={<ForumSettingsPage />}
       />
       <Route path="forums/:forumSlug/acl" element={<ForumAclPage />} />
-      <Route
-        path="forums/:forumSlug/topics/:topicId"
-        element={<TopicDetailsPage />}
-      />
       <Route path="forums/:forumSlug/audit" element={<ForumAuditLogPage />} />
     </Routes>
   );
