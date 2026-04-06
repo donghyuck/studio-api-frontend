@@ -10,6 +10,97 @@
   border-radius: 8px;
 }
 
+.react-grid-host .ag-header,
+.react-grid-host .ag-header-row {
+  min-height: 44px;
+}
+
+.react-grid-host .ag-header-cell,
+.react-grid-host .ag-cell {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.react-grid-host .ag-header-cell {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.react-grid-host .ag-cell {
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1.25;
+}
+
+.react-grid-host .ag-cell-wrapper,
+.react-grid-host .ag-cell-value {
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.react-grid-host .ag-cell-value > .MuiButton-root {
+  min-height: 30px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.react-grid-host .ag-cell-value > .MuiBox-root {
+  min-height: 30px;
+}
+
+.react-grid-host .ag-paging-panel {
+  min-height: 44px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid var(--ag-border-color);
+}
+
+.react-grid-host .ag-paging-row-summary-panel,
+.react-grid-host .ag-paging-page-summary-panel,
+.react-grid-host .ag-paging-page-size {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+}
+
+.react-grid-host .ag-paging-button,
+.react-grid-host .ag-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+}
+
+.react-grid-host .ag-picker-field-wrapper {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+}
+
+.react-grid-host .ag-select .ag-picker-field-display {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1.2;
+}
+
+.react-grid-host .ag-paging-description,
+.react-grid-host .ag-paging-number,
+.react-grid-host .ag-paging-page-summary-panel > span,
+.react-grid-host .ag-paging-row-summary-panel > span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.react-grid-host .ag-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .react-grid-loading-overlay {
   display: flex;
   align-items: center;

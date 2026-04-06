@@ -9,6 +9,8 @@ const textComparator = (left?: unknown, right?: unknown) =>
 export const defaultGridOptions: GridOptions = {
   localeText: AG_GRID_LOCALE_KR,
   loadingOverlayComponent: CustomLoadingOverlay,
+  headerHeight: 44,
+  rowHeight: 44,
   paginationPageSizeSelector: [15, 30, 50, 100],
   defaultColDef: {
     flex: 1,
@@ -17,10 +19,6 @@ export const defaultGridOptions: GridOptions = {
     resizable: true,
     sortable: true,
     filter: true,
-    cellStyle: {
-      display: "flex",
-      alignItems: "center",
-    },
   },
   columnTypes: {
     text: {
