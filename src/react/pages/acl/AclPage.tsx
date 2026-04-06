@@ -1,24 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
   Breadcrumbs,
   Button,
   Chip,
-  CircularProgress,
   Divider,
   IconButton,
   Paper,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Typography,
 } from "@mui/material";
 import { AddOutlined, DeleteOutlined, RefreshOutlined } from "@mui/icons-material";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ColDef } from "ag-grid-community";
+import { PageableGridContent } from "@/react/components/ag-grid";
+import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { useConfirm, useToast } from "@/react/feedback";
 import type {
   AclClassDto,
@@ -27,7 +24,14 @@ import type {
   AclSidDto,
 } from "@/types/studio/acl";
 import type { AclActionMaskDto } from "@/types/studio/ai";
+import { aclQueryKeys } from "./queryKeys";
 import { reactAclApi } from "./api";
+import {
+  AclClassesDataSource,
+  AclEntriesDataSource,
+  AclObjectsDataSource,
+  AclSidsDataSource,
+} from "./datasource";
 import { CreateClassDialog } from "./CreateClassDialog";
 import { CreateSidDialog } from "./CreateSidDialog";
 import { CreateObjectDialog } from "./CreateObjectDialog";
@@ -60,23 +64,44 @@ function SectionHeader({
 export function AclPage() {
   const toast = useToast();
   const confirm = useConfirm();
-
-  const [classes, setClasses] = useState<AclClassDto[]>([]);
-  const [sids, setSids] = useState<AclSidDto[]>([]);
-  const [objects, setObjects] = useState<AclObjectIdentityDto[]>([]);
-  const [entries, setEntries] = useState<AclEntryDto[]>([]);
-  const [actions, setActions] = useState<AclActionMaskDto[]>([]);
-
-  const [loadingClasses, setLoadingClasses] = useState(false);
-  const [loadingSids, setLoadingSids] = useState(false);
-  const [loadingObjects, setLoadingObjects] = useState(false);
-  const [loadingEntries, setLoadingEntries] = useState(false);
+  const queryClient = useQueryClient();
+  const classesGridRef = useRef<PageableGridContentHandle<AclClassDto>>(null);
+  const sidsGridRef = useRef<PageableGridContentHandle<AclSidDto>>(null);
+  const objectsGridRef = useRef<PageableGridContentHandle<AclObjectIdentityDto>>(null);
+  const entriesGridRef = useRef<PageableGridContentHandle<AclEntryDto>>(null);
   const [pageError, setPageError] = useState<string | null>(null);
 
   const [createClassOpen, setCreateClassOpen] = useState(false);
   const [createSidOpen, setCreateSidOpen] = useState(false);
   const [createObjectOpen, setCreateObjectOpen] = useState(false);
   const [createEntryOpen, setCreateEntryOpen] = useState(false);
+
+  const classesDataSource = useMemo(() => new AclClassesDataSource(), []);
+  const sidsDataSource = useMemo(() => new AclSidsDataSource(), []);
+  const objectsDataSource = useMemo(() => new AclObjectsDataSource(), []);
+  const entriesDataSource = useMemo(() => new AclEntriesDataSource(), []);
+
+  const classesQuery = useQuery({
+    queryKey: aclQueryKeys.custom("classes"),
+    queryFn: reactAclApi.listClasses,
+  });
+  const sidsQuery = useQuery({
+    queryKey: aclQueryKeys.custom("sids"),
+    queryFn: reactAclApi.listSids,
+  });
+  const objectsQuery = useQuery({
+    queryKey: aclQueryKeys.custom("objects"),
+    queryFn: reactAclApi.listObjects,
+  });
+  const actionsQuery = useQuery({
+    queryKey: aclQueryKeys.custom("actions"),
+    queryFn: reactAclApi.listActions,
+  });
+
+  const classes = classesQuery.data ?? [];
+  const sids = sidsQuery.data ?? [];
+  const objects = objectsQuery.data ?? [];
+  const actions = actionsQuery.data ?? [];
 
   const objectById = useMemo(
     () => Object.fromEntries(objects.map((objectIdentity) => [objectIdentity.id, objectIdentity])),
@@ -91,73 +116,210 @@ export function AclPage() {
     [sids]
   );
 
-  const loadClasses = useCallback(async () => {
-    setLoadingClasses(true);
+  const refreshLookups = useCallback(async () => {
     try {
-      setClasses(await reactAclApi.listClasses());
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: aclQueryKeys.custom("classes") }),
+        queryClient.invalidateQueries({ queryKey: aclQueryKeys.custom("sids") }),
+        queryClient.invalidateQueries({ queryKey: aclQueryKeys.custom("objects") }),
+        queryClient.invalidateQueries({ queryKey: aclQueryKeys.custom("actions") }),
+      ]);
       setPageError(null);
     } catch {
-      setPageError("ACL 클래스를 불러오지 못했습니다.");
-      toast.error("ACL 클래스를 불러오지 못했습니다.");
-    } finally {
-      setLoadingClasses(false);
+      setPageError("ACL lookup 데이터를 새로고침하지 못했습니다.");
+      toast.error("ACL lookup 데이터를 새로고침하지 못했습니다.");
     }
-  }, [toast]);
+  }, [queryClient, toast]);
 
-  const loadSids = useCallback(async () => {
-    setLoadingSids(true);
-    try {
-      setSids(await reactAclApi.listSids());
-      setPageError(null);
-    } catch {
-      setPageError("ACL SID를 불러오지 못했습니다.");
-      toast.error("ACL SID를 불러오지 못했습니다.");
-    } finally {
-      setLoadingSids(false);
-    }
-  }, [toast]);
+  const refreshAllGrids = useCallback(async () => {
+    classesGridRef.current?.refresh();
+    sidsGridRef.current?.refresh();
+    objectsGridRef.current?.refresh();
+    entriesGridRef.current?.refresh();
+    await refreshLookups();
+  }, [refreshLookups]);
 
-  const loadObjects = useCallback(async () => {
-    setLoadingObjects(true);
-    try {
-      setObjects(await reactAclApi.listObjects());
-      setPageError(null);
-    } catch {
-      setPageError("ACL 오브젝트를 불러오지 못했습니다.");
-      toast.error("ACL 오브젝트를 불러오지 못했습니다.");
-    } finally {
-      setLoadingObjects(false);
-    }
-  }, [toast]);
+  const classesColumnDefs = useMemo<ColDef<AclClassDto>[]>(
+    () => [
+      { field: "id", headerName: "ID", sortable: true, flex: 0.5, filter: false },
+      { field: "className", headerName: "클래스명", sortable: true, flex: 1.5, filter: false },
+      { field: "classIdType", headerName: "ID 타입", sortable: true, flex: 1, filter: false },
+      {
+        colId: "actions",
+        headerName: "",
+        sortable: false,
+        filter: false,
+        flex: 0.5,
+        cellRenderer: (params: { data?: AclClassDto }) => (
+          <IconButton color="error" size="small" onClick={() => params.data && void handleDeleteClass(params.data.id)}>
+            <DeleteOutlined fontSize="small" />
+          </IconButton>
+        ),
+      },
+    ],
+    []
+  );
 
-  const loadEntries = useCallback(async () => {
-    setLoadingEntries(true);
-    try {
-      setEntries(await reactAclApi.listEntries());
-      setPageError(null);
-    } catch {
-      setPageError("ACL 엔트리를 불러오지 못했습니다.");
-      toast.error("ACL 엔트리를 불러오지 못했습니다.");
-    } finally {
-      setLoadingEntries(false);
-    }
-  }, [toast]);
+  const sidsColumnDefs = useMemo<ColDef<AclSidDto>[]>(
+    () => [
+      { field: "id", headerName: "ID", sortable: true, flex: 0.5, filter: false },
+      { field: "sid", headerName: "SID", sortable: true, flex: 1.5, filter: false },
+      {
+        colId: "principal",
+        headerName: "유형",
+        sortable: true,
+        flex: 1,
+        filter: false,
+        cellRenderer: (params: { data?: AclSidDto }) => (
+          <Chip size="small" label={params.data?.principal ? "Principal" : "Authority"} />
+        ),
+      },
+      {
+        colId: "actions",
+        headerName: "",
+        sortable: false,
+        filter: false,
+        flex: 0.5,
+        cellRenderer: (params: { data?: AclSidDto }) => (
+          <IconButton color="error" size="small" onClick={() => params.data && void handleDeleteSid(params.data.id)}>
+            <DeleteOutlined fontSize="small" />
+          </IconButton>
+        ),
+      },
+    ],
+    []
+  );
 
-  const loadActions = useCallback(async () => {
-    try {
-      setActions(await reactAclApi.listActions());
-    } catch {
-      toast.error("ACL 액션 정의를 불러오지 못했습니다.");
-    }
-  }, [toast]);
+  const objectsColumnDefs = useMemo<ColDef<AclObjectIdentityDto>[]>(
+    () => [
+      { field: "id", headerName: "ID", sortable: true, flex: 0.5, filter: false },
+      { field: "className", headerName: "클래스", sortable: true, flex: 1, filter: false },
+      {
+        colId: "objectIdIdentity",
+        headerName: "오브젝트 ID",
+        sortable: true,
+        flex: 1,
+        filter: false,
+        valueGetter: (params) =>
+          String(params.data?.objectIdIdentity) === "__root__"
+            ? "__root__"
+            : String(params.data?.objectIdIdentity ?? ""),
+      },
+      {
+        colId: "ownerSidId",
+        headerName: "Owner SID",
+        sortable: false,
+        flex: 1,
+        filter: false,
+        valueGetter: (params) => {
+          const ownerSidId = params.data?.ownerSidId;
+          return ownerSidId ? sidById[ownerSidId]?.sid ?? ownerSidId : "-";
+        },
+      },
+      {
+        colId: "entriesInheriting",
+        headerName: "상속",
+        sortable: true,
+        flex: 0.7,
+        filter: false,
+        cellRenderer: (params: { data?: AclObjectIdentityDto }) => (
+          <Chip size="small" label={params.data?.entriesInheriting ? "상속" : "비상속"} />
+        ),
+      },
+      {
+        colId: "actions",
+        headerName: "",
+        sortable: false,
+        filter: false,
+        flex: 0.5,
+        cellRenderer: (params: { data?: AclObjectIdentityDto }) => (
+          <IconButton color="error" size="small" onClick={() => params.data && void handleDeleteObject(params.data.id)}>
+            <DeleteOutlined fontSize="small" />
+          </IconButton>
+        ),
+      },
+    ],
+    [sidById]
+  );
 
-  useEffect(() => {
-    void loadClasses();
-    void loadSids();
-    void loadObjects();
-    void loadEntries();
-    void loadActions();
-  }, [loadActions, loadClasses, loadEntries, loadObjects, loadSids]);
+  const entriesColumnDefs = useMemo<ColDef<AclEntryDto>[]>(
+    () => [
+      { field: "id", headerName: "ID", sortable: true, flex: 0.5, filter: false },
+      {
+        colId: "object",
+        headerName: "오브젝트",
+        sortable: false,
+        flex: 1.5,
+        filter: false,
+        valueGetter: (params) => {
+          const objectIdentity = objectById[params.data?.aclObjectIdentity ?? -1];
+          return objectIdentity
+            ? `${objectIdentity.className}#${String(objectIdentity.objectIdIdentity)}`
+            : params.data?.aclObjectIdentity;
+        },
+      },
+      {
+        colId: "sid",
+        headerName: "SID",
+        sortable: false,
+        flex: 1,
+        filter: false,
+        valueGetter: (params) => sidById[params.data?.sid ?? -1]?.sid ?? params.data?.sid,
+      },
+      {
+        colId: "mask",
+        headerName: "액션",
+        sortable: false,
+        flex: 1,
+        filter: false,
+        valueGetter: (params) => actionByMask[params.data?.mask ?? -1] ?? params.data?.mask,
+      },
+      { field: "aceOrder", headerName: "순서", sortable: true, flex: 0.6, filter: false },
+      {
+        colId: "granting",
+        headerName: "허용 여부",
+        sortable: true,
+        flex: 0.8,
+        filter: false,
+        cellRenderer: (params: { data?: AclEntryDto }) => (
+          <Chip
+            size="small"
+            color={params.data?.granting ? "success" : "error"}
+            label={params.data?.granting ? "허용" : "거부"}
+          />
+        ),
+      },
+      {
+        colId: "audit",
+        headerName: "감사",
+        sortable: false,
+        flex: 1,
+        filter: false,
+        cellRenderer: (params: { data?: AclEntryDto }) => (
+          <Stack direction="row" spacing={0.5}>
+            {params.data?.auditSuccess ? <Chip size="small" label="성공" /> : null}
+            {params.data?.auditFailure ? <Chip size="small" label="실패" /> : null}
+            {!params.data?.auditSuccess && !params.data?.auditFailure ? (
+              <Typography color="text.secondary">-</Typography>
+            ) : null}
+          </Stack>
+        ),
+      },
+      {
+        colId: "actions",
+        headerName: "",
+        sortable: false,
+        filter: false,
+        flex: 0.5,
+        cellRenderer: (params: { data?: AclEntryDto }) => (
+          <IconButton color="error" size="small" onClick={() => params.data && void handleDeleteEntry(params.data.id)}>
+            <DeleteOutlined fontSize="small" />
+          </IconButton>
+        ),
+      },
+    ],
+    [actionByMask, objectById, sidById]
+  );
 
   async function handleDeleteClass(id: number) {
     const ok = await confirm({ title: "ACL 클래스 삭제", message: "이 클래스를 삭제하시겠습니까?" });
@@ -166,7 +328,8 @@ export function AclPage() {
     try {
       await reactAclApi.deleteClass(id);
       toast.success("ACL 클래스가 삭제되었습니다.");
-      await loadClasses();
+      classesGridRef.current?.refresh();
+      await refreshLookups();
     } catch {
       toast.error("ACL 클래스 삭제에 실패했습니다.");
     }
@@ -179,7 +342,10 @@ export function AclPage() {
     try {
       await reactAclApi.deleteSid(id);
       toast.success("ACL SID가 삭제되었습니다.");
-      await loadSids();
+      sidsGridRef.current?.refresh();
+      objectsGridRef.current?.refresh();
+      entriesGridRef.current?.refresh();
+      await refreshLookups();
     } catch {
       toast.error("ACL SID 삭제에 실패했습니다.");
     }
@@ -195,7 +361,9 @@ export function AclPage() {
     try {
       await reactAclApi.deleteObject(id);
       toast.success("ACL 오브젝트가 삭제되었습니다.");
-      await loadObjects();
+      objectsGridRef.current?.refresh();
+      entriesGridRef.current?.refresh();
+      await refreshLookups();
     } catch {
       toast.error("ACL 오브젝트 삭제에 실패했습니다.");
     }
@@ -208,7 +376,7 @@ export function AclPage() {
     try {
       await reactAclApi.deleteEntry(id);
       toast.success("ACL 엔트리가 삭제되었습니다.");
-      await loadEntries();
+      entriesGridRef.current?.refresh();
     } catch {
       toast.error("ACL 엔트리 삭제에 실패했습니다.");
     }
@@ -236,90 +404,36 @@ export function AclPage() {
           <SectionHeader
             title="ACL 클래스"
             onAdd={() => setCreateClassOpen(true)}
-            onRefresh={() => void loadClasses()}
+            onRefresh={() => {
+              classesGridRef.current?.refresh();
+              void refreshLookups();
+            }}
           />
-          {loadingClasses ? (
-            <CircularProgress size={24} />
-          ) : (
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>클래스명</TableCell>
-                    <TableCell>ID 타입</TableCell>
-                    <TableCell align="right">동작</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {classes.map((aclClass) => (
-                    <TableRow key={aclClass.id}>
-                      <TableCell>{aclClass.id}</TableCell>
-                      <TableCell>{aclClass.className}</TableCell>
-                      <TableCell>{aclClass.classIdType ?? "-"}</TableCell>
-                      <TableCell align="right">
-                        <IconButton color="error" size="small" onClick={() => void handleDeleteClass(aclClass.id)}>
-                          <DeleteOutlined fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {classes.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4}>
-                        <Typography color="text.secondary">등록된 ACL 클래스가 없습니다.</Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <PageableGridContent<AclClassDto>
+            ref={classesGridRef}
+            datasource={classesDataSource}
+            columns={classesColumnDefs}
+            height={260}
+          />
         </Stack>
       </Paper>
 
       <Paper variant="outlined" sx={{ p: 2 }}>
         <Stack spacing={2}>
-          <SectionHeader title="ACL SID" onAdd={() => setCreateSidOpen(true)} onRefresh={() => void loadSids()} />
-          {loadingSids ? (
-            <CircularProgress size={24} />
-          ) : (
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>SID</TableCell>
-                    <TableCell>유형</TableCell>
-                    <TableCell align="right">동작</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {sids.map((sid) => (
-                    <TableRow key={sid.id}>
-                      <TableCell>{sid.id}</TableCell>
-                      <TableCell>{sid.sid}</TableCell>
-                      <TableCell>
-                        <Chip size="small" label={sid.principal ? "Principal" : "Authority"} />
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton color="error" size="small" onClick={() => void handleDeleteSid(sid.id)}>
-                          <DeleteOutlined fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {sids.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={4}>
-                        <Typography color="text.secondary">등록된 SID가 없습니다.</Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <SectionHeader
+            title="ACL SID"
+            onAdd={() => setCreateSidOpen(true)}
+            onRefresh={() => {
+              sidsGridRef.current?.refresh();
+              void refreshLookups();
+            }}
+          />
+          <PageableGridContent<AclSidDto>
+            ref={sidsGridRef}
+            datasource={sidsDataSource}
+            columns={sidsColumnDefs}
+            height={260}
+          />
         </Stack>
       </Paper>
 
@@ -328,55 +442,17 @@ export function AclPage() {
           <SectionHeader
             title="오브젝트 아이덴티티"
             onAdd={() => setCreateObjectOpen(true)}
-            onRefresh={() => void loadObjects()}
+            onRefresh={() => {
+              objectsGridRef.current?.refresh();
+              void refreshLookups();
+            }}
           />
-          {loadingObjects ? (
-            <CircularProgress size={24} />
-          ) : (
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>클래스</TableCell>
-                    <TableCell>오브젝트 ID</TableCell>
-                    <TableCell>Owner SID</TableCell>
-                    <TableCell>상속</TableCell>
-                    <TableCell align="right">동작</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {objects.map((objectIdentity) => (
-                    <TableRow key={objectIdentity.id}>
-                      <TableCell>{objectIdentity.id}</TableCell>
-                      <TableCell>{objectIdentity.className}</TableCell>
-                      <TableCell>
-                        {String(objectIdentity.objectIdIdentity) === "__root__"
-                          ? "__root__"
-                          : String(objectIdentity.objectIdIdentity)}
-                      </TableCell>
-                      <TableCell>{objectIdentity.ownerSidId ? sidById[objectIdentity.ownerSidId]?.sid ?? objectIdentity.ownerSidId : "-"}</TableCell>
-                      <TableCell>
-                        <Chip size="small" label={objectIdentity.entriesInheriting ? "상속" : "비상속"} />
-                      </TableCell>
-                      <TableCell align="right">
-                        <IconButton color="error" size="small" onClick={() => void handleDeleteObject(objectIdentity.id)}>
-                          <DeleteOutlined fontSize="small" />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {objects.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6}>
-                        <Typography color="text.secondary">등록된 오브젝트 아이덴티티가 없습니다.</Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <PageableGridContent<AclObjectIdentityDto>
+            ref={objectsGridRef}
+            datasource={objectsDataSource}
+            columns={objectsColumnDefs}
+            height={280}
+          />
         </Stack>
       </Paper>
 
@@ -385,77 +461,14 @@ export function AclPage() {
           <SectionHeader
             title="ACL 엔트리"
             onAdd={() => setCreateEntryOpen(true)}
-            onRefresh={() => void loadEntries()}
+            onRefresh={() => entriesGridRef.current?.refresh()}
           />
-          {loadingEntries ? (
-            <CircularProgress size={24} />
-          ) : (
-            <TableContainer>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>오브젝트</TableCell>
-                    <TableCell>SID</TableCell>
-                    <TableCell>액션</TableCell>
-                    <TableCell>순서</TableCell>
-                    <TableCell>허용 여부</TableCell>
-                    <TableCell>감사</TableCell>
-                    <TableCell align="right">동작</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {entries.map((entry) => {
-                    const objectIdentity = objectById[entry.aclObjectIdentity];
-                    const sid = sidById[entry.sid];
-                    const action = actionByMask[entry.mask] ?? entry.mask;
-
-                    return (
-                      <TableRow key={entry.id}>
-                        <TableCell>{entry.id}</TableCell>
-                        <TableCell>
-                          {objectIdentity
-                            ? `${objectIdentity.className}#${String(objectIdentity.objectIdIdentity)}`
-                            : entry.aclObjectIdentity}
-                        </TableCell>
-                        <TableCell>{sid?.sid ?? entry.sid}</TableCell>
-                        <TableCell>{String(action)}</TableCell>
-                        <TableCell>{entry.aceOrder}</TableCell>
-                        <TableCell>
-                          <Chip
-                            size="small"
-                            color={entry.granting ? "success" : "error"}
-                            label={entry.granting ? "허용" : "거부"}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Stack direction="row" spacing={0.5}>
-                            {entry.auditSuccess ? <Chip size="small" label="성공" /> : null}
-                            {entry.auditFailure ? <Chip size="small" label="실패" /> : null}
-                            {!entry.auditSuccess && !entry.auditFailure ? (
-                              <Typography color="text.secondary">-</Typography>
-                            ) : null}
-                          </Stack>
-                        </TableCell>
-                        <TableCell align="right">
-                          <IconButton color="error" size="small" onClick={() => void handleDeleteEntry(entry.id)}>
-                            <DeleteOutlined fontSize="small" />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {entries.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8}>
-                        <Typography color="text.secondary">등록된 ACL 엔트리가 없습니다.</Typography>
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+          <PageableGridContent<AclEntryDto>
+            ref={entriesGridRef}
+            datasource={entriesDataSource}
+            columns={entriesColumnDefs}
+            height={320}
+          />
         </Stack>
       </Paper>
 
@@ -464,19 +477,19 @@ export function AclPage() {
       <CreateClassDialog
         open={createClassOpen}
         onClose={() => setCreateClassOpen(false)}
-        onCreated={() => void loadClasses()}
+        onCreated={() => void refreshAllGrids()}
       />
       <CreateSidDialog
         open={createSidOpen}
         onClose={() => setCreateSidOpen(false)}
-        onCreated={() => void loadSids()}
+        onCreated={() => void refreshAllGrids()}
       />
       <CreateObjectDialog
         open={createObjectOpen}
         onClose={() => setCreateObjectOpen(false)}
         classes={classes}
         sids={sids}
-        onCreated={() => void loadObjects()}
+        onCreated={() => void refreshAllGrids()}
       />
       <CreateEntryDialog
         open={createEntryOpen}
@@ -485,7 +498,9 @@ export function AclPage() {
         sids={sids}
         objects={objects}
         actions={actions}
-        onCreated={() => void loadEntries()}
+        onCreated={() => {
+          entriesGridRef.current?.refresh();
+        }}
       />
     </Stack>
   );
