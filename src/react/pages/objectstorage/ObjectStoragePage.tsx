@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Alert, Box, Breadcrumbs, Button, Chip, Stack, Typography } from "@mui/material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
@@ -8,12 +8,17 @@ import { objectStorageQueryKeys } from "@/react/pages/objectstorage/queryKeys";
 import { reactObjectStorageApi } from "@/react/pages/objectstorage/api";
 import { ObjectDialog } from "@/react/pages/objectstorage/ObjectDialog";
 import type { BucketDto, ObjectListItemDto } from "@/types/studio/storage";
+import { resolveAxiosError } from "@/utils/helpers";
 
 export function ObjectStoragePage() {
   const { providerId = "" } = useParams();
   const [bucket, setBucket] = useState<BucketDto | null>(null);
   const [prefix, setPrefix] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [rows, setRows] = useState<ObjectListItemDto[]>([]);
+  const [nextToken, setNextToken] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const bucketsQuery = useQuery({
     queryKey: objectStorageQueryKeys.custom("buckets", providerId),
@@ -28,22 +33,33 @@ export function ObjectStoragePage() {
         providerId,
         bucket: bucket?.bucket ?? "",
         prefix: prefix || undefined,
-      }),
+    }),
     enabled: Boolean(providerId) && Boolean(bucket?.bucket),
   });
 
-  const rows = useMemo(
-    () =>
-      objectsQuery.data
-        ? reactObjectStorageApi.toRows(objectsQuery.data, true).filter((item) => {
-            if (!prefix) return true;
-            const slash = prefix.endsWith("/") ? prefix : `${prefix}/`;
-            const noSlash = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
-            return item.key !== slash && item.key !== noSlash;
-          })
-        : [],
-    [objectsQuery.data, prefix]
-  );
+  useEffect(() => {
+    if (!objectsQuery.data) {
+      setRows([]);
+      setNextToken(null);
+      setHasMore(false);
+      return;
+    }
+
+    const filteredRows = reactObjectStorageApi
+      .toRows(objectsQuery.data, true)
+      .filter((item) => {
+        if (!prefix) return true;
+        const slash = prefix.endsWith("/") ? prefix : `${prefix}/`;
+        const noSlash = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
+        return item.key !== slash && item.key !== noSlash;
+      });
+
+    setRows(filteredRows);
+    setNextToken(objectsQuery.data.nextToken ?? null);
+    setHasMore(
+      reactObjectStorageApi.hasMore(objectsQuery.data.truncated, objectsQuery.data.nextToken)
+    );
+  }, [objectsQuery.data, prefix]);
 
   const bucketColumns = useMemo<ColDef<BucketDto>[]>(
     () => [
@@ -125,6 +141,48 @@ export function ObjectStoragePage() {
     rootDisabled: false,
   });
 
+  async function handleLoadMore() {
+    if (!bucket || !nextToken || loadingMore) {
+      return;
+    }
+
+    setLoadingMore(true);
+    try {
+      const response = await reactObjectStorageApi.fetchObjects({
+        providerId,
+        bucket: bucket.bucket,
+        prefix: prefix || undefined,
+        token: nextToken,
+      });
+
+      const appendedRows = reactObjectStorageApi.toRows(response, true).filter((item) => {
+        if (!prefix) return true;
+        const slash = prefix.endsWith("/") ? prefix : `${prefix}/`;
+        const noSlash = prefix.endsWith("/") ? prefix.slice(0, -1) : prefix;
+        return item.key !== slash && item.key !== noSlash;
+      });
+
+      setRows((current) => {
+        const seen = new Set(current.map((item) => item.key));
+        const merged = [...current];
+        for (const item of appendedRows) {
+          if (!seen.has(item.key)) {
+            merged.push(item);
+            seen.add(item.key);
+          }
+        }
+        return merged;
+      });
+      setNextToken(response.nextToken ?? null);
+      setHasMore(reactObjectStorageApi.hasMore(response.truncated, response.nextToken));
+    } catch (error) {
+      console.error(error);
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
   return (
     <>
       <Stack spacing={2}>
@@ -151,11 +209,10 @@ export function ObjectStoragePage() {
                   />
                 ))}
               </Stack>
-              {reactObjectStorageApi.hasMore(objectsQuery.data?.truncated, objectsQuery.data?.nextToken) ? (
+              {hasMore ? (
                 <Button
-                  onClick={() => {
-                    void objectsQuery.refetch();
-                  }}
+                  onClick={() => void handleLoadMore()}
+                  disabled={loadingMore}
                 >
                   더 불러오기
                 </Button>
