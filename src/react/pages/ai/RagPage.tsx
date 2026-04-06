@@ -14,7 +14,12 @@ import {
 import type { ColDef } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import { reactAiApi } from "@/react/pages/ai/api";
-import type { AiInfoResponse, ProviderInfo, VectorSearchResultDto } from "@/types/studio/ai";
+import type {
+  AiInfoResponse,
+  ChatMessageDto,
+  ProviderInfo,
+  VectorSearchResultDto,
+} from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 
 export function RagPage() {
@@ -26,6 +31,8 @@ export function RagPage() {
   const [expandedQuery, setExpandedQuery] = useState("");
   const [expandedKeywords, setExpandedKeywords] = useState<string[]>([]);
   const [rows, setRows] = useState<VectorSearchResultDto[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessageDto[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const providers = useMemo<ProviderInfo[]>(() => aiInfo?.providers ?? [], [aiInfo]);
@@ -76,6 +83,44 @@ export function RagPage() {
     }
   }
 
+  async function handleRagChat() {
+    const trimmed = chatInput.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const nextMessages: ChatMessageDto[] = [
+      ...chatMessages,
+      { role: "user", content: trimmed },
+    ];
+
+    setChatMessages(nextMessages);
+    setChatInput("");
+    setError(null);
+
+    try {
+      const response = await reactAiApi.sendRagChat({
+        chat: {
+          provider: provider || undefined,
+          model: model || undefined,
+          messages: nextMessages,
+        },
+        ragQuery: expandedQuery.trim() || query.trim() || trimmed,
+        ragTopK: Number(topK) || 3,
+      });
+
+      const assistant = [...response.messages]
+        .reverse()
+        .find((message) => message.role === "assistant");
+
+      if (assistant) {
+        setChatMessages((current) => [...current, assistant]);
+      }
+    } catch (chatError) {
+      setError(resolveAxiosError(chatError));
+    }
+  }
+
   return (
     <Stack spacing={2}>
       <Breadcrumbs separator="›">
@@ -119,6 +164,41 @@ export function RagPage() {
           확장 쿼리로 검색
         </Button>
       </Stack>
+      <Card variant="outlined">
+        <CardContent>
+          <Stack spacing={2}>
+            <Typography variant="subtitle2">RAG Chat</Typography>
+            <Stack spacing={1}>
+              {chatMessages.length === 0 ? (
+                <Typography color="text.secondary">RAG 대화를 시작하세요.</Typography>
+              ) : (
+                chatMessages.map((message, index) => (
+                  <TextField
+                    key={`${message.role}-${index}`}
+                    label={message.role}
+                    value={message.content}
+                    InputProps={{ readOnly: true }}
+                    multiline
+                    minRows={2}
+                  />
+                ))
+              )}
+            </Stack>
+            <TextField
+              label="RAG 질문"
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              multiline
+              minRows={3}
+            />
+            <Stack direction="row" justifyContent="flex-end">
+              <Button variant="contained" onClick={() => void handleRagChat()} disabled={!chatInput.trim()}>
+                RAG 요청
+              </Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
       {expandedKeywords.length > 0 ? (
         <Card variant="outlined">
           <CardContent>

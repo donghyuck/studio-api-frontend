@@ -12,6 +12,7 @@ import {
   Typography,
 } from "@mui/material";
 import { DeleteOutlined, RefreshOutlined, SearchOutlined } from "@mui/icons-material";
+import DOMPurify from "dompurify";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
@@ -47,7 +48,9 @@ function MailDetailDialog({
             </Typography>
             <Box
               sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, p: 2 }}
-              dangerouslySetInnerHTML={{ __html: message.body || "<p>메일 본문이 없습니다.</p>" }}
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(message.body || "<p>메일 본문이 없습니다.</p>"),
+              }}
             />
           </Stack>
         ) : null}
