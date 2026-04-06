@@ -31,6 +31,7 @@
 
 5. 이슈 템플릿 기록 원칙
 - 이슈 작성 시 `.gitlab/issue_templates/default.md`를 사용한다.
+- `Type` 항목은 `Feature/Bug/Refactor/Docs/Chore` 중 정확히 하나만 체크한다.
 - `Size` 항목은 `Small/Medium/Large` 중 정확히 하나만 체크한다.
 - `Size` 기준은 다음과 같다.
   - `Small (1)`: 단순 수정 / 단일 파일
@@ -38,6 +39,16 @@
   - `Large (3)`: 구조 변경 / 복수 모듈
 - `AI-Assisted` 항목은 `Yes/No` 중 정확히 하나만 체크한다.
 - AI를 사용한 작업은 반드시 `Yes`를 체크한다.
+
+6. Subagent 위임 원칙
+- Subagent는 독립 검토가 가능한 명확한 하위 작업에만 사용한다.
+- 위임 전 작업 경계(파일/모듈/책임)를 정의한다.
+- Main author는 subagent 산출물을 통합하고 최종 책임을 가진다.
+- Main author는 merge 전 subagent 결과를 직접 검증한다.
+- Subagent 사용 시 이슈/PR(MR)에 위임 범위와 검증 결과를 기록한다.
+- 역할별 agent를 사용하는 경우에도 공통 `SKILL.md`를 먼저 적용하고, 이후 `.codex/agents/*.toml`과 `docs/agents/*.md`를 적용한다.
+- `.codex/config.toml`은 선택적 메타데이터이며 정책 강제의 기준이 아니다.
+- Subagent를 명시하지 않으면 기존과 동일하게 main agent 기준으로 작업한다.
 
 ## AI 커밋 메시지 규칙
 1. AI 보조 커밋 제목은 반드시 `[ai-assisted]`로 시작한다.
@@ -86,6 +97,7 @@ AI로 생성된 변경은 다음 중 하나 이상의 검증을 포함해야 한
 - smoke test 수행
 
 검증 명령은 커밋 또는 PR 본문에 기록한다.
+Subagent를 사용한 경우, 통합 이후 main author의 검증 항목을 포함해 기록한다.
 
 ### 3. PR/MR 검사
 Pull Request(Merge Request) 단계에서 다음을 확인한다.
@@ -102,6 +114,9 @@ AI 생성 코드에 대해 다음 검사를 권장한다.
 - secret scanning
 
 ## 문서 관계(중복 방지)
+- 정책 버전 기준: `POLICY_VERSION.md`
 - 개발 참여 절차: `CONTRIBUTING.md`
 - AI 상세 규칙: `AI_DEVELOPMENT_POLICY.md` (본 문서)
 - AI 커밋 템플릿: `.gitmessage-ai-assisted.txt`
+- VSCode 워크스페이스 Java snippet 기준: `.vscode/java.code-snippets` (`addCopyright`, `addDeveloper`)
+- 개인 VSCode 적용 템플릿/절차: `docs/dev/vscode-snippets-guide.md`

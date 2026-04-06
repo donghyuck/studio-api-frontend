@@ -1,6 +1,7 @@
 # Issue
 
 ## Type
+아래 항목은 **정확히 하나만** 체크합니다.
 - [ ] Feature
 - [ ] Bug
 - [ ] Refactor
@@ -33,7 +34,7 @@
 - [ ] manual check
 - [ ] analysis only (no code change)
 
-## AI-
+## AI-Assisted
 아래 항목은 **정확히 하나만** 체크합니다.
 - [ ] Yes (AI 사용 작업)
 - [ ] No (AI 미사용 작업)
@@ -47,6 +48,13 @@
 - [ ] Refactoring suggestion
 - [ ] Test case / validation checklist
 - [ ] Documentation draft
+- [ ] Subagent delegation
+
+## Subagent Usage
+subagent를 사용한 경우에만 작성합니다.
+- Delegated tasks:
+- Ownership (files/modules/tasks):
+- Main author post-integration validation:
 
 ## Analysis / Findings
 특히 유지보수/버그 작업의 경우, AI 분석 결과 또는 주요 확인 사항을 작성합니다.
