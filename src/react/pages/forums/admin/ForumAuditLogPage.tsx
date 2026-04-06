@@ -11,7 +11,7 @@ import type { ColDef } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ForumAuditDataSource } from "@/react/pages/forums/admin/ForumAuditDataSource";
-import type { ForumAuditEvent } from "@/react/pages/forums/admin/auditApi";
+import type { ForumAuditEvent } from "@/react/pages/forums/admin/api";
 
 export function ForumAuditLogPage() {
   const { forumSlug } = useParams<{ forumSlug: string }>();
@@ -26,11 +26,11 @@ export function ForumAuditLogPage() {
 
   const columnDefs = useMemo<ColDef<ForumAuditEvent>[]>(
     () => [
-      { field: "id", headerName: "ID", sortable: true, flex: 0.5 },
-      { field: "actor", headerName: "행위자", sortable: true, flex: 1 },
+      { field: "auditId", headerName: "ID", sortable: true, flex: 0.5 },
+      { field: "actorId", headerName: "행위자", sortable: true, flex: 1 },
       { field: "action", headerName: "액션", sortable: true, flex: 1.5 },
       {
-        field: "details",
+        field: "detail",
         headerName: "세부 정보",
         flex: 2,
         cellRenderer: (params) => (
@@ -40,7 +40,7 @@ export function ForumAuditLogPage() {
         ),
       },
       {
-        field: "timestamp",
+        field: "at",
         headerName: "시각",
         sortable: true,
         flex: 1.5,
