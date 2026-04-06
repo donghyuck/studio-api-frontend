@@ -84,6 +84,28 @@ export function ObjectTypeDetailPage() {
     }
   }
 
+  async function handleSavePolicy() {
+    if (!objectTypeId || !user) return;
+    setSaving(true);
+    try {
+      const nextPolicy = await reactObjectTypeApi.upsertPolicy(Number(objectTypeId), {
+        maxFileMb: policyForm.maxFileMb === "" ? null : Number(policyForm.maxFileMb),
+        allowedExt: policyForm.allowedExt || null,
+        allowedMime: policyForm.allowedMime || null,
+        updatedBy: user.username,
+        updatedById: user.userId,
+        createdBy: policy?.createdBy ?? user.username,
+        createdById: policy?.createdById ?? user.userId,
+      });
+      setPolicy(nextPolicy);
+      toast.success("파일 정책이 저장되었습니다.");
+    } catch {
+      toast.error("파일 정책 저장에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
@@ -169,7 +191,20 @@ export function ObjectTypeDetailPage() {
       </Card>
       {policy && (
         <Card variant="outlined">
-          <CardHeader title="파일 정책" />
+          <CardHeader
+            title="파일 정책"
+            action={
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<SaveOutlined />}
+                onClick={handleSavePolicy}
+                disabled={saving}
+              >
+                저장
+              </Button>
+            }
+          />
           <CardContent>
             <Stack spacing={2} sx={{ maxWidth: 600 }}>
               <TextField

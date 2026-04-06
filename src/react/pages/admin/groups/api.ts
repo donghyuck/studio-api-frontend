@@ -1,6 +1,5 @@
 import { apiRequest } from "@/react/query/fetcher";
 import type { GroupDto } from "@/react/pages/admin/datasource";
-import type { UserDto } from "@/types/studio/user";
 
 export interface GroupMemberDto { userId: number; username: string; name: string; role?: string; joinedAt?: string; }
 

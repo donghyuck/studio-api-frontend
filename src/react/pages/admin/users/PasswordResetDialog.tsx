@@ -62,7 +62,10 @@ export function PasswordResetDialog({ open, onClose, userId, username }: Props) 
     }
     setLoading(true);
     try {
-      await reactUsersApi.resetPassword(userId, newPassword);
+      await reactUsersApi.resetPassword(userId, {
+        currentPassword: "",
+        newPassword,
+      });
       toast.success("비밀번호가 재설정되었습니다.");
       onClose();
     } catch {

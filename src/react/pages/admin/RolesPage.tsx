@@ -15,6 +15,7 @@ import {
   GroupOutlined,
   PersonOutlined,
   RefreshOutlined,
+  AddOutlined,
   SearchOutlined,
 } from "@mui/icons-material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
@@ -22,6 +23,7 @@ import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import type { RoleDto } from "@/react/pages/admin/datasource";
 import { RolesDataSource } from "@/react/pages/admin/datasource";
+import { RoleDialog } from "@/react/pages/admin/roles/RoleDialog";
 
 export function RolesPage() {
   const navigate = useNavigate();
@@ -29,6 +31,7 @@ export function RolesPage() {
   const dataSource = useMemo(() => new RolesDataSource(), []);
   const [searchInput, setSearchInput] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const columnDefs = useMemo<ColDef<RoleDto>[]>(
     () => [
@@ -163,6 +166,13 @@ export function RolesPage() {
         <Stack direction="row" spacing={1}>
           <Button
             variant="text"
+            startIcon={<AddOutlined />}
+            onClick={() => setCreateOpen(true)}
+          >
+            역할 생성
+          </Button>
+          <Button
+            variant="text"
             startIcon={<RefreshOutlined />}
             onClick={handleRefresh}
           >
@@ -198,6 +208,11 @@ export function RolesPage() {
         ref={gridRef}
         datasource={dataSource}
         columns={columnDefs}
+      />
+      <RoleDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => gridRef.current?.refresh()}
       />
     </Stack>
   );

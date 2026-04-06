@@ -1,5 +1,5 @@
 import { apiRequest } from "@/react/query/fetcher";
-import type { UserDto, PasswordPolicyDto } from "@/types/studio/user";
+import type { UserDto, PasswordPolicyDto, ResetPasswordRequest } from "@/types/studio/user";
 
 export interface UserRoleDto { roleId: number; name: string; description?: string | null; }
 
@@ -16,6 +16,6 @@ export const reactUsersApi = {
     apiRequest<void>("delete", `/api/mgmt/users/${userId}/roles/${roleId}`),
   getPasswordPolicy: () =>
     apiRequest<PasswordPolicyDto>("get", "/api/mgmt/users/password-policy"),
-  resetPassword: (userId: number, newPassword: string) =>
-    apiRequest<void>("post", `/api/mgmt/users/${userId}/password`, { data: { newPassword } }),
+  resetPassword: (userId: number, payload: ResetPasswordRequest) =>
+    apiRequest<void>("post", `/api/mgmt/users/${userId}/password`, { data: payload }),
 };
