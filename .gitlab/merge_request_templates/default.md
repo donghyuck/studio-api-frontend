@@ -1,35 +1,50 @@
-# Merge Request
-
-## Related Issue
-- Closes #
-
 ## Why
-변경 이유를 작성합니다.
+- 
 
 ## What
-주요 변경 내용을 작성합니다.
+- 
 
-- 
-- 
-- 
+## Related Issues
+- Closes #
+- Related #
+
+## Change Scope
+- [ ] API contract
+- [ ] Business logic
+- [ ] DB schema/query
+- [ ] Security/permission
+- [ ] Docs/runbook
+
+## Security Impact
+- Risk:
+- Mitigation:
 
 ## Validation
-실행한 검증을 작성합니다.
+- Commands:
+  - 
+- Result:
+  - 
+- Additional checks:
 
-- [ ] build
-- [ ] test
-- [ ] manual verification
-- [ ] analysis only (no code change)
+## Subagent Usage
+아래 항목은 **정확히 하나만** 체크합니다.
+- [ ] No
+- [ ] Yes
+- Delegated tasks:
+- Ownership (files/modules/tasks):
+- Main author post-integration validation:
 
 ## Checklist
-- [ ] working branch used or direct main change justified
-- [ ] commit message rule followed
-- [ ] issue template used and `AI-Assisted` value checked (`Yes`/`No` single selection, AI-used issue must be `Yes`)
+- [ ] policy-compliant commit message
+- [ ] issue template used where applicable
+- [ ] AI-Assisted checked correctly
+- [ ] subagent usage recorded (if used)
+- [ ] validation recorded
+- [ ] CI / repository verification passed
+- [ ] human review completed before merge
 - [ ] no unrelated changes included
-- [ ] documentation updated if needed
-- [ ] changelog updated if needed
-- [ ] AI-assisted change reviewed by human
 
-## AI-Assisted
-- [ ] Yes
-- [ ] No
+## Deployment Notes
+- Migration/ordering:
+- Rollback plan:
+- Post-deploy checks:
