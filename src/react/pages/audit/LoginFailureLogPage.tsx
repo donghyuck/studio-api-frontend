@@ -2,9 +2,13 @@ import { useMemo, useRef } from "react";
 import {
   Box,
   Breadcrumbs,
+  Button,
   Stack,
   Typography,
 } from "@mui/material";
+import {
+  RefreshOutlined,
+} from "@mui/icons-material";
 import type { ColDef } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
@@ -33,6 +37,10 @@ export function LoginFailureLogPage() {
     []
   );
 
+  const handleRefresh = () => {
+    gridRef.current?.refresh();
+  };
+
   return (
     <Stack spacing={2}>
       <Breadcrumbs separator="›">
@@ -43,6 +51,15 @@ export function LoginFailureLogPage() {
 
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="h5">로그인 실패 로그</Typography>
+        <Stack direction="row" spacing={1}>
+          <Button
+            variant="text"
+            startIcon={<RefreshOutlined />}
+            onClick={handleRefresh}
+          >
+            새로고침
+          </Button>
+        </Stack>
       </Box>
 
       <PageableGridContent<LoginFailureEvent>
