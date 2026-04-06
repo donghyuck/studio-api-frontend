@@ -12,6 +12,7 @@ import {
 import {
   ChevronRight,
   DeleteOutlined,
+  GroupAddOutlined,
   GroupOutlined,
   RefreshOutlined,
   SearchOutlined,
@@ -21,6 +22,7 @@ import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import type { GroupDto } from "@/react/pages/admin/datasource";
 import { GroupsDataSource } from "@/react/pages/admin/datasource";
+import { GroupDialog } from "@/react/pages/admin/groups/GroupDialog";
 
 export function GroupsPage() {
   const navigate = useNavigate();
@@ -28,6 +30,7 @@ export function GroupsPage() {
   const dataSource = useMemo(() => new GroupsDataSource(), []);
   const [searchInput, setSearchInput] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const columnDefs = useMemo<ColDef<GroupDto>[]>(
     () => [
@@ -159,6 +162,13 @@ export function GroupsPage() {
         <Stack direction="row" spacing={1}>
           <Button
             variant="text"
+            startIcon={<GroupAddOutlined />}
+            onClick={() => setCreateOpen(true)}
+          >
+            그룹 생성
+          </Button>
+          <Button
+            variant="text"
             startIcon={<RefreshOutlined />}
             onClick={handleRefresh}
           >
@@ -194,6 +204,11 @@ export function GroupsPage() {
         ref={gridRef}
         datasource={dataSource}
         columns={columnDefs}
+      />
+      <GroupDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => gridRef.current?.refresh()}
       />
     </Stack>
   );
