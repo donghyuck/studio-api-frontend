@@ -62,6 +62,9 @@ export function PasswordResetDialog({ open, onClose, userId, username }: Props) 
     }
     setLoading(true);
     try {
+      // The mgmt endpoint currently shares ResetPasswordRequest.
+      // Admin-triggered resets do not have the user's current password,
+      // so we send an empty value until the backend exposes a dedicated DTO.
       await reactUsersApi.resetPassword(userId, {
         currentPassword: "",
         newPassword,
