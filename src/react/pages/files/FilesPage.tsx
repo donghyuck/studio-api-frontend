@@ -20,10 +20,12 @@ import {
   Typography,
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import dayjs from "dayjs";
 import { reactFilesApi } from "@/react/pages/files/api";
+import { FileDetailDialog } from "@/react/pages/files/FileDetailDialog";
 import { FileUploadDialog } from "@/react/pages/files/FileUploadDialog";
 import { filesQueryKeys } from "@/react/pages/files/queryKeys";
 
@@ -41,6 +43,7 @@ export function FilesPage() {
   const [page, setPage] = useState(0);
   const [pageSize] = useState(10);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [detailAttachmentId, setDetailAttachmentId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const filesQuery = useQuery({
@@ -175,6 +178,11 @@ export function FilesPage() {
                           <DeleteOutlineIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      <Tooltip title="상세">
+                        <IconButton onClick={() => setDetailAttachmentId(file.attachmentId)}>
+                          <InfoOutlinedIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -208,6 +216,13 @@ export function FilesPage() {
           await queryClient.invalidateQueries({ queryKey: filesQueryKeys.all });
         }}
       />
+      {detailAttachmentId ? (
+        <FileDetailDialog
+          open={detailAttachmentId !== null}
+          onClose={() => setDetailAttachmentId(null)}
+          attachmentId={detailAttachmentId}
+        />
+      ) : null}
     </>
   );
 }

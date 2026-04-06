@@ -1,0 +1,26 @@
+import { apiRequest } from "@/react/query/fetcher";
+import type {
+  ObjectTypeDto,
+  ObjectTypePatchRequest,
+  ObjectTypePolicyDto,
+  ObjectTypePolicyUpsertRequest,
+} from "@/types/studio/objecttype";
+
+const BASE = "/api/mgmt/object-types";
+
+export const reactObjectTypeApi = {
+  list: (params?: { domain?: string; status?: string; q?: string }) =>
+    apiRequest<ObjectTypeDto[]>("get", BASE, { params }),
+
+  get: (objectType: number) =>
+    apiRequest<ObjectTypeDto>("get", `${BASE}/${objectType}`),
+
+  patch: (objectType: number, payload: ObjectTypePatchRequest) =>
+    apiRequest<ObjectTypeDto>("patch", `${BASE}/${objectType}`, { data: payload }),
+
+  getPolicy: (objectType: number) =>
+    apiRequest<ObjectTypePolicyDto>("get", `${BASE}/${objectType}/policy`),
+
+  upsertPolicy: (objectType: number, payload: ObjectTypePolicyUpsertRequest) =>
+    apiRequest<ObjectTypePolicyDto>("put", `${BASE}/${objectType}/policy`, { data: payload }),
+};
