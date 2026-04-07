@@ -65,6 +65,14 @@ export function ObjectTypeListPage() {
   const columnDefs = useMemo<ColDef<ObjectTypeDto>[]>(
     () => [
       {
+        field: "objectType",
+        headerName: "ID",
+        type: "number",
+        maxWidth: 90,
+        sortable: true,
+        filter: false,
+      },
+      {
         field: "code",
         headerName: "코드",
         flex: 1.2,
