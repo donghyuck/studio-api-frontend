@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Box, Stack, Button, IconButton, TextField,
+  Box, Stack, Button, Grid, IconButton, TextField,
   FormControlLabel, Switch, CircularProgress, Alert, Tooltip,
 } from "@mui/material";
 import { KeyOutlined, ManageAccountsOutlined, SaveOutlined } from "@mui/icons-material";
@@ -85,51 +85,52 @@ export function UserDetailPage() {
           </>
         }
       />
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-          gap: 2,
-          alignItems: "center",
-          width: "100%",
-        }}
-      >
-        <TextField label="아이디" value={user.username} InputProps={{ readOnly: true }} size="small" />
-        <TextField label="이름" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} size="small" />
-        <TextField label="이메일" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} size="small" />
-        <FormControlLabel control={<Switch checked={form.emailVisble} onChange={e => setForm(f => ({ ...f, emailVisble: e.target.checked }))} />} label="이메일 공개" />
-        <FormControlLabel control={<Switch checked={form.nameVisible} onChange={e => setForm(f => ({ ...f, nameVisible: e.target.checked }))} />} label="이름 공개" />
-        <FormControlLabel control={<Switch checked={form.enabled} onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} />} label="계정 활성화" />
-        <Stack
-          direction="row"
-          spacing={1}
-          justifyContent="flex-end"
-          sx={{ gridColumn: "1 / -1" }}
-        >
-          <Button
-            variant="outlined"
-            startIcon={<ManageAccountsOutlined />}
-            onClick={() => setRolesOpen(true)}
-          >
-            역할 관리
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<KeyOutlined />}
-            onClick={() => setResetOpen(true)}
-          >
-            비밀번호 재설정
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<SaveOutlined />}
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? <CircularProgress size={20} /> : "저장"}
-          </Button>
-        </Stack>
-      </Box>
+      <Grid container spacing={2} alignItems="center">
+        <Grid size={{ xs: 12, md: 4 }}>
+          <TextField label="아이디" value={user.username} InputProps={{ readOnly: true }} size="small" fullWidth />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <TextField label="이름" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} size="small" fullWidth />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <TextField label="이메일" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} size="small" fullWidth />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <FormControlLabel control={<Switch checked={form.emailVisble} onChange={e => setForm(f => ({ ...f, emailVisble: e.target.checked }))} />} label="이메일 공개" />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <FormControlLabel control={<Switch checked={form.nameVisible} onChange={e => setForm(f => ({ ...f, nameVisible: e.target.checked }))} />} label="이름 공개" />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <FormControlLabel control={<Switch checked={form.enabled} onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} />} label="계정 활성화" />
+        </Grid>
+        <Grid size={12}>
+          <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Button
+              variant="outlined"
+              startIcon={<ManageAccountsOutlined />}
+              onClick={() => setRolesOpen(true)}
+            >
+              역할 관리
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<KeyOutlined />}
+              onClick={() => setResetOpen(true)}
+            >
+              비밀번호 재설정
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<SaveOutlined />}
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? <CircularProgress size={20} /> : "저장"}
+            </Button>
+          </Stack>
+        </Grid>
+      </Grid>
       <UserRolesDialog open={rolesOpen} onClose={() => setRolesOpen(false)} userId={user.userId} username={user.username} />
       <PasswordResetDialog open={resetOpen} onClose={() => setResetOpen(false)} userId={user.userId} username={user.username} />
     </Stack>
