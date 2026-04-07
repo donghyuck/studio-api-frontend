@@ -53,7 +53,7 @@ export function UserDetailPage() {
   return (
     <Stack spacing={2}>
       <PageToolbar
-        divider={false}
+        divider={true}
         breadcrumbs={["시스템관리", "보안관리", "회원", user.username]}
         label="회원 정보를 조회하고 계정 상태를 관리합니다."
         previous
