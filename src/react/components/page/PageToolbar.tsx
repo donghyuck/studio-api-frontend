@@ -115,7 +115,17 @@ export function PageToolbar({
             </Box>
           </Stack>
 
-          <Stack direction="row" spacing={1} alignItems="center" flexShrink={0}>
+          <Stack
+            direction="row"
+            spacing={0}
+            alignItems="center"
+            flexShrink={0}
+            sx={{
+              "& .MuiIconButton-root": {
+                ml: 0,
+              },
+            }}
+          >
             {actions}
             {onSearch ? (
               <Box
