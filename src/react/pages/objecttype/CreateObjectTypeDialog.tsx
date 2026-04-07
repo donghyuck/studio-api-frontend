@@ -30,6 +30,7 @@ const statusOptions: Array<{ label: string; value: ObjectTypeStatus }> = [
 export function CreateObjectTypeDialog({ open, onClose, onCreated }: Props) {
   const toast = useToast();
   const { user } = useAuthStore();
+  const [objectType, setObjectType] = useState("");
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
@@ -37,9 +38,21 @@ export function CreateObjectTypeDialog({ open, onClose, onCreated }: Props) {
   const [description, setDescription] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const canSubmit = !!user && !!code.trim() && !!name.trim() && !!domain.trim();
+  const trimmedCode = code.trim();
+  const isCodeValid = /^[a-z][a-z0-9_-]{1,79}$/.test(trimmedCode);
+  const objectTypeNumber = objectType.trim() === "" ? null : Number(objectType);
+  const isObjectTypeValid =
+    objectTypeNumber == null ||
+    (Number.isInteger(objectTypeNumber) && objectTypeNumber >= 0);
+  const canSubmit =
+    !!user &&
+    isObjectTypeValid &&
+    isCodeValid &&
+    !!name.trim() &&
+    !!domain.trim();
 
   function resetForm() {
+    setObjectType("");
     setCode("");
     setName("");
     setDomain("");
@@ -58,7 +71,8 @@ export function CreateObjectTypeDialog({ open, onClose, onCreated }: Props) {
     setSaving(true);
     try {
       const created = await reactObjectTypeApi.create({
-        code: code.trim(),
+        objectType: objectTypeNumber,
+        code: trimmedCode,
         name: name.trim(),
         domain: domain.trim(),
         status,
@@ -85,11 +99,23 @@ export function CreateObjectTypeDialog({ open, onClose, onCreated }: Props) {
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <TextField
+            label="객체 유형"
+            size="small"
+            fullWidth
+            value={objectType}
+            onChange={(event) => setObjectType(event.target.value)}
+            type="number"
+            helperText="비워두면 서버에서 새 ID를 할당합니다."
+            error={!isObjectTypeValid}
+          />
+          <TextField
             label="코드"
             size="small"
             fullWidth
             value={code}
             onChange={(event) => setCode(event.target.value)}
+            error={!!trimmedCode && !isCodeValid}
+            helperText="소문자로 시작하고 소문자, 숫자, _, - 조합으로 2~80자 입력합니다."
             required
           />
           <TextField
