@@ -21,7 +21,7 @@ import { ObjectTypeDetailPage } from "@/react/pages/objecttype/ObjectTypeDetailP
 import { ObjectTypeListPage } from "@/react/pages/objecttype/ObjectTypeListPage";
 import { ObjectStorageListPage } from "@/react/pages/objectstorage/ObjectStorageListPage";
 import { ObjectStoragePage } from "@/react/pages/objectstorage/ObjectStoragePage";
-import { MyProfilePage } from "@/react/pages/profile/MyProfilePage";
+import { profileRoutes } from "@/react/features/profile/routes";
 import { TemplateDetailsPage } from "@/react/pages/templates/TemplateDetailsPage";
 import { TemplatesPage } from "@/react/pages/templates/TemplatesPage";
 import { UnauthorizedPage } from "@/react/pages/UnauthorizedPage";
@@ -48,7 +48,7 @@ export function AppRouter() {
       <Route element={<ProtectedRoute />}>
         <Route element={<FullLayout />}>
           <Route index element={<DashboardPage />} />
-          <Route path="profile" element={<MyProfilePage />} />
+          {profileRoutes}
           <Route path="application/files" element={<FilesPage />} />
           <Route path="application/mail" element={<MailPage />}>
             <Route index element={<Navigate to="inbox" replace />} />

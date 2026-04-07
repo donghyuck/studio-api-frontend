@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Issue `#54` introduced a profile feature module pilot under `src/react/features/profile` while preserving the `/profile` route.
 - Issue `#66` restored object type creation in the React `/policy/object-types` page, including Vue-parity ID/code validation fields, array-backed list loading, list ID display, PageToolbar detail header, and detail deletion.
 - Issue `#58` removed inactive legacy Vue view sources, Vue component files, and the dangling legacy Vue AG Grid options file outside the React runtime.
 - Issue `#60` renamed the misspelled AG Grid shared type path to `src/types/ag-grid`.
@@ -13,6 +14,10 @@
 
 ### Verification
 
+- Issue `#54`: `npm run typecheck`
+- Issue `#54`: `npm run lint`
+- Issue `#54`: `npm run build`
+- Issue `#54`: manual check - `/profile` route path reviewed
 - Issue `#66`: `npm run typecheck`
 - Issue `#66`: `npm run lint`
 - Issue `#66`: `npm run build`

@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import {
-  Box, Stack, Typography, Button, TextField, Divider,
+  Box, Stack, Typography, Button, TextField,
   CircularProgress, Alert, Card, CardContent, CardHeader, FormControlLabel, Switch,
 } from "@mui/material";
 import { SaveOutlined } from "@mui/icons-material";
 import { useToast } from "@/react/feedback";
-import { reactProfileApi } from "./api";
+import { reactProfileApi } from "@/react/features/profile/api/profileApi";
 import type { MeProfileDto } from "@/types/studio/user";
 
 const AUTO_REFRESH_KEY = "studio.jwt.autoRefresh";

@@ -16,7 +16,7 @@ import {
 } from "@mui/material";
 import { CheckCircleOutline, RadioButtonUnchecked } from "@mui/icons-material";
 import { useToast } from "@/react/feedback";
-import { reactProfileApi } from "@/react/pages/profile/api";
+import { reactProfileApi } from "@/react/features/profile/api/profileApi";
 import type { PasswordPolicyDto } from "@/types/studio/user";
 import { resolveAxiosError } from "@/utils/helpers";
 

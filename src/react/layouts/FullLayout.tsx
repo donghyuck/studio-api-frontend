@@ -47,7 +47,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { AppShellHeader } from "@/react/layouts/AppShellHeader";
 import { useAuthStore } from "@/react/auth/store";
-import { PasswordChangeDialog } from "@/react/pages/profile/PasswordChangeDialog";
+import { PasswordChangeDialog } from "@/react/features/profile/components/PasswordChangeDialog";
 import { SessionStatusChip } from "@/react/components/auth/SessionStatusChip";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
