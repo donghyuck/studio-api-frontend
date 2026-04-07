@@ -4,11 +4,15 @@
 
 ### Changed
 
+- Issue `#53` moved React-facing document, object storage, forum role matrix, and AG Grid locale dependencies into the React TypeScript runtime boundary.
 - Issue `#52` removed React-inactive Vue ESLint/Vite cleanup leftovers, deleted dead Vuetify/Pinia plugin entry files, and switched ESLint to a React/TypeScript flat config.
 - Issue `#50` added `docs/react-maintainability-improvement-plan.md` to define the post-migration React structure improvement direction for the `2.x` runtime.
 
 ### Verification
 
+- Issue `#53`: `npm run typecheck`
+- Issue `#53`: `npm run lint`
+- Issue `#53`: `npm run build`
 - Issue `#52`: `npm run typecheck`
 - Issue `#52`: `npm run lint`
 - Issue `#52`: `npm run build`

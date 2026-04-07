@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import type { GridOptions } from "ag-grid-community";
-import { AG_GRID_LOCALE_KR } from "@/components/ag-grid/locale/ko-KR";
+import { AG_GRID_LOCALE_KR } from "@/react/components/ag-grid/locale/ko-KR";
 import { CustomLoadingOverlay } from "@/react/components/ag-grid/CustomLoadingOverlay";
 
 const textComparator = (left?: unknown, right?: unknown) =>

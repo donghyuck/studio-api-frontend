@@ -12,7 +12,7 @@ import {
 import {
   ROLE_PERMISSION_ACTIONS,
   rolePermissionRows,
-} from "@/data/studio/mgmt/forums";
+} from "@/react/pages/forums/admin/roleMatrix";
 
 interface Props {
   open: boolean;
