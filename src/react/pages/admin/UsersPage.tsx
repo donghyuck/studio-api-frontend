@@ -106,9 +106,9 @@ export function UsersPage() {
               fontSize: 11,
               ...(params.value
                 ? {
-                    bgcolor: "#e0f2fe",
-                    color: "#0369a1",
-                    borderColor: "#bae6fd",
+                    bgcolor: "#2563eb",
+                    color: "#ffffff",
+                    borderColor: "#1d4ed8",
                   }
                 : {}),
             }}
