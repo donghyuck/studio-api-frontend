@@ -109,7 +109,7 @@ src/react/
 - AG Grid locale/options는 Vue-era `src/components/ag-grid`가 아니라 React 공용 grid 영역에서 소유한다.
   - `src/react/components/ag-grid/gridOptions.ts`가 `@/components/ag-grid/locale/ko-KR`를 import하고 있다. React 공용 위치로 locale 파일을 이동한 뒤 참조를 교체한다.
 - page-local datasource 파일(`acl/datasource.ts`, `admin/datasource.ts`, `mail/datasource.ts` 등)은 기능 이동 시 feature 모듈 안으로 함께 이동한다. 공용 베이스 클래스가 필요해지면 그때 `shared/grid`로 추출한다.
-- `src/types/ag-gird`는 별도 refactor 이슈에서 `ag-grid`로 rename한다.
+- AG Grid shared type path는 issue `#60`에서 `src/types/ag-grid`로 정리한다.
 - React API 호출은 가능하면 `src/react/query/fetcher.ts` 또는 이후 `shared/api` 계층 기준으로 통일한다.
 
 검증:

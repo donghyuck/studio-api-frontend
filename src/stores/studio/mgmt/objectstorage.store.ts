@@ -8,7 +8,7 @@ import {
   toRows,
 } from "@/data/studio/mgmt/storage";
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";
-import type { PageableDataSource } from "@/types/ag-gird";
+import type { PageableDataSource } from "@/types/ag-grid";
 import type {
   BucketDto,
   ObjectInfoDto,

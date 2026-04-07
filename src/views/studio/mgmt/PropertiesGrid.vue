@@ -9,7 +9,7 @@
     </AgGridVue>
 </template>
 <script setup lang="ts">
-// define grid componet : ag-gird  
+// define grid componet : ag-grid
 import ActionCellRenderer from '@/components/ag-grid/renderer/ActionCellRenderer.vue';
 import PageToolbar from '@/components/bars/PageToolbar.vue';
 import type { Property } from '@/types/studio';

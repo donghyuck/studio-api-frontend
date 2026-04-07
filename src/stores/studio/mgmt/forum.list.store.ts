@@ -1,4 +1,4 @@
-import type { PageableDataSource } from "@/types/ag-gird";
+import type { PageableDataSource } from "@/types/ag-grid";
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";
 
 import { defineStore } from "pinia";

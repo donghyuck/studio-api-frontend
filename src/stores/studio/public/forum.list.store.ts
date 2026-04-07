@@ -1,5 +1,5 @@
 import { AgGridDataSource, createAgGridStore } from "@/data/datasource/ag-grid.datasource";
-import type { PageableDataSource } from "@/types/ag-gird";
+import type { PageableDataSource } from "@/types/ag-grid";
 import type { ForumResponse, ForumSummaryResponse } from "@/types/studio/forums";
 
 class PublicForumListDataSource

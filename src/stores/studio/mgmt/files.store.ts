@@ -1,7 +1,7 @@
 import { getFileById } from "@/data/studio/mgmt/files";
 import api from "@/plugins/axios";
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";
-import type { PageableDataSource } from "@/types/ag-gird";
+import type { PageableDataSource } from "@/types/ag-grid";
 import type { AttachmentDto } from "@/types/studio/files";
 import type { UploadResult } from "@/types/upload";
 import { handleBlobDownloadResponse } from "@/data/http/http-download";
