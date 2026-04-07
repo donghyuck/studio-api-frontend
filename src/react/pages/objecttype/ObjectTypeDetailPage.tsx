@@ -1,13 +1,10 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Box,
   Stack,
-  Breadcrumbs,
-  Typography,
   Button,
   TextField,
-  Divider,
   CircularProgress,
   Alert,
   Card,
@@ -19,6 +16,7 @@ import { useConfirm, useToast } from "@/react/feedback";
 import { reactObjectTypeApi } from "./api";
 import type { ObjectTypeDto, ObjectTypePolicyDto } from "@/types/studio/objecttype";
 import { useAuthStore } from "@/react/auth/store";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 export function ObjectTypeDetailPage() {
   const { objectTypeId } = useParams<{ objectTypeId: string }>();
@@ -38,7 +36,7 @@ export function ObjectTypeDetailPage() {
     allowedMime: "",
   });
 
-  useEffect(() => {
+  const loadObjectType = useCallback(() => {
     if (!objectTypeId) return;
     setLoading(true);
     Promise.all([
@@ -65,6 +63,10 @@ export function ObjectTypeDetailPage() {
       .catch(() => setError("오브젝트 타입을 불러오지 못했습니다."))
       .finally(() => setLoading(false));
   }, [objectTypeId]);
+
+  useEffect(() => {
+    loadObjectType();
+  }, [loadObjectType]);
 
   async function handleSave() {
     if (!objectTypeId || !user) return;
@@ -142,47 +144,42 @@ export function ObjectTypeDetailPage() {
 
   return (
     <Stack spacing={2}>
-      <Breadcrumbs separator="›">
-        <Typography color="text.secondary">정책</Typography>
-        <Typography
-          color="text.secondary"
-          sx={{ cursor: "pointer" }}
-          onClick={() => navigate("/policy/object-types")}
-        >
-          오브젝트 타입
-        </Typography>
-        <Typography color="text.primary">{objectType.code}</Typography>
-      </Breadcrumbs>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h5">오브젝트 타입 상세</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button
-            variant="outlined"
-            startIcon={<ArrowBackOutlined />}
-            onClick={() => navigate("/policy/object-types")}
-          >
-            목록
-          </Button>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteOutlineOutlined />}
-            onClick={() => void handleDelete()}
-            disabled={saving}
-          >
-            삭제
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<SaveOutlined />}
-            onClick={handleSave}
-            disabled={saving}
-          >
-            {saving ? <CircularProgress size={20} /> : "저장"}
-          </Button>
-        </Stack>
-      </Box>
-      <Divider />
+      <PageToolbar
+        breadcrumbs={["정책", "오브젝트 타입", objectType.code]}
+        title="오브젝트 타입 상세"
+        label="오브젝트 타입 기본 정보와 파일 정책을 관리합니다."
+        previous
+        onPrevious={() => navigate("/policy/object-types")}
+        onRefresh={loadObjectType}
+        actions={
+          <>
+            <Button
+              variant="outlined"
+              startIcon={<ArrowBackOutlined />}
+              onClick={() => navigate("/policy/object-types")}
+            >
+              목록
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteOutlineOutlined />}
+              onClick={() => void handleDelete()}
+              disabled={saving}
+            >
+              삭제
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<SaveOutlined />}
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? <CircularProgress size={20} /> : "저장"}
+            </Button>
+          </>
+        }
+      />
       <Card variant="outlined">
         <CardHeader title="기본 정보" />
         <CardContent>

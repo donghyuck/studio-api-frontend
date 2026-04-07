@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Issue `#66` restored object type creation in the React `/policy/object-types` page, including Vue-parity ID/code validation fields, array-backed list loading, list ID display, and detail deletion.
+- Issue `#66` restored object type creation in the React `/policy/object-types` page, including Vue-parity ID/code validation fields, array-backed list loading, list ID display, PageToolbar detail header, and detail deletion.
 - Issue `#58` removed inactive legacy Vue view sources, Vue component files, and the dangling legacy Vue AG Grid options file outside the React runtime.
 - Issue `#60` renamed the misspelled AG Grid shared type path to `src/types/ag-grid`.
 - Issue `#53` moved React-facing document, object storage, forum role matrix, and AG Grid locale dependencies into the React TypeScript runtime boundary.
