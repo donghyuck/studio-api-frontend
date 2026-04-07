@@ -4,6 +4,7 @@ import type {
   ObjectTypePatchRequest,
   ObjectTypePolicyDto,
   ObjectTypePolicyUpsertRequest,
+  ObjectTypeUpsertRequest,
 } from "@/types/studio/objecttype";
 
 const BASE = "/api/mgmt/object-types";
@@ -15,8 +16,14 @@ export const reactObjectTypeApi = {
   get: (objectType: number) =>
     apiRequest<ObjectTypeDto>("get", `${BASE}/${objectType}`),
 
+  create: (payload: ObjectTypeUpsertRequest) =>
+    apiRequest<ObjectTypeDto, ObjectTypeUpsertRequest>("post", BASE, { data: payload }),
+
   patch: (objectType: number, payload: ObjectTypePatchRequest) =>
     apiRequest<ObjectTypeDto>("patch", `${BASE}/${objectType}`, { data: payload }),
+
+  delete: (objectType: number) =>
+    apiRequest<void>("delete", `${BASE}/${objectType}`),
 
   getPolicy: (objectType: number) =>
     apiRequest<ObjectTypePolicyDto>("get", `${BASE}/${objectType}/policy`),

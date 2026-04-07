@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Issue `#66` restored object type creation in the React `/policy/object-types` page, including Vue-parity ID/code validation fields, array-backed list loading, list ID display, PageToolbar detail header, and detail deletion.
 - Issue `#58` removed inactive legacy Vue view sources, Vue component files, and the dangling legacy Vue AG Grid options file outside the React runtime.
 - Issue `#60` renamed the misspelled AG Grid shared type path to `src/types/ag-grid`.
 - Issue `#53` moved React-facing document, object storage, forum role matrix, and AG Grid locale dependencies into the React TypeScript runtime boundary.
@@ -12,6 +13,10 @@
 
 ### Verification
 
+- Issue `#66`: `npm run typecheck`
+- Issue `#66`: `npm run lint`
+- Issue `#66`: `npm run build`
+- Issue `#66`: manual check - `/policy/object-types` create dialog validation path reviewed
 - Issue `#58`: confirmed React runtime paths do not import `src/views` or deleted Vue component files
 - Issue `#58`: `npm run typecheck`
 - Issue `#58`: `npm run lint`
