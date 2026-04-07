@@ -49,7 +49,7 @@ These patterns are already in use and must be followed in all new files:
 
 | Vue source | Target React path |
 |---|---|
-| `src/views/studio/profile/MyProfilePage.vue` | `src/react/pages/profile/MyProfilePage.tsx` |
+| `src/views/studio/profile/MyProfilePage.vue` | `src/react/features/profile/pages/MyProfilePage.tsx` |
 
 ### 2. Admin Detail And Assignment Flows
 
@@ -149,10 +149,12 @@ These patterns are already in use and must be followed in all new files:
 **New files:**
 
 ```
-src/react/pages/profile/
-  MyProfilePage.tsx         ← GET/PATCH /api/self
-  api.ts
-  queryKeys.ts
+src/react/features/profile/
+  pages/MyProfilePage.tsx    ← GET/PATCH /api/self
+  components/PasswordChangeDialog.tsx
+  api/profileApi.ts
+  queries/queryKeys.ts
+  routes.tsx
 
 src/react/pages/admin/
   UserSearchDialog.tsx      ← GET /api/mgmt/users (search, shared)
