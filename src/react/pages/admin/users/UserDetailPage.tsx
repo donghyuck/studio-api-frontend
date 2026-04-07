@@ -88,14 +88,10 @@ export function UserDetailPage() {
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            md: "repeat(2, minmax(0, 1fr))",
-          },
+          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
           gap: 2,
           alignItems: "center",
           width: "100%",
-          mx: "auto",
         }}
       >
         <TextField label="아이디" value={user.username} InputProps={{ readOnly: true }} size="small" />
