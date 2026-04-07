@@ -15,30 +15,31 @@ import {
 } from "@mui/material";
 import DOMPurify from "dompurify";
 import { reactForumsPublicApi } from "@/react/pages/community/api";
-import { forumPublicQueryKeys } from "@/react/pages/community/queryKeys";
+import { forumAdminQueryKeys } from "@/react/pages/forums/admin/queryKeys";
 import { formatDateTime, formatTopicStatus } from "@/react/pages/community/format";
 import type { PostResponse } from "@/types/studio/forums";
 
 export function TopicDetailsPage() {
   const { forumSlug = "", topicId = "" } = useParams();
   const parsedTopicId = Number(topicId);
+  const hasValidTopicId = Number.isFinite(parsedTopicId) && parsedTopicId > 0;
 
   const forumQuery = useQuery({
-    queryKey: forumPublicQueryKeys.detail(forumSlug),
+    queryKey: forumAdminQueryKeys.detail(forumSlug),
     queryFn: () => reactForumsPublicApi.getForum(forumSlug),
     enabled: Boolean(forumSlug),
   });
 
   const topicQuery = useQuery({
-    queryKey: forumPublicQueryKeys.custom("admin-topic", forumSlug, topicId),
+    queryKey: forumAdminQueryKeys.custom("topic", forumSlug, parsedTopicId),
     queryFn: () => reactForumsPublicApi.getTopic(forumSlug, parsedTopicId),
-    enabled: Boolean(forumSlug) && Number.isFinite(parsedTopicId),
+    enabled: Boolean(forumSlug) && hasValidTopicId,
   });
 
   const postsQuery = useQuery({
-    queryKey: forumPublicQueryKeys.custom("admin-topic-posts", forumSlug, topicId),
+    queryKey: forumAdminQueryKeys.custom("topic-posts", forumSlug, parsedTopicId),
     queryFn: () => reactForumsPublicApi.listPosts(forumSlug, parsedTopicId),
-    enabled: Boolean(forumSlug) && Number.isFinite(parsedTopicId),
+    enabled: Boolean(forumSlug) && hasValidTopicId,
   });
 
   const isLoading = forumQuery.isLoading || topicQuery.isLoading || postsQuery.isLoading;
