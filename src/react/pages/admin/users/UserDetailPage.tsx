@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Box, Stack, Breadcrumbs, Typography, Button, TextField,
-  FormControlLabel, Switch, Divider, CircularProgress, Alert,
+  Box, Stack, IconButton, TextField,
+  FormControlLabel, Switch, CircularProgress, Alert, Tooltip,
 } from "@mui/material";
-import { KeyOutlined, ManageAccountsOutlined, ArrowBackOutlined, SaveOutlined } from "@mui/icons-material";
+import { KeyOutlined, ManageAccountsOutlined, SaveOutlined } from "@mui/icons-material";
 import { useToast } from "@/react/feedback";
 import { reactUsersApi } from "./api";
 import { UserRolesDialog } from "./UserRolesDialog";
 import { PasswordResetDialog } from "./PasswordResetDialog";
 import type { UserDto } from "@/types/studio/user";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 export function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
@@ -51,23 +52,39 @@ export function UserDetailPage() {
 
   return (
     <Stack spacing={2}>
-      <Breadcrumbs separator="›">
-        <Typography color="text.secondary">시스템관리</Typography>
-        <Typography color="text.secondary" sx={{ cursor: "pointer" }} onClick={() => navigate("/admin/users")}>회원</Typography>
-        <Typography color="text.primary">{user.username}</Typography>
-      </Breadcrumbs>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h5">회원 상세</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button startIcon={<ManageAccountsOutlined />} onClick={() => setRolesOpen(true)}>역할 관리</Button>
-          <Button startIcon={<KeyOutlined />} onClick={() => setResetOpen(true)}>비밀번호 재설정</Button>
-          <Button variant="outlined" startIcon={<ArrowBackOutlined />} onClick={() => navigate("/admin/users")}>목록</Button>
-          <Button variant="contained" startIcon={<SaveOutlined />} onClick={handleSave} disabled={saving}>
-            {saving ? <CircularProgress size={20} /> : "저장"}
-          </Button>
-        </Stack>
-      </Box>
-      <Divider />
+      <PageToolbar
+        divider={false}
+        breadcrumbs={["시스템관리", "보안관리", "회원", user.username]}
+        label="회원 정보를 조회하고 계정 상태를 관리합니다."
+        previous
+        onPrevious={() => navigate("/admin/users")}
+        actions={
+          <>
+            <Tooltip title="역할 관리">
+              <IconButton size="small" onClick={() => setRolesOpen(true)}>
+                <ManageAccountsOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="비밀번호 재설정">
+              <IconButton size="small" onClick={() => setResetOpen(true)}>
+                <KeyOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="저장">
+              <span>
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? <CircularProgress size={18} /> : <SaveOutlined fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </>
+        }
+      />
       <Stack spacing={2} sx={{ maxWidth: 600 }}>
         <TextField label="아이디" value={user.username} InputProps={{ readOnly: true }} size="small" />
         <TextField label="이름" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} size="small" />
