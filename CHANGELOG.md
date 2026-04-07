@@ -14,6 +14,7 @@
 - Issue `#60`: confirm no legacy AG Grid type path references remain
 - Issue `#60`: `npm run typecheck`
 - Issue `#60`: `npm run lint`
+- Issue `#60`: `npm run build`
 - Issue `#53`: `npm run typecheck`
 - Issue `#53`: `npm run lint`
 - Issue `#53`: `npm run build`
