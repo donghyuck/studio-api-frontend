@@ -32,6 +32,8 @@ interface ApiEnvelope<T> {
   data?: T;
 }
 
+type QueryParams = Record<string, string | number | boolean | undefined | null>;
+
 const API_BASE = "/api/mgmt/documents";
 
 function unwrapPayload<T>(payload: ApiEnvelope<T> | T) {
@@ -47,7 +49,8 @@ function unwrapPayload<T>(payload: ApiEnvelope<T> | T) {
   return payload as T;
 }
 
-async function requestWithMeta<T>(url: string, params?: Record<string, unknown>) {
+// apiRequest cannot surface response headers; direct client access is needed for ETag extraction.
+async function requestWithMeta<T>(url: string, params?: QueryParams) {
   const response = await apiClient.get<ApiEnvelope<T> | T>(url, {
     params,
     withCredentials: true,
@@ -60,6 +63,7 @@ async function requestWithMeta<T>(url: string, params?: Record<string, unknown>)
 }
 
 export const reactDocumentsApi = {
+  // ETag-aware document reads use requestWithMeta.
   getLatest(documentId: number): Promise<DocumentBundleResponse> {
     return requestWithMeta<DocumentVersionBundle>(`${API_BASE}/${documentId}`);
   },
@@ -90,6 +94,7 @@ export const reactDocumentsApi = {
       `${API_BASE}/${documentId}/blocks/${blockId}`
     );
   },
+  // Mutations and non-ETag reads use the shared React query fetcher.
   createBlock(documentId: number, payload: DocumentBlockCreateRequest) {
     return apiRequest<{ blockId: number }, DocumentBlockCreateRequest>(
       "post",
