@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-04-07
+
+### Changed
+
+- Issue `#50` added `docs/react-maintainability-improvement-plan.md` to define the post-migration React structure improvement direction for the `2.x` runtime.
+
+### Verification
+
+- Reviewed the new document against the current React source tree and migration policy documents.
+- `npm run typecheck`
+
 ## 2026-04-06
 
 ### Changed
