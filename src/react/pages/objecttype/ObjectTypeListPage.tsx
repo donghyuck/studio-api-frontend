@@ -3,16 +3,13 @@ import { useNavigate } from "react-router-dom";
 import {
   Box,
   Stack,
-  Breadcrumbs,
-  Typography,
-  Button,
 } from "@mui/material";
-import { RefreshOutlined } from "@mui/icons-material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import type { ObjectTypeDto } from "@/types/studio/objecttype";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 class ObjectTypesDataSource extends ReactPageDataSource<ObjectTypeDto> {
   constructor() {
@@ -34,13 +31,23 @@ export function ObjectTypeListPage() {
         sortable: true,
         filter: false,
         cellRenderer: (params: ICellRendererParams<ObjectTypeDto>) => (
-          <Button
-            variant="text"
-            size="small"
+          <Box
+            component="button"
+            type="button"
             onClick={() => navigate(`/policy/object-types/${params.data?.objectType}`)}
+            sx={{
+              border: 0,
+              p: 0,
+              bgcolor: "transparent",
+              color: "primary.main",
+              cursor: "pointer",
+              font: "inherit",
+              textAlign: "left",
+              "&:hover": { textDecoration: "underline" },
+            }}
           >
             {params.value}
-          </Button>
+          </Box>
         ),
       },
       { field: "name", headerName: "이름", flex: 1.2, sortable: true, filter: false },
@@ -52,17 +59,13 @@ export function ObjectTypeListPage() {
   );
 
   return (
-    <Stack spacing={2}>
-      <Breadcrumbs separator="›">
-        <Typography color="text.secondary">정책</Typography>
-        <Typography color="text.primary">오브젝트 타입</Typography>
-      </Breadcrumbs>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h5">오브젝트 타입</Typography>
-        <Button startIcon={<RefreshOutlined />} onClick={() => gridRef.current?.refresh()}>
-          새로고침
-        </Button>
-      </Box>
+    <Stack spacing={0.5}>
+      <PageToolbar
+        divider={false}
+        breadcrumbs={["정책", "오브젝트 타입"]}
+        label="데이터 타입 정의를 조회하고 관리합니다."
+        onRefresh={() => gridRef.current?.refresh()}
+      />
       <PageableGridContent<ObjectTypeDto>
         ref={gridRef}
         datasource={dataSource}

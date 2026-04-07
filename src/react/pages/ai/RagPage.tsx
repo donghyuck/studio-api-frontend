@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Breadcrumbs,
   Button,
   Card,
   CardContent,
@@ -21,6 +20,7 @@ import type {
   VectorSearchResultDto,
 } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 export function RagPage() {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
@@ -122,48 +122,54 @@ export function RagPage() {
   }
 
   return (
-    <Stack spacing={2}>
-      <Breadcrumbs separator="›">
-        <Typography color="text.secondary">서비스 관리</Typography>
-        <Typography color="text.secondary">AI</Typography>
-        <Typography color="text.primary">RAG</Typography>
-      </Breadcrumbs>
-      <Typography variant="h5">RAG Search</Typography>
+    <Stack spacing={1}>
+      <PageToolbar
+        divider={false}
+        breadcrumbs={["서비스 관리", "AI", "RAG"]}
+        label="문서 벡터 검색과 RAG Chat 요청을 수행합니다."
+      />
       {error ? <Alert severity="error">{error}</Alert> : null}
-      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-        <TextField
-          select
-          label="Provider"
-          value={provider}
-          onChange={(event) => {
-            const nextProvider = event.target.value;
-            setProvider(nextProvider);
-            const match = providers.find((item) => item.name === nextProvider);
-            setModel(match?.chat.model ?? "");
-          }}
-          fullWidth
-        >
-          {providers.map((item) => (
-            <MenuItem key={item.name} value={item.name}>
-              {item.name}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth />
-        <TextField label="topK" value={topK} onChange={(event) => setTopK(event.target.value)} sx={{ maxWidth: 140 }} />
-      </Stack>
-      <TextField label="쿼리" value={query} onChange={(event) => setQuery(event.target.value)} />
-      <Stack direction="row" spacing={1}>
-        <Button variant="contained" onClick={() => void handleSearch(false)} disabled={!query.trim()}>
-          검색
-        </Button>
-        <Button variant="outlined" onClick={() => void handleRewrite()} disabled={!query.trim()}>
-          쿼리 확장
-        </Button>
-        <Button variant="text" onClick={() => void handleSearch(true)} disabled={!expandedQuery.trim()}>
-          확장 쿼리로 검색
-        </Button>
-      </Stack>
+      <Card variant="outlined">
+        <CardContent>
+          <Stack spacing={2}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <TextField
+                select
+                label="Provider"
+                value={provider}
+                onChange={(event) => {
+                  const nextProvider = event.target.value;
+                  setProvider(nextProvider);
+                  const match = providers.find((item) => item.name === nextProvider);
+                  setModel(match?.chat.model ?? "");
+                }}
+                fullWidth
+                size="small"
+              >
+                {providers.map((item) => (
+                  <MenuItem key={item.name} value={item.name}>
+                    {item.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth size="small" />
+              <TextField label="topK" value={topK} onChange={(event) => setTopK(event.target.value)} sx={{ maxWidth: 140 }} size="small" />
+            </Stack>
+            <TextField label="쿼리" value={query} onChange={(event) => setQuery(event.target.value)} size="small" />
+            <Stack direction="row" spacing={1}>
+              <Button variant="contained" onClick={() => void handleSearch(false)} disabled={!query.trim()}>
+                검색
+              </Button>
+              <Button variant="outlined" onClick={() => void handleRewrite()} disabled={!query.trim()}>
+                쿼리 확장
+              </Button>
+              <Button variant="text" onClick={() => void handleSearch(true)} disabled={!expandedQuery.trim()}>
+                확장 쿼리로 검색
+              </Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
       <Card variant="outlined">
         <CardContent>
           <Stack spacing={2}>

@@ -2,17 +2,16 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
-  Breadcrumbs,
-  Button,
+  IconButton,
   Stack,
-  TextField,
-  Typography,
+  Tooltip,
 } from "@mui/material";
 import {
   AddOutlined,
   ChevronRight,
-  RefreshOutlined,
-  SearchOutlined,
+  SecurityOutlined,
+  SettingsOutlined,
+  SummarizeOutlined,
 } from "@mui/icons-material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
@@ -20,7 +19,7 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import { ForumCreateDialog } from "@/react/pages/forums/admin/ForumCreateDialog";
 import { ForumListDataSource } from "@/react/pages/forums/admin/ForumListDataSource";
 import type { ForumSummaryResponse } from "@/types/studio/forums";
-import { formatDateTime } from "@/react/pages/community/format";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 export function ForumListPage() {
   const navigate = useNavigate();
@@ -37,13 +36,23 @@ export function ForumListPage() {
         sortable: true,
         flex: 1,
         cellRenderer: (params: ICellRendererParams<ForumSummaryResponse>) => (
-          <Button
-            variant="text"
-            size="small"
+          <Box
+            component="button"
+            type="button"
             onClick={() => navigate(`/admin/forums/${params.data?.slug}/settings`)}
+            sx={{
+              border: 0,
+              p: 0,
+              bgcolor: "transparent",
+              color: "primary.main",
+              cursor: "pointer",
+              font: "inherit",
+              textAlign: "left",
+              "&:hover": { textDecoration: "underline" },
+            }}
           >
             {params.value}
-          </Button>
+          </Box>
         ),
       },
       { field: "slug", headerName: "슬러그", sortable: true, flex: 0.8 },
@@ -67,46 +76,49 @@ export function ForumListPage() {
         field: "updatedAt",
         headerName: "수정일",
         sortable: true,
+        type: "datetime",
         flex: 0.7,
-        valueFormatter: (params) => formatDateTime(params.value),
       },
       {
         colId: "actions",
         headerName: "",
         sortable: false,
-        flex: 1.1,
-        minWidth: 280,
+        flex: 0.85,
+        minWidth: 168,
         cellRenderer: (params: ICellRendererParams<ForumSummaryResponse>) => (
           <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
-            <Button
-              variant="text"
-              size="small"
+            <Tooltip title="설정">
+              <IconButton
+                size="small"
               onClick={() => navigate(`/admin/forums/${params.data?.slug}/settings`)}
             >
-              설정
-            </Button>
-            <Button
-              variant="text"
-              size="small"
+                <SettingsOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="ACL">
+              <IconButton
+                size="small"
               onClick={() => navigate(`/admin/forums/${params.data?.slug}/acl`)}
             >
-              ACL
-            </Button>
-            <Button
-              variant="text"
-              size="small"
+                <SecurityOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="감사 로그">
+              <IconButton
+                size="small"
               onClick={() => navigate(`/admin/forums/${params.data?.slug}/audit`)}
             >
-              감사
-            </Button>
-            <Button
-              variant="text"
-              size="small"
-              endIcon={<ChevronRight fontSize="small" />}
+                <SummarizeOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="상세">
+              <IconButton
+                size="small"
               onClick={() => navigate(`/admin/forums/${params.data?.slug}/settings`)}
             >
-              상세
-            </Button>
+                <ChevronRight fontSize="small" />
+              </IconButton>
+            </Tooltip>
           </Box>
         ),
       },
@@ -123,51 +135,23 @@ export function ForumListPage() {
 
   return (
     <>
-      <Stack spacing={2}>
-        <Breadcrumbs separator="›">
-          <Typography color="text.secondary">어드민</Typography>
-          <Typography color="text.primary">포럼</Typography>
-        </Breadcrumbs>
-
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Typography variant="h5">포럼 목록</Typography>
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="text"
-              startIcon={<AddOutlined />}
-              onClick={() => setCreateOpen(true)}
-            >
-              게시판 생성
-            </Button>
-            <Button
-              variant="text"
-              startIcon={<RefreshOutlined />}
-              onClick={() => gridRef.current?.refresh()}
-            >
-              새로고침
-            </Button>
-          </Stack>
-        </Box>
-
-        <TextField
-          label="검색어 (이름 또는 설명)"
-          variant="outlined"
-          size="small"
-          fullWidth
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") {
-              handleSearch();
-            }
-          }}
-          InputProps={{
-            endAdornment: (
-              <Button onClick={handleSearch} startIcon={<SearchOutlined />} size="small">
-                검색
-              </Button>
-            ),
-          }}
+      <Stack spacing={0.5}>
+        <PageToolbar
+          divider={false}
+          breadcrumbs={["어드민", "포럼"]}
+          label="포럼을 검색하고 설정, ACL, 감사 로그를 관리합니다."
+          onRefresh={() => gridRef.current?.refresh()}
+          searchPlaceholder="이름 또는 설명 검색"
+          searchValue={searchInput}
+          onSearchValueChange={setSearchInput}
+          onSearch={handleSearch}
+          actions={
+            <Tooltip title="게시판을 생성합니다.">
+              <IconButton size="small" onClick={() => setCreateOpen(true)}>
+                <AddOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          }
         />
 
         <PageableGridContent<ForumSummaryResponse>

@@ -9,5 +9,5 @@ export const reactProfileApi = {
   getPasswordPolicy: () =>
     apiRequest<PasswordPolicyDto>("get", "/api/self/password-policy"),
   changePassword: (currentPassword: string, newPassword: string) =>
-    apiRequest<void>("post", "/api/self/password", { data: { currentPassword, newPassword } }),
+    apiRequest<void>("put", "/api/self/password", { data: { currentPassword, newPassword } }),
 };

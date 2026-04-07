@@ -89,7 +89,6 @@ function PageableGridContentInner<TData = unknown>(
     }
 
     setGridHeight(getAutoGridHeight(containerRef.current));
-    gridApiRef.current?.sizeColumnsToFit();
   }, []);
 
   const getRows = useCallback(

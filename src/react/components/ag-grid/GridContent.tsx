@@ -64,7 +64,6 @@ function GridContentInner<TData = unknown>(
     }
 
     setGridHeight(getAutoGridHeight(containerRef.current));
-    gridApiRef.current?.sizeColumnsToFit();
   }, []);
 
   const handleGridReady = useCallback(

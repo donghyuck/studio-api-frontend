@@ -2,13 +2,12 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
-  Breadcrumbs,
   Button,
   Chip,
-  Divider,
   IconButton,
   Paper,
   Stack,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import { AddOutlined, DeleteOutlined, RefreshOutlined } from "@mui/icons-material";
@@ -36,6 +35,7 @@ import { CreateClassDialog } from "./CreateClassDialog";
 import { CreateSidDialog } from "./CreateSidDialog";
 import { CreateObjectDialog } from "./CreateObjectDialog";
 import { CreateEntryDialog } from "./CreateEntryDialog";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 function SectionHeader({
   title,
@@ -48,14 +48,18 @@ function SectionHeader({
 }) {
   return (
     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-      <Typography variant="h6">{title}</Typography>
+      <Typography variant="subtitle1">{title}</Typography>
       <Stack direction="row" spacing={1}>
-        <Button size="small" startIcon={<AddOutlined />} onClick={onAdd}>
-          추가
-        </Button>
-        <Button size="small" startIcon={<RefreshOutlined />} onClick={onRefresh}>
-          새로고침
-        </Button>
+        <Tooltip title="추가">
+          <IconButton size="small" onClick={onAdd}>
+            <AddOutlined fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="새로고침">
+          <IconButton size="small" onClick={onRefresh}>
+            <RefreshOutlined fontSize="small" />
+          </IconButton>
+        </Tooltip>
       </Stack>
     </Box>
   );
@@ -69,7 +73,12 @@ export function AclPage() {
   const sidsGridRef = useRef<PageableGridContentHandle<AclSidDto>>(null);
   const objectsGridRef = useRef<PageableGridContentHandle<AclObjectIdentityDto>>(null);
   const entriesGridRef = useRef<PageableGridContentHandle<AclEntryDto>>(null);
+  const classesSectionRef = useRef<HTMLDivElement | null>(null);
+  const sidsSectionRef = useRef<HTMLDivElement | null>(null);
+  const objectsSectionRef = useRef<HTMLDivElement | null>(null);
+  const entriesSectionRef = useRef<HTMLDivElement | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState("classes");
 
   const [createClassOpen, setCreateClassOpen] = useState(false);
   const [createSidOpen, setCreateSidOpen] = useState(false);
@@ -382,97 +391,184 @@ export function AclPage() {
     }
   }
 
-  return (
-    <Stack spacing={3}>
-      <Breadcrumbs separator="›">
-        <Typography color="text.secondary">시스템관리</Typography>
-        <Typography color="text.secondary">보안관리</Typography>
-        <Typography color="text.primary">ACL 관리</Typography>
-      </Breadcrumbs>
+  function handleSectionChange(section: string) {
+    setActiveSection(section);
+    const target = {
+      classes: classesSectionRef,
+      sids: sidsSectionRef,
+      objects: objectsSectionRef,
+      entries: entriesSectionRef,
+    }[section]?.current;
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
-      <Box>
-        <Typography variant="h5">ACL 관리</Typography>
-        <Typography variant="body2" color="text.secondary">
-          클래스, SID, 오브젝트 아이덴티티, 엔트리를 한 화면에서 관리합니다.
-        </Typography>
-      </Box>
+  return (
+    <Stack spacing={1}>
+      <PageToolbar
+        divider={false}
+        breadcrumbs={["시스템관리", "보안관리", "ACL 관리"]}
+        label="클래스, SID, 오브젝트 아이덴티티, 엔트리를 한 화면에서 관리합니다."
+        onRefresh={() => void refreshAllGrids()}
+      />
 
       {pageError ? <Alert severity="error">{pageError}</Alert> : null}
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack spacing={2}>
-          <SectionHeader
-            title="ACL 클래스"
-            onAdd={() => setCreateClassOpen(true)}
-            onRefresh={() => {
-              classesGridRef.current?.refresh();
-              void refreshLookups();
-            }}
-          />
-          <PageableGridContent<AclClassDto>
-            ref={classesGridRef}
-            datasource={classesDataSource}
-            columns={classesColumnDefs}
-            height={260}
-          />
-        </Stack>
-      </Paper>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1080px) 180px" }, gap: 2 }}>
+        <Stack spacing={1} sx={{ maxWidth: 1080, width: "100%" }}>
+          <Paper ref={classesSectionRef} elevation={0} sx={{ p: 0, scrollMarginTop: 56 }}>
+            <Stack spacing={1}>
+              <SectionHeader
+                title="ACL 클래스"
+                onAdd={() => setCreateClassOpen(true)}
+                onRefresh={() => {
+                  classesGridRef.current?.refresh();
+                  void refreshLookups();
+                }}
+              />
+              <PageableGridContent<AclClassDto>
+                ref={classesGridRef}
+                datasource={classesDataSource}
+                columns={classesColumnDefs}
+                height={500}
+              />
+            </Stack>
+          </Paper>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack spacing={2}>
-          <SectionHeader
-            title="ACL SID"
-            onAdd={() => setCreateSidOpen(true)}
-            onRefresh={() => {
-              sidsGridRef.current?.refresh();
-              void refreshLookups();
-            }}
-          />
-          <PageableGridContent<AclSidDto>
-            ref={sidsGridRef}
-            datasource={sidsDataSource}
-            columns={sidsColumnDefs}
-            height={260}
-          />
-        </Stack>
-      </Paper>
+          <Paper ref={sidsSectionRef} elevation={0} sx={{ p: 0, scrollMarginTop: 56 }}>
+            <Stack spacing={1}>
+              <SectionHeader
+                title="ACL SID"
+                onAdd={() => setCreateSidOpen(true)}
+                onRefresh={() => {
+                  sidsGridRef.current?.refresh();
+                  void refreshLookups();
+                }}
+              />
+              <PageableGridContent<AclSidDto>
+                ref={sidsGridRef}
+                datasource={sidsDataSource}
+                columns={sidsColumnDefs}
+                height={500}
+              />
+            </Stack>
+          </Paper>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack spacing={2}>
-          <SectionHeader
-            title="오브젝트 아이덴티티"
-            onAdd={() => setCreateObjectOpen(true)}
-            onRefresh={() => {
-              objectsGridRef.current?.refresh();
-              void refreshLookups();
-            }}
-          />
-          <PageableGridContent<AclObjectIdentityDto>
-            ref={objectsGridRef}
-            datasource={objectsDataSource}
-            columns={objectsColumnDefs}
-            height={280}
-          />
-        </Stack>
-      </Paper>
+          <Paper ref={objectsSectionRef} elevation={0} sx={{ p: 0, scrollMarginTop: 56 }}>
+            <Stack spacing={1}>
+              <SectionHeader
+                title="오브젝트 아이덴티티"
+                onAdd={() => setCreateObjectOpen(true)}
+                onRefresh={() => {
+                  objectsGridRef.current?.refresh();
+                  void refreshLookups();
+                }}
+              />
+              <PageableGridContent<AclObjectIdentityDto>
+                ref={objectsGridRef}
+                datasource={objectsDataSource}
+                columns={objectsColumnDefs}
+                height={500}
+              />
+            </Stack>
+          </Paper>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack spacing={2}>
-          <SectionHeader
-            title="ACL 엔트리"
-            onAdd={() => setCreateEntryOpen(true)}
-            onRefresh={() => entriesGridRef.current?.refresh()}
-          />
-          <PageableGridContent<AclEntryDto>
-            ref={entriesGridRef}
-            datasource={entriesDataSource}
-            columns={entriesColumnDefs}
-            height={320}
-          />
+          <Paper ref={entriesSectionRef} elevation={0} sx={{ p: 0, scrollMarginTop: 56 }}>
+            <Stack spacing={1}>
+              <SectionHeader
+                title="ACL 엔트리"
+                onAdd={() => setCreateEntryOpen(true)}
+                onRefresh={() => entriesGridRef.current?.refresh()}
+              />
+              <PageableGridContent<AclEntryDto>
+                ref={entriesGridRef}
+                datasource={entriesDataSource}
+                columns={entriesColumnDefs}
+                height={500}
+              />
+            </Stack>
+          </Paper>
         </Stack>
-      </Paper>
 
-      <Divider />
+        <Box
+          component="aside"
+          sx={{
+            display: { xs: "none", lg: "block" },
+            position: "sticky",
+            top: 16,
+            alignSelf: "start",
+            borderLeft: "1px solid",
+            borderColor: "divider",
+            pl: 2,
+            py: 1,
+          }}
+        >
+          <Typography variant="caption" color="text.secondary" fontWeight={700}>
+            Contents
+          </Typography>
+          <Stack spacing={0.5} sx={{ mt: 1 }}>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "classes" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "classes" ? 700 : 400,
+                borderLeft: activeSection === "classes" ? "2px solid" : "2px solid transparent",
+                borderColor: activeSection === "classes" ? "primary.main" : "transparent",
+                pl: 1,
+              }}
+              onClick={() => handleSectionChange("classes")}
+            >
+              ACL 클래스
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "sids" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "sids" ? 700 : 400,
+                borderLeft: activeSection === "sids" ? "2px solid" : "2px solid transparent",
+                borderColor: activeSection === "sids" ? "primary.main" : "transparent",
+                pl: 1,
+              }}
+              onClick={() => handleSectionChange("sids")}
+            >
+              ACL SID
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "objects" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "objects" ? 700 : 400,
+                borderLeft: activeSection === "objects" ? "2px solid" : "2px solid transparent",
+                borderColor: activeSection === "objects" ? "primary.main" : "transparent",
+                pl: 1,
+              }}
+              onClick={() => handleSectionChange("objects")}
+            >
+              오브젝트 아이덴티티
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "entries" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "entries" ? 700 : 400,
+                borderLeft: activeSection === "entries" ? "2px solid" : "2px solid transparent",
+                borderColor: activeSection === "entries" ? "primary.main" : "transparent",
+                pl: 1,
+              }}
+              onClick={() => handleSectionChange("entries")}
+            >
+              ACL 엔트리
+            </Button>
+          </Stack>
+        </Box>
+      </Box>
 
       <CreateClassDialog
         open={createClassOpen}

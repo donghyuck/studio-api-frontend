@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Box, Button, Stack, Typography } from "@mui/material";
-import { EmailOutlined, RefreshOutlined } from "@mui/icons-material";
+import { Alert, IconButton, Stack, Tooltip } from "@mui/material";
+import { EmailOutlined } from "@mui/icons-material";
 import type { ColDef } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
@@ -9,6 +9,7 @@ import { MailSyncLogDataSource } from "@/react/pages/mail/datasource";
 import { toast } from "@/react/feedback";
 import type { MailSyncLogDto } from "@/types/studio/mail";
 import { resolveAxiosError } from "@/utils/helpers";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 export function MailSyncPage() {
   const gridRef = useRef<PageableGridContentHandle<MailSyncLogDto>>(null);
@@ -27,14 +28,14 @@ export function MailSyncPage() {
         headerName: "시작일",
         flex: 0.55,
         sortable: true,
-        valueFormatter: (params) => (params.value ? new Date(params.value).toLocaleString() : ""),
+        type: "datetime",
       },
       {
         field: "finishedAt",
         headerName: "종료일",
         flex: 0.55,
         sortable: true,
-        valueFormatter: (params) => (params.value ? new Date(params.value).toLocaleString() : ""),
+        type: "datetime",
       },
       { field: "status", headerName: "상태", flex: 0.3, sortable: true },
       { field: "message", headerName: "메시지", flex: 1 },
@@ -58,6 +59,7 @@ export function MailSyncPage() {
       },
       () => {
         setError("메일 동기화 SSE 연결에 실패했습니다.");
+        setSyncing(false);
       }
     );
 
@@ -72,33 +74,33 @@ export function MailSyncPage() {
     try {
       await reactMailApi.startSync();
       toast.info("메일 동기화를 요청했습니다.");
+      gridRef.current?.refresh();
     } catch (syncError) {
       const message = resolveAxiosError(syncError);
       setError(message);
       toast.error(message);
+    } finally {
       setSyncing(false);
     }
   }
 
   return (
-    <Stack spacing={2}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h6">메일 동기화</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button
-            startIcon={<EmailOutlined />}
-            variant="contained"
-            onClick={() => void handleSync()}
-            disabled={syncing}
-          >
-            메일 동기화 요청
-          </Button>
-          <Button startIcon={<RefreshOutlined />} onClick={() => gridRef.current?.refresh()}>
-            새로고침
-          </Button>
-        </Stack>
-      </Box>
-
+    <Stack spacing={0.5}>
+      <PageToolbar
+        divider={false}
+        breadcrumbs={["애플리케이션", "메일", "Sync"]}
+        label="메일 동기화를 요청하고 처리 로그를 확인합니다."
+        onRefresh={() => gridRef.current?.refresh()}
+        actions={
+          <Tooltip title="메일 동기화를 요청합니다.">
+            <span>
+              <IconButton size="small" onClick={() => void handleSync()} disabled={syncing}>
+                <EmailOutlined fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        }
+      />
       {error ? <Alert severity="error">{error}</Alert> : null}
 
       <PageableGridContent<MailSyncLogDto>

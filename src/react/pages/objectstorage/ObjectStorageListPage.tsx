@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Alert, Box, Breadcrumbs, Button, Stack, Typography } from "@mui/material";
-import { RefreshOutlined } from "@mui/icons-material";
+import { Alert, Box, Button, Stack } from "@mui/material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import type { GridContentHandle } from "@/react/components/ag-grid/types";
 import { reactObjectStorageApi } from "@/react/pages/objectstorage/api";
 import { objectStorageQueryKeys } from "@/react/pages/objectstorage/queryKeys";
 import type { ProviderDto } from "@/types/studio/storage";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 export function ObjectStorageListPage() {
   const navigate = useNavigate();
@@ -27,13 +27,23 @@ export function ObjectStorageListPage() {
         flex: 0.7,
         sortable: true,
         cellRenderer: (params: ICellRendererParams<ProviderDto>) => (
-          <Button
-            variant="text"
-            size="small"
+          <Box
+            component="button"
+            type="button"
             onClick={() => navigate(`/services/object-storage/${params.data?.name}`)}
+            sx={{
+              border: 0,
+              p: 0,
+              bgcolor: "transparent",
+              color: "primary.main",
+              cursor: "pointer",
+              font: "inherit",
+              textAlign: "left",
+              "&:hover": { textDecoration: "underline" },
+            }}
           >
             {params.value}
-          </Button>
+          </Box>
         ),
       },
       { field: "type", headerName: "유형", flex: 0.4, sortable: true },
@@ -45,17 +55,13 @@ export function ObjectStorageListPage() {
   );
 
   return (
-    <Stack spacing={2}>
-      <Breadcrumbs separator="›">
-        <Typography color="text.secondary">서비스 관리</Typography>
-        <Typography color="text.primary">Object Storage</Typography>
-      </Breadcrumbs>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h5">Providers</Typography>
-        <Button startIcon={<RefreshOutlined />} onClick={() => providersQuery.refetch()}>
-          새로고침
-        </Button>
-      </Box>
+    <Stack spacing={0.5}>
+      <PageToolbar
+        divider={false}
+        breadcrumbs={["서비스 관리", "Object Storage"]}
+        label="오브젝트 스토리지 provider를 조회합니다."
+        onRefresh={() => providersQuery.refetch()}
+      />
       {providersQuery.isError ? <Alert severity="error">Provider 목록을 불러오지 못했습니다.</Alert> : null}
       <GridContent<ProviderDto>
         ref={gridRef}

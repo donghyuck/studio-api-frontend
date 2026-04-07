@@ -35,7 +35,7 @@ export class ReactPageDataSource<T> implements AgGridCompatibleDataSource<T> {
   error: unknown = null;
   dataItems: T[] = [];
   total = 0;
-  pageSize = 20;
+  pageSize = 15;
   page = 0;
 
   protected filter: Record<string, unknown> = {};
