@@ -100,9 +100,18 @@ export function UsersPage() {
           <Chip
             size="small"
             label={params.value ? "활성" : "비활성"}
-            color={params.value ? "success" : "default"}
             variant={params.value ? "filled" : "outlined"}
-            sx={{ height: 22, fontSize: 11 }}
+            sx={{
+              height: 22,
+              fontSize: 11,
+              ...(params.value
+                ? {
+                    bgcolor: "#2563eb",
+                    color: "#ffffff",
+                    borderColor: "#1d4ed8",
+                  }
+                : {}),
+            }}
           />
         ),
         cellStyle: { textAlign: "center" },
