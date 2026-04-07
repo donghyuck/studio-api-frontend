@@ -3,18 +3,17 @@ import { useNavigate } from "react-router-dom";
 import {
   Box,
   Stack,
-  Breadcrumbs,
-  Typography,
-  Button,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
-import { AddOutlined, RefreshOutlined } from "@mui/icons-material";
+import { AddOutlined } from "@mui/icons-material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { CreateTemplateDialog } from "@/react/pages/templates/CreateTemplateDialog";
-import { reactTemplatesApi } from "./api";
 import type { TemplateSummaryDto } from "@/types/studio/template";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 class TemplatesDataSource extends ReactPageDataSource<TemplateSummaryDto> {
   constructor() {
@@ -37,39 +36,47 @@ export function TemplatesPage() {
         sortable: true,
         filter: false,
         cellRenderer: (params: ICellRendererParams<TemplateSummaryDto>) => (
-          <Button
-            variant="text"
-            size="small"
+          <Box
+            component="button"
+            type="button"
             onClick={() => navigate(`/application/templates/${params.data?.templateId}`)}
+            sx={{
+              border: 0,
+              p: 0,
+              bgcolor: "transparent",
+              color: "primary.main",
+              cursor: "pointer",
+              font: "inherit",
+              textAlign: "left",
+              "&:hover": { textDecoration: "underline" },
+            }}
           >
             {params.value}
-          </Button>
+          </Box>
         ),
       },
       { field: "displayName", headerName: "표시 이름", flex: 1.5, sortable: true, filter: false },
       { field: "objectType", headerName: "오브젝트 타입", flex: 0.8, sortable: false, filter: false },
-      { field: "updatedAt", headerName: "수정일시", flex: 1, sortable: true, filter: false },
+      { field: "updatedAt", headerName: "수정일시", type: "datetime", flex: 1, sortable: true, filter: false },
     ],
     [navigate]
   );
 
   return (
-    <Stack spacing={2}>
-      <Breadcrumbs separator="›">
-        <Typography color="text.secondary">애플리케이션</Typography>
-        <Typography color="text.primary">템플릿</Typography>
-      </Breadcrumbs>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h5">템플릿 목록</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button startIcon={<AddOutlined />} onClick={() => setCreateOpen(true)}>
-            템플릿 생성
-          </Button>
-          <Button startIcon={<RefreshOutlined />} onClick={() => gridRef.current?.refresh()}>
-            새로고침
-          </Button>
-        </Stack>
-      </Box>
+    <Stack spacing={0.5}>
+      <PageToolbar
+        divider={false}
+        breadcrumbs={["애플리케이션", "템플릿"]}
+        label="템플릿을 조회하고 생성합니다."
+        onRefresh={() => gridRef.current?.refresh()}
+        actions={
+          <Tooltip title="템플릿을 생성합니다.">
+            <IconButton size="small" onClick={() => setCreateOpen(true)}>
+              <AddOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        }
+      />
       <PageableGridContent<TemplateSummaryDto>
         ref={gridRef}
         datasource={dataSource}

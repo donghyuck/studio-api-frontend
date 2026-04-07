@@ -7,13 +7,32 @@ interface Props {
 
 export function AppShellHeader({ children, leading }: Props) {
   return (
-    <AppBar position="static" color="inherit" elevation={1}>
-      <Toolbar sx={{ justifyContent: "space-between" }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          {leading}
-          <Typography variant="h6" color="text.primary">
-            Studio One Platform
-          </Typography>
+    <AppBar position="static" color="inherit" elevation={0}>
+      <Toolbar
+        sx={{
+          minHeight: 64,
+          justifyContent: "space-between",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          bgcolor: "#ffffff",
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+          }}
+        >
+          <Box sx={{ display: "flex", alignItems: "center" }}>{leading}</Box>
+          <Box>
+            <Typography variant="subtitle1" color="text.primary" fontWeight={700}>
+              Studio One Platform
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Operator console
+            </Typography>
+          </Box>
         </Box>
         {children}
       </Toolbar>

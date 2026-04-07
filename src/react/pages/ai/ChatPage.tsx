@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
-  Breadcrumbs,
   Button,
   Card,
   CardContent,
@@ -14,6 +13,7 @@ import {
 import { reactAiApi } from "@/react/pages/ai/api";
 import type { AiInfoResponse, ChatMessageDto, ProviderInfo } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 type ChatMessage = ChatMessageDto & { model?: string };
 
@@ -79,37 +79,44 @@ export function ChatPage() {
   }
 
   return (
-    <Stack spacing={2}>
-      <Breadcrumbs separator="›">
-        <Typography color="text.secondary">서비스 관리</Typography>
-        <Typography color="text.secondary">AI</Typography>
-        <Typography color="text.primary">Chat</Typography>
-      </Breadcrumbs>
-      <Typography variant="h5">AI Chat</Typography>
-      {error ? <Alert severity="error">{error}</Alert> : null}
-      <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-        <TextField
-          select
-          label="Provider"
-          value={provider}
-          onChange={(event) => handleProviderChange(event.target.value)}
-          fullWidth
-        >
-          {providers.map((item) => (
-            <MenuItem key={item.name} value={item.name}>
-              {item.name}
-            </MenuItem>
-          ))}
-        </TextField>
-        <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth />
-      </Stack>
-      <TextField
-        label="System Prompt"
-        value={systemPrompt}
-        onChange={(event) => setSystemPrompt(event.target.value)}
-        multiline
-        minRows={2}
+    <Stack spacing={1}>
+      <PageToolbar
+        divider={false}
+        breadcrumbs={["서비스 관리", "AI", "Chat"]}
+        label="Provider와 모델을 선택해 AI Chat 요청을 보냅니다."
       />
+      {error ? <Alert severity="error">{error}</Alert> : null}
+      <Card variant="outlined">
+        <CardContent>
+          <Stack spacing={2}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <TextField
+                select
+                label="Provider"
+                value={provider}
+                onChange={(event) => handleProviderChange(event.target.value)}
+                fullWidth
+                size="small"
+              >
+                {providers.map((item) => (
+                  <MenuItem key={item.name} value={item.name}>
+                    {item.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth size="small" />
+            </Stack>
+            <TextField
+              label="System Prompt"
+              value={systemPrompt}
+              onChange={(event) => setSystemPrompt(event.target.value)}
+              multiline
+              minRows={2}
+              size="small"
+            />
+          </Stack>
+        </CardContent>
+      </Card>
       <Card variant="outlined">
         <CardContent>
           <Stack spacing={1.5}>

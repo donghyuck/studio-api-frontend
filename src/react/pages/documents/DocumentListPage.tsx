@@ -3,17 +3,16 @@ import { useNavigate } from "react-router-dom";
 import {
   Box,
   Stack,
-  Breadcrumbs,
-  Typography,
-  Button,
-  TextField,
+  IconButton,
+  Tooltip,
 } from "@mui/material";
-import { AddOutlined, RefreshOutlined, SearchOutlined } from "@mui/icons-material";
+import { AddOutlined } from "@mui/icons-material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { CreateDocumentDialog } from "@/react/pages/documents/CreateDocumentDialog";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 interface DocumentSummaryDto {
   documentId: number;
@@ -46,18 +45,28 @@ export function DocumentListPage() {
         sortable: true,
         filter: false,
         cellRenderer: (params: ICellRendererParams<DocumentSummaryDto>) => (
-          <Button
-            variant="text"
-            size="small"
+          <Box
+            component="button"
+            type="button"
             onClick={() => navigate(`/application/documents/${params.data?.documentId}`)}
+            sx={{
+              border: 0,
+              p: 0,
+              bgcolor: "transparent",
+              color: "primary.main",
+              cursor: "pointer",
+              font: "inherit",
+              textAlign: "left",
+              "&:hover": { textDecoration: "underline" },
+            }}
           >
             {params.value}
-          </Button>
+          </Box>
         ),
       },
       { field: "objectType", headerName: "오브젝트 타입", flex: 0.8, sortable: false, filter: false },
-      { field: "createdAt", headerName: "생성일시", flex: 1, sortable: true, filter: false },
-      { field: "updatedAt", headerName: "수정일시", flex: 1, sortable: true, filter: false },
+      { field: "createdAt", headerName: "생성일시", type: "datetime", flex: 1, sortable: true, filter: false },
+      { field: "updatedAt", headerName: "수정일시", type: "datetime", flex: 1, sortable: true, filter: false },
     ],
     [navigate]
   );
@@ -68,37 +77,23 @@ export function DocumentListPage() {
   }
 
   return (
-    <Stack spacing={2}>
-      <Breadcrumbs separator="›">
-        <Typography color="text.secondary">애플리케이션</Typography>
-        <Typography color="text.primary">문서</Typography>
-      </Breadcrumbs>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h5">문서 목록</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button startIcon={<AddOutlined />} onClick={() => setCreateOpen(true)}>
-            문서 생성
-          </Button>
-          <Button startIcon={<RefreshOutlined />} onClick={() => gridRef.current?.refresh()}>
-            새로고침
-          </Button>
-        </Stack>
-      </Box>
-      <TextField
-        label="검색어"
-        variant="outlined"
-        size="small"
-        fullWidth
-        value={searchInput}
-        onChange={(e) => setSearchInput(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-        InputProps={{
-          endAdornment: (
-            <Button onClick={handleSearch} startIcon={<SearchOutlined />} size="small">
-              검색
-            </Button>
-          ),
-        }}
+    <Stack spacing={0.5}>
+      <PageToolbar
+        divider={false}
+        breadcrumbs={["애플리케이션", "문서"]}
+        label="문서를 검색하고 생성합니다."
+        onRefresh={() => gridRef.current?.refresh()}
+        searchPlaceholder="문서 검색"
+        searchValue={searchInput}
+        onSearchValueChange={setSearchInput}
+        onSearch={handleSearch}
+        actions={
+          <Tooltip title="문서를 생성합니다.">
+            <IconButton size="small" onClick={() => setCreateOpen(true)}>
+              <AddOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        }
       />
       <PageableGridContent<DocumentSummaryDto>
         ref={gridRef}

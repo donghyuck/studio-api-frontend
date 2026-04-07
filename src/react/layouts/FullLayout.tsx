@@ -1,8 +1,14 @@
 import {
   Box,
+  Avatar,
   Button,
+  ClickAwayListener,
   Divider,
   Drawer,
+  ToggleButton,
+  ToggleButtonGroup,
+  Paper,
+  Popper,
   IconButton,
   List,
   ListItemButton,
@@ -10,6 +16,8 @@ import {
   ListItemText,
   Tooltip,
   Typography,
+  MenuItem,
+  ListItemText as MuiListItemText,
   useMediaQuery,
   useTheme,
 } from "@mui/material";
@@ -29,11 +37,21 @@ import {
   RuleOutlined,
   StorageOutlined,
   TopicOutlined,
+  LogoutOutlined,
+  ListAltOutlined,
+  ComputerOutlined,
+  LightModeOutlined,
+  DarkModeOutlined,
 } from "@mui/icons-material";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useState } from "react";
 import { AppShellHeader } from "@/react/layouts/AppShellHeader";
 import { useAuthStore } from "@/react/auth/store";
+import { PasswordChangeDialog } from "@/react/pages/profile/PasswordChangeDialog";
+import { SessionStatusChip } from "@/react/components/auth/SessionStatusChip";
+import { API_BASE_URL } from "@/config/backend";
+import NO_AVATAR from "@/assets/images/users/no-avatar.png";
+import { useThemeMode } from "@/react/theme/AppThemeProvider";
 
 const DRAWER_WIDTH = 248;
 
@@ -67,9 +85,15 @@ export function FullLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
+  const refreshTokens = useAuthStore((state) => state.refreshTokens);
   const logoutEverywhere = useAuthStore((state) => state.logoutEverywhere);
+  const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+  const [profileAnchor, setProfileAnchor] = useState<HTMLElement | null>(null);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const profileOpen = Boolean(profileAnchor);
 
   const sections = useMemo<NavSection[]>(
     () => [
@@ -83,13 +107,23 @@ export function FullLayout() {
       {
         title: "Application",
         items: [
-          { label: "파일", path: "/application/files", icon: <FolderOpenOutlined fontSize="small" /> },
           {
             label: "메일",
             path: "/application/mail/inbox",
             icon: <MailOutline fontSize="small" />,
             match: (pathname) => pathname.startsWith("/application/mail"),
           },
+          {
+            label: "포럼 관리",
+            path: "/admin/forums",
+            icon: <ForumOutlined fontSize="small" />,
+          },
+        ],
+      },
+      {
+        title: "Resource",
+        items: [
+          { label: "파일", path: "/application/files", icon: <FolderOpenOutlined fontSize="small" /> },
           {
             label: "문서",
             path: "/application/documents",
@@ -110,6 +144,7 @@ export function FullLayout() {
             path: "/policy/object-types",
             icon: <RuleOutlined fontSize="small" />,
           },
+          { label: "ACL", path: "/admin/acl", icon: <RuleOutlined fontSize="small" /> },
         ],
       },
       {
@@ -138,16 +173,10 @@ export function FullLayout() {
           { label: "회원", path: "/admin/users", icon: <AccountCircleOutlined fontSize="small" /> },
           { label: "그룹", path: "/admin/groups", icon: <GroupOutlined fontSize="small" /> },
           { label: "역할", path: "/admin/roles", icon: <RuleOutlined fontSize="small" /> },
-          { label: "ACL", path: "/admin/acl", icon: <RuleOutlined fontSize="small" /> },
           {
             label: "로그인 실패 감사",
             path: "/admin/audit/login-failures",
             icon: <ArticleOutlined fontSize="small" />,
-          },
-          {
-            label: "포럼 관리",
-            path: "/admin/forums",
-            icon: <ForumOutlined fontSize="small" />,
           },
         ],
       },
@@ -191,6 +220,10 @@ export function FullLayout() {
   }, [sectionDefaults]);
 
   const drawerWidth = collapsed ? 0 : DRAWER_WIDTH;
+  const displayName = user?.name || user?.username || "사용자";
+  const profileImageUrl = user?.username
+    ? `${API_BASE_URL}/api/profile/${encodeURIComponent(user.username)}/avatar`
+    : NO_AVATAR;
 
   const drawerContent = (
     <Box
@@ -198,13 +231,19 @@ export function FullLayout() {
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        bgcolor: "#e9eef5",
+        bgcolor: "#ffffff",
         color: "#1f2937",
       }}
     >
-      <Box sx={{ flex: 1, overflowY: "auto", py: 1 }}>
+      <Box sx={{ flex: 1, overflowY: "auto", py: 2 }}>
         {sections.map((section) => (
-          <Box key={section.title} sx={{ mb: 1 }}>
+          <Box
+            key={section.title}
+            sx={{
+              mb: 1,
+              px: 2,
+            }}
+          >
             {!collapsed ? (
               <ListItemButton
                 onClick={() =>
@@ -214,18 +253,29 @@ export function FullLayout() {
                   }))
                 }
                 sx={{
-                  mx: 1.5,
-                  mb: 0.5,
-                  minHeight: 38,
-                  borderRadius: 2,
-                  px: 1.5,
+                  minHeight: 34,
+                  borderRadius: 1,
+                  px: 0,
+                  py: 0.5,
                   justifyContent: "space-between",
-                  color: "#334155",
+                  color: "#111827",
+                  bgcolor: "transparent",
+                  "&:hover": {
+                    bgcolor: "transparent",
+                    color: "#2563eb",
+                  },
                 }}
               >
                 <Typography
                   variant="caption"
-                  sx={{ textTransform: "uppercase", fontWeight: 700, letterSpacing: 0.4 }}
+                  sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.5,
+                    textTransform: "uppercase",
+                    fontWeight: 500,
+                    letterSpacing: 0.2,
+                  }}
                 >
                   {section.title}
                 </Typography>
@@ -239,7 +289,10 @@ export function FullLayout() {
             <List
               disablePadding
               sx={{
-                px: collapsed ? 1 : 1.5,
+                ml: 0,
+                pl: 1.5,
+                pr: 0,
+                borderLeft: "1px solid rgba(148,163,184,0.45)",
                 display: collapsed || expandedSections[section.title] ? "block" : "none",
               }}
             >
@@ -251,28 +304,37 @@ export function FullLayout() {
                     selected={active}
                     onClick={() => navigate(item.path)}
                     sx={{
-                      minHeight: 42,
-                      borderRadius: 2,
-                      mb: 0.5,
-                      px: collapsed ? 1.25 : 1.5,
+                      position: "relative",
+                      minHeight: 30,
+                      borderRadius: 1,
+                      mb: 0.25,
+                      px: 1,
+                      py: 0.25,
+                      ml: -0.5,
                       justifyContent: collapsed ? "center" : "flex-start",
-                      color: active ? "#0f172a" : "#334155",
+                      color: active ? "#2563eb" : "#4b5563",
                       "&.Mui-selected": {
-                        bgcolor: "rgba(148,163,184,0.22)",
+                        bgcolor: "transparent",
+                        color: "#2563eb",
+                        fontWeight: 700,
                       },
                       "&.Mui-selected:hover": {
-                        bgcolor: "rgba(148,163,184,0.28)",
+                        bgcolor: "rgba(37,99,235,0.06)",
                       },
                       "&:hover": {
-                        bgcolor: "rgba(148,163,184,0.14)",
+                        bgcolor: "rgba(37,99,235,0.06)",
+                        color: "#2563eb",
                       },
                     }}
                   >
                     <ListItemIcon
                       sx={{
-                        minWidth: collapsed ? 0 : 36,
-                        color: active ? "#0f172a" : "#475569",
+                        minWidth: collapsed ? 0 : 30,
+                        color: "inherit",
                         justifyContent: "center",
+                        "& svg": {
+                          fontSize: 18,
+                        },
                       }}
                     >
                       {item.icon}
@@ -323,16 +385,164 @@ export function FullLayout() {
           </IconButton>
         }
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-          <Button variant="text" size="small" onClick={() => navigate("/profile")}>
-            내 프로필
-          </Button>
-          <Typography variant="body2" color="text.secondary">
-            {user?.name ?? user?.username ?? "사용자"}
-          </Typography>
-          <Button variant="outlined" size="small" onClick={() => void logoutEverywhere()}>
-            로그아웃
-          </Button>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            pr: 1,
+          }}
+        >
+          <Box sx={{ display: { xs: "none", md: "block" } }}>
+            <SessionStatusChip token={token} refreshTokens={refreshTokens} />
+          </Box>
+          <Box sx={{ textAlign: "right", display: { xs: "none", sm: "block" } }}>
+            <Typography variant="caption" color="text.primary" fontWeight={600} sx={{ lineHeight: 1.1, display: "block" }}>
+              {displayName}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11, lineHeight: 1.1 }}>
+              {user?.email || user?.username || ""}
+            </Typography>
+          </Box>
+          <IconButton
+            onClick={(event) =>
+              setProfileAnchor((anchor) => (anchor ? null : event.currentTarget))
+            }
+            size="small"
+            aria-label="사용자 메뉴"
+          >
+            <Avatar
+              alt={displayName}
+              src={profileImageUrl}
+              imgProps={{
+                onError: (event) => {
+                  event.currentTarget.src = NO_AVATAR;
+                },
+              }}
+              sx={{ width: 30, height: 30, bgcolor: "grey.200" }}
+            />
+          </IconButton>
+          <Popper
+            open={profileOpen}
+            anchorEl={profileAnchor}
+            placement="bottom-end"
+            sx={{ zIndex: (muiTheme) => muiTheme.zIndex.modal }}
+          >
+            <ClickAwayListener onClickAway={() => setProfileAnchor(null)}>
+              <Paper
+                elevation={8}
+                sx={{
+                  width: 320,
+                  mt: 1,
+                  borderRadius: 3,
+                  overflow: "hidden",
+                  border: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+              <Box
+                sx={{
+                  px: 2.5,
+                  py: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 1.5,
+                  bgcolor: "rgba(37,99,235,0.04)",
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                <Avatar
+                  alt={displayName}
+                  src={profileImageUrl}
+                  imgProps={{
+                    onError: (event) => {
+                      event.currentTarget.src = NO_AVATAR;
+                    },
+                  }}
+                  sx={{ width: 42, height: 42, bgcolor: "grey.200" }}
+                />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="subtitle2" noWrap>
+                    {displayName}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap>
+                    {user?.email || user?.username || ""}
+                  </Typography>
+                </Box>
+              </Box>
+            <MenuItem
+              onClick={() => {
+                setProfileAnchor(null);
+                navigate("/profile");
+              }}
+              sx={{ px: 2.5, py: 1.25 }}
+            >
+              <ListItemIcon>
+                <AccountCircleOutlined fontSize="small" />
+              </ListItemIcon>
+              <MuiListItemText primary="내 프로필" secondary={user?.username} />
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                setProfileAnchor(null);
+                setPasswordDialogOpen(true);
+              }}
+              sx={{ px: 2.5, py: 1.25 }}
+            >
+              <ListItemIcon>
+                <ListAltOutlined fontSize="small" />
+              </ListItemIcon>
+              <MuiListItemText primary="비밀번호 변경" />
+            </MenuItem>
+            <Divider />
+            <Box sx={{ px: 2.5, py: 1.5 }}>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                테마
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                fullWidth
+                size="small"
+                value={themeMode}
+                onChange={(_, nextMode) => {
+                  if (nextMode) {
+                    setThemeMode(nextMode);
+                  }
+                }}
+              >
+                <ToggleButton value="system" sx={{ gap: 0.5 }}>
+                  <ComputerOutlined fontSize="small" />
+                  시스템
+                </ToggleButton>
+                <ToggleButton value="light" sx={{ gap: 0.5 }}>
+                  <LightModeOutlined fontSize="small" />
+                  라이트
+                </ToggleButton>
+                <ToggleButton value="dark" sx={{ gap: 0.5 }}>
+                  <DarkModeOutlined fontSize="small" />
+                  다크
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+            <Divider />
+            <Box sx={{ px: 2.5, py: 2 }}>
+              <Button
+                variant="outlined"
+                color="primary"
+                fullWidth
+                startIcon={<LogoutOutlined fontSize="small" />}
+                onClick={() => {
+                  setProfileAnchor(null);
+                  void logoutEverywhere();
+                }}
+              >
+                로그아웃
+              </Button>
+            </Box>
+              </Paper>
+            </ClickAwayListener>
+          </Popper>
         </Box>
       </AppShellHeader>
       <Box sx={{ display: "flex", minHeight: "calc(100vh - 64px)" }}>
@@ -374,6 +584,10 @@ export function FullLayout() {
           <Outlet />
         </Box>
       </Box>
+      <PasswordChangeDialog
+        open={passwordDialogOpen}
+        onClose={() => setPasswordDialogOpen(false)}
+      />
     </Box>
   );
 }
