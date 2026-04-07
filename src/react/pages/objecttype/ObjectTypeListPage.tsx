@@ -1,15 +1,19 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
+  IconButton,
   Stack,
+  Tooltip,
 } from "@mui/material";
+import { AddCircleOutlineOutlined } from "@mui/icons-material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import type { ObjectTypeDto } from "@/types/studio/objecttype";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import { CreateObjectTypeDialog } from "./CreateObjectTypeDialog";
 
 class ObjectTypesDataSource extends ReactPageDataSource<ObjectTypeDto> {
   constructor() {
@@ -21,6 +25,7 @@ export function ObjectTypeListPage() {
   const navigate = useNavigate();
   const gridRef = useRef<PageableGridContentHandle<ObjectTypeDto>>(null);
   const dataSource = useMemo(() => new ObjectTypesDataSource(), []);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const columnDefs = useMemo<ColDef<ObjectTypeDto>[]>(
     () => [
@@ -65,11 +70,26 @@ export function ObjectTypeListPage() {
         breadcrumbs={["정책", "오브젝트 타입"]}
         label="데이터 타입 정의를 조회하고 관리합니다."
         onRefresh={() => gridRef.current?.refresh()}
+        actions={
+          <Tooltip title="새 오브젝트 타입을 생성합니다.">
+            <IconButton size="small" onClick={() => setCreateOpen(true)}>
+              <AddCircleOutlineOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        }
       />
       <PageableGridContent<ObjectTypeDto>
         ref={gridRef}
         datasource={dataSource}
         columns={columnDefs}
+      />
+      <CreateObjectTypeDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(objectType) => {
+          gridRef.current?.refresh();
+          navigate(`/policy/object-types/${objectType.objectType}`);
+        }}
       />
     </Stack>
   );
