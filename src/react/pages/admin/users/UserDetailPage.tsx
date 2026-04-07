@@ -85,14 +85,29 @@ export function UserDetailPage() {
           </>
         }
       />
-      <Stack spacing={2} sx={{ maxWidth: 600 }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr",
+            md: "repeat(2, minmax(0, 1fr))",
+          },
+          gap: 2,
+          alignItems: "center",
+        }}
+      >
         <TextField label="아이디" value={user.username} InputProps={{ readOnly: true }} size="small" />
         <TextField label="이름" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} size="small" />
         <TextField label="이메일" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} size="small" />
         <FormControlLabel control={<Switch checked={form.emailVisble} onChange={e => setForm(f => ({ ...f, emailVisble: e.target.checked }))} />} label="이메일 공개" />
         <FormControlLabel control={<Switch checked={form.nameVisible} onChange={e => setForm(f => ({ ...f, nameVisible: e.target.checked }))} />} label="이름 공개" />
         <FormControlLabel control={<Switch checked={form.enabled} onChange={e => setForm(f => ({ ...f, enabled: e.target.checked }))} />} label="계정 활성화" />
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
+        <Stack
+          direction="row"
+          spacing={1}
+          justifyContent="flex-end"
+          sx={{ gridColumn: "1 / -1" }}
+        >
           <Button
             variant="outlined"
             startIcon={<ManageAccountsOutlined />}
@@ -116,7 +131,7 @@ export function UserDetailPage() {
             {saving ? <CircularProgress size={20} /> : "저장"}
           </Button>
         </Stack>
-      </Stack>
+      </Box>
       <UserRolesDialog open={rolesOpen} onClose={() => setRolesOpen(false)} userId={user.userId} username={user.username} />
       <PasswordResetDialog open={resetOpen} onClose={() => setResetOpen(false)} userId={user.userId} username={user.username} />
     </Stack>
