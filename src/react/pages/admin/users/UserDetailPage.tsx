@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Box, Stack, Button, TextField,
-  FormControlLabel, Switch, CircularProgress, Alert,
+  Box, Stack, Button, IconButton, TextField,
+  FormControlLabel, Switch, CircularProgress, Alert, Tooltip,
 } from "@mui/material";
 import { KeyOutlined, ManageAccountsOutlined, SaveOutlined } from "@mui/icons-material";
 import { useToast } from "@/react/feedback";
@@ -58,6 +58,32 @@ export function UserDetailPage() {
         label="회원 정보를 조회하고 계정 상태를 관리합니다."
         previous
         onPrevious={() => navigate("/admin/users")}
+        actions={
+          <>
+            <Tooltip title="역할 관리">
+              <IconButton size="small" onClick={() => setRolesOpen(true)}>
+                <ManageAccountsOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="비밀번호 재설정">
+              <IconButton size="small" onClick={() => setResetOpen(true)}>
+                <KeyOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="저장">
+              <span>
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? <CircularProgress size={18} /> : <SaveOutlined fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
+          </>
+        }
       />
       <Stack spacing={2} sx={{ maxWidth: 600 }}>
         <TextField label="아이디" value={user.username} InputProps={{ readOnly: true }} size="small" />
