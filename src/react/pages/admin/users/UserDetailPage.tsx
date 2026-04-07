@@ -95,7 +95,6 @@ export function UserDetailPage() {
           gap: 2,
           alignItems: "center",
           width: "100%",
-          maxWidth: 600,
           mx: "auto",
         }}
       >
