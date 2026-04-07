@@ -1,3 +1,4 @@
+import type { SortModelItem } from "ag-grid-community";
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -14,10 +15,44 @@ import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import type { ObjectTypeDto } from "@/types/studio/objecttype";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { CreateObjectTypeDialog } from "./CreateObjectTypeDialog";
+import { reactObjectTypeApi } from "./api";
 
 class ObjectTypesDataSource extends ReactPageDataSource<ObjectTypeDto> {
   constructor() {
     super("/api/mgmt/object-types");
+  }
+
+  async fetch() {
+    this.loading = true;
+    this.error = null;
+    try {
+      const rows = await reactObjectTypeApi.list(this.filter);
+      this.dataItems = Array.isArray(rows) ? rows : [];
+      this.total = this.dataItems.length;
+      this.page = 0;
+      this.isLoaded = true;
+    } catch (error) {
+      this.error = error;
+      throw error;
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  async fetchForAgGrid({
+    startRow,
+    endRow,
+  }: {
+    startRow: number;
+    endRow: number;
+    sortModel?: SortModelItem[];
+    filterModel?: Record<string, unknown>;
+  }) {
+    await this.fetch();
+    return {
+      rows: this.dataItems.slice(startRow, endRow),
+      total: this.total,
+    };
   }
 }
 
