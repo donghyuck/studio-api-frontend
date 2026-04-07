@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { api as httpApi } from "@/data/http";
 import axios from "@/plugins/axios";
 import type { AxiosProgressEvent, AxiosResponse } from "axios";
-import type { PageableDataSource } from "@/types/ag-gird";
+import type { PageableDataSource } from "@/types/ag-grid";
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";
 import { handleBlobDownloadResponse } from "@/data/http/http-download";
 import type { PasswordPolicyDto, ResetPasswordRequest, UserDto } from "@/types/studio/user";

@@ -1,6 +1,6 @@
 import { DEFAULT_PAGE_SIZE } from "@/data/studio/public";
 import { api } from "@/data/http";
-import type { FetchOptions, PageQuery, PageableDataSource } from "@/types/ag-gird";
+import type { FetchOptions, PageQuery, PageableDataSource } from "@/types/ag-grid";
 import type { SortModelItem } from "ag-grid-community";
 import { ref, type Ref } from "vue";
 

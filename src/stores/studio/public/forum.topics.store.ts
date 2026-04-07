@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { AgGridDataSource } from "@/data/datasource/ag-grid.datasource";
-import type { PageableDataSource } from "@/types/ag-gird";
+import type { PageableDataSource } from "@/types/ag-grid";
 import type { TopicSummaryResponse } from "@/types/studio/forums";
 
 export type PublicForumTopicsDataSource = PageableDataSource & {

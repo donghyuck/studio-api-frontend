@@ -3,7 +3,7 @@ import {
   deleteAclClass,
   deleteAclClasss,
 } from "@/data/studio/mgmt/acl";
-import type { PageableDataSource } from "@/types/ag-gird";
+import type { PageableDataSource } from "@/types/ag-grid";
 import type { AclClassDto } from "@/types/studio/acl";
 import { defineStore } from "pinia";
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";

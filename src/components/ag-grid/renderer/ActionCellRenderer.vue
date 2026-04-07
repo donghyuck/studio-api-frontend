@@ -25,7 +25,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { hasCaps } from '@/types/ag-gird/caps'
+import { hasCaps } from '@/types/ag-grid/caps'
 
 type ValueOrFn<T> = T | ((ctx: Ctx) => T)
 

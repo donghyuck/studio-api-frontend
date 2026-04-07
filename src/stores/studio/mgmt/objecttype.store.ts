@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { PageableDataSource, PageQuery, FetchOptions } from "@/types/ag-gird";
+import type { PageableDataSource, PageQuery, FetchOptions } from "@/types/ag-grid";
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";
 import type { ObjectTypeDto } from "@/types/studio/objecttype";
 import { objectTypeAdminApi } from "@/data/studio/mgmt/objecttype";

@@ -12,7 +12,7 @@
 <script setup lang="ts">
 import gridOptions from '@/components/ag-grid/ag-grid-options';
 import { useToast } from '@/plugins/toast';
-import type { PageableDataSource } from "@/types/ag-gird";
+import type { PageableDataSource } from "@/types/ag-grid";
 import { resolveAxiosError, sleep } from '@/utils/helpers';
 import type {
   ColDef,

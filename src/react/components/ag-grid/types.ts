@@ -5,7 +5,7 @@ import type {
   RowModelType,
   SortModelItem,
 } from "ag-grid-community";
-import type { PageableDataSource } from "@/types/ag-gird";
+import type { PageableDataSource } from "@/types/ag-grid";
 
 export interface GridEventListener {
   type: string;

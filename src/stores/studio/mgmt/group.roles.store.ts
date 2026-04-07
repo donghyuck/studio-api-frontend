@@ -1,5 +1,5 @@
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";
-import type { PageableDataSource } from "@/types/ag-gird";
+import type { PageableDataSource } from "@/types/ag-grid";
 import { api } from "@/data/http";
 import { defineStore } from "pinia";
 import type { RoleDto } from "./roles.store";

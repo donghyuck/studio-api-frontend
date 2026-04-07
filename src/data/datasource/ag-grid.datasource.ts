@@ -3,7 +3,7 @@ import { ref, type Ref } from "vue";
 import { defineStore } from "pinia";
 import { api } from "@/data/http";
 import { DEFAULT_PAGE_SIZE } from "@/data/studio/public";
-import type { FetchOptions, PageQuery, PageableDataSource, PageResult } from "@/types/ag-gird";
+import type { FetchOptions, PageQuery, PageableDataSource, PageResult } from "@/types/ag-grid";
 
 type AgGridFilterModel = Record<string, any>;
 

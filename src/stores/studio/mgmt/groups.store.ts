@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { api } from "@/data/http";
-import type { PageableDataSource, CreateOptions } from "@/types/ag-gird";
+import type { PageableDataSource, CreateOptions } from "@/types/ag-grid";
 import { AbstractPageDataSource } from "@/data/datasource/abstract.page.datasource";
 export interface GroupDto {
   groupId: number;
