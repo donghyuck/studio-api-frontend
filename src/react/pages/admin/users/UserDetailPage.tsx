@@ -94,6 +94,7 @@ export function UserDetailPage() {
           },
           gap: 2,
           alignItems: "center",
+          maxWidth: 600,
         }}
       >
         <TextField label="아이디" value={user.username} InputProps={{ readOnly: true }} size="small" />
