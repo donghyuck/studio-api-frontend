@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Issue `#58` removed inactive legacy Vue view sources and Vue component files outside the React runtime.
+- Issue `#58` removed inactive legacy Vue view sources, Vue component files, and the dangling legacy Vue AG Grid options file outside the React runtime.
 - Issue `#60` renamed the misspelled AG Grid shared type path to `src/types/ag-grid`.
 - Issue `#53` moved React-facing document, object storage, forum role matrix, and AG Grid locale dependencies into the React TypeScript runtime boundary.
 - Issue `#52` removed React-inactive Vue ESLint/Vite cleanup leftovers, deleted dead Vuetify/Pinia plugin entry files, and switched ESLint to a React/TypeScript flat config.
@@ -16,6 +16,7 @@
 - Issue `#58`: `npm run typecheck`
 - Issue `#58`: `npm run lint`
 - Issue `#58`: `npm run build`
+- Issue `#58`: smoke test N/A (no React route changes)
 - Issue `#60`: confirm no legacy AG Grid type path references remain
 - Issue `#60`: `npm run typecheck`
 - Issue `#60`: `npm run lint`
