@@ -9,7 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
-  ArrowBackIosNewOutlined,
+  ArrowBackOutlined,
   CloseOutlined,
   RefreshOutlined,
   SearchOutlined,
@@ -96,7 +96,7 @@ export function PageToolbar({
             {previous ? (
               <Tooltip title="이전">
                 <IconButton size="small" onClick={onPrevious}>
-                  <ArrowBackIosNewOutlined fontSize="small" />
+                  <ArrowBackOutlined fontSize="small" />
                 </IconButton>
               </Tooltip>
             ) : null}
