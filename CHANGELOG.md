@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Issue `#59` split FullLayout navigation and user menu responsibilities into dedicated layout components.
 - Issue `#54` introduced a profile feature module pilot under `src/react/features/profile` while preserving the `/profile` route.
 - Issue `#66` restored object type creation in the React `/policy/object-types` page, including Vue-parity ID/code validation fields, array-backed list loading, list ID display, PageToolbar detail header, and detail deletion.
 - Issue `#58` removed inactive legacy Vue view sources, Vue component files, and the dangling legacy Vue AG Grid options file outside the React runtime.
@@ -14,6 +15,10 @@
 
 ### Verification
 
+- Issue `#59`: `npm run typecheck`
+- Issue `#59`: `npm run lint`
+- Issue `#59`: `npm run build`
+- Issue `#59`: manual check - dashboard/profile/admin route and navigation behavior reviewed in code
 - Issue `#54`: `npm run typecheck`
 - Issue `#54`: `npm run lint`
 - Issue `#54`: `npm run build`
