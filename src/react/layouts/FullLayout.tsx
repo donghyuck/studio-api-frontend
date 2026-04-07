@@ -17,6 +17,7 @@ import NO_AVATAR from "@/assets/images/users/no-avatar.png";
 import { useThemeMode } from "@/react/theme/AppThemeProvider";
 import {
   buildNavSections,
+  COLLAPSED_DRAWER_WIDTH,
   DRAWER_WIDTH,
   FullLayoutNavigation,
   matchesPath,
@@ -72,7 +73,7 @@ export function FullLayout() {
     });
   }, [sectionDefaults]);
 
-  const drawerWidth = collapsed ? 0 : DRAWER_WIDTH;
+  const drawerWidth = collapsed ? COLLAPSED_DRAWER_WIDTH : DRAWER_WIDTH;
   const displayName = user?.name || user?.username || "사용자";
   const emailOrUsername = user?.email || user?.username || "";
   const profileImageUrl = user?.username
@@ -91,7 +92,10 @@ export function FullLayout() {
           [title]: !current[title],
         }))
       }
-      onNavigate={(path) => navigate(path)}
+      onNavigate={(path) => {
+        navigate(path);
+        setMobileOpen(false);
+      }}
     />
   );
 
@@ -146,12 +150,12 @@ export function FullLayout() {
               width: drawerWidth,
               flexShrink: 0,
               overflow: "hidden",
-              borderRight: collapsed ? "none" : "1px solid",
+              borderRight: "1px solid",
               borderColor: "divider",
               transition: "width 160ms ease, border-color 160ms ease",
             }}
           >
-            {!collapsed ? navigation : null}
+            {navigation}
           </Box>
         ) : (
           <Drawer

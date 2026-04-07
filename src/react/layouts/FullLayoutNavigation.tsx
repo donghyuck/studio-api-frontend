@@ -25,6 +25,7 @@ import {
 } from "@mui/icons-material";
 
 export const DRAWER_WIDTH = 248;
+export const COLLAPSED_DRAWER_WIDTH = 64;
 
 export type NavItem = {
   label: string;
@@ -171,7 +172,7 @@ export function FullLayoutNavigation({
             key={section.title}
             sx={{
               mb: 1,
-              px: 2,
+              px: collapsed ? 1 : 2,
             }}
           >
             {!collapsed ? (
@@ -215,9 +216,9 @@ export function FullLayoutNavigation({
               disablePadding
               sx={{
                 ml: 0,
-                pl: 1.5,
+                pl: collapsed ? 0 : 1.5,
                 pr: 0,
-                borderLeft: "1px solid rgba(148,163,184,0.45)",
+                borderLeft: collapsed ? "none" : "1px solid rgba(148,163,184,0.45)",
                 display: collapsed || expandedSections[section.title] ? "block" : "none",
               }}
             >
