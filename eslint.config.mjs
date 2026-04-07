@@ -1,18 +1,18 @@
-import pluginVue from "eslint-plugin-vue";
-import prettierSkipFormatting from "@vue/eslint-config-prettier/skip-formatting";
-import {
-  configureVueProject,
-  defineConfigWithVueTs,
-  vueTsConfigs,
-} from "@vue/eslint-config-typescript";
+import js from "@eslint/js";
+import globals from "globals";
+import tseslint from "typescript-eslint";
 
-configureVueProject({
-  rootDir: import.meta.dirname,
-  scriptLangs: ["ts"],
-  tsSyntaxInTemplates: true,
-});
+const activeRuntimeFiles = [
+  "*.config.{js,mjs,cjs,ts,mts,cts}",
+  "env.d.ts",
+  "src/main.tsx",
+  "src/react/**/*.{ts,tsx}",
+  "src/config/**/*.ts",
+  "src/utils/**/*.ts",
+  "src/types/**/*.ts",
+];
 
-export default defineConfigWithVueTs(
+export default tseslint.config(
   {
     ignores: [
       ".claude/**",
@@ -26,42 +26,36 @@ export default defineConfigWithVueTs(
       "*.min.*",
     ],
   },
-  pluginVue.configs["flat/essential"],
-  vueTsConfigs.recommended,
-  prettierSkipFormatting,
   {
+    files: activeRuntimeFiles,
+    ...js.configs.recommended,
+  },
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: activeRuntimeFiles,
+  })),
+  {
+    files: activeRuntimeFiles,
     languageOptions: {
-      parserOptions: {
-        tsconfigRootDir: import.meta.dirname,
+      globals: {
+        ...globals.browser,
+        ...globals.es2022,
+        ...globals.node,
       },
     },
-  },
-  {
     rules: {
-      // Existing codebase uses `any` in a few integration-heavy areas (ag-grid, renderers).
-      // Keep lint actionable by allowing `any` for now; rely on `vue-tsc` for stricter checks.
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-
-      // Several SFCs currently omit `lang="ts"`; enforce later once the migration is complete.
-      "vue/block-lang": "off",
-
-      // Keep as warning to avoid breaking builds while still surfacing the risk.
-      "vue/no-v-text-v-html-on-component": "warn",
-
-      // Keep `npm run lint` green; tighten later as the codebase is cleaned up.
+      "no-prototype-builtins": "warn",
+      "no-useless-assignment": "warn",
+      "no-useless-catch": "warn",
+      "no-useless-escape": "warn",
+      "preserve-caught-error": "warn",
       "prefer-const": "warn",
       "no-var": "warn",
-      "vue/no-unused-vars": "warn",
-      "vue/valid-v-for": "warn",
-      "vue/multi-word-component-names": "off",
-      "vue/no-use-v-if-with-v-for": "warn",
-      "vue/valid-template-root": "warn",
-      "vue/no-ref-as-operand": "warn",
-      "vue/no-dupe-keys": "warn",
     },
   }
 );

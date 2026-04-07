@@ -4,10 +4,14 @@
 
 ### Changed
 
+- Issue `#52` removed React-inactive Vue ESLint/Vite cleanup leftovers, deleted dead Vuetify/Pinia plugin entry files, and switched ESLint to a React/TypeScript flat config.
 - Issue `#50` added `docs/react-maintainability-improvement-plan.md` to define the post-migration React structure improvement direction for the `2.x` runtime.
 
 ### Verification
 
+- Issue `#52`: `npm run typecheck`
+- Issue `#52`: `npm run lint`
+- Issue `#52`: `npm run build`
 - Reviewed the new document against the current React source tree and migration policy documents.
 - `npm run typecheck`
 
