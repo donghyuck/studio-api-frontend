@@ -4,12 +4,14 @@ import {
   Box,
   Stack,
   Button,
+  IconButton,
   TextField,
   CircularProgress,
   Alert,
   Card,
   CardContent,
   CardHeader,
+  Tooltip,
 } from "@mui/material";
 import { ArrowBackOutlined, DeleteOutlineOutlined, SaveOutlined } from "@mui/icons-material";
 import { useConfirm, useToast } from "@/react/feedback";
@@ -153,30 +155,35 @@ export function ObjectTypeDetailPage() {
         onRefresh={loadObjectType}
         actions={
           <>
-            <Button
-              variant="outlined"
-              startIcon={<ArrowBackOutlined />}
-              onClick={() => navigate("/policy/object-types")}
-            >
-              목록
-            </Button>
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<DeleteOutlineOutlined />}
-              onClick={() => void handleDelete()}
-              disabled={saving}
-            >
-              삭제
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<SaveOutlined />}
-              onClick={handleSave}
-              disabled={saving}
-            >
-              {saving ? <CircularProgress size={20} /> : "저장"}
-            </Button>
+            <Tooltip title="목록으로 이동">
+              <IconButton size="small" onClick={() => navigate("/policy/object-types")}>
+                <ArrowBackOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="오브젝트 타입 삭제">
+              <span>
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => void handleDelete()}
+                  disabled={saving}
+                >
+                  <DeleteOutlineOutlined fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="저장">
+              <span>
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? <CircularProgress size={18} /> : <SaveOutlined fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
           </>
         }
       />
