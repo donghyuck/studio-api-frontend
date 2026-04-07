@@ -13,7 +13,7 @@ import {
   CardHeader,
   Tooltip,
 } from "@mui/material";
-import { ArrowBackOutlined, DeleteOutlineOutlined, SaveOutlined } from "@mui/icons-material";
+import { DeleteOutlineOutlined, SaveOutlined } from "@mui/icons-material";
 import { useConfirm, useToast } from "@/react/feedback";
 import { reactObjectTypeApi } from "./api";
 import type { ObjectTypeDto, ObjectTypePolicyDto } from "@/types/studio/objecttype";
@@ -155,11 +155,6 @@ export function ObjectTypeDetailPage() {
         onRefresh={loadObjectType}
         actions={
           <>
-            <Tooltip title="목록으로 이동">
-              <IconButton size="small" onClick={() => navigate("/policy/object-types")}>
-                <ArrowBackOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
             <Tooltip title="오브젝트 타입 삭제">
               <span>
                 <IconButton
