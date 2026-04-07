@@ -22,6 +22,9 @@ export const reactObjectTypeApi = {
   patch: (objectType: number, payload: ObjectTypePatchRequest) =>
     apiRequest<ObjectTypeDto>("patch", `${BASE}/${objectType}`, { data: payload }),
 
+  delete: (objectType: number) =>
+    apiRequest<void>("delete", `${BASE}/${objectType}`),
+
   getPolicy: (objectType: number) =>
     apiRequest<ObjectTypePolicyDto>("get", `${BASE}/${objectType}/policy`),
 

@@ -14,8 +14,8 @@ import {
   CardContent,
   CardHeader,
 } from "@mui/material";
-import { ArrowBackOutlined, SaveOutlined } from "@mui/icons-material";
-import { useToast } from "@/react/feedback";
+import { ArrowBackOutlined, DeleteOutlineOutlined, SaveOutlined } from "@mui/icons-material";
+import { useConfirm, useToast } from "@/react/feedback";
 import { reactObjectTypeApi } from "./api";
 import type { ObjectTypeDto, ObjectTypePolicyDto } from "@/types/studio/objecttype";
 import { useAuthStore } from "@/react/auth/store";
@@ -24,6 +24,7 @@ export function ObjectTypeDetailPage() {
   const { objectTypeId } = useParams<{ objectTypeId: string }>();
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
   const { user } = useAuthStore();
   const [objectType, setObjectType] = useState<ObjectTypeDto | null>(null);
   const [policy, setPolicy] = useState<ObjectTypePolicyDto | null>(null);
@@ -106,6 +107,29 @@ export function ObjectTypeDetailPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!objectTypeId || !objectType) return;
+
+    const ok = await confirm({
+      title: "오브젝트 타입 삭제",
+      message: `${objectType.code} 오브젝트 타입을 삭제하시겠습니까?`,
+      okText: "삭제",
+      cancelText: "취소",
+    });
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      await reactObjectTypeApi.delete(Number(objectTypeId));
+      toast.success("오브젝트 타입이 삭제되었습니다.");
+      navigate("/policy/object-types");
+    } catch {
+      toast.error("삭제에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
@@ -138,6 +162,15 @@ export function ObjectTypeDetailPage() {
             onClick={() => navigate("/policy/object-types")}
           >
             목록
+          </Button>
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteOutlineOutlined />}
+            onClick={() => void handleDelete()}
+            disabled={saving}
+          >
+            삭제
           </Button>
           <Button
             variant="contained"
