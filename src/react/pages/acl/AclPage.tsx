@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -401,6 +401,53 @@ export function AclPage() {
     }[section]?.current;
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  useEffect(() => {
+    let frameId = 0;
+    const sectionEntries = [
+      { key: "classes", ref: classesSectionRef },
+      { key: "sids", ref: sidsSectionRef },
+      { key: "objects", ref: objectsSectionRef },
+      { key: "entries", ref: entriesSectionRef },
+    ];
+
+    function updateActiveSection() {
+      const scrollAnchor = 120;
+      const visibleSection =
+        sectionEntries
+          .map(({ key, ref }) => ({
+            key,
+            top: ref.current?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY,
+          }))
+          .filter((section) => Number.isFinite(section.top))
+          .reduce(
+            (current, section) => {
+              if (section.top <= scrollAnchor && section.top > current.top) {
+                return section;
+              }
+              return current;
+            },
+            { key: sectionEntries[0].key, top: Number.NEGATIVE_INFINITY }
+          ).key;
+
+      setActiveSection(visibleSection);
+    }
+
+    function scheduleUpdate() {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(updateActiveSection);
+    }
+
+    updateActiveSection();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, []);
 
   return (
     <Stack spacing={1}>
