@@ -180,7 +180,7 @@ export function UserDetailPage() {
       />
       <Container maxWidth="md" disableGutters>
         <Grid container spacing={1} alignItems="center">
-          <Grid size={12}>
+          <Grid size={12} sx={{ mb: 2 }}>
             <Stack direction="row" spacing={2} alignItems="center">
               <Avatar
                 alt={user.username}
