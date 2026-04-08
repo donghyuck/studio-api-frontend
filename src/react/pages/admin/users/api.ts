@@ -3,6 +3,13 @@ import type { UserDto, PasswordPolicyDto, ResetPasswordRequest } from "@/types/s
 
 export interface UserRoleDto { roleId: number; name: string; description?: string | null; }
 
+export interface UserAvatarPresence {
+  hasAvatar: boolean;
+  count: number;
+  primaryImageId?: number | null;
+  primaryModifiedDate?: string | null;
+}
+
 export const reactUsersApi = {
   getUser: (userId: number) =>
     apiRequest<UserDto>("get", `/api/mgmt/users/${userId}`),
@@ -18,4 +25,20 @@ export const reactUsersApi = {
     apiRequest<PasswordPolicyDto>("get", "/api/mgmt/users/password-policy"),
   resetPassword: (userId: number, payload: ResetPasswordRequest) =>
     apiRequest<void>("post", `/api/mgmt/users/${userId}/password`, { data: payload }),
+  checkAvatarPresence: (userId: number) =>
+    apiRequest<UserAvatarPresence>("get", `/api/mgmt/users/${userId}/avatars/exists`),
+  uploadAvatar: (userId: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiRequest<{ id?: number; imageId?: number }, FormData>(
+      "post",
+      `/api/mgmt/users/${userId}/avatars`,
+      {
+        headers: { "Content-Type": "multipart/form-data" },
+        data: formData,
+      }
+    );
+  },
+  deleteAvatar: (userId: number, avatarId: number) =>
+    apiRequest<void>("delete", `/api/mgmt/users/${userId}/avatars/${avatarId}`),
 };

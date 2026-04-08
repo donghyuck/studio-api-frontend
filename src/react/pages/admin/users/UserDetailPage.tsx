@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
+  Avatar,
   Box,
   Stack,
   Button,
@@ -15,22 +16,29 @@ import {
   Container,
 } from "@mui/material";
 import {
+  DeleteOutlined,
   KeyOutlined,
   ManageAccountsOutlined,
   SaveOutlined,
+  UploadOutlined,
 } from "@mui/icons-material";
-import { useToast } from "@/react/feedback";
+import { useConfirm, useToast } from "@/react/feedback";
 import { reactUsersApi } from "./api";
 import { UserRolesDialog } from "./UserRolesDialog";
 import { PasswordResetDialog } from "./PasswordResetDialog";
 import type { UserDto } from "@/types/studio/user";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import { API_BASE_URL } from "@/config/backend";
+import NO_AVATAR from "@/assets/images/users/no-avatar.png";
 
 export function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const toast = useToast();
+  const confirm = useConfirm();
   const [user, setUser] = useState<UserDto | null>(null);
+  const [avatarImageId, setAvatarImageId] = useState<number | null>(null);
+  const [avatarVersion, setAvatarVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +57,7 @@ export function UserDetailPage() {
     setLoading(true);
     reactUsersApi
       .getUser(Number(userId))
-      .then((u) => {
+      .then(async (u) => {
         setUser(u);
         setForm({
           name: u.name,
@@ -58,6 +66,11 @@ export function UserDetailPage() {
           nameVisible: u.nameVisible,
           enabled: u.enabled,
         });
+        const presence = await reactUsersApi
+          .checkAvatarPresence(Number(userId))
+          .catch(() => null);
+        setAvatarImageId(presence?.primaryImageId ?? null);
+        setAvatarVersion((value) => value + 1);
         setError(null);
       })
       .catch(() => setError("사용자를 불러오지 못했습니다."))
@@ -77,6 +90,44 @@ export function UserDetailPage() {
     }
   }
 
+  async function handleAvatarUpload(file?: File) {
+    if (!userId || !file) return;
+    setSaving(true);
+    try {
+      const uploaded = await reactUsersApi.uploadAvatar(Number(userId), file);
+      setAvatarImageId(uploaded.id ?? uploaded.imageId ?? null);
+      setAvatarVersion((value) => value + 1);
+      toast.success("아바타 이미지가 업로드되었습니다.");
+    } catch {
+      toast.error("아바타 업로드에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAvatarDelete() {
+    if (!userId || !avatarImageId) return;
+    const ok = await confirm({
+      title: "아바타 삭제",
+      message: "아바타 이미지를 삭제하시겠습니까?",
+      okText: "삭제",
+      cancelText: "취소",
+    });
+    if (!ok) return;
+
+    setSaving(true);
+    try {
+      await reactUsersApi.deleteAvatar(Number(userId), avatarImageId);
+      setAvatarImageId(null);
+      setAvatarVersion((value) => value + 1);
+      toast.success("아바타 이미지가 삭제되었습니다.");
+    } catch {
+      toast.error("아바타 삭제에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading)
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
@@ -85,6 +136,8 @@ export function UserDetailPage() {
     );
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!user) return null;
+
+  const avatarUrl = `${API_BASE_URL}/api/profile/${encodeURIComponent(user.username)}/avatar?v=${avatarVersion}`;
 
   return (
     <Stack spacing={2}>
@@ -127,6 +180,49 @@ export function UserDetailPage() {
       />
       <Container maxWidth="md" disableGutters>
         <Grid container spacing={1} alignItems="center">
+          <Grid size={12}>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Avatar
+                alt={user.username}
+                src={avatarImageId ? avatarUrl : NO_AVATAR}
+                imgProps={{
+                  onError: (event) => {
+                    event.currentTarget.src = NO_AVATAR;
+                  },
+                }}
+                sx={{ width: 96, height: 96, bgcolor: "grey.200" }}
+              />
+              <Stack direction="row" spacing={1}>
+                <Button
+                  component="label"
+                  variant="outlined"
+                  startIcon={<UploadOutlined />}
+                  disabled={saving}
+                >
+                  아바타 업로드
+                  <input
+                    hidden
+                    accept="image/*"
+                    type="file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      void handleAvatarUpload(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutlined />}
+                  disabled={saving || !avatarImageId}
+                  onClick={() => void handleAvatarDelete()}
+                >
+                  아바타 삭제
+                </Button>
+              </Stack>
+            </Stack>
+          </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
             <TextField
               label="아이디"
