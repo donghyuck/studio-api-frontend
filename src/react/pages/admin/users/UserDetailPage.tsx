@@ -289,7 +289,7 @@ export function UserDetailPage() {
               label="계정 활성화"
             />
           </Grid>
-          <Grid size={12}>
+          <Grid size={12} sx={{ mt: 2 }}>
             <Stack direction="row" spacing={1} justifyContent="flex-end">
               <Button
                 variant="outlined"
