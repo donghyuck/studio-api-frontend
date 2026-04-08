@@ -412,6 +412,15 @@ export function AclPage() {
     ];
 
     function updateActiveSection() {
+      const lastSectionKey = sectionEntries[sectionEntries.length - 1].key;
+      const isAtPageBottom =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 8;
+
+      if (isAtPageBottom) {
+        setActiveSection(lastSectionKey);
+        return;
+      }
+
       const scrollAnchor = 120;
       const visibleSection =
         sectionEntries
