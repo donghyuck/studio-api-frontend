@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   Button,
   CircularProgress,
   Dialog,
@@ -50,6 +51,9 @@ export function CreateClassDialog({ open, onClose, onCreated }: Props) {
       <DialogTitle>ACL 클래스 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          <Alert severity="info">
+            클래스(FQCN) 또는 도메인 객체는 ACL(Access Control List)이 적용되는 객체의 종류를 정의합니다.
+          </Alert>
           <TextField
             label="클래스명"
             size="small"
