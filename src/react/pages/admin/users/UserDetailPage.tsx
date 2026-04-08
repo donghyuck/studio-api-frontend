@@ -153,7 +153,7 @@ export function UserDetailPage() {
       />
       <Container maxWidth="md" disableGutters>
         <Grid container spacing={1} alignItems="center">
-          <Grid size={12} sx={{ mb: 2 }}>
+          <Grid size={12} sx={{ mb: 5 }}>
             <Stack direction="row" spacing={2} alignItems="center">
               <Avatar
                 alt={user.username}
@@ -163,7 +163,7 @@ export function UserDetailPage() {
                     event.currentTarget.src = NO_AVATAR;
                   },
                 }}
-                sx={{ width: 96, height: 96, bgcolor: "grey.200" }}
+                sx={{ width: 120, height: 120, bgcolor: "grey.200" }}
               />
               <Stack direction="row" spacing={1}>
                 <Button
@@ -218,7 +218,9 @@ export function UserDetailPage() {
             <TextField
               label="이메일"
               value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, email: e.target.value }))
+              }
               size="small"
               fullWidth
             />
@@ -262,7 +264,7 @@ export function UserDetailPage() {
               label="계정 활성화"
             />
           </Grid>
-          <Grid size={12} sx={{ mt: 2 }}>
+          <Grid size={12} sx={{ mt: 10 }}>
             <Stack direction="row" spacing={1} justifyContent="flex-end">
               <Button
                 variant="outlined"
