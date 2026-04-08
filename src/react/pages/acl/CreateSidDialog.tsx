@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   Button,
   CircularProgress,
   Dialog,
@@ -49,6 +50,9 @@ export function CreateSidDialog({ open, onClose, onCreated }: Props) {
       <DialogTitle>ACL SID 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          <Alert severity="info">
+            권한을 부여할 대상(사용자 또는 롤)을 정의합니다. 롤은 ROLE_ 접두어를 제외하고 입력합니다.
+          </Alert>
           <TextField
             label="SID"
             size="small"

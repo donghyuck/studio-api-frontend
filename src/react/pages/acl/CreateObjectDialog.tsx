@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   Button,
   CircularProgress,
   Dialog,
@@ -68,6 +69,10 @@ export function CreateObjectDialog({
       <DialogTitle>오브젝트 아이덴티티 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          <Alert severity="info">
+            종류(도메인 또는 클래스)에 해당하는 객체를 정의합니다. 전체를 표현하려면 대상 ID 값으로
+            `__root__`를 입력하세요.
+          </Alert>
           <TextField
             select
             label="ACL 클래스"

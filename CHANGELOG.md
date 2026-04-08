@@ -4,6 +4,7 @@
 
 ### Changed
 
+- ACL management page and create dialogs now restore explanatory guidance from the legacy Vue implementation.
 - Issue `#59` split FullLayout navigation and user menu responsibilities into dedicated layout components.
 - Issue `#54` introduced a profile feature module pilot under `src/react/features/profile` while preserving the `/profile` route.
 - Issue `#66` restored object type creation in the React `/policy/object-types` page, including Vue-parity ID/code validation fields, array-backed list loading, list ID display, PageToolbar detail header, and detail deletion.
@@ -15,6 +16,8 @@
 
 ### Verification
 
+- ACL guidance restore: `npm run typecheck`
+- ACL guidance restore: `npm run lint`
 - Issue `#59`: `npm run typecheck`
 - Issue `#59`: `npm run lint`
 - Issue `#59`: `npm run build`

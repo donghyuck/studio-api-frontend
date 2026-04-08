@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Alert,
   Button,
   CircularProgress,
   Dialog,
@@ -84,6 +85,9 @@ export function CreateEntryDialog({
       <DialogTitle>ACL 엔트리 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
+          <Alert severity="info">
+            특정 객체에 대해 누구(SID)에게 어떤 권한(mask)을 허용하거나 거부할지 한 줄씩 정의합니다.
+          </Alert>
           <TextField
             select
             label="오브젝트 아이덴티티"

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -22,7 +22,6 @@ import type {
   AclObjectIdentityDto,
   AclSidDto,
 } from "@/types/studio/acl";
-import type { AclActionMaskDto } from "@/types/studio/ai";
 import { aclQueryKeys } from "./queryKeys";
 import { reactAclApi } from "./api";
 import {
@@ -402,6 +401,62 @@ export function AclPage() {
     target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  useEffect(() => {
+    let frameId = 0;
+    const sectionEntries = [
+      { key: "classes", ref: classesSectionRef },
+      { key: "sids", ref: sidsSectionRef },
+      { key: "objects", ref: objectsSectionRef },
+      { key: "entries", ref: entriesSectionRef },
+    ];
+
+    function updateActiveSection() {
+      const lastSectionKey = sectionEntries[sectionEntries.length - 1].key;
+      const isAtPageBottom =
+        window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 8;
+
+      if (isAtPageBottom) {
+        setActiveSection(lastSectionKey);
+        return;
+      }
+
+      const scrollAnchor = 120;
+      const visibleSection =
+        sectionEntries
+          .map(({ key, ref }) => ({
+            key,
+            top: ref.current?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY,
+          }))
+          .filter((section) => Number.isFinite(section.top))
+          .reduce(
+            (current, section) => {
+              if (section.top <= scrollAnchor && section.top > current.top) {
+                return section;
+              }
+              return current;
+            },
+            { key: sectionEntries[0].key, top: Number.NEGATIVE_INFINITY }
+          ).key;
+
+      setActiveSection(visibleSection);
+    }
+
+    function scheduleUpdate() {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(updateActiveSection);
+    }
+
+    updateActiveSection();
+    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, []);
+
   return (
     <Stack spacing={1}>
       <PageToolbar
@@ -425,6 +480,10 @@ export function AclPage() {
                   void refreshLookups();
                 }}
               />
+              <Alert severity="info">
+                ACL이 적용되는 보호 대상의 종류를 정의합니다. 도메인 객체 이름이나 클래스(FQCN)를
+                등록해 이후 오브젝트 아이덴티티와 권한 엔트리의 기준으로 사용합니다.
+              </Alert>
               <PageableGridContent<AclClassDto>
                 ref={classesGridRef}
                 datasource={classesDataSource}
@@ -444,6 +503,10 @@ export function AclPage() {
                   void refreshLookups();
                 }}
               />
+              <Alert severity="info">
+                권한을 부여할 대상(SID)을 정의합니다. 사용자 Principal 또는 ROLE 접두어를 제외한 권한/롤을
+                등록해 ACL 엔트리에서 선택합니다.
+              </Alert>
               <PageableGridContent<AclSidDto>
                 ref={sidsGridRef}
                 datasource={sidsDataSource}
@@ -463,6 +526,10 @@ export function AclPage() {
                   void refreshLookups();
                 }}
               />
+              <Alert severity="info">
+                도메인 객체 ID 값 `__root__`는 도메인 또는 클래스 전체를 의미하는 가상 객체입니다.
+                루트 객체에 ACL을 부여하면 해당 도메인 또는 클래스 전체에 대한 권한을 적용할 수 있습니다.
+              </Alert>
               <PageableGridContent<AclObjectIdentityDto>
                 ref={objectsGridRef}
                 datasource={objectsDataSource}
@@ -479,6 +546,10 @@ export function AclPage() {
                 onAdd={() => setCreateEntryOpen(true)}
                 onRefresh={() => entriesGridRef.current?.refresh()}
               />
+              <Alert severity="info">
+                권한 엔트리는 OID(객체 식별자)와 순서 값을 기준으로 평가됩니다. 동일 OID에 여러 권한을
+                추가할 때는 평가 순서 값을 다르게 지정해야 합니다.
+              </Alert>
               <PageableGridContent<AclEntryDto>
                 ref={entriesGridRef}
                 datasource={entriesDataSource}
