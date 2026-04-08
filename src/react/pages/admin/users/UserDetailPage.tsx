@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Avatar,
@@ -6,13 +6,11 @@ import {
   Stack,
   Button,
   Grid,
-  IconButton,
   TextField,
   FormControlLabel,
   Switch,
   CircularProgress,
   Alert,
-  Tooltip,
   Container,
 } from "@mui/material";
 import {
@@ -52,7 +50,7 @@ export function UserDetailPage() {
     enabled: true,
   });
 
-  useEffect(() => {
+  const loadUser = useCallback(() => {
     if (!userId) return;
     setLoading(true);
     reactUsersApi
@@ -76,6 +74,10 @@ export function UserDetailPage() {
       .catch(() => setError("사용자를 불러오지 못했습니다."))
       .finally(() => setLoading(false));
   }, [userId]);
+
+  useEffect(() => {
+    loadUser();
+  }, [loadUser]);
 
   async function handleSave() {
     if (!userId) return;
@@ -147,36 +149,7 @@ export function UserDetailPage() {
         label="회원 정보를 조회하고 계정 상태를 관리합니다."
         previous
         onPrevious={() => navigate("/admin/users")}
-        actions={
-          <>
-            <Tooltip title="역할 관리">
-              <IconButton size="small" onClick={() => setRolesOpen(true)}>
-                <ManageAccountsOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="비밀번호 재설정">
-              <IconButton size="small" onClick={() => setResetOpen(true)}>
-                <KeyOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="저장">
-              <span>
-                <IconButton
-                  size="small"
-                  color="primary"
-                  onClick={handleSave}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <CircularProgress size={18} />
-                  ) : (
-                    <SaveOutlined fontSize="small" />
-                  )}
-                </IconButton>
-              </span>
-            </Tooltip>
-          </>
-        }
+        onRefresh={loadUser}
       />
       <Container maxWidth="md" disableGutters>
         <Grid container spacing={1} alignItems="center">
