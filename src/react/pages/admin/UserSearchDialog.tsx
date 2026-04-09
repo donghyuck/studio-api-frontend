@@ -5,12 +5,14 @@ import {
   DialogContent,
   DialogActions,
   Button,
+  Typography,
   Stack,
   TextField,
 } from "@mui/material";
 import type {
   ColDef,
   ICellRendererParams,
+  PaginationChangedEvent,
   SelectionChangedEvent,
 } from "ag-grid-community";
 import { SearchOutlined } from "@mui/icons-material";
@@ -40,6 +42,7 @@ export function UserSearchDialog({
   const dataSource = useMemo(() => new UsersDataSource(), []);
   const isMultiple = selectionMode === "multiple";
   const [selectedCount, setSelectedCount] = useState(0);
+  const [displayedCount, setDisplayedCount] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -98,6 +101,11 @@ export function UserSearchDialog({
               listener: (event: SelectionChangedEvent<UserDto>) =>
                 setSelectedCount(event.api.getSelectedRows().length ?? 0),
             },
+            {
+              type: "paginationChanged",
+              listener: (event: PaginationChangedEvent<UserDto>) =>
+                setDisplayedCount(event.api.getDisplayedRowCount() ?? 0),
+            },
           ]
         : undefined,
     [isMultiple]
@@ -105,6 +113,7 @@ export function UserSearchDialog({
 
   const handleClose = useCallback(() => {
     setSelectedCount(0);
+    setDisplayedCount(0);
     setConfirming(false);
     setQuery("");
     dataSource.setSearch("");
@@ -115,7 +124,20 @@ export function UserSearchDialog({
     dataSource.setSearch(query);
     gridRef.current?.refresh();
     setSelectedCount(0);
+    setDisplayedCount(0);
   }, [dataSource, query]);
+
+  const allDisplayedSelected = displayedCount > 0 && selectedCount === displayedCount;
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (allDisplayedSelected) {
+      gridRef.current?.deselectAll();
+      setSelectedCount(0);
+      return;
+    }
+    gridRef.current?.selectAll();
+    setSelectedCount(gridRef.current?.selectedRows().length ?? 0);
+  }, [allDisplayedSelected]);
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
@@ -159,6 +181,18 @@ export function UserSearchDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
+        {isMultiple ? (
+          <Button
+            variant="outlined"
+            onClick={handleToggleSelectAll}
+            disabled={displayedCount === 0 || confirming}
+          >
+            {allDisplayedSelected ? "전체 해제" : "전체 선택"}
+            <Typography component="span" sx={{ ml: 0.5 }}>
+              ({selectedCount})
+            </Typography>
+          </Button>
+        ) : null}
         <Button variant="outlined" onClick={handleClose}>닫기</Button>
         {isMultiple ? (
           <Button
