@@ -29,7 +29,7 @@ export function UserSearchDialog({
 }: Props) {
   const gridRef = useRef<PageableGridContentHandle<UserDto>>(null);
   const dataSource = useMemo(() => new UsersDataSource(), []);
-  const isMultiple = selectionMode === "multiple";
+const isMultiple = selectionMode === "multiple";
   const [selectedCount, setSelectedCount] = useState(0);
   const [confirming, setConfirming] = useState(false);
 
@@ -102,12 +102,13 @@ export function UserSearchDialog({
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>사용자 검색</DialogTitle>
-      <DialogContent sx={{ height: 400 }}>
+      <DialogContent sx={{ height: 420 }}>
         <PageableGridContent<UserDto>
           ref={gridRef}
           datasource={dataSource}
           columns={columnDefs}
           events={gridEvents}
+          height={340}
           rowSelection={isMultiple ? "multiple" : undefined}
         />
       </DialogContent>
