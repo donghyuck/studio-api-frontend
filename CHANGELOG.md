@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Issue `#79` stabilizes the user roles dialog loading layout with section skeletons and fixed content heights.
 - User roles management dialog now distinguishes group-inherited roles from directly granted roles and uses a transfer-list style editor for direct assignments.
 - Managed detail pages for groups, roles, object types, and templates now follow the user detail page layout standard.
 - ACL management page and create dialogs now restore explanatory guidance from the legacy Vue implementation.
@@ -18,6 +19,10 @@
 
 ### Verification
 
+- Issue `#79`: `npm run typecheck`
+- Issue `#79`: `npm run lint`
+- Issue `#79`: `npm run build`
+- Issue `#79`: manual check - user roles dialog loading layout reviewed in code
 - User roles dialog UX: `npm run typecheck`
 - User roles dialog UX: `npm run lint`
 - User roles dialog UX: `npm run build`

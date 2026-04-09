@@ -13,6 +13,7 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  Skeleton,
   Stack,
   TextField,
   Typography,
@@ -35,6 +36,30 @@ interface Props {
 
 function byName(left: { name: string }, right: { name: string }) {
   return left.name.localeCompare(right.name);
+}
+
+function RolesListSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <Stack spacing={1}>
+      <Skeleton variant="rounded" height={40} />
+      <Divider />
+      <Stack spacing={0.75}>
+        {Array.from({ length: rows }).map((_, index) => (
+          <Skeleton key={index} variant="rounded" height={48} />
+        ))}
+      </Stack>
+    </Stack>
+  );
+}
+
+function ReadOnlyListSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <Stack spacing={0.75}>
+      {Array.from({ length: rows }).map((_, index) => (
+        <Skeleton key={index} variant="rounded" height={48} />
+      ))}
+    </Stack>
+  );
 }
 
 export function UserRolesDialog({ open, onClose, userId, username }: Props) {
@@ -207,10 +232,10 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
 
           <Card variant="outlined">
             <CardContent>
-              <Stack spacing={1}>
+              <Stack spacing={1} sx={{ minHeight: 160 }}>
                 <Typography variant="subtitle2">그룹에서 부여된 역할</Typography>
                 {loading ? (
-                  <CircularProgress size={24} />
+                  <ReadOnlyListSkeleton />
                 ) : grantedRolesByGroup.length === 0 ? (
                   <Typography color="text.secondary" variant="body2">
                     그룹 상속 역할 없음
@@ -234,39 +259,51 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
           <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="stretch">
             <Card variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
               <CardContent>
-                <Stack spacing={1}>
+                <Stack spacing={1} sx={{ minHeight: 420 }}>
                   <Typography variant="subtitle2">부여 가능한 역할</Typography>
-                  <TextField
-                    label="역할 검색"
-                    size="small"
-                    value={searchLeft}
-                    onChange={(event) => setSearchLeft(event.target.value)}
-                    fullWidth
-                  />
-                  <Divider />
                   {loading ? (
-                    <CircularProgress size={24} />
+                    <RolesListSkeleton />
                   ) : availableRoles.length === 0 ? (
-                    <Typography color="text.secondary" variant="body2">
-                      선택 가능한 역할 없음
-                    </Typography>
+                    <>
+                      <TextField
+                        label="역할 검색"
+                        size="small"
+                        value={searchLeft}
+                        onChange={(event) => setSearchLeft(event.target.value)}
+                        fullWidth
+                      />
+                      <Divider />
+                      <Typography color="text.secondary" variant="body2">
+                        선택 가능한 역할 없음
+                      </Typography>
+                    </>
                   ) : (
-                    <List dense sx={{ maxHeight: 280, overflowY: "auto" }}>
-                      {availableRoles.map((role) => (
-                        <ListItemButton
-                          key={role.roleId}
-                          selected={selectedLeft.includes(role.roleId)}
-                          onClick={() =>
-                            toggleSelected(selectedLeft, setSelectedLeft, role.roleId)
-                          }
-                        >
-                          <ListItemText
-                            primary={role.name}
-                            secondary={`ID: ${role.roleId}${role.description ? ` · ${role.description}` : ""}`}
-                          />
-                        </ListItemButton>
-                      ))}
-                    </List>
+                    <>
+                      <TextField
+                        label="역할 검색"
+                        size="small"
+                        value={searchLeft}
+                        onChange={(event) => setSearchLeft(event.target.value)}
+                        fullWidth
+                      />
+                      <Divider />
+                      <List dense sx={{ maxHeight: 280, overflowY: "auto" }}>
+                        {availableRoles.map((role) => (
+                          <ListItemButton
+                            key={role.roleId}
+                            selected={selectedLeft.includes(role.roleId)}
+                            onClick={() =>
+                              toggleSelected(selectedLeft, setSelectedLeft, role.roleId)
+                            }
+                          >
+                            <ListItemText
+                              primary={role.name}
+                              secondary={`ID: ${role.roleId}${role.description ? ` · ${role.description}` : ""}`}
+                            />
+                          </ListItemButton>
+                        ))}
+                      </List>
+                    </>
                   )}
                 </Stack>
               </CardContent>
@@ -282,7 +319,7 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
                 variant="outlined"
                 startIcon={<ArrowForwardOutlined />}
                 onClick={moveToGranted}
-                disabled={selectedLeft.length === 0}
+                disabled={loading || selectedLeft.length === 0}
               >
                 추가
               </Button>
@@ -290,7 +327,7 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
                 variant="outlined"
                 startIcon={<ArrowBackOutlined />}
                 onClick={moveToAvailable}
-                disabled={selectedRight.length === 0}
+                disabled={loading || selectedRight.length === 0}
               >
                 제거
               </Button>
@@ -298,39 +335,51 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
 
             <Card variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
               <CardContent>
-                <Stack spacing={1}>
+                <Stack spacing={1} sx={{ minHeight: 420 }}>
                   <Typography variant="subtitle2">사용자에게 직접 부여한 역할</Typography>
-                  <TextField
-                    label="역할 검색"
-                    size="small"
-                    value={searchRight}
-                    onChange={(event) => setSearchRight(event.target.value)}
-                    fullWidth
-                  />
-                  <Divider />
                   {loading ? (
-                    <CircularProgress size={24} />
+                    <RolesListSkeleton />
                   ) : filteredGrantedRolesByUser.length === 0 ? (
-                    <Typography color="text.secondary" variant="body2">
-                      직접 부여 역할 없음
-                    </Typography>
+                    <>
+                      <TextField
+                        label="역할 검색"
+                        size="small"
+                        value={searchRight}
+                        onChange={(event) => setSearchRight(event.target.value)}
+                        fullWidth
+                      />
+                      <Divider />
+                      <Typography color="text.secondary" variant="body2">
+                        직접 부여 역할 없음
+                      </Typography>
+                    </>
                   ) : (
-                    <List dense sx={{ maxHeight: 280, overflowY: "auto" }}>
-                      {filteredGrantedRolesByUser.map((role) => (
-                        <ListItemButton
-                          key={role.roleId}
-                          selected={selectedRight.includes(role.roleId)}
-                          onClick={() =>
-                            toggleSelected(selectedRight, setSelectedRight, role.roleId)
-                          }
-                        >
-                          <ListItemText
-                            primary={role.name}
-                            secondary={`ID: ${role.roleId}${role.description ? ` · ${role.description}` : ""}`}
-                          />
-                        </ListItemButton>
-                      ))}
-                    </List>
+                    <>
+                      <TextField
+                        label="역할 검색"
+                        size="small"
+                        value={searchRight}
+                        onChange={(event) => setSearchRight(event.target.value)}
+                        fullWidth
+                      />
+                      <Divider />
+                      <List dense sx={{ maxHeight: 280, overflowY: "auto" }}>
+                        {filteredGrantedRolesByUser.map((role) => (
+                          <ListItemButton
+                            key={role.roleId}
+                            selected={selectedRight.includes(role.roleId)}
+                            onClick={() =>
+                              toggleSelected(selectedRight, setSelectedRight, role.roleId)
+                            }
+                          >
+                            <ListItemText
+                              primary={role.name}
+                              secondary={`ID: ${role.roleId}${role.description ? ` · ${role.description}` : ""}`}
+                            />
+                          </ListItemButton>
+                        ))}
+                      </List>
+                    </>
                   )}
                 </Stack>
               </CardContent>
