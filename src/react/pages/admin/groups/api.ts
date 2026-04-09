@@ -1,5 +1,5 @@
 import { apiRequest } from "@/react/query/fetcher";
-import type { GroupDto } from "@/react/pages/admin/datasource";
+import type { GroupDto, RoleDto } from "@/react/pages/admin/datasource";
 
 export interface GroupMemberDto { userId: number; username: string; name: string; role?: string; joinedAt?: string; }
 
@@ -18,6 +18,14 @@ export const reactGroupsApi = {
     apiRequest<void>("delete", `/api/mgmt/groups/${groupId}/members/${userId}`),
   getGroupRoles: (groupId: number) =>
     apiRequest<{ roleId: number; name: string }[]>("get", `/api/mgmt/groups/${groupId}/roles`),
+  getAvailableRoles: (params?: { page?: number; size?: number; sort?: string }) =>
+    apiRequest<{ content: RoleDto[]; totalElements: number }>("get", "/api/mgmt/roles", {
+      params: {
+        page: params?.page ?? 0,
+        size: params?.size ?? 200,
+        sort: params?.sort ?? "name,asc",
+      },
+    }),
   addGroupRole: (groupId: number, roleId: number) =>
     apiRequest<void>("post", `/api/mgmt/groups/${groupId}/roles`, { data: { roleId } }),
   removeGroupRole: (groupId: number, roleId: number) =>

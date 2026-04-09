@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Issue `#81` updates group member and role dialogs with batch member selection and transfer-list role editing.
 - Issue `#79` stabilizes the user roles dialog loading layout with section skeletons and fixed content heights.
 - User roles management dialog now distinguishes group-inherited roles from directly granted roles and uses a transfer-list style editor for direct assignments.
 - Managed detail pages for groups, roles, object types, and templates now follow the user detail page layout standard.
@@ -19,6 +20,10 @@
 
 ### Verification
 
+- Issue `#81`: `npm run typecheck`
+- Issue `#81`: `npm run lint`
+- Issue `#81`: `npm run build`
+- Issue `#81`: manual check - group member and role dialog flows reviewed in code
 - Issue `#79`: `npm run typecheck`
 - Issue `#79`: `npm run lint`
 - Issue `#79`: `npm run build`
