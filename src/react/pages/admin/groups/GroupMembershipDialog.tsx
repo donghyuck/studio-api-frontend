@@ -111,6 +111,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
   const [saving, setSaving] = useState(false);
   const [userSearchOpen, setUserSearchOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
+  const [gridKey, setGridKey] = useState(0);
   const dataSource = useMemo(() => new GroupMemberSummariesDataSource(groupId), [groupId]);
 
   const columnDefs = useMemo<ColDef<GroupMemberDto>[]>(
@@ -190,7 +191,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
     dataSource.applyFilter(
       searchInput.trim() ? { q: searchInput.trim() } : {}
     );
-    gridRef.current?.refresh();
+    setGridKey((current) => current + 1);
   }, [dataSource, searchInput]);
 
   async function handleAdd(selectedUsers: UserDto[]) {
@@ -210,7 +211,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
     setSaving(true);
     try {
       await reactGroupsApi.addMembers(groupId, userIds);
-      gridRef.current?.refresh();
+      setGridKey((current) => current + 1);
       toast.success(`${userIds.length}명의 멤버가 추가되었습니다.`);
     } catch {
       toast.error("멤버 추가에 실패했습니다.");
@@ -242,7 +243,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
     setSaving(true);
     try {
       await Promise.all(userIds.map((userId) => reactGroupsApi.removeMember(groupId, userId)));
-      gridRef.current?.refresh();
+      setGridKey((current) => current + 1);
       toast.success(`${userIds.length}명의 멤버가 제거되었습니다.`);
     } catch {
       toast.error("멤버 제거에 실패했습니다.");
@@ -284,6 +285,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
               }}
             />
             <PageableGridContent<GroupMemberDto>
+              key={gridKey}
               ref={gridRef}
               datasource={dataSource}
               columns={columnDefs}
