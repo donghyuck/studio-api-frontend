@@ -43,6 +43,7 @@ export function UserSearchDialog({
   const isMultiple = selectionMode === "multiple";
   const [selectedCount, setSelectedCount] = useState(0);
   const [displayedCount, setDisplayedCount] = useState(0);
+  const [allSelected, setAllSelected] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -98,13 +99,23 @@ export function UserSearchDialog({
         ? [
             {
               type: "selectionChanged",
-              listener: (event: SelectionChangedEvent<UserDto>) =>
-                setSelectedCount(event.api.getSelectedRows().length ?? 0),
+              listener: (event: SelectionChangedEvent<UserDto>) => {
+                const nextSelectedCount = event.api.getSelectedRows().length ?? 0;
+                const nextDisplayedCount = event.api.getDisplayedRowCount() ?? 0;
+                setSelectedCount(nextSelectedCount);
+                setAllSelected(
+                  nextDisplayedCount > 0 && nextSelectedCount === nextDisplayedCount
+                );
+              },
             },
             {
               type: "paginationChanged",
-              listener: (event: PaginationChangedEvent<UserDto>) =>
-                setDisplayedCount(event.api.getDisplayedRowCount() ?? 0),
+              listener: (event: PaginationChangedEvent<UserDto>) => {
+                const nextDisplayedCount = event.api.getDisplayedRowCount() ?? 0;
+                const nextSelectedCount = event.api.getSelectedRows().length ?? 0;
+                setDisplayedCount(nextDisplayedCount);
+                setAllSelected(nextDisplayedCount > 0 && nextSelectedCount === nextDisplayedCount);
+              },
             },
           ]
         : undefined,
@@ -114,6 +125,7 @@ export function UserSearchDialog({
   const handleClose = useCallback(() => {
     setSelectedCount(0);
     setDisplayedCount(0);
+    setAllSelected(false);
     setConfirming(false);
     setQuery("");
     dataSource.setSearch("");
@@ -125,19 +137,20 @@ export function UserSearchDialog({
     gridRef.current?.refresh();
     setSelectedCount(0);
     setDisplayedCount(0);
+    setAllSelected(false);
   }, [dataSource, query]);
 
-  const allDisplayedSelected = displayedCount > 0 && selectedCount === displayedCount;
-
   const handleToggleSelectAll = useCallback(() => {
-    if (allDisplayedSelected) {
+    if (allSelected) {
       gridRef.current?.deselectAll();
       setSelectedCount(0);
+      setAllSelected(false);
       return;
     }
     gridRef.current?.selectAll();
     setSelectedCount(gridRef.current?.selectedRows().length ?? 0);
-  }, [allDisplayedSelected]);
+    setAllSelected(true);
+  }, [allSelected]);
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
@@ -187,7 +200,7 @@ export function UserSearchDialog({
             onClick={handleToggleSelectAll}
             disabled={displayedCount === 0 || confirming}
           >
-            {allDisplayedSelected ? "전체 해제" : "전체 선택"}
+            {allSelected ? "전체 해제" : "전체 선택"}
             <Typography component="span" sx={{ ml: 0.5 }}>
               ({selectedCount})
             </Typography>
