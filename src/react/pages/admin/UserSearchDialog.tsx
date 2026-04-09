@@ -15,7 +15,7 @@ interface Props {
   onClose: () => void;
   onSelect?: (user: UserDto) => void;
   selectionMode?: "single" | "multiple";
-  onConfirmSelection?: (users: UserDto[]) => void;
+  onConfirmSelection?: (users: UserDto[]) => void | Promise<void>;
   confirmLabel?: string;
 }
 
@@ -31,6 +31,7 @@ export function UserSearchDialog({
   const dataSource = useMemo(() => new UsersDataSource(), []);
   const isMultiple = selectionMode === "multiple";
   const [selectedCount, setSelectedCount] = useState(0);
+  const [confirming, setConfirming] = useState(false);
 
   const columnDefs = useMemo<ColDef<UserDto>[]>(() => {
     const baseColumns: ColDef<UserDto>[] = [
@@ -64,13 +65,18 @@ export function UserSearchDialog({
     ];
   }, [isMultiple, onClose, onSelect]);
 
-  function handleConfirmSelection() {
+  async function handleConfirmSelection() {
     const users = gridRef.current?.selectedRows() ?? [];
     if (users.length === 0) {
       return;
     }
-    onConfirmSelection?.(users);
-    handleClose();
+    setConfirming(true);
+    try {
+      await onConfirmSelection?.(users);
+      handleClose();
+    } finally {
+      setConfirming(false);
+    }
   }
 
   const gridEvents = useMemo(
@@ -89,6 +95,7 @@ export function UserSearchDialog({
 
   const handleClose = useCallback(() => {
     setSelectedCount(0);
+    setConfirming(false);
     onClose();
   }, [onClose]);
 
@@ -109,10 +116,10 @@ export function UserSearchDialog({
         {isMultiple ? (
           <Button
             variant="outlined"
-            onClick={handleConfirmSelection}
-            disabled={selectedCount === 0}
+            onClick={() => void handleConfirmSelection()}
+            disabled={selectedCount === 0 || confirming}
           >
-            {confirmLabel}
+            {confirming ? "추가 중..." : confirmLabel}
           </Button>
         ) : null}
       </DialogActions>
