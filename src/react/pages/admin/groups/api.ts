@@ -26,8 +26,10 @@ export const reactGroupsApi = {
         sort: params?.sort ?? "name,asc",
       },
     }),
-  addGroupRole: (groupId: number, roleId: number) =>
-    apiRequest<void>("post", `/api/mgmt/groups/${groupId}/roles`, { data: { roleId } }),
+  setGroupRoles: (groupId: number, roleIds: number[]) =>
+    apiRequest<void>("post", `/api/mgmt/groups/${groupId}/roles`, {
+      data: { roleIds },
+    }),
   removeGroupRole: (groupId: number, roleId: number) =>
     apiRequest<void>("delete", `/api/mgmt/groups/${groupId}/roles/${roleId}`),
 };

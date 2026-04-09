@@ -176,12 +176,13 @@ export function GroupRolesDialog({ open, onClose, groupId, groupName }: Props) {
   }
 
   async function handleSave() {
-    const initialIds = new Set(initialGrantedRoles.map((role) => role.roleId));
-    const currentIds = new Set(grantedRoles.map((role) => role.roleId));
-    const toAdd = grantedRoles.filter((role) => !initialIds.has(role.roleId));
-    const toRemove = initialGrantedRoles.filter((role) => !currentIds.has(role.roleId));
+    const initialIds = initialGrantedRoles.map((role) => role.roleId).sort((a, b) => a - b);
+    const currentIds = grantedRoles.map((role) => role.roleId).sort((a, b) => a - b);
+    const changed =
+      initialIds.length !== currentIds.length ||
+      initialIds.some((roleId, index) => roleId !== currentIds[index]);
 
-    if (toAdd.length === 0 && toRemove.length === 0) {
+    if (!changed) {
       toast.info("변경된 역할이 없습니다.");
       onClose();
       return;
@@ -189,7 +190,7 @@ export function GroupRolesDialog({ open, onClose, groupId, groupName }: Props) {
 
     const ok = await confirm({
       title: "역할 변경 저장",
-      message: `역할 ${toAdd.length}개 추가, ${toRemove.length}개 제거를 저장하시겠습니까?`,
+      message: `그룹 역할을 ${currentIds.length}개로 저장하시겠습니까? 기존 역할 구성은 전체 교체됩니다.`,
       okText: "저장",
       cancelText: "취소",
     });
@@ -197,10 +198,7 @@ export function GroupRolesDialog({ open, onClose, groupId, groupName }: Props) {
 
     setSaving(true);
     try {
-      await Promise.all([
-        ...toAdd.map((role) => reactGroupsApi.addGroupRole(groupId, role.roleId)),
-        ...toRemove.map((role) => reactGroupsApi.removeGroupRole(groupId, role.roleId)),
-      ]);
+      await reactGroupsApi.setGroupRoles(groupId, currentIds);
       toast.success("그룹 역할이 저장되었습니다.");
       onClose();
     } catch {
