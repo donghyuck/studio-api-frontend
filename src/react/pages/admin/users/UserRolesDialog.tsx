@@ -392,10 +392,10 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={saving}>
+        <Button variant="outlined" onClick={onClose} disabled={saving}>
           취소
         </Button>
-        <Button variant="contained" onClick={() => void handleSave()} disabled={saving}>
+        <Button variant="outlined" onClick={() => void handleSave()} disabled={saving}>
           {saving ? <CircularProgress size={20} /> : "저장"}
         </Button>
       </DialogActions>
