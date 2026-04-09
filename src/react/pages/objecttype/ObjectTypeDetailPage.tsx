@@ -237,11 +237,12 @@ export function ObjectTypeDetailPage() {
                 <TextField
                   label="최대 파일 크기 (MB)"
                   value={policyForm.maxFileMb}
-                  onChange={(e) => setPolicyForm((f) => ({ ...f, maxFileMb: e.target.value }))}
-                  size="small"
-                  type="number"
-                  fullWidth
-                />
+                onChange={(e) => setPolicyForm((f) => ({ ...f, maxFileMb: e.target.value }))}
+                size="small"
+                type="number"
+                helperText="예: 10"
+                fullWidth
+              />
               </Grid>
               <Grid size={{ xs: 12, md: 4 }}>
                 <TextField
@@ -259,6 +260,7 @@ export function ObjectTypeDetailPage() {
                   value={policyForm.allowedMime}
                   onChange={(e) => setPolicyForm((f) => ({ ...f, allowedMime: e.target.value }))}
                   size="small"
+                  helperText="예: image/*,application/pdf"
                   fullWidth
                 />
               </Grid>
