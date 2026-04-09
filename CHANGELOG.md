@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Managed detail pages for groups, roles, object types, and templates now follow the user detail page layout standard.
 - ACL management page and create dialogs now restore explanatory guidance from the legacy Vue implementation.
 - Issue `#59` split FullLayout navigation and user menu responsibilities into dedicated layout components.
 - Issue `#54` introduced a profile feature module pilot under `src/react/features/profile` while preserving the `/profile` route.
@@ -16,6 +17,10 @@
 
 ### Verification
 
+- Admin detail standardization: `npm run typecheck`
+- Admin detail standardization: `npm run lint`
+- Admin detail standardization: `npm run build`
+- Admin detail standardization: manual check - groups/roles/object type/template detail routes reviewed in code
 - ACL guidance restore: `npm run typecheck`
 - ACL guidance restore: `npm run lint`
 - Issue `#59`: `npm run typecheck`

@@ -1,14 +1,22 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
-  Box, Stack, Breadcrumbs, Typography, Button, TextField, Divider, CircularProgress, Alert,
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Container,
+  Grid,
+  TextField,
+  Stack,
 } from "@mui/material";
-import { ArrowBackOutlined, SaveOutlined, GroupAddOutlined, ManageAccountsOutlined } from "@mui/icons-material";
+import { GroupAddOutlined, ManageAccountsOutlined, SaveOutlined } from "@mui/icons-material";
 import { useToast } from "@/react/feedback";
 import { reactGroupsApi } from "./api";
 import { GroupMembershipDialog } from "./GroupMembershipDialog";
 import { GroupRolesDialog } from "./GroupRolesDialog";
 import type { GroupDto } from "@/react/pages/admin/datasource";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 export function GroupDetailPage() {
   const { groupId } = useParams<{ groupId: string }>();
@@ -22,14 +30,23 @@ export function GroupDetailPage() {
   const [rolesOpen, setRolesOpen] = useState(false);
   const [form, setForm] = useState({ name: "", description: "" });
 
-  useEffect(() => {
+  const loadGroup = useCallback(() => {
     if (!groupId) return;
     setLoading(true);
-    reactGroupsApi.getGroup(Number(groupId))
-      .then(g => { setGroup(g); setForm({ name: g.name, description: g.description ?? "" }); setError(null); })
+    reactGroupsApi
+      .getGroup(Number(groupId))
+      .then((g) => {
+        setGroup(g);
+        setForm({ name: g.name, description: g.description ?? "" });
+        setError(null);
+      })
       .catch(() => setError("그룹을 불러오지 못했습니다."))
       .finally(() => setLoading(false));
   }, [groupId]);
+
+  useEffect(() => {
+    loadGroup();
+  }, [loadGroup]);
 
   async function handleSave() {
     if (!groupId) return;
@@ -44,35 +61,90 @@ export function GroupDetailPage() {
     }
   }
 
-  if (loading) return <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}><CircularProgress /></Box>;
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!group) return null;
 
   return (
     <Stack spacing={2}>
-      <Breadcrumbs separator="›">
-        <Typography color="text.secondary">시스템관리</Typography>
-        <Typography color="text.secondary" sx={{ cursor: "pointer" }} onClick={() => navigate("/admin/groups")}>그룹</Typography>
-        <Typography color="text.primary">{group.name}</Typography>
-      </Breadcrumbs>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h5">그룹 상세</Typography>
-        <Stack direction="row" spacing={1}>
-          <Button startIcon={<GroupAddOutlined />} onClick={() => setMembersOpen(true)}>멤버 관리</Button>
-          <Button startIcon={<ManageAccountsOutlined />} onClick={() => setRolesOpen(true)}>역할 관리</Button>
-          <Button variant="outlined" startIcon={<ArrowBackOutlined />} onClick={() => navigate("/admin/groups")}>목록</Button>
-          <Button variant="contained" startIcon={<SaveOutlined />} onClick={handleSave} disabled={saving}>
-            {saving ? <CircularProgress size={20} /> : "저장"}
-          </Button>
-        </Stack>
-      </Box>
-      <Divider />
-      <Stack spacing={2} sx={{ maxWidth: 600 }}>
-        <TextField label="그룹명" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} size="small" />
-        <TextField label="설명" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} size="small" multiline rows={2} />
-      </Stack>
-      <GroupMembershipDialog open={membersOpen} onClose={() => setMembersOpen(false)} groupId={group.groupId} groupName={group.name} />
-      <GroupRolesDialog open={rolesOpen} onClose={() => setRolesOpen(false)} groupId={group.groupId} groupName={group.name} />
+      <PageToolbar
+        divider
+        breadcrumbs={["시스템관리", "보안관리", "그룹", group.name]}
+        label="그룹 정보를 조회하고 멤버와 역할을 관리합니다."
+        previous
+        onPrevious={() => navigate("/admin/groups")}
+        onRefresh={loadGroup}
+      />
+      <Container maxWidth="md" disableGutters>
+        <Grid container spacing={1} alignItems="center">
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              label="그룹명"
+              value={form.name}
+              onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+              size="small"
+              fullWidth
+            />
+          </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <TextField
+              label="설명"
+              value={form.description}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, description: event.target.value }))
+              }
+              size="small"
+              multiline
+              rows={2}
+              fullWidth
+            />
+          </Grid>
+          <Grid size={12} sx={{ mt: 2 }}>
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button
+                variant="outlined"
+                startIcon={<GroupAddOutlined />}
+                onClick={() => setMembersOpen(true)}
+              >
+                멤버 관리
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<ManageAccountsOutlined />}
+                onClick={() => setRolesOpen(true)}
+              >
+                역할 관리
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<SaveOutlined />}
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? <CircularProgress size={20} /> : "저장"}
+              </Button>
+            </Stack>
+          </Grid>
+        </Grid>
+      </Container>
+      <GroupMembershipDialog
+        open={membersOpen}
+        onClose={() => setMembersOpen(false)}
+        groupId={group.groupId}
+        groupName={group.name}
+      />
+      <GroupRolesDialog
+        open={rolesOpen}
+        onClose={() => setRolesOpen(false)}
+        groupId={group.groupId}
+        groupName={group.name}
+      />
     </Stack>
   );
 }

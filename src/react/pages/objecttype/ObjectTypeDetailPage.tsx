@@ -4,16 +4,13 @@ import {
   Box,
   Stack,
   Button,
-  IconButton,
+  Container,
+  Grid,
   TextField,
   CircularProgress,
   Alert,
-  Card,
-  CardContent,
-  CardHeader,
-  Tooltip,
 } from "@mui/material";
-import { DeleteOutlineOutlined, SaveOutlined } from "@mui/icons-material";
+import { SaveOutlined } from "@mui/icons-material";
 import { useConfirm, useToast } from "@/react/feedback";
 import { reactObjectTypeApi } from "./api";
 import type { ObjectTypeDto, ObjectTypePolicyDto } from "@/types/studio/objecttype";
@@ -147,69 +144,52 @@ export function ObjectTypeDetailPage() {
   return (
     <Stack spacing={2}>
       <PageToolbar
+        divider
         breadcrumbs={["정책", "오브젝트 타입", objectType.code]}
-        title="오브젝트 타입 상세"
         label="오브젝트 타입 기본 정보와 파일 정책을 관리합니다."
         previous
         onPrevious={() => navigate("/policy/object-types")}
         onRefresh={loadObjectType}
-        actions={
-          <>
-            <Tooltip title="오브젝트 타입 삭제">
-              <span>
-                <IconButton
-                  size="small"
-                  color="error"
-                  onClick={() => void handleDelete()}
-                  disabled={saving}
-                >
-                  <DeleteOutlineOutlined fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="저장">
-              <span>
-                <IconButton
-                  size="small"
-                  color="primary"
-                  onClick={handleSave}
-                  disabled={saving}
-                >
-                  {saving ? <CircularProgress size={18} /> : <SaveOutlined fontSize="small" />}
-                </IconButton>
-              </span>
-            </Tooltip>
-          </>
-        }
       />
-      <Card variant="outlined">
-        <CardHeader title="기본 정보" />
-        <CardContent>
-          <Stack spacing={2} sx={{ maxWidth: 600 }}>
+      <Container maxWidth="md" disableGutters>
+        <Grid container spacing={1} alignItems="center">
+          <Grid size={{ xs: 12, md: 4 }}>
             <TextField
               label="코드"
               value={objectType.code}
               InputProps={{ readOnly: true }}
               size="small"
+              fullWidth
             />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
             <TextField
               label="이름"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
               size="small"
+              fullWidth
             />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
             <TextField
               label="도메인"
               value={objectType.domain}
               InputProps={{ readOnly: true }}
               size="small"
+              fullWidth
             />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
             <TextField
               label="상태"
               value={form.status}
               onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
               size="small"
+              fullWidth
             />
+          </Grid>
+          <Grid size={{ xs: 12, md: 8 }}>
             <TextField
               label="설명"
               value={form.description}
@@ -217,52 +197,77 @@ export function ObjectTypeDetailPage() {
               size="small"
               multiline
               rows={2}
+              fullWidth
             />
-          </Stack>
-        </CardContent>
-      </Card>
-      {policy && (
-        <Card variant="outlined">
-          <CardHeader
-            title="파일 정책"
-            action={
+          </Grid>
+          <Grid size={12} sx={{ mt: 2 }}>
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
               <Button
                 variant="outlined"
-                size="small"
                 startIcon={<SaveOutlined />}
-                onClick={handleSavePolicy}
+                color="error"
+                onClick={() => void handleDelete()}
                 disabled={saving}
               >
-                저장
+                삭제
               </Button>
-            }
-          />
-          <CardContent>
-            <Stack spacing={2} sx={{ maxWidth: 600 }}>
+              <Button
+                variant="outlined"
+                startIcon={<SaveOutlined />}
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? <CircularProgress size={20} /> : "저장"}
+              </Button>
+            </Stack>
+          </Grid>
+        </Grid>
+      </Container>
+      <Container maxWidth="md" disableGutters>
+        <Grid container spacing={1} alignItems="center">
+          <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 label="최대 파일 크기 (MB)"
                 value={policyForm.maxFileMb}
                 onChange={(e) => setPolicyForm((f) => ({ ...f, maxFileMb: e.target.value }))}
                 size="small"
                 type="number"
+                fullWidth
               />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 label="허용 확장자"
                 value={policyForm.allowedExt}
                 onChange={(e) => setPolicyForm((f) => ({ ...f, allowedExt: e.target.value }))}
                 size="small"
                 helperText="예: jpg,png,pdf"
+                fullWidth
               />
+          </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
               <TextField
                 label="허용 MIME 타입"
                 value={policyForm.allowedMime}
                 onChange={(e) => setPolicyForm((f) => ({ ...f, allowedMime: e.target.value }))}
                 size="small"
+                fullWidth
               />
+          </Grid>
+          <Grid size={12} sx={{ mt: 2 }}>
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button
+                variant="outlined"
+                startIcon={<SaveOutlined />}
+                onClick={handleSavePolicy}
+                disabled={saving}
+              >
+                {saving ? <CircularProgress size={20} /> : "파일 정책 저장"}
+              </Button>
             </Stack>
-          </CardContent>
-        </Card>
-      )}
+          </Grid>
+        </Grid>
+      </Container>
     </Stack>
   );
 }
