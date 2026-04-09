@@ -36,20 +36,7 @@ export function UserSearchDialog({
     ];
 
     if (isMultiple) {
-      return [
-        {
-          colId: "select",
-          headerName: "",
-          width: 56,
-          maxWidth: 56,
-          checkboxSelection: true,
-          sortable: false,
-          filter: false,
-          resizable: false,
-          pinned: "left",
-        },
-        ...baseColumns,
-      ];
+      return baseColumns;
     }
 
     return [
