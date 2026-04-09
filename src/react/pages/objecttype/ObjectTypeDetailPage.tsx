@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Stack,
   Button,
@@ -10,7 +13,7 @@ import {
   CircularProgress,
   Alert,
 } from "@mui/material";
-import { SaveOutlined } from "@mui/icons-material";
+import { ExpandMoreOutlined, SaveOutlined } from "@mui/icons-material";
 import { useConfirm, useToast } from "@/react/feedback";
 import { reactObjectTypeApi } from "./api";
 import type { ObjectTypeDto, ObjectTypePolicyDto } from "@/types/studio/objecttype";
@@ -224,49 +227,56 @@ export function ObjectTypeDetailPage() {
         </Grid>
       </Container>
       <Container maxWidth="md" disableGutters>
-        <Grid container spacing={1} alignItems="center">
-          <Grid size={{ xs: 12, md: 4 }}>
-              <TextField
-                label="최대 파일 크기 (MB)"
-                value={policyForm.maxFileMb}
-                onChange={(e) => setPolicyForm((f) => ({ ...f, maxFileMb: e.target.value }))}
-                size="small"
-                type="number"
-                fullWidth
-              />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-              <TextField
-                label="허용 확장자"
-                value={policyForm.allowedExt}
-                onChange={(e) => setPolicyForm((f) => ({ ...f, allowedExt: e.target.value }))}
-                size="small"
-                helperText="예: jpg,png,pdf"
-                fullWidth
-              />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-              <TextField
-                label="허용 MIME 타입"
-                value={policyForm.allowedMime}
-                onChange={(e) => setPolicyForm((f) => ({ ...f, allowedMime: e.target.value }))}
-                size="small"
-                fullWidth
-              />
-          </Grid>
-          <Grid size={12} sx={{ mt: 2 }}>
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button
-                variant="outlined"
-                startIcon={<SaveOutlined />}
-                onClick={handleSavePolicy}
-                disabled={saving}
-              >
-                {saving ? <CircularProgress size={20} /> : "파일 정책 저장"}
-              </Button>
-            </Stack>
-          </Grid>
-        </Grid>
+        <Accordion disableGutters>
+          <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
+            파일 정책
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={1} alignItems="center">
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  label="최대 파일 크기 (MB)"
+                  value={policyForm.maxFileMb}
+                  onChange={(e) => setPolicyForm((f) => ({ ...f, maxFileMb: e.target.value }))}
+                  size="small"
+                  type="number"
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  label="허용 확장자"
+                  value={policyForm.allowedExt}
+                  onChange={(e) => setPolicyForm((f) => ({ ...f, allowedExt: e.target.value }))}
+                  size="small"
+                  helperText="예: jpg,png,pdf"
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  label="허용 MIME 타입"
+                  value={policyForm.allowedMime}
+                  onChange={(e) => setPolicyForm((f) => ({ ...f, allowedMime: e.target.value }))}
+                  size="small"
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={12} sx={{ mt: 2 }}>
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Button
+                    variant="outlined"
+                    startIcon={<SaveOutlined />}
+                    onClick={handleSavePolicy}
+                    disabled={saving}
+                  >
+                    {saving ? <CircularProgress size={20} /> : "파일 정책 저장"}
+                  </Button>
+                </Stack>
+              </Grid>
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
       </Container>
     </Stack>
   );
