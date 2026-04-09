@@ -1,4 +1,5 @@
 import { apiRequest } from "@/react/query/fetcher";
+import type { RoleDto } from "@/react/pages/admin/datasource";
 import type { UserDto, PasswordPolicyDto, ResetPasswordRequest } from "@/types/studio/user";
 
 export interface UserRoleDto { roleId: number; name: string; description?: string | null; }
@@ -17,6 +18,22 @@ export const reactUsersApi = {
     apiRequest<UserDto>("put", `/api/mgmt/users/${userId}`, { data: payload }),
   getUserRoles: (userId: number) =>
     apiRequest<UserRoleDto[]>("get", `/api/mgmt/users/${userId}/roles`),
+  getUserDirectRoles: (userId: number) =>
+    apiRequest<UserRoleDto[]>("get", `/api/mgmt/users/${userId}/roles`, {
+      params: { by: "user" },
+    }),
+  getUserGroupRoles: (userId: number) =>
+    apiRequest<UserRoleDto[]>("get", `/api/mgmt/users/${userId}/roles`, {
+      params: { by: "group" },
+    }),
+  getAvailableRoles: (params?: { page?: number; size?: number; sort?: string }) =>
+    apiRequest<{ content: RoleDto[]; totalElements: number }>("get", "/api/mgmt/roles", {
+      params: {
+        page: params?.page ?? 0,
+        size: params?.size ?? 200,
+        sort: params?.sort ?? "name,asc",
+      },
+    }),
   addUserRole: (userId: number, roleId: number) =>
     apiRequest<void>("post", `/api/mgmt/users/${userId}/roles`, { data: { roleId } }),
   removeUserRole: (userId: number, roleId: number) =>
