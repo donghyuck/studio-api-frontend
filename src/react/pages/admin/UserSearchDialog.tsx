@@ -45,9 +45,9 @@ export function UserSearchDialog({
 
   const columnDefs = useMemo<ColDef<UserDto>[]>(() => {
     const baseColumns: ColDef<UserDto>[] = [
-      { field: "username", headerName: "아이디", flex: 1 },
-      { field: "name", headerName: "이름", flex: 1 },
-      { field: "email", headerName: "이메일", flex: 1.5 },
+      { field: "username", headerName: "아이디", flex: 1, filter: false },
+      { field: "name", headerName: "이름", flex: 1, filter: false },
+      { field: "email", headerName: "이메일", flex: 1.5, filter: false },
     ];
 
     if (isMultiple) {
