@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Button,
   CircularProgress,
@@ -6,15 +6,13 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
-  List,
-  ListItem,
-  ListItemText,
   Stack,
-  Typography,
 } from "@mui/material";
 import { DeleteOutlined, GroupAddOutlined } from "@mui/icons-material";
-import { useToast } from "@/react/feedback";
+import type { ColDef } from "ag-grid-community";
+import { PageableGridContent } from "@/react/components/ag-grid";
+import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
+import { useConfirm, useToast } from "@/react/feedback";
 import { reactGroupsApi, type GroupMemberDto } from "./api";
 import { UserSearchDialog } from "@/react/pages/admin/UserSearchDialog";
 import type { UserDto } from "@/types/studio/user";
@@ -26,14 +24,100 @@ interface Props {
   groupName: string;
 }
 
+class GroupMembersDialogDataSource {
+  isLoaded = true;
+  loading = false;
+  error: unknown = null;
+  dataItems: GroupMemberDto[] = [];
+  total = 0;
+  pageSize = 15;
+  page = 0;
+
+  setItems(items: GroupMemberDto[]) {
+    this.dataItems = items;
+    this.total = items.length;
+  }
+
+  setPage(page: number) {
+    this.page = page;
+  }
+
+  setPageSize(size: number) {
+    this.pageSize = size;
+  }
+
+  setSort() {}
+
+  setFilter() {}
+
+  setSearch() {}
+
+  applyFilter() {}
+
+  async fetch() {}
+
+  async fetchForAgGrid({
+    startRow,
+    endRow,
+  }: {
+    startRow: number;
+    endRow: number;
+  }) {
+    return {
+      rows: this.dataItems.slice(startRow, endRow),
+      total: this.total,
+    };
+  }
+}
+
 export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Props) {
   const toast = useToast();
+  const confirm = useConfirm();
+  const gridRef = useRef<PageableGridContentHandle<GroupMemberDto>>(null);
   const [members, setMembers] = useState<GroupMemberDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [userSearchOpen, setUserSearchOpen] = useState(false);
+  const dataSource = useMemo(() => new GroupMembersDialogDataSource(), []);
+
+  dataSource.setItems(members);
 
   const memberIds = useMemo(() => new Set(members.map((member) => member.userId)), [members]);
+
+  const columnDefs = useMemo<ColDef<GroupMemberDto>[]>(
+    () => [
+      {
+        field: "userId",
+        headerName: "ID",
+        maxWidth: 90,
+        filter: false,
+        sortable: false,
+        type: "number",
+      },
+      {
+        field: "name",
+        headerName: "이름",
+        flex: 1,
+        filter: false,
+        sortable: false,
+      },
+      {
+        field: "username",
+        headerName: "아이디",
+        flex: 1,
+        filter: false,
+        sortable: false,
+      },
+      {
+        field: "email",
+        headerName: "이메일",
+        flex: 1.2,
+        filter: false,
+        sortable: false,
+      },
+    ],
+    []
+  );
 
   async function loadMembers() {
     setLoading(true);
@@ -76,22 +160,44 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
     }
   }
 
-  async function handleRemove(userId: number) {
+  async function handleRemoveSelected() {
+    const selectedRows = gridRef.current?.selectedRows() ?? [];
+    const userIds = selectedRows
+      .map((member) => member.userId)
+      .filter((userId): userId is number => typeof userId === "number");
+
+    if (userIds.length === 0) {
+      return;
+    }
+
+    const ok = await confirm({
+      title: "삭제 확인",
+      message: "선택된 사용자를 그룹에서 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+      okText: "확인",
+      cancelText: "취소",
+    });
+    if (!ok) {
+      return;
+    }
+
+    setSaving(true);
     try {
-      await reactGroupsApi.removeMember(groupId, userId);
-      toast.success("멤버가 제거되었습니다.");
+      await Promise.all(userIds.map((userId) => reactGroupsApi.removeMember(groupId, userId)));
       await loadMembers();
+      toast.success(`${userIds.length}명의 멤버가 제거되었습니다.`);
     } catch {
       toast.error("멤버 제거에 실패했습니다.");
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
     <>
-      <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="md" fullWidth>
         <DialogTitle>멤버 관리 — {groupName}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1} sx={{ mt: 1 }}>
+        <DialogContent sx={{ height: 520 }}>
+          <Stack spacing={1} sx={{ mt: 1, height: "100%" }}>
             <Button
               variant="outlined"
               size="small"
@@ -104,37 +210,26 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
             {loading ? (
               <CircularProgress size={24} />
             ) : (
-              <List dense>
-                {members.length === 0 ? (
-                  <Typography color="text.secondary" variant="body2">
-                    멤버 없음
-                  </Typography>
-                ) : (
-                  members.map((member) => (
-                    <ListItem
-                      key={member.userId}
-                      secondaryAction={
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => void handleRemove(member.userId)}
-                        >
-                          <DeleteOutlined fontSize="small" />
-                        </IconButton>
-                      }
-                    >
-                      <ListItemText
-                        primary={member.name}
-                        secondary={`@${member.username}`}
-                      />
-                    </ListItem>
-                  ))
-                )}
-              </List>
+              <PageableGridContent<GroupMemberDto>
+                ref={gridRef}
+                datasource={dataSource}
+                columns={columnDefs}
+                rowSelection="multiple"
+                height={420}
+              />
             )}
           </Stack>
         </DialogContent>
         <DialogActions>
+          <Button
+            variant="outlined"
+            color="error"
+            startIcon={<DeleteOutlined />}
+            onClick={() => void handleRemoveSelected()}
+            disabled={saving || (gridRef.current?.selectedRows().length ?? 0) === 0}
+          >
+            선택 멤버 제거
+          </Button>
           <Button variant="outlined" onClick={onClose} disabled={saving}>
             닫기
           </Button>
