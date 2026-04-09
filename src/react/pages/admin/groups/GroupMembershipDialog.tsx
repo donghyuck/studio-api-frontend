@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
+  Avatar,
   Box,
   Button,
   Chip,
@@ -18,6 +19,8 @@ import { useConfirm, useToast } from "@/react/feedback";
 import { reactGroupsApi, type GroupMemberDto } from "./api";
 import { UserSearchDialog } from "@/react/pages/admin/UserSearchDialog";
 import type { UserDto } from "@/types/studio/user";
+import { API_BASE_URL } from "@/config/backend";
+import NO_AVATAR from "@/assets/images/users/no-avatar.png";
 
 interface Props {
   open: boolean;
@@ -113,12 +116,30 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
   const columnDefs = useMemo<ColDef<GroupMemberDto>[]>(
     () => [
       {
-        field: "userId",
-        headerName: "ID",
-        maxWidth: 90,
+        field: "username",
+        headerName: "아이디",
+        flex: 1,
         filter: false,
         sortable: false,
-        type: "number",
+        cellRenderer: (params) => (
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Avatar
+              alt={String(params.value ?? "")}
+              src={
+                params.value
+                  ? `${API_BASE_URL}/api/profile/${encodeURIComponent(String(params.value))}/avatar`
+                  : NO_AVATAR
+              }
+              imgProps={{
+                onError: (event) => {
+                  event.currentTarget.src = NO_AVATAR;
+                },
+              }}
+              sx={{ width: 24, height: 24, bgcolor: "grey.200" }}
+            />
+            <span>{String(params.value ?? "")}</span>
+          </Stack>
+        ),
       },
       {
         field: "name",
@@ -128,9 +149,9 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
         sortable: false,
       },
       {
-        field: "username",
-        headerName: "아이디",
-        flex: 1,
+        field: "email",
+        headerName: "메일",
+        flex: 1.2,
         filter: false,
         sortable: false,
       },
