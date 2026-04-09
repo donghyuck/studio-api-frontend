@@ -6,6 +6,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Box,
   Stack,
 } from "@mui/material";
 import { DeleteOutlined, GroupAddOutlined } from "@mui/icons-material";
@@ -198,15 +199,6 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
         <DialogTitle>멤버 관리 — {groupName}</DialogTitle>
         <DialogContent sx={{ height: 520 }}>
           <Stack spacing={1} sx={{ mt: 1, height: "100%" }}>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<GroupAddOutlined />}
-              onClick={() => setUserSearchOpen(true)}
-              sx={{ alignSelf: "flex-start" }}
-            >
-              멤버 추가
-            </Button>
             {loading ? (
               <CircularProgress size={24} />
             ) : (
@@ -221,15 +213,25 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button
-            variant="outlined"
-            color="error"
-            startIcon={<DeleteOutlined />}
-            onClick={() => void handleRemoveSelected()}
-            disabled={saving || (gridRef.current?.selectedRows().length ?? 0) === 0}
-          >
-            선택 멤버 제거
-          </Button>
+          <Box sx={{ display: "flex", gap: 1, mr: "auto" }}>
+            <Button
+              variant="outlined"
+              startIcon={<GroupAddOutlined />}
+              onClick={() => setUserSearchOpen(true)}
+              disabled={saving}
+            >
+              멤버 추가
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              startIcon={<DeleteOutlined />}
+              onClick={() => void handleRemoveSelected()}
+              disabled={saving || (gridRef.current?.selectedRows().length ?? 0) === 0}
+            >
+              선택 멤버 제거
+            </Button>
+          </Box>
           <Button variant="outlined" onClick={onClose} disabled={saving}>
             닫기
           </Button>
