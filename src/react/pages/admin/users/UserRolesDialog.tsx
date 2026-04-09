@@ -34,11 +34,15 @@ interface Props {
   username: string;
 }
 
+const INHERITED_SECTION_MIN_HEIGHT = 120;
+const TRANSFER_SECTION_MIN_HEIGHT = 300;
+const ROLE_LIST_MAX_HEIGHT = 220;
+
 function byName(left: { name: string }, right: { name: string }) {
   return left.name.localeCompare(right.name);
 }
 
-function RolesListSkeleton({ rows = 6 }: { rows?: number }) {
+function RolesListSkeleton({ rows = 4 }: { rows?: number }) {
   return (
     <Stack spacing={1}>
       <Skeleton variant="rounded" height={40} />
@@ -52,7 +56,7 @@ function RolesListSkeleton({ rows = 6 }: { rows?: number }) {
   );
 }
 
-function ReadOnlyListSkeleton({ rows = 3 }: { rows?: number }) {
+function ReadOnlyListSkeleton({ rows = 2 }: { rows?: number }) {
   return (
     <Stack spacing={0.75}>
       {Array.from({ length: rows }).map((_, index) => (
@@ -232,7 +236,7 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
 
           <Card variant="outlined">
             <CardContent>
-              <Stack spacing={1} sx={{ minHeight: 160 }}>
+              <Stack spacing={1} sx={{ minHeight: INHERITED_SECTION_MIN_HEIGHT }}>
                 <Typography variant="subtitle2">그룹에서 부여된 역할</Typography>
                 {loading ? (
                   <ReadOnlyListSkeleton />
@@ -259,7 +263,7 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
           <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="stretch">
             <Card variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
               <CardContent>
-                <Stack spacing={1} sx={{ minHeight: 420 }}>
+                <Stack spacing={1} sx={{ minHeight: TRANSFER_SECTION_MIN_HEIGHT }}>
                   <Typography variant="subtitle2">부여 가능한 역할</Typography>
                   {loading ? (
                     <RolesListSkeleton />
@@ -287,7 +291,7 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
                         fullWidth
                       />
                       <Divider />
-                      <List dense sx={{ maxHeight: 280, overflowY: "auto" }}>
+                      <List dense sx={{ maxHeight: ROLE_LIST_MAX_HEIGHT, overflowY: "auto" }}>
                         {availableRoles.map((role) => (
                           <ListItemButton
                             key={role.roleId}
@@ -335,7 +339,7 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
 
             <Card variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
               <CardContent>
-                <Stack spacing={1} sx={{ minHeight: 420 }}>
+                <Stack spacing={1} sx={{ minHeight: TRANSFER_SECTION_MIN_HEIGHT }}>
                   <Typography variant="subtitle2">사용자에게 직접 부여한 역할</Typography>
                   {loading ? (
                     <RolesListSkeleton />
@@ -363,7 +367,7 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
                         fullWidth
                       />
                       <Divider />
-                      <List dense sx={{ maxHeight: 280, overflowY: "auto" }}>
+                      <List dense sx={{ maxHeight: ROLE_LIST_MAX_HEIGHT, overflowY: "auto" }}>
                         {filteredGrantedRolesByUser.map((role) => (
                           <ListItemButton
                             key={role.roleId}
