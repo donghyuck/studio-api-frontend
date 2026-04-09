@@ -1,10 +1,19 @@
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button } from "@mui/material";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Stack,
+  TextField,
+} from "@mui/material";
 import type {
   ColDef,
   ICellRendererParams,
   SelectionChangedEvent,
 } from "ag-grid-community";
+import { SearchOutlined } from "@mui/icons-material";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { UsersDataSource } from "@/react/pages/admin/datasource";
@@ -29,9 +38,10 @@ export function UserSearchDialog({
 }: Props) {
   const gridRef = useRef<PageableGridContentHandle<UserDto>>(null);
   const dataSource = useMemo(() => new UsersDataSource(), []);
-const isMultiple = selectionMode === "multiple";
+  const isMultiple = selectionMode === "multiple";
   const [selectedCount, setSelectedCount] = useState(0);
   const [confirming, setConfirming] = useState(false);
+  const [query, setQuery] = useState("");
 
   const columnDefs = useMemo<ColDef<UserDto>[]>(() => {
     const baseColumns: ColDef<UserDto>[] = [
@@ -96,21 +106,57 @@ const isMultiple = selectionMode === "multiple";
   const handleClose = useCallback(() => {
     setSelectedCount(0);
     setConfirming(false);
+    setQuery("");
+    dataSource.setSearch("");
     onClose();
-  }, [onClose]);
+  }, [dataSource, onClose]);
+
+  const handleSearch = useCallback(() => {
+    dataSource.setSearch(query);
+    gridRef.current?.refresh();
+    setSelectedCount(0);
+  }, [dataSource, query]);
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>사용자 검색</DialogTitle>
       <DialogContent sx={{ height: 420 }}>
-        <PageableGridContent<UserDto>
-          ref={gridRef}
-          datasource={dataSource}
-          columns={columnDefs}
-          events={gridEvents}
-          height={340}
-          rowSelection={isMultiple ? "multiple" : undefined}
-        />
+        <Stack spacing={1} sx={{ mt: 1 }}>
+          <TextField
+            label="이름, 아이디, 이메일 검색"
+            size="small"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                handleSearch();
+              }
+            }}
+            fullWidth
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <Button
+                    size="small"
+                    variant="text"
+                    startIcon={<SearchOutlined />}
+                    onClick={handleSearch}
+                  >
+                    검색
+                  </Button>
+                ),
+              },
+            }}
+          />
+          <PageableGridContent<UserDto>
+            ref={gridRef}
+            datasource={dataSource}
+            columns={columnDefs}
+            events={gridEvents}
+            height={320}
+            rowSelection={isMultiple ? "multiple" : undefined}
+          />
+        </Stack>
       </DialogContent>
       <DialogActions>
         <Button variant="outlined" onClick={handleClose}>닫기</Button>
