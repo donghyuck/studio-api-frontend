@@ -1,13 +1,30 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Dialog, DialogTitle, DialogContent, DialogActions,
-  Button, List, ListItem, ListItemText, IconButton, Divider,
-  Typography, CircularProgress, Stack, TextField,
+  Alert,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  List,
+  ListItemButton,
+  ListItemText,
+  Stack,
+  TextField,
+  Typography,
 } from "@mui/material";
-import { DeleteOutlined, AddOutlined } from "@mui/icons-material";
-import { useToast } from "@/react/feedback";
+import {
+  ArrowBackOutlined,
+  ArrowForwardOutlined,
+} from "@mui/icons-material";
+import { useConfirm, useToast } from "@/react/feedback";
 import { reactUsersApi } from "./api";
 import type { UserRoleDto } from "./api";
+import type { RoleDto } from "@/react/pages/admin/datasource";
 
 interface Props {
   open: boolean;
@@ -16,79 +33,318 @@ interface Props {
   username: string;
 }
 
+function byName(left: { name: string }, right: { name: string }) {
+  return left.name.localeCompare(right.name);
+}
+
 export function UserRolesDialog({ open, onClose, userId, username }: Props) {
   const toast = useToast();
-  const [roles, setRoles] = useState<UserRoleDto[]>([]);
+  const confirm = useConfirm();
   const [loading, setLoading] = useState(false);
-  const [roleIdInput, setRoleIdInput] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [allRoles, setAllRoles] = useState<RoleDto[]>([]);
+  const [grantedRolesByGroup, setGrantedRolesByGroup] = useState<UserRoleDto[]>([]);
+  const [grantedRolesByUser, setGrantedRolesByUser] = useState<UserRoleDto[]>([]);
+  const [initialGrantedRolesByUser, setInitialGrantedRolesByUser] = useState<UserRoleDto[]>([]);
+  const [selectedLeft, setSelectedLeft] = useState<number[]>([]);
+  const [selectedRight, setSelectedRight] = useState<number[]>([]);
+  const [searchLeft, setSearchLeft] = useState("");
+  const [searchRight, setSearchRight] = useState("");
 
-  async function loadRoles() {
+  async function loadData() {
     setLoading(true);
     try {
-      const data = await reactUsersApi.getUserRoles(userId);
-      setRoles(Array.isArray(data) ? data : []);
+      const [rolesResponse, groupRoles, userRoles] = await Promise.all([
+        reactUsersApi.getAvailableRoles(),
+        reactUsersApi.getUserGroupRoles(userId),
+        reactUsersApi.getUserDirectRoles(userId),
+      ]);
+      const roles = (rolesResponse.content ?? []).slice().sort(byName);
+      const directRoles = (Array.isArray(userRoles) ? userRoles : []).slice().sort(byName);
+      const inheritedRoles = (Array.isArray(groupRoles) ? groupRoles : []).slice().sort(byName);
+      setAllRoles(roles);
+      setGrantedRolesByGroup(inheritedRoles);
+      setGrantedRolesByUser(directRoles);
+      setInitialGrantedRolesByUser(directRoles);
+      setSelectedLeft([]);
+      setSelectedRight([]);
+      setSearchLeft("");
+      setSearchRight("");
     } catch {
-      toast.error("역할 목록 로딩 실패");
+      toast.error("역할 목록 로딩에 실패했습니다.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    if (open) { setRoleIdInput(""); loadRoles(); }
+    if (!open) return;
+    void loadData();
   }, [open, userId]);
 
-  async function handleAdd() {
-    const roleId = parseInt(roleIdInput, 10);
-    if (!roleId) return;
-    try {
-      await reactUsersApi.addUserRole(userId, roleId);
-      toast.success("역할이 부여되었습니다.");
-      setRoleIdInput("");
-      loadRoles();
-    } catch {
-      toast.error("역할 부여에 실패했습니다.");
-    }
+  const inheritedRoleIds = useMemo(
+    () => new Set(grantedRolesByGroup.map((role) => role.roleId)),
+    [grantedRolesByGroup]
+  );
+  const directRoleIds = useMemo(
+    () => new Set(grantedRolesByUser.map((role) => role.roleId)),
+    [grantedRolesByUser]
+  );
+
+  const availableRoles = useMemo(
+    () =>
+      allRoles
+        .filter((role) => !inheritedRoleIds.has(role.roleId) && !directRoleIds.has(role.roleId))
+        .filter((role) => {
+          const keyword = searchLeft.trim().toLowerCase();
+          if (!keyword) return true;
+          return (
+            role.name.toLowerCase().includes(keyword) ||
+            String(role.roleId).includes(keyword) ||
+            (role.description ?? "").toLowerCase().includes(keyword)
+          );
+        }),
+    [allRoles, inheritedRoleIds, directRoleIds, searchLeft]
+  );
+
+  const filteredGrantedRolesByUser = useMemo(
+    () =>
+      grantedRolesByUser.filter((role) => {
+        const keyword = searchRight.trim().toLowerCase();
+        if (!keyword) return true;
+        return (
+          role.name.toLowerCase().includes(keyword) ||
+          String(role.roleId).includes(keyword) ||
+          (role.description ?? "").toLowerCase().includes(keyword)
+        );
+      }),
+    [grantedRolesByUser, searchRight]
+  );
+
+  function toggleSelected(
+    selected: number[],
+    setter: (value: number[]) => void,
+    roleId: number
+  ) {
+    setter(
+      selected.includes(roleId)
+        ? selected.filter((value) => value !== roleId)
+        : [...selected, roleId]
+    );
   }
 
-  async function handleRemove(roleId: number) {
+  function moveToGranted() {
+    const nextRoles = allRoles
+      .filter((role) => selectedLeft.includes(role.roleId))
+      .map((role) => ({
+        roleId: role.roleId,
+        name: role.name,
+        description: role.description,
+      }));
+
+    setGrantedRolesByUser((current) =>
+      [...current, ...nextRoles]
+        .filter(
+          (role, index, roles) =>
+            roles.findIndex((candidate) => candidate.roleId === role.roleId) === index
+        )
+        .sort(byName)
+    );
+    setSelectedLeft([]);
+  }
+
+  function moveToAvailable() {
+    setGrantedRolesByUser((current) =>
+      current.filter((role) => !selectedRight.includes(role.roleId))
+    );
+    setSelectedRight([]);
+  }
+
+  async function handleSave() {
+    const initialIds = new Set(initialGrantedRolesByUser.map((role) => role.roleId));
+    const currentIds = new Set(grantedRolesByUser.map((role) => role.roleId));
+
+    const toAdd = grantedRolesByUser.filter((role) => !initialIds.has(role.roleId));
+    const toRemove = initialGrantedRolesByUser.filter((role) => !currentIds.has(role.roleId));
+
+    if (toAdd.length === 0 && toRemove.length === 0) {
+      toast.info("변경된 역할이 없습니다.");
+      onClose();
+      return;
+    }
+
+    const ok = await confirm({
+      title: "역할 변경 저장",
+      message: `역할 ${toAdd.length}개 추가, ${toRemove.length}개 제거를 저장하시겠습니까?`,
+      okText: "저장",
+      cancelText: "취소",
+    });
+    if (!ok) return;
+
+    setSaving(true);
     try {
-      await reactUsersApi.removeUserRole(userId, roleId);
-      toast.success("역할이 제거되었습니다.");
-      loadRoles();
+      await Promise.all([
+        ...toAdd.map((role) => reactUsersApi.addUserRole(userId, role.roleId)),
+        ...toRemove.map((role) => reactUsersApi.removeUserRole(userId, role.roleId)),
+      ]);
+      toast.success("사용자 역할이 저장되었습니다.");
+      onClose();
     } catch {
-      toast.error("역할 제거에 실패했습니다.");
+      toast.error("사용자 역할 저장에 실패했습니다.");
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="md" fullWidth>
       <DialogTitle>역할 관리 — {username}</DialogTitle>
       <DialogContent>
-        <Stack spacing={1} sx={{ mt: 1 }}>
-          <Stack direction="row" spacing={1}>
-            <TextField label="역할 ID" size="small" value={roleIdInput}
-              onChange={e => setRoleIdInput(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && handleAdd()} />
-            <Button startIcon={<AddOutlined />} variant="outlined" onClick={handleAdd} disabled={!roleIdInput}>추가</Button>
+        <Stack spacing={2} sx={{ mt: 1 }}>
+          <Alert severity="info">
+            그룹에서 상속된 역할은 읽기 전용입니다. 여기서는 사용자에게 직접 부여한 역할만 추가하거나 제거할 수 있습니다.
+          </Alert>
+
+          <Card variant="outlined">
+            <CardContent>
+              <Stack spacing={1}>
+                <Typography variant="subtitle2">그룹에서 부여된 역할</Typography>
+                {loading ? (
+                  <CircularProgress size={24} />
+                ) : grantedRolesByGroup.length === 0 ? (
+                  <Typography color="text.secondary" variant="body2">
+                    그룹 상속 역할 없음
+                  </Typography>
+                ) : (
+                  <List dense>
+                    {grantedRolesByGroup.map((role) => (
+                      <ListItemButton key={role.roleId} disabled>
+                        <ListItemText
+                          primary={role.name}
+                          secondary={`ID: ${role.roleId}`}
+                        />
+                      </ListItemButton>
+                    ))}
+                  </List>
+                )}
+              </Stack>
+            </CardContent>
+          </Card>
+
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="stretch">
+            <Card variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
+              <CardContent>
+                <Stack spacing={1}>
+                  <Typography variant="subtitle2">부여 가능한 역할</Typography>
+                  <TextField
+                    label="역할 검색"
+                    size="small"
+                    value={searchLeft}
+                    onChange={(event) => setSearchLeft(event.target.value)}
+                    fullWidth
+                  />
+                  <Divider />
+                  {loading ? (
+                    <CircularProgress size={24} />
+                  ) : availableRoles.length === 0 ? (
+                    <Typography color="text.secondary" variant="body2">
+                      선택 가능한 역할 없음
+                    </Typography>
+                  ) : (
+                    <List dense sx={{ maxHeight: 280, overflowY: "auto" }}>
+                      {availableRoles.map((role) => (
+                        <ListItemButton
+                          key={role.roleId}
+                          selected={selectedLeft.includes(role.roleId)}
+                          onClick={() =>
+                            toggleSelected(selectedLeft, setSelectedLeft, role.roleId)
+                          }
+                        >
+                          <ListItemText
+                            primary={role.name}
+                            secondary={`ID: ${role.roleId}${role.description ? ` · ${role.description}` : ""}`}
+                          />
+                        </ListItemButton>
+                      ))}
+                    </List>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
+
+            <Stack
+              direction={{ xs: "row", md: "column" }}
+              spacing={1}
+              justifyContent="center"
+              alignItems="center"
+            >
+              <Button
+                variant="outlined"
+                startIcon={<ArrowForwardOutlined />}
+                onClick={moveToGranted}
+                disabled={selectedLeft.length === 0}
+              >
+                추가
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<ArrowBackOutlined />}
+                onClick={moveToAvailable}
+                disabled={selectedRight.length === 0}
+              >
+                제거
+              </Button>
+            </Stack>
+
+            <Card variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
+              <CardContent>
+                <Stack spacing={1}>
+                  <Typography variant="subtitle2">사용자에게 직접 부여한 역할</Typography>
+                  <TextField
+                    label="역할 검색"
+                    size="small"
+                    value={searchRight}
+                    onChange={(event) => setSearchRight(event.target.value)}
+                    fullWidth
+                  />
+                  <Divider />
+                  {loading ? (
+                    <CircularProgress size={24} />
+                  ) : filteredGrantedRolesByUser.length === 0 ? (
+                    <Typography color="text.secondary" variant="body2">
+                      직접 부여 역할 없음
+                    </Typography>
+                  ) : (
+                    <List dense sx={{ maxHeight: 280, overflowY: "auto" }}>
+                      {filteredGrantedRolesByUser.map((role) => (
+                        <ListItemButton
+                          key={role.roleId}
+                          selected={selectedRight.includes(role.roleId)}
+                          onClick={() =>
+                            toggleSelected(selectedRight, setSelectedRight, role.roleId)
+                          }
+                        >
+                          <ListItemText
+                            primary={role.name}
+                            secondary={`ID: ${role.roleId}${role.description ? ` · ${role.description}` : ""}`}
+                          />
+                        </ListItemButton>
+                      ))}
+                    </List>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
           </Stack>
-          <Divider />
-          {loading ? <CircularProgress size={24} /> : (
-            <List dense>
-              {roles.length === 0 && <Typography color="text.secondary" variant="body2">부여된 역할 없음</Typography>}
-              {roles.map(r => (
-                <ListItem key={r.roleId} secondaryAction={
-                  <IconButton size="small" color="error" onClick={() => handleRemove(r.roleId)}><DeleteOutlined fontSize="small" /></IconButton>
-                }>
-                  <ListItemText primary={r.name} secondary={`ID: ${r.roleId}`} />
-                </ListItem>
-              ))}
-            </List>
-          )}
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>닫기</Button>
+        <Button onClick={onClose} disabled={saving}>
+          취소
+        </Button>
+        <Button variant="contained" onClick={() => void handleSave()} disabled={saving}>
+          {saving ? <CircularProgress size={20} /> : "저장"}
+        </Button>
       </DialogActions>
     </Dialog>
   );

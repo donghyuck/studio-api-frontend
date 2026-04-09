@@ -4,6 +4,7 @@
 
 ### Changed
 
+- User roles management dialog now distinguishes group-inherited roles from directly granted roles and uses a transfer-list style editor for direct assignments.
 - Managed detail pages for groups, roles, object types, and templates now follow the user detail page layout standard.
 - ACL management page and create dialogs now restore explanatory guidance from the legacy Vue implementation.
 - Issue `#59` split FullLayout navigation and user menu responsibilities into dedicated layout components.
@@ -17,6 +18,9 @@
 
 ### Verification
 
+- User roles dialog UX: `npm run typecheck`
+- User roles dialog UX: `npm run lint`
+- User roles dialog UX: `npm run build`
 - Admin detail standardization: `npm run typecheck`
 - Admin detail standardization: `npm run lint`
 - Admin detail standardization: `npm run build`
