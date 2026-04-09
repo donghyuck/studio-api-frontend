@@ -22,6 +22,7 @@ import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { UsersDataSource } from "@/react/pages/admin/datasource";
 import type { UserDto } from "@/types/studio/user";
+import { useConfirm } from "@/react/feedback";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
 
@@ -32,6 +33,7 @@ interface Props {
   selectionMode?: "single" | "multiple";
   onConfirmSelection?: (users: UserDto[]) => void | Promise<void>;
   confirmLabel?: string;
+  confirmMessage?: string;
 }
 
 export function UserSearchDialog({
@@ -41,9 +43,11 @@ export function UserSearchDialog({
   selectionMode = "single",
   onConfirmSelection,
   confirmLabel = "추가",
+  confirmMessage = "선택한 사용자를 추가하시겠습니까? 이 작업은 즉시 반영됩니다.",
 }: Props) {
   const gridRef = useRef<PageableGridContentHandle<UserDto>>(null);
   const dataSource = useMemo(() => new UsersDataSource(), []);
+  const confirm = useConfirm();
   const isMultiple = selectionMode === "multiple";
   const [selectedCount, setSelectedCount] = useState(0);
   const [displayedCount, setDisplayedCount] = useState(0);
@@ -149,6 +153,17 @@ export function UserSearchDialog({
     if (users.length === 0) {
       return;
     }
+
+    const ok = await confirm({
+      title: "확인",
+      message: confirmMessage,
+      okText: "확인",
+      cancelText: "취소",
+    });
+    if (!ok) {
+      return;
+    }
+
     setConfirming(true);
     try {
       await onConfirmSelection?.(users);
