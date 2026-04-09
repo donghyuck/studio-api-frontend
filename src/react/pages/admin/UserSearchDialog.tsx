@@ -194,12 +194,15 @@ export function UserSearchDialog({
     setAllSelected(false);
     setConfirming(false);
     setQuery("");
-    dataSource.setSearch("");
+    dataSource.applyFilter({});
     onClose();
   }, [dataSource, onClose]);
 
   const handleSearch = useCallback(() => {
-    dataSource.setSearch(query);
+    const trimmed = query.trim();
+    dataSource.applyFilter(
+      trimmed ? { q: trimmed, in: "username,name,email" } : {}
+    );
     gridRef.current?.refresh();
     setSelectedCount(0);
     setDisplayedCount(0);
