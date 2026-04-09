@@ -12,8 +12,8 @@ export const reactGroupsApi = {
     apiRequest<GroupDto>("post", "/api/mgmt/groups", { data: payload }),
   getMembers: (groupId: number) =>
     apiRequest<GroupMemberDto[]>("get", `/api/mgmt/groups/${groupId}/members`),
-  addMember: (groupId: number, userId: number) =>
-    apiRequest<void>("post", `/api/mgmt/groups/${groupId}/members`, { data: { userId } }),
+  addMembers: (groupId: number, userIds: number[]) =>
+    apiRequest<void>("post", `/api/mgmt/groups/${groupId}/members`, { data: { userIds } }),
   removeMember: (groupId: number, userId: number) =>
     apiRequest<void>("delete", `/api/mgmt/groups/${groupId}/members/${userId}`),
   getGroupRoles: (groupId: number) =>

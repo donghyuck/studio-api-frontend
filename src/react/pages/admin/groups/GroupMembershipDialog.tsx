@@ -63,23 +63,14 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
 
     setSaving(true);
     try {
-      const results = await Promise.allSettled(
-        usersToAdd.map((user) => reactGroupsApi.addMember(groupId, user.userId))
+      await reactGroupsApi.addMembers(
+        groupId,
+        usersToAdd.map((user) => user.userId)
       );
-      const successCount = results.filter((result) => result.status === "fulfilled").length;
-      const failureCount = results.length - successCount;
-
-      if (successCount > 0) {
-        await loadMembers();
-      }
-
-      if (successCount > 0 && failureCount > 0) {
-        toast.warning(`${successCount}명 추가, ${failureCount}명 실패`);
-      } else if (successCount > 0) {
-        toast.success(`${successCount}명의 멤버가 추가되었습니다.`);
-      } else {
-        toast.error("멤버 추가에 실패했습니다.");
-      }
+      await loadMembers();
+      toast.success(`${usersToAdd.length}명의 멤버가 추가되었습니다.`);
+    } catch {
+      toast.error("멤버 추가에 실패했습니다.");
     } finally {
       setSaving(false);
     }

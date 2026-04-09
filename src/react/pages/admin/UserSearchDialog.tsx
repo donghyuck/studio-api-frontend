@@ -53,6 +53,7 @@ export function UserSearchDialog({
   const [displayedCount, setDisplayedCount] = useState(0);
   const [confirming, setConfirming] = useState(false);
   const [query, setQuery] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
 
   const columnDefs = useMemo<ColDef<UserDto>[]>(() => {
     const baseColumns: ColDef<UserDto>[] = [
@@ -201,18 +202,25 @@ export function UserSearchDialog({
     setDisplayedCount(0);
     setConfirming(false);
     setQuery("");
+    setHasSearched(false);
     dataSource.applyFilter({});
     onClose();
   }, [dataSource, onClose]);
 
   const handleSearch = useCallback(() => {
     const trimmed = query.trim();
-    dataSource.applyFilter(
-      trimmed ? { q: trimmed, in: "username,name,email" } : {}
-    );
+    if (!trimmed) {
+      dataSource.applyFilter({});
+      setHasSearched(false);
+      setSelectedCount(0);
+      setDisplayedCount(0);
+      return;
+    }
+    dataSource.applyFilter({ q: trimmed, in: "username,name,email" });
     gridRef.current?.refresh();
     setSelectedCount(0);
     setDisplayedCount(0);
+    setHasSearched(true);
   }, [dataSource, query]);
 
   const hasSelection = selectedCount > 0;
@@ -264,13 +272,29 @@ export function UserSearchDialog({
               },
             }}
           />
-          <PageableGridContent<UserDto>
-            ref={gridRef}
-            datasource={dataSource}
-            columns={columnDefs}
-            events={gridEvents}
-            rowSelection={isMultiple ? "multiple" : undefined}
-          />
+          {hasSearched ? (
+            <PageableGridContent<UserDto>
+              ref={gridRef}
+              datasource={dataSource}
+              columns={columnDefs}
+              events={gridEvents}
+              rowSelection={isMultiple ? "multiple" : undefined}
+            />
+          ) : (
+            <Stack
+              alignItems="center"
+              justifyContent="center"
+              sx={{
+                flex: 1,
+                minHeight: 0,
+                color: "text.secondary",
+              }}
+            >
+              <Typography variant="body2">
+                검색어를 입력한 뒤 검색을 실행하면 결과가 표시됩니다.
+              </Typography>
+            </Stack>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -278,7 +302,7 @@ export function UserSearchDialog({
           <Button
             variant="outlined"
             onClick={handleToggleSelectAll}
-            disabled={displayedCount === 0 || confirming}
+            disabled={!hasSearched || displayedCount === 0 || confirming}
           >
             {hasSelection ? "전체 해제" : "전체 선택"}
             <Typography component="span" sx={{ ml: 0.5 }}>
