@@ -1,6 +1,10 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button } from "@mui/material";
-import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import type {
+  ColDef,
+  ICellRendererParams,
+  SelectionChangedEvent,
+} from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { UsersDataSource } from "@/react/pages/admin/datasource";
@@ -75,7 +79,8 @@ export function UserSearchDialog({
         ? [
             {
               type: "selectionChanged",
-              listener: () => setSelectedCount(gridRef.current?.selectedRows().length ?? 0),
+              listener: (event: SelectionChangedEvent<UserDto>) =>
+                setSelectedCount(event.api.getSelectedRows().length ?? 0),
             },
           ]
         : undefined,
