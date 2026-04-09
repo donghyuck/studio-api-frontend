@@ -34,8 +34,8 @@ export const reactUsersApi = {
         sort: params?.sort ?? "name,asc",
       },
     }),
-  addUserRole: (userId: number, roleId: number) =>
-    apiRequest<void>("post", `/api/mgmt/users/${userId}/roles`, { data: { roleId } }),
+  setUserRoles: (userId: number, roleIds: number[]) =>
+    apiRequest<void>("post", `/api/mgmt/users/${userId}/roles`, { data: { roleIds } }),
   removeUserRole: (userId: number, roleId: number) =>
     apiRequest<void>("delete", `/api/mgmt/users/${userId}/roles/${roleId}`),
   getPasswordPolicy: () =>
