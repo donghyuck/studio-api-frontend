@@ -11,11 +11,10 @@ export interface GroupMemberDto {
   role?: string;
   joinedAt?: string | null;
   joinedBy?: string | null;
+  enabled?: boolean;
 }
 
-function unwrapMemberList(
-  payload: GroupMemberDto[] | PageResponse<GroupMemberDto>
-) {
+function unwrapMemberList(payload: GroupMemberDto[] | PageResponse<GroupMemberDto>) {
   if (Array.isArray(payload)) {
     return payload;
   }
@@ -30,11 +29,27 @@ export const reactGroupsApi = {
     apiRequest<GroupDto>("put", `/api/mgmt/groups/${groupId}`, { data: payload }),
   createGroup: (payload: { name: string; description?: string }) =>
     apiRequest<GroupDto>("post", "/api/mgmt/groups", { data: payload }),
+  getMemberSummaries: (
+    groupId: number,
+    params?: { q?: string; page?: number; size?: number; sort?: string }
+  ) =>
+    apiRequest<PageResponse<GroupMemberDto>>(
+      "get",
+      `/api/mgmt/groups/${groupId}/member-summaries`,
+      {
+        params: {
+          q: params?.q,
+          page: params?.page ?? 0,
+          size: params?.size ?? 20,
+          sort: params?.sort,
+        },
+      }
+    ),
   getMembers: async (groupId: number) =>
     unwrapMemberList(
       await apiRequest<GroupMemberDto[] | PageResponse<GroupMemberDto>>(
         "get",
-        `/api/mgmt/groups/${groupId}/members`
+        `/api/mgmt/groups/${groupId}/member-summaries`
       )
     ),
   addMembers: (groupId: number, userIds: number[]) =>

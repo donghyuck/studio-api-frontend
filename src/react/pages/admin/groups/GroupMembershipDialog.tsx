@@ -1,18 +1,19 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
+  Box,
   Button,
-  CircularProgress,
+  Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  Box,
   Stack,
+  TextField,
 } from "@mui/material";
-import { DeleteOutlined, GroupAddOutlined } from "@mui/icons-material";
+import { DeleteOutlined, GroupAddOutlined, SearchOutlined } from "@mui/icons-material";
 import type { ColDef } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
-import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
+import type { AgGridCompatibleDataSource, PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { useConfirm, useToast } from "@/react/feedback";
 import { reactGroupsApi, type GroupMemberDto } from "./api";
 import { UserSearchDialog } from "@/react/pages/admin/UserSearchDialog";
@@ -25,19 +26,17 @@ interface Props {
   groupName: string;
 }
 
-class GroupMembersDialogDataSource {
-  isLoaded = true;
+class GroupMemberSummariesDataSource implements AgGridCompatibleDataSource<GroupMemberDto> {
+  isLoaded = false;
   loading = false;
   error: unknown = null;
   dataItems: GroupMemberDto[] = [];
   total = 0;
-  pageSize = 15;
+  pageSize = 20;
   page = 0;
+  private q = "";
 
-  setItems(items: GroupMemberDto[]) {
-    this.dataItems = items;
-    this.total = items.length;
-  }
+  constructor(private readonly groupId: number) {}
 
   setPage(page: number) {
     this.page = page;
@@ -49,13 +48,36 @@ class GroupMembersDialogDataSource {
 
   setSort() {}
 
-  setFilter() {}
+  setSearch(q?: string) {
+    this.q = (q ?? "").trim();
+  }
 
-  setSearch() {}
+  setFilter(q?: string) {
+    this.setSearch(q);
+  }
 
-  applyFilter() {}
+  applyFilter(filter?: Record<string, unknown>) {
+    this.q = String(filter?.q ?? "").trim();
+  }
 
-  async fetch() {}
+  async fetch() {
+    this.loading = true;
+    try {
+      const response = await reactGroupsApi.getMemberSummaries(this.groupId, {
+        q: this.q || undefined,
+        page: this.page,
+        size: this.pageSize,
+      });
+      this.dataItems = response.content ?? [];
+      this.total = response.totalElements ?? 0;
+      this.isLoaded = true;
+    } catch (error) {
+      this.error = error;
+      throw error;
+    } finally {
+      this.loading = false;
+    }
+  }
 
   async fetchForAgGrid({
     startRow,
@@ -64,9 +86,17 @@ class GroupMembersDialogDataSource {
     startRow: number;
     endRow: number;
   }) {
+    const size = endRow - startRow || this.pageSize;
+    const page = Math.floor(startRow / size);
+    const response = await reactGroupsApi.getMemberSummaries(this.groupId, {
+      q: this.q || undefined,
+      page,
+      size,
+    });
+
     return {
-      rows: this.dataItems.slice(startRow, endRow),
-      total: this.total,
+      rows: response.content ?? [],
+      total: response.totalElements ?? 0,
     };
   }
 }
@@ -75,15 +105,10 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
   const toast = useToast();
   const confirm = useConfirm();
   const gridRef = useRef<PageableGridContentHandle<GroupMemberDto>>(null);
-  const [members, setMembers] = useState<GroupMemberDto[]>([]);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [userSearchOpen, setUserSearchOpen] = useState(false);
-  const dataSource = useMemo(() => new GroupMembersDialogDataSource(), []);
-
-  dataSource.setItems(members);
-
-  const memberIds = useMemo(() => new Set(members.map((member) => member.userId)), [members]);
+  const [searchInput, setSearchInput] = useState("");
+  const dataSource = useMemo(() => new GroupMemberSummariesDataSource(groupId), [groupId]);
 
   const columnDefs = useMemo<ColDef<GroupMemberDto>[]>(
     () => [
@@ -110,50 +135,62 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
         sortable: false,
       },
       {
-        field: "email",
-        headerName: "이메일",
-        flex: 1.2,
+        field: "enabled",
+        headerName: "활성화",
+        width: 96,
+        maxWidth: 96,
         filter: false,
         sortable: false,
+        cellRenderer: (params) => (
+          <Chip
+            size="small"
+            label={params.value ? "활성" : "비활성"}
+            variant={params.value ? "filled" : "outlined"}
+            sx={{
+              height: 22,
+              fontSize: 11,
+              ...(params.value
+                ? {
+                    bgcolor: "#2563eb",
+                    color: "#ffffff",
+                    borderColor: "#1d4ed8",
+                  }
+                : {}),
+            }}
+          />
+        ),
+        cellStyle: { textAlign: "center" },
       },
     ],
     []
   );
 
-  async function loadMembers() {
-    setLoading(true);
-    try {
-      const data = await reactGroupsApi.getMembers(groupId);
-      setMembers(Array.isArray(data) ? data : []);
-    } catch {
-      toast.error("멤버 목록 로딩 실패");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    if (open) {
-      void loadMembers();
-    }
-  }, [open, groupId]);
+  const handleSearch = useCallback(() => {
+    dataSource.applyFilter(
+      searchInput.trim() ? { q: searchInput.trim() } : {}
+    );
+    gridRef.current?.refresh();
+  }, [dataSource, searchInput]);
 
   async function handleAdd(selectedUsers: UserDto[]) {
-    const usersToAdd = selectedUsers.filter((user) => !memberIds.has(user.userId));
+    const userIds = Array.from(
+      new Set(
+        selectedUsers
+          .map((user) => user.userId)
+          .filter((userId): userId is number => typeof userId === "number")
+      )
+    );
 
-    if (usersToAdd.length === 0) {
+    if (userIds.length === 0) {
       toast.info("추가할 멤버가 없습니다.");
       return;
     }
 
     setSaving(true);
     try {
-      await reactGroupsApi.addMembers(
-        groupId,
-        usersToAdd.map((user) => user.userId)
-      );
-      await loadMembers();
-      toast.success(`${usersToAdd.length}명의 멤버가 추가되었습니다.`);
+      await reactGroupsApi.addMembers(groupId, userIds);
+      gridRef.current?.refresh();
+      toast.success(`${userIds.length}명의 멤버가 추가되었습니다.`);
     } catch {
       toast.error("멤버 추가에 실패했습니다.");
     } finally {
@@ -184,7 +221,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
     setSaving(true);
     try {
       await Promise.all(userIds.map((userId) => reactGroupsApi.removeMember(groupId, userId)));
-      await loadMembers();
+      gridRef.current?.refresh();
       toast.success(`${userIds.length}명의 멤버가 제거되었습니다.`);
     } catch {
       toast.error("멤버 제거에 실패했습니다.");
@@ -197,19 +234,41 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
     <>
       <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="md" fullWidth>
         <DialogTitle>멤버 관리 — {groupName}</DialogTitle>
-        <DialogContent sx={{ height: 520 }}>
+        <DialogContent sx={{ height: 560 }}>
           <Stack spacing={1} sx={{ mt: 1, height: "100%" }}>
-            {loading ? (
-              <CircularProgress size={24} />
-            ) : (
-              <PageableGridContent<GroupMemberDto>
-                ref={gridRef}
-                datasource={dataSource}
-                columns={columnDefs}
-                rowSelection="multiple"
-                height={420}
-              />
-            )}
+            <TextField
+              label="이름, 아이디, 이메일 검색"
+              size="small"
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleSearch();
+                }
+              }}
+              fullWidth
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <Button
+                      size="small"
+                      variant="text"
+                      startIcon={<SearchOutlined />}
+                      onClick={handleSearch}
+                    >
+                      검색
+                    </Button>
+                  ),
+                },
+              }}
+            />
+            <PageableGridContent<GroupMemberDto>
+              ref={gridRef}
+              datasource={dataSource}
+              columns={columnDefs}
+              rowSelection="multiple"
+              height={430}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
