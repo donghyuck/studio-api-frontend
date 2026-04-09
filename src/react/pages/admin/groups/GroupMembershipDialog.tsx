@@ -12,7 +12,7 @@ import {
   TextField,
 } from "@mui/material";
 import { DeleteOutlined, GroupAddOutlined, SearchOutlined } from "@mui/icons-material";
-import type { ColDef } from "ag-grid-community";
+import type { ColDef, SelectionChangedEvent } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { AgGridCompatibleDataSource, PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { useConfirm, useToast } from "@/react/feedback";
@@ -112,6 +112,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
   const [userSearchOpen, setUserSearchOpen] = useState(false);
   const [searchInput, setSearchInput] = useState("");
   const [gridKey, setGridKey] = useState(0);
+  const [selectedCount, setSelectedCount] = useState(0);
   const dataSource = useMemo(() => new GroupMemberSummariesDataSource(groupId), [groupId]);
 
   const columnDefs = useMemo<ColDef<GroupMemberDto>[]>(
@@ -191,6 +192,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
     dataSource.applyFilter(
       searchInput.trim() ? { q: searchInput.trim() } : {}
     );
+    setSelectedCount(0);
     setGridKey((current) => current + 1);
   }, [dataSource, searchInput]);
 
@@ -211,6 +213,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
     setSaving(true);
     try {
       await reactGroupsApi.addMembers(groupId, userIds);
+      setSelectedCount(0);
       setGridKey((current) => current + 1);
       toast.success(`${userIds.length}명의 멤버가 추가되었습니다.`);
     } catch {
@@ -243,6 +246,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
     setSaving(true);
     try {
       await Promise.all(userIds.map((userId) => reactGroupsApi.removeMember(groupId, userId)));
+      setSelectedCount(0);
       setGridKey((current) => current + 1);
       toast.success(`${userIds.length}명의 멤버가 제거되었습니다.`);
     } catch {
@@ -289,6 +293,13 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
               ref={gridRef}
               datasource={dataSource}
               columns={columnDefs}
+              events={[
+                {
+                  type: "selectionChanged",
+                  listener: (event: SelectionChangedEvent<GroupMemberDto>) =>
+                    setSelectedCount(event.api.getSelectedRows().length ?? 0),
+                },
+              ]}
               rowSelection="multiple"
               height={430}
             />
@@ -309,7 +320,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
               color="error"
               startIcon={<DeleteOutlined />}
               onClick={() => void handleRemoveSelected()}
-              disabled={saving || (gridRef.current?.selectedRows().length ?? 0) === 0}
+              disabled={saving || selectedCount === 0}
             >
               선택 멤버 제거
             </Button>
