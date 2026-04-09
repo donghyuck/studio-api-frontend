@@ -215,8 +215,14 @@ export function UserSearchDialog({
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
       <DialogTitle>사용자 검색</DialogTitle>
-      <DialogContent sx={{ height: 420 }}>
-        <Stack spacing={1} sx={{ mt: 1 }}>
+      <DialogContent
+        sx={{
+          height: "min(70vh, 640px)",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <Stack spacing={1} sx={{ mt: 1, minHeight: 0, flex: 1 }}>
           <TextField
             label="이름, 아이디, 이메일 검색"
             size="small"
@@ -248,7 +254,6 @@ export function UserSearchDialog({
             datasource={dataSource}
             columns={columnDefs}
             events={gridEvents}
-            height={320}
             rowSelection={isMultiple ? "multiple" : undefined}
           />
         </Stack>
