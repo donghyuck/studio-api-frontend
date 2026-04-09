@@ -1,7 +1,27 @@
 import { apiRequest } from "@/react/query/fetcher";
 import type { GroupDto, RoleDto } from "@/react/pages/admin/datasource";
+import type { PageResponse } from "@/types/studio/api-common";
 
-export interface GroupMemberDto { userId: number; username: string; name: string; role?: string; joinedAt?: string; }
+export interface GroupMemberDto {
+  groupId?: number;
+  userId: number;
+  username?: string;
+  name?: string;
+  email?: string | null;
+  role?: string;
+  joinedAt?: string | null;
+  joinedBy?: string | null;
+}
+
+function unwrapMemberList(
+  payload: GroupMemberDto[] | PageResponse<GroupMemberDto>
+) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return payload.content ?? [];
+}
 
 export const reactGroupsApi = {
   getGroup: (groupId: number) =>
@@ -10,8 +30,13 @@ export const reactGroupsApi = {
     apiRequest<GroupDto>("put", `/api/mgmt/groups/${groupId}`, { data: payload }),
   createGroup: (payload: { name: string; description?: string }) =>
     apiRequest<GroupDto>("post", "/api/mgmt/groups", { data: payload }),
-  getMembers: (groupId: number) =>
-    apiRequest<GroupMemberDto[]>("get", `/api/mgmt/groups/${groupId}/members`),
+  getMembers: async (groupId: number) =>
+    unwrapMemberList(
+      await apiRequest<GroupMemberDto[] | PageResponse<GroupMemberDto>>(
+        "get",
+        `/api/mgmt/groups/${groupId}/members`
+      )
+    ),
   addMembers: (groupId: number, userIds: number[]) =>
     apiRequest<void>("post", `/api/mgmt/groups/${groupId}/members`, { data: { userIds } }),
   removeMember: (groupId: number, userId: number) =>
