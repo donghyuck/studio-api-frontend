@@ -260,8 +260,14 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
     <>
       <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="md" fullWidth>
         <DialogTitle>멤버 관리 — {groupName}</DialogTitle>
-        <DialogContent sx={{ height: 560 }}>
-          <Stack spacing={1} sx={{ mt: 1, height: "100%" }}>
+        <DialogContent
+          sx={{
+            height: "min(70vh, 620px)",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <Stack spacing={1} sx={{ mt: 1, minHeight: 0, flex: 1 }}>
             <TextField
               label="이름, 아이디, 이메일 검색"
               size="small"
@@ -301,7 +307,6 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
                 },
               ]}
               rowSelection="multiple"
-              height={430}
             />
           </Stack>
         </DialogContent>
