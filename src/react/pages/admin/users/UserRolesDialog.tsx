@@ -391,7 +391,7 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
           </Stack>
         </Stack>
       </DialogContent>
-      <DialogActions sx={{ borderTop: 1, borderColor: "divider" }}>
+      <DialogActions>
         <Button variant="outlined" onClick={onClose} disabled={saving}>
           취소
         </Button>
