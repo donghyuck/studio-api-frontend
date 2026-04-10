@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Issue `#91` restores group detail properties editing with the shared accordion-based AG Grid editor and dedicated group properties API.
 - Issue `#89` restores user detail properties editing with a reusable accordion-based AG Grid editor backed by the dedicated user properties API.
 - Issue `#87` improves role detail user/group assignment dialogs with search-driven multi-select assign/revoke flows and current assignment grids.
 - Issue `#85` standardized dialog shell rounding and footer action button variants across create/edit and admin management dialogs.
@@ -12,6 +13,10 @@
 
 ### Verification
 
+- Issue `#91`: `npm run typecheck`
+- Issue `#91`: `npm run lint`
+- Issue `#91`: `npm run build`
+- Issue `#91`: manual check - group detail properties accordion, save flow, and side nav reviewed in code
 - Issue `#89`: `npm run typecheck`
 - Issue `#89`: `npm run lint`
 - Issue `#89`: `npm run build`
