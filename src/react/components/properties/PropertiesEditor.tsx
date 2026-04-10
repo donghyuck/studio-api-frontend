@@ -3,6 +3,7 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { IconButton, Stack, Typography } from "@mui/material";
@@ -121,8 +122,13 @@ function PropertiesEditorInner(
   ref: React.ForwardedRef<PropertiesEditorHandle>
 ) {
   const [rows, setRows] = useState<PropertyRow[]>(() => validateRows(toRows(value)));
+  const lastEmittedValueRef = useRef<Record<string, string>>(value);
 
   useEffect(() => {
+    if (sameMap(lastEmittedValueRef.current, value)) {
+      return;
+    }
+
     const nextRows = validateRows(
       Object.entries(value).map(([key, rowValue], index) => ({
         id: rows[index]?.id ?? `row-${index}`,
@@ -140,7 +146,9 @@ function PropertiesEditorInner(
   function updateRows(nextRows: PropertyRow[]) {
     const validated = validateRows(nextRows);
     setRows(validated);
-    onChange(toMap(validated));
+    const nextValue = toMap(validated);
+    lastEmittedValueRef.current = nextValue;
+    onChange(nextValue);
   }
 
   function handleDelete(rowId: string) {
