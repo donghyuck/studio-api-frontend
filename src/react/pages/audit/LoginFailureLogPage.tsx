@@ -1,9 +1,11 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Breadcrumbs,
   Button,
+  ButtonGroup,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import {
@@ -18,6 +20,9 @@ import type { LoginFailureEvent } from "@/react/pages/audit/loginFailuresApi";
 export function LoginFailureLogPage() {
   const gridRef = useRef<PageableGridContentHandle<LoginFailureEvent>>(null);
   const dataSource = useMemo(() => new LoginFailuresDataSource(), []);
+  const [dateStart, setDateStart] = useState("");
+  const [dateEnd, setDateEnd] = useState("");
+  const [usernameLike, setUsernameLike] = useState("");
 
   const columnDefs = useMemo<ColDef<LoginFailureEvent>[]>(
     () => [
@@ -43,6 +48,78 @@ export function LoginFailureLogPage() {
     gridRef.current?.refresh();
   };
 
+  function setPreset(days: number) {
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const start = new Date(end);
+    start.setDate(start.getDate() - (days - 1));
+    setDateStart(start.toISOString().slice(0, 10));
+    setDateEnd(end.toISOString().slice(0, 10));
+  }
+
+  function setToday() {
+    setPreset(1);
+  }
+
+  function set7days() {
+    setPreset(7);
+  }
+
+  function set30days() {
+    setPreset(30);
+  }
+
+  function set6Months() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    setDateStart(start.toISOString().slice(0, 10));
+    setDateEnd(end.toISOString().slice(0, 10));
+  }
+
+  function setThisMonth() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    setDateStart(start.toISOString().slice(0, 10));
+    setDateEnd(end.toISOString().slice(0, 10));
+  }
+
+  function startOfDayLocalToIso(dateStr: string) {
+    const [y = 0, m = 1, d = 1] = dateStr.split("-").map(Number);
+    return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString();
+  }
+
+  function endOfDayExclusiveLocalToIso(dateStr: string) {
+    const [y = 0, m = 1, d = 1] = dateStr.split("-").map(Number);
+    return new Date(y, m - 1, d + 1, 0, 0, 0, 0).toISOString();
+  }
+
+  const validRange = !dateStart || !dateEnd || dateStart <= dateEnd;
+
+  const handleSearch = () => {
+    if (!validRange) {
+      return;
+    }
+
+    const filter: Record<string, string> = {};
+    if (dateStart) {
+      filter.from = startOfDayLocalToIso(dateStart);
+    }
+    if (dateEnd) {
+      filter.to = endOfDayExclusiveLocalToIso(dateEnd);
+    }
+    if (usernameLike.trim()) {
+      filter.usernameLike = usernameLike.trim();
+    }
+    dataSource.applyFilter(filter);
+    gridRef.current?.refresh();
+  };
+
+  useEffect(() => {
+    setPreset(7);
+  }, []);
+
   return (
     <Stack spacing={2}>
       <Breadcrumbs separator="›">
@@ -63,6 +140,61 @@ export function LoginFailureLogPage() {
           </Button>
         </Stack>
       </Box>
+
+      <Stack spacing={1}>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+          <TextField
+            label="시작일(포함)"
+            type="date"
+            size="small"
+            value={dateStart}
+            onChange={(event) => setDateStart(event.target.value)}
+            InputLabelProps={{ shrink: true }}
+            error={!validRange}
+            fullWidth
+          />
+          <TextField
+            label="종료일(포함)"
+            type="date"
+            size="small"
+            value={dateEnd}
+            onChange={(event) => setDateEnd(event.target.value)}
+            InputLabelProps={{ shrink: true }}
+            error={!validRange}
+            helperText={!validRange ? "시작일이 종료일보다 늦을 수 없습니다." : " "}
+            fullWidth
+          />
+          <TextField
+            label="아이디"
+            size="small"
+            value={usernameLike}
+            onChange={(event) => setUsernameLike(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                handleSearch();
+              }
+            }}
+            fullWidth
+          />
+        </Stack>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+          <ButtonGroup size="small" variant="outlined">
+            <Button onClick={setToday}>오늘</Button>
+            <Button onClick={set7days}>7일</Button>
+            <Button onClick={set30days}>30일</Button>
+            <Button onClick={set6Months}>6개월</Button>
+            <Button onClick={setThisMonth}>이번달</Button>
+          </ButtonGroup>
+          <Button
+            variant="outlined"
+            startIcon={<RefreshOutlined />}
+            onClick={handleSearch}
+            disabled={!validRange}
+          >
+            조회
+          </Button>
+        </Box>
+      </Stack>
 
       <PageableGridContent<LoginFailureEvent>
         ref={gridRef}

@@ -4,6 +4,7 @@
 
 ### Changed
 
+- React login failure audit page now supports Vue-parity search filters for date range and username.
 - React login failure audit list now uses `/api/mgmt/audit/login-failure-log` to match the server route.
 - Issue `#81` updates group member and role dialogs with batch member selection and transfer-list role editing.
 - Issue `#79` stabilizes the user roles dialog loading layout with section skeletons and fixed content heights.
@@ -21,6 +22,8 @@
 
 ### Verification
 
+- Login failure audit search: `npm run typecheck`
+- Login failure audit search: `npm run build`
 - Login failure audit route: `npm run typecheck`
 - Issue `#81`: `npm run typecheck`
 - Issue `#81`: `npm run lint`
