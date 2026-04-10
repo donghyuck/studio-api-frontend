@@ -15,6 +15,7 @@ import {
   Stack,
   Switch,
   TextField,
+  Typography,
 } from "@mui/material";
 import {
   AddOutlined,
@@ -55,7 +56,9 @@ export function UserDetailPage() {
   const [rolesOpen, setRolesOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const propertiesEditorRef = useRef<PropertiesEditorHandle | null>(null);
+  const propertiesSectionRef = useRef<HTMLDivElement | null>(null);
   const [propertiesResetKey, setPropertiesResetKey] = useState(0);
+  const [propertiesExpanded, setPropertiesExpanded] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -189,6 +192,11 @@ export function UserDetailPage() {
       setSaving(false);
     }
   }
+
+  const handleSectionChange = useCallback(() => {
+    setPropertiesExpanded(true);
+    propertiesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   if (loading) {
     return (
@@ -370,8 +378,15 @@ export function UserDetailPage() {
           </Grid>
         </Grid>
       </Container>
-      <Container maxWidth="md" disableGutters>
-        <Accordion disableGutters>
+      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 180px" }, gap: 3 }}>
+        <Container maxWidth="md" disableGutters>
+        <Accordion
+          disableGutters
+          expanded={propertiesExpanded}
+          onChange={(_, expanded) => setPropertiesExpanded(expanded)}
+          ref={propertiesSectionRef}
+          sx={{ scrollMarginTop: 56 }}
+        >
           <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
             프로퍼티
           </AccordionSummary>
@@ -413,6 +428,41 @@ export function UserDetailPage() {
           </AccordionDetails>
         </Accordion>
       </Container>
+        <Box
+          component="aside"
+          sx={{
+            display: { xs: "none", xl: "block" },
+            position: "sticky",
+            top: 16,
+            alignSelf: "start",
+            borderLeft: "1px solid",
+            borderColor: "divider",
+            pl: 2,
+            py: 1,
+          }}
+        >
+          <Typography variant="caption" color="text.secondary" fontWeight={700}>
+            Contents
+          </Typography>
+          <Stack spacing={0.5} sx={{ mt: 1 }}>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: propertiesExpanded ? "primary.main" : "text.secondary",
+                fontWeight: propertiesExpanded ? 700 : 400,
+                borderLeft: propertiesExpanded ? "2px solid" : "2px solid transparent",
+                borderColor: propertiesExpanded ? "primary.main" : "transparent",
+                pl: 1,
+              }}
+              onClick={handleSectionChange}
+            >
+              프로퍼티
+            </Button>
+          </Stack>
+        </Box>
+      </Box>
       <UserRolesDialog
         open={rolesOpen}
         onClose={() => setRolesOpen(false)}
