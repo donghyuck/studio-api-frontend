@@ -23,10 +23,12 @@ export function LoginFailureLogPage() {
     () => [
       { field: "id", headerName: "ID", sortable: true, flex: 0.5 },
       { field: "username", headerName: "사용자명", sortable: true, flex: 1 },
-      { field: "ipAddress", headerName: "IP 주소", sortable: true, flex: 1 },
-      { field: "reason", headerName: "실패 사유", sortable: true, flex: 2 },
+      { field: "remoteIp", headerName: "IP 주소", sortable: true, flex: 1 },
+      { field: "failureType", headerName: "예외 유형", sortable: true, flex: 1.25 },
+      { field: "message", headerName: "메시지", sortable: true, flex: 1.75 },
+      { field: "userAgent", headerName: "User-Agent", sortable: true, flex: 2.5 },
       {
-        field: "timestamp",
+        field: "occurredAt",
         headerName: "시각",
         sortable: true,
         flex: 1.5,

@@ -1,9 +1,11 @@
 import type { PageResponse } from "@/types/studio/api-common";
 
 export interface LoginFailureEvent {
-  id: string;
-  timestamp: string;
+  id: number;
+  occurredAt: string;
   username: string;
-  ipAddress: string;
-  reason: string;
+  remoteIp: string;
+  failureType: string;
+  message: string;
+  userAgent?: string | null;
 }
