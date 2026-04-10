@@ -134,7 +134,7 @@ export function LoginFailureLogPage() {
           sx={{
             border: 1,
             borderColor: "divider",
-            borderRadius: 0,
+            borderRadius: 0.5,
             px: 1,
             py: 1,
           }}
