@@ -6,8 +6,7 @@ import {
   useState,
   type ForwardedRef,
 } from "react";
-import { IconButton, Stack, Typography } from "@mui/material";
-import { DeleteOutlined } from "@mui/icons-material";
+import { Button, Stack, Typography } from "@mui/material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import type { PropertyOwnerType } from "@/react/api/properties";
 import { GridContent } from "@/react/components/ag-grid/GridContent";
@@ -99,14 +98,14 @@ function ActionsCell({
   onDelete: (rowId: string) => void;
 }) {
   return (
-    <IconButton
+    <Button
       size="small"
       color="error"
       onClick={() => onDelete(data.id)}
       disabled={disabled}
     >
-      <DeleteOutlined fontSize="small" />
-    </IconButton>
+      삭제
+    </Button>
   );
 }
 
