@@ -29,7 +29,7 @@ interface Props {
 
 function toRows(value: Record<string, string>): PropertyRow[] {
   return Object.entries(value).map(([key, rowValue], index) => ({
-    id: `${key}-${index}`,
+    id: `row-${index}`,
     key,
     value: rowValue,
     keyError: null,
@@ -84,7 +84,15 @@ export function PropertiesEditor({ value, onChange, disabled = false }: Props) {
   const [rows, setRows] = useState<PropertyRow[]>(() => validateRows(toRows(value)));
 
   useEffect(() => {
-    setRows(validateRows(toRows(value)));
+    setRows((currentRows) => {
+      const nextRows = Object.entries(value).map(([key, rowValue], index) => ({
+        id: currentRows[index]?.id ?? `row-${index}`,
+        key,
+        value: rowValue,
+        keyError: null,
+      }));
+      return validateRows(nextRows);
+    });
   }, [value]);
 
   const hasErrors = useMemo(
