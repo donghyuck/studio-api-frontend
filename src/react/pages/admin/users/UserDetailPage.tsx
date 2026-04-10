@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Avatar,
   Box,
   Stack,
@@ -15,6 +18,7 @@ import {
 } from "@mui/material";
 import {
   DeleteOutlined,
+  ExpandMoreOutlined,
   KeyOutlined,
   ManageAccountsOutlined,
   SaveOutlined,
@@ -28,6 +32,7 @@ import type { UserDto } from "@/types/studio/user";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
+import { PropertiesEditor } from "@/react/components/properties/PropertiesEditor";
 
 export function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
@@ -49,6 +54,7 @@ export function UserDetailPage() {
     nameVisible: true,
     enabled: true,
   });
+  const [properties, setProperties] = useState<Record<string, string>>({});
 
   const loadUser = useCallback(() => {
     if (!userId) return;
@@ -64,6 +70,14 @@ export function UserDetailPage() {
           nameVisible: u.nameVisible,
           enabled: u.enabled,
         });
+        setProperties(
+          Object.fromEntries(
+            Object.entries(u.properties ?? {}).map(([key, value]) => [
+              key,
+              value == null ? "" : String(value),
+            ])
+          )
+        );
         const presence = await reactUsersApi
           .checkAvatarPresence(Number(userId))
           .catch(() => null);
@@ -83,7 +97,10 @@ export function UserDetailPage() {
     if (!userId) return;
     setSaving(true);
     try {
-      await reactUsersApi.updateUser(Number(userId), form);
+      await reactUsersApi.updateUser(Number(userId), {
+        ...form,
+        properties,
+      });
       toast.success("저장되었습니다.");
     } catch {
       toast.error("저장에 실패했습니다.");
@@ -291,6 +308,20 @@ export function UserDetailPage() {
             </Stack>
           </Grid>
         </Grid>
+      </Container>
+      <Container maxWidth="md" disableGutters>
+        <Accordion disableGutters>
+          <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
+            프로퍼티
+          </AccordionSummary>
+          <AccordionDetails>
+            <PropertiesEditor
+              value={properties}
+              onChange={setProperties}
+              disabled={saving}
+            />
+          </AccordionDetails>
+        </Accordion>
       </Container>
       <UserRolesDialog
         open={rolesOpen}
