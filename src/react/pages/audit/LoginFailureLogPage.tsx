@@ -133,7 +133,7 @@ export function LoginFailureLogPage() {
         <Box
           sx={{
             border: 1,
-            borderColor: "rgba(148, 163, 184, 0.45)",
+            borderColor: "rgb(191 191 191)",
             borderRadius: 2,
             px: 1.5,
             py: 1.5,
