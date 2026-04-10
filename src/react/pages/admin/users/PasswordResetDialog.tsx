@@ -79,7 +79,7 @@ export function PasswordResetDialog({ open, onClose, userId, username }: Props) 
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle>비밀번호 재설정 — {username}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -96,8 +96,8 @@ export function PasswordResetDialog({ open, onClose, userId, username }: Props) 
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>취소</Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={loading || !newPassword}>
+        <Button variant="outlined" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="outlined" onClick={handleSubmit} disabled={loading || !newPassword}>
           {loading ? <CircularProgress size={20} /> : "재설정"}
         </Button>
       </DialogActions>

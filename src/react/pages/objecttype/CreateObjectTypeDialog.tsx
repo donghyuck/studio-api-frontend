@@ -94,7 +94,7 @@ export function CreateObjectTypeDialog({ open, onClose, onCreated }: Props) {
   }
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle>오브젝트 타입 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -161,11 +161,11 @@ export function CreateObjectTypeDialog({ open, onClose, onCreated }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={handleClose} disabled={saving}>
+        <Button variant="outlined" onClick={handleClose} disabled={saving}>
           취소
         </Button>
         <Button
-          variant="contained"
+          variant="outlined"
           onClick={() => void handleCreate()}
           disabled={saving || !canSubmit}
         >

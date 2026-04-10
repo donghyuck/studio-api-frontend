@@ -118,7 +118,7 @@ export function ForumCategoryDialog({ open, forumSlug, onClose }: Props) {
   }
 
   return (
-    <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle>카테고리 관리</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -199,7 +199,7 @@ export function ForumCategoryDialog({ open, forumSlug, onClose }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={saving}>
+        <Button variant="outlined" onClick={onClose} disabled={saving}>
           닫기
         </Button>
       </DialogActions>

@@ -57,7 +57,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle>그룹 부여 — {roleName}</DialogTitle>
       <DialogContent>
         <Stack spacing={1} sx={{ mt: 1 }}>
@@ -83,7 +83,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>닫기</Button>
+        <Button variant="outlined" onClick={onClose}>닫기</Button>
       </DialogActions>
     </Dialog>
   );

@@ -122,7 +122,7 @@ export function ForumCreateDialog({ open, onClose, onCreated }: Props) {
   }
 
   return (
-    <Dialog open={open} onClose={loading ? undefined : onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={loading ? undefined : onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle>새 게시판</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -210,10 +210,10 @@ export function ForumCreateDialog({ open, onClose, onCreated }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+        <Button variant="outlined" onClick={onClose} disabled={loading}>
           취소
         </Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={loading || !canSubmit}>
+        <Button variant="outlined" onClick={handleSubmit} disabled={loading || !canSubmit}>
           생성
         </Button>
       </DialogActions>

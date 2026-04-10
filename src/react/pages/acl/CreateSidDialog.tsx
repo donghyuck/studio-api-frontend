@@ -46,7 +46,7 @@ export function CreateSidDialog({ open, onClose, onCreated }: Props) {
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle>ACL SID 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -73,11 +73,11 @@ export function CreateSidDialog({ open, onClose, onCreated }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+        <Button variant="outlined" onClick={onClose} disabled={loading}>
           취소
         </Button>
         <Button
-          variant="contained"
+          variant="outlined"
           onClick={() => void handleCreate()}
           disabled={loading || !sid.trim()}
         >

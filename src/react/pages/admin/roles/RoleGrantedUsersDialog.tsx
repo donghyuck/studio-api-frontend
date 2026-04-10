@@ -58,7 +58,7 @@ export function RoleGrantedUsersDialog({ open, onClose, roleId, roleName }: Prop
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
         <DialogTitle>사용자 부여 — {roleName}</DialogTitle>
         <DialogContent>
           <Stack spacing={1} sx={{ mt: 1 }}>
@@ -78,7 +78,7 @@ export function RoleGrantedUsersDialog({ open, onClose, roleId, roleName }: Prop
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>닫기</Button>
+          <Button variant="outlined" onClick={onClose}>닫기</Button>
         </DialogActions>
       </Dialog>
       <UserSearchDialog open={userSearchOpen} onClose={() => setUserSearchOpen(false)} onSelect={handleAdd} />

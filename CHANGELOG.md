@@ -4,11 +4,16 @@
 
 ### Changed
 
+- Issue `#85` standardized dialog shell rounding and footer action button variants across create/edit and admin management dialogs.
 - Issue `#83` aligned React group member deletion with the server contract by sending `DELETE /api/mgmt/groups/{id}/members` requests with `{ userIds: [...] }` bodies for both single and multiple deletion.
 - Neutral outlined close/cancel button styling is now provided by the MUI theme instead of per-dialog overrides.
 
 ### Verification
 
+- Issue `#85`: `npm run typecheck`
+- Issue `#85`: `npm run lint`
+- Issue `#85`: `npm run build`
+- Issue `#85`: manual check - create/edit and admin management dialog shell/action consistency reviewed in code
 - Issue `#83`: `npm run typecheck`
 - Issue `#83`: `npm run lint`
 - Issue `#83`: `npm run build`

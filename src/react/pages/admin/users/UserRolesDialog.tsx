@@ -227,7 +227,7 @@ export function UserRolesDialog({ open, onClose, userId, username }: Props) {
   }
 
   return (
-    <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle>역할 관리 — {username}</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
