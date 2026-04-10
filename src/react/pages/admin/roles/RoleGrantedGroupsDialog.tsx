@@ -194,6 +194,7 @@ export function RoleGrantedGroupsDialog({
   const [grantedSearchInput, setGrantedSearchInput] = useState("");
   const [candidateGridKey, setCandidateGridKey] = useState(0);
   const [grantedGridKey, setGrantedGridKey] = useState(0);
+  const [hasSearchedCandidates, setHasSearchedCandidates] = useState(false);
   const [selectedCandidateCount, setSelectedCandidateCount] = useState(0);
   const [selectedGrantedCount, setSelectedGrantedCount] = useState(0);
 
@@ -281,6 +282,7 @@ export function RoleGrantedGroupsDialog({
 
     setCandidateSearchInput("");
     setGrantedSearchInput("");
+    setHasSearchedCandidates(false);
     setCandidateGridKey(0);
     resetSelection();
     void loadGrantedGroups();
@@ -288,7 +290,16 @@ export function RoleGrantedGroupsDialog({
 
   const handleCandidateSearch = useCallback(() => {
     const trimmed = candidateSearchInput.trim();
-    candidatesDataSource.applyFilter(trimmed ? { q: trimmed } : {});
+    if (!trimmed) {
+      candidatesDataSource.applyFilter({});
+      setHasSearchedCandidates(false);
+      setSelectedCandidateCount(0);
+      setCandidateGridKey((current) => current + 1);
+      return;
+    }
+
+    candidatesDataSource.applyFilter({ q: trimmed });
+    setHasSearchedCandidates(true);
     setSelectedCandidateCount(0);
     setCandidateGridKey((current) => current + 1);
   }, [candidateSearchInput, candidatesDataSource]);
@@ -332,7 +343,9 @@ export function RoleGrantedGroupsDialog({
       toast.success(`${groupIds.length}개 그룹에 권한을 부여했습니다.`);
       resetSelection();
       await loadGrantedGroups();
-      setCandidateGridKey((current) => current + 1);
+      if (hasSearchedCandidates) {
+        setCandidateGridKey((current) => current + 1);
+      }
     } catch {
       toast.error("그룹 권한 부여에 실패했습니다.");
     } finally {
@@ -370,7 +383,9 @@ export function RoleGrantedGroupsDialog({
       toast.success(`${groupIds.length}개 그룹의 권한을 회수했습니다.`);
       resetSelection();
       await loadGrantedGroups();
-      setCandidateGridKey((current) => current + 1);
+      if (hasSearchedCandidates) {
+        setCandidateGridKey((current) => current + 1);
+      }
     } catch {
       toast.error("그룹 권한 회수에 실패했습니다.");
     } finally {
@@ -421,15 +436,32 @@ export function RoleGrantedGroupsDialog({
                 },
               }}
             />
-            <PageableGridContent<GroupDto>
-              key={candidateGridKey}
-              ref={candidatesGridRef}
-              datasource={candidatesDataSource}
-              columns={groupColumns as ColDef<GroupDto>[]}
-              events={candidateEvents}
-              rowSelection="multiple"
-              height={GRID_HEIGHT}
-            />
+            {hasSearchedCandidates ? (
+              <PageableGridContent<GroupDto>
+                key={candidateGridKey}
+                ref={candidatesGridRef}
+                datasource={candidatesDataSource}
+                columns={groupColumns as ColDef<GroupDto>[]}
+                events={candidateEvents}
+                rowSelection="multiple"
+                height={GRID_HEIGHT}
+              />
+            ) : (
+              <Box
+                sx={{
+                  height: GRID_HEIGHT,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  border: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  검색어를 입력한 뒤 검색을 실행하면 결과가 표시됩니다.
+                </Typography>
+              </Box>
+            )}
           </Stack>
 
           <Stack spacing={1}>
