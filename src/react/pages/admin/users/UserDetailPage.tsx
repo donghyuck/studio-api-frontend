@@ -18,6 +18,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
+  AddOutlined,
   DeleteOutlined,
   ExpandMoreOutlined,
   KeyOutlined,
@@ -340,6 +341,7 @@ export function UserDetailPage() {
                 <Button
                   size="small"
                   variant="outlined"
+                  startIcon={<AddOutlined />}
                   onClick={handleAddPropertyRow}
                   disabled={saving}
                 >
@@ -351,7 +353,7 @@ export function UserDetailPage() {
               value={properties}
               onChange={setProperties}
               disabled={saving}
-              actions={null}
+              hideDefaultAddAction
             />
           </AccordionDetails>
         </Accordion>

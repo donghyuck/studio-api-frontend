@@ -27,6 +27,7 @@ interface Props {
   disabled?: boolean;
   actions?: React.ReactNode;
   onAdd?: () => void;
+  hideDefaultAddAction?: boolean;
 }
 
 function toRows(value: Record<string, string>): PropertyRow[] {
@@ -88,6 +89,7 @@ export function PropertiesEditor({
   disabled = false,
   actions,
   onAdd,
+  hideDefaultAddAction = false,
 }: Props) {
   const [rows, setRows] = useState<PropertyRow[]>(() => validateRows(toRows(value)));
 
@@ -135,7 +137,7 @@ export function PropertiesEditor({
     <Stack spacing={1}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Box />
-        {actions ?? (
+        {actions ?? (hideDefaultAddAction ? null : (
           <Button
             size="small"
             variant="outlined"
@@ -145,7 +147,7 @@ export function PropertiesEditor({
           >
             행 추가
           </Button>
-        )}
+        ))}
       </Box>
       <Table size="small">
         <TableHead>
