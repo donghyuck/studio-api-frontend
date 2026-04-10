@@ -136,7 +136,7 @@ export function LoginFailureLogPage() {
             py: 1.25,
           }}
         >
-          <Stack spacing={1}>
+          <Stack spacing={0.5}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
               <TextField
                 label="시작일(포함)"
@@ -156,7 +156,7 @@ export function LoginFailureLogPage() {
                 onChange={(event) => setDateEnd(event.target.value)}
                 InputLabelProps={{ shrink: true }}
                 error={!validRange}
-                helperText={!validRange ? "시작일이 종료일보다 늦을 수 없습니다." : " "}
+                helperText={!validRange ? "시작일이 종료일보다 늦을 수 없습니다." : undefined}
                 fullWidth
               />
               <TextField
