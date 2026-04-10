@@ -126,7 +126,7 @@ export function PropertiesEditor({ value, onChange, disabled = false }: Props) {
   return (
     <Stack spacing={1}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="subtitle2">프로퍼티 목록</Typography>
+        <Box />
         <Button
           size="small"
           variant="outlined"

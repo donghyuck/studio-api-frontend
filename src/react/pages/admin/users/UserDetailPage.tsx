@@ -15,6 +15,7 @@ import {
   CircularProgress,
   Alert,
   Container,
+  Typography,
 } from "@mui/material";
 import {
   DeleteOutlined,
@@ -315,6 +316,9 @@ export function UserDetailPage() {
             프로퍼티
           </AccordionSummary>
           <AccordionDetails>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              사용자에 대한 추가 속성을 관리합니다.
+            </Typography>
             <PropertiesEditor
               value={properties}
               onChange={setProperties}
