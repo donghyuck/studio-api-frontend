@@ -1,33 +1,45 @@
-import { useCallback, useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Alert,
   Avatar,
   Box,
-  Stack,
   Button,
-  Grid,
-  TextField,
-  FormControlLabel,
-  Switch,
   CircularProgress,
-  Alert,
   Container,
+  FormControlLabel,
+  Grid,
+  Stack,
+  Switch,
+  TextField,
+  Typography,
 } from "@mui/material";
 import {
+  AddOutlined,
   DeleteOutlined,
+  ExpandMoreOutlined,
   KeyOutlined,
   ManageAccountsOutlined,
   SaveOutlined,
   UploadOutlined,
 } from "@mui/icons-material";
-import { useConfirm, useToast } from "@/react/feedback";
-import { reactUsersApi } from "./api";
-import { UserRolesDialog } from "./UserRolesDialog";
-import { PasswordResetDialog } from "./PasswordResetDialog";
-import type { UserDto } from "@/types/studio/user";
-import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
+import { getProperties, replaceProperties } from "@/react/api/properties";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
+import {
+  PropertiesEditor,
+  type PropertiesEditorHandle,
+} from "@/react/components/properties/PropertiesEditor";
+import { useConfirm, useToast } from "@/react/feedback";
+import { diffProperties, normalizeProperties } from "@/react/utils/propertyKeys";
+import type { UserDto } from "@/types/studio/user";
+import { PasswordResetDialog } from "./PasswordResetDialog";
+import { reactUsersApi } from "./api";
+import { UserRolesDialog } from "./UserRolesDialog";
 
 export function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
@@ -39,9 +51,14 @@ export function UserDetailPage() {
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [propertiesSaving, setPropertiesSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rolesOpen, setRolesOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const propertiesEditorRef = useRef<PropertiesEditorHandle | null>(null);
+  const propertiesSectionRef = useRef<HTMLDivElement | null>(null);
+  const [propertiesResetKey, setPropertiesResetKey] = useState(0);
+  const [propertiesExpanded, setPropertiesExpanded] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -49,21 +66,44 @@ export function UserDetailPage() {
     nameVisible: true,
     enabled: true,
   });
+  const [initialProperties, setInitialProperties] = useState<Record<string, string>>({});
+  const [draftProperties, setDraftProperties] = useState<Record<string, string>>({});
 
   const loadUser = useCallback(() => {
     if (!userId) return;
     setLoading(true);
-    reactUsersApi
-      .getUser(Number(userId))
-      .then(async (u) => {
-        setUser(u);
+
+    Promise.allSettled([
+      reactUsersApi.getUser(Number(userId)),
+      getProperties("users", Number(userId)),
+    ])
+      .then(async ([userResult, propertiesResult]) => {
+        if (userResult.status !== "fulfilled") {
+          throw userResult.reason;
+        }
+
+        const nextUser = userResult.value;
+        setUser(nextUser);
         setForm({
-          name: u.name,
-          email: u.email ?? "",
-          emailVisble: u.emailVisble,
-          nameVisible: u.nameVisible,
-          enabled: u.enabled,
+          name: nextUser.name,
+          email: nextUser.email ?? "",
+          emailVisble: nextUser.emailVisble,
+          nameVisible: nextUser.nameVisible,
+          enabled: nextUser.enabled,
         });
+
+        const nextProperties =
+          propertiesResult.status === "fulfilled"
+            ? normalizeProperties(propertiesResult.value)
+            : {};
+        if (propertiesResult.status !== "fulfilled") {
+          toast.error("프로퍼티를 불러오지 못했습니다.");
+        }
+
+        setInitialProperties(nextProperties);
+        setDraftProperties(nextProperties);
+        setPropertiesResetKey((current) => current + 1);
+
         const presence = await reactUsersApi
           .checkAvatarPresence(Number(userId))
           .catch(() => null);
@@ -73,11 +113,23 @@ export function UserDetailPage() {
       })
       .catch(() => setError("사용자를 불러오지 못했습니다."))
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [toast, userId]);
 
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  useEffect(() => {
+    if (!propertiesExpanded) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      propertiesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [propertiesExpanded]);
 
   async function handleSave() {
     if (!userId) return;
@@ -89,6 +141,29 @@ export function UserDetailPage() {
       toast.error("저장에 실패했습니다.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveProperties() {
+    if (!userId) return;
+    if (propertiesEditorRef.current?.hasErrors()) {
+      toast.error("프로퍼티 키 오류를 먼저 수정해 주세요.");
+      return;
+    }
+
+    setPropertiesSaving(true);
+    try {
+      const nextProperties = propertiesEditorRef.current?.getValue() ?? draftProperties;
+      const saved = await replaceProperties("users", Number(userId), nextProperties);
+      const normalized = normalizeProperties(saved);
+      setInitialProperties(normalized);
+      setDraftProperties(normalized);
+      setPropertiesResetKey((current) => current + 1);
+      toast.success("프로퍼티가 저장되었습니다.");
+    } catch {
+      toast.error("프로퍼티 저장에 실패했습니다.");
+    } finally {
+      setPropertiesSaving(false);
     }
   }
 
@@ -130,16 +205,27 @@ export function UserDetailPage() {
     }
   }
 
-  if (loading)
+  const handleSectionChange = useCallback(() => {
+    setPropertiesExpanded((current) => !current);
+  }, []);
+
+  if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
         <CircularProgress />
       </Box>
     );
+  }
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!user) return null;
 
   const avatarUrl = `${API_BASE_URL}/api/profile/${encodeURIComponent(user.username)}/avatar?v=${avatarVersion}`;
+  const propertiesDiff = diffProperties(initialProperties, draftProperties);
+  const propertiesChanged =
+    Object.keys(propertiesDiff.added).length > 0 ||
+    Object.keys(propertiesDiff.updated).length > 0 ||
+    propertiesDiff.removed.length > 0;
+  const propertiesBusy = saving || propertiesSaving;
 
   return (
     <Stack spacing={2}>
@@ -151,147 +237,251 @@ export function UserDetailPage() {
         onPrevious={() => navigate("/admin/users")}
         onRefresh={loadUser}
       />
-      <Container maxWidth="md" disableGutters>
-        <Grid container spacing={1} alignItems="center">
-          <Grid size={12} sx={{ mb: 5 }}>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar
-                alt={user.username}
-                src={avatarImageId ? avatarUrl : NO_AVATAR}
-                imgProps={{
-                  onError: (event) => {
-                    event.currentTarget.src = NO_AVATAR;
-                  },
-                }}
-                sx={{ width: 120, height: 120, bgcolor: "grey.200" }}
-              />
-              <Stack direction="row" spacing={1}>
-                <Button
-                  component="label"
-                  variant="outlined"
-                  startIcon={<UploadOutlined />}
-                  disabled={saving}
-                >
-                  아바타 업로드
-                  <input
-                    hidden
-                    accept="image/*"
-                    type="file"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      void handleAvatarUpload(file);
-                      event.currentTarget.value = "";
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 200px" },
+          gap: { xs: 0, lg: 3 },
+        }}
+      >
+        <Stack spacing={2}>
+          <Container maxWidth="md" disableGutters>
+            <Grid container spacing={1} alignItems="center">
+              <Grid size={12} sx={{ mb: 5 }}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Avatar
+                    alt={user.username}
+                    src={avatarImageId ? avatarUrl : NO_AVATAR}
+                    imgProps={{
+                      onError: (event) => {
+                        event.currentTarget.src = NO_AVATAR;
+                      },
                     }}
+                    sx={{ width: 120, height: 120, bgcolor: "grey.200" }}
                   />
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteOutlined />}
-                  disabled={saving || !avatarImageId}
-                  onClick={() => void handleAvatarDelete()}
-                >
-                  아바타 삭제
-                </Button>
-              </Stack>
-            </Stack>
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="아이디"
-              value={user.username}
-              InputProps={{ readOnly: true }}
-              size="small"
-              fullWidth
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="이름"
-              value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              size="small"
-              fullWidth
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="이메일"
-              value={form.email}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, email: e.target.value }))
-              }
-              size="small"
-              fullWidth
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.emailVisble}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, emailVisble: e.target.checked }))
-                  }
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      component="label"
+                      variant="outlined"
+                      startIcon={<UploadOutlined />}
+                      disabled={saving}
+                    >
+                      아바타 업로드
+                      <input
+                        hidden
+                        accept="image/*"
+                        type="file"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          void handleAvatarUpload(file);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<DeleteOutlined />}
+                      disabled={saving || !avatarImageId}
+                      onClick={() => void handleAvatarDelete()}
+                    >
+                      아바타 삭제
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  label="아이디"
+                  value={user.username}
+                  InputProps={{ readOnly: true }}
+                  size="small"
+                  fullWidth
                 />
-              }
-              label="이메일 공개"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.nameVisible}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, nameVisible: e.target.checked }))
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  label="이름"
+                  value={form.name}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, name: event.target.value }))
                   }
+                  size="small"
+                  fullWidth
                 />
-              }
-              label="이름 공개"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.enabled}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, enabled: e.target.checked }))
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  label="이메일"
+                  value={form.email}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, email: event.target.value }))
                   }
+                  size="small"
+                  fullWidth
                 />
-              }
-              label="계정 활성화"
-            />
-          </Grid>
-          <Grid size={12} sx={{ mt: 10 }}>
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button
-                variant="outlined"
-                startIcon={<ManageAccountsOutlined />}
-                onClick={() => setRolesOpen(true)}
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.emailVisble}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          emailVisble: event.target.checked,
+                        }))
+                      }
+                    />
+                  }
+                  label="이메일 공개"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.nameVisible}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          nameVisible: event.target.checked,
+                        }))
+                      }
+                    />
+                  }
+                  label="이름 공개"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.enabled}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          enabled: event.target.checked,
+                        }))
+                      }
+                    />
+                  }
+                  label="계정 활성화"
+                />
+              </Grid>
+              <Grid size={12} sx={{ mt: 10 }}>
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Button
+                    variant="outlined"
+                    startIcon={<ManageAccountsOutlined />}
+                    onClick={() => setRolesOpen(true)}
+                  >
+                    역할 관리
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<KeyOutlined />}
+                    onClick={() => setResetOpen(true)}
+                  >
+                    비밀번호 재설정
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<SaveOutlined />}
+                    onClick={handleSave}
+                    disabled={saving}
+                  >
+                    {saving ? <CircularProgress size={20} /> : "저장"}
+                  </Button>
+                </Stack>
+              </Grid>
+            </Grid>
+          </Container>
+          <Container maxWidth="md" disableGutters>
+            <Box ref={propertiesSectionRef} sx={{ scrollMarginTop: 56 }}>
+              <Accordion
+                disableGutters
+                expanded={propertiesExpanded}
+                onChange={(_, expanded) => setPropertiesExpanded(expanded)}
               >
-                역할 관리
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<KeyOutlined />}
-                onClick={() => setResetOpen(true)}
-              >
-                비밀번호 재설정
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<SaveOutlined />}
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? <CircularProgress size={20} /> : "저장"}
-              </Button>
-            </Stack>
-          </Grid>
-        </Grid>
-      </Container>
+                <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
+                  프로퍼티
+                </AccordionSummary>
+                <AccordionDetails>
+                  <PageToolbar
+                    divider={false}
+                    label="사용자에 대한 추가 속성을 관리합니다."
+                    actions={
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<AddOutlined />}
+                          onClick={() => propertiesEditorRef.current?.addRow()}
+                          disabled={propertiesBusy}
+                        >
+                          행 추가
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<SaveOutlined />}
+                          onClick={() => void handleSaveProperties()}
+                          disabled={propertiesBusy || !propertiesChanged}
+                        >
+                          {propertiesSaving ? <CircularProgress size={16} /> : "저장"}
+                        </Button>
+                      </Stack>
+                    }
+                  />
+                  <PropertiesEditor
+                    ref={propertiesEditorRef}
+                    value={draftProperties}
+                    onChange={setDraftProperties}
+                    type="users"
+                    disabled={propertiesBusy}
+                    resetKey={propertiesResetKey}
+                  />
+                </AccordionDetails>
+              </Accordion>
+            </Box>
+          </Container>
+        </Stack>
+        <Box
+          component="aside"
+          sx={{
+            display: { xs: "none", lg: "block" },
+            position: "sticky",
+            top: 16,
+            alignSelf: "start",
+            borderLeft: "1px solid",
+            borderColor: "divider",
+            pl: 2,
+            py: 1,
+          }}
+        >
+          <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 0.2 }}>
+            Contents
+          </Typography>
+          <Stack spacing={0.5} sx={{ mt: 1 }}>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: propertiesExpanded ? "primary.main" : "text.secondary",
+                fontWeight: propertiesExpanded ? 700 : 400,
+                borderLeft: propertiesExpanded ? "2px solid" : "2px solid transparent",
+                borderColor: propertiesExpanded ? "primary.main" : "transparent",
+                pl: 1,
+              }}
+              onClick={handleSectionChange}
+            >
+              프로퍼티
+            </Button>
+          </Stack>
+        </Box>
+      </Box>
       <UserRolesDialog
         open={rolesOpen}
         onClose={() => setRolesOpen(false)}
