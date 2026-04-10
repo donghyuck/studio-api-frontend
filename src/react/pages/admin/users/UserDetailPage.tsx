@@ -226,158 +226,6 @@ export function UserDetailPage() {
         onPrevious={() => navigate("/admin/users")}
         onRefresh={loadUser}
       />
-      <Container maxWidth="md" disableGutters>
-        <Grid container spacing={1} alignItems="center">
-          <Grid size={12} sx={{ mb: 5 }}>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Avatar
-                alt={user.username}
-                src={avatarImageId ? avatarUrl : NO_AVATAR}
-                imgProps={{
-                  onError: (event) => {
-                    event.currentTarget.src = NO_AVATAR;
-                  },
-                }}
-                sx={{ width: 120, height: 120, bgcolor: "grey.200" }}
-              />
-              <Stack direction="row" spacing={1}>
-                <Button
-                  component="label"
-                  variant="outlined"
-                  startIcon={<UploadOutlined />}
-                  disabled={saving}
-                >
-                  아바타 업로드
-                  <input
-                    hidden
-                    accept="image/*"
-                    type="file"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      void handleAvatarUpload(file);
-                      event.currentTarget.value = "";
-                    }}
-                  />
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="error"
-                  startIcon={<DeleteOutlined />}
-                  disabled={saving || !avatarImageId}
-                  onClick={() => void handleAvatarDelete()}
-                >
-                  아바타 삭제
-                </Button>
-              </Stack>
-            </Stack>
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="아이디"
-              value={user.username}
-              InputProps={{ readOnly: true }}
-              size="small"
-              fullWidth
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="이름"
-              value={form.name}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, name: event.target.value }))
-              }
-              size="small"
-              fullWidth
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              label="이메일"
-              value={form.email}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, email: event.target.value }))
-              }
-              size="small"
-              fullWidth
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.emailVisble}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      emailVisble: event.target.checked,
-                    }))
-                  }
-                />
-              }
-              label="이메일 공개"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.nameVisible}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      nameVisible: event.target.checked,
-                    }))
-                  }
-                />
-              }
-              label="이름 공개"
-            />
-          </Grid>
-          <Grid size={{ xs: 12, md: 4 }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.enabled}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      enabled: event.target.checked,
-                    }))
-                  }
-                />
-              }
-              label="계정 활성화"
-            />
-          </Grid>
-          <Grid size={12} sx={{ mt: 10 }}>
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button
-                variant="outlined"
-                startIcon={<ManageAccountsOutlined />}
-                onClick={() => setRolesOpen(true)}
-              >
-                역할 관리
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<KeyOutlined />}
-                onClick={() => setResetOpen(true)}
-              >
-                비밀번호 재설정
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<SaveOutlined />}
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? <CircularProgress size={20} /> : "저장"}
-              </Button>
-            </Stack>
-          </Grid>
-        </Grid>
-      </Container>
       <Box
         sx={{
           display: "grid",
@@ -385,55 +233,209 @@ export function UserDetailPage() {
           gap: { xs: 0, lg: 3 },
         }}
       >
-        <Container maxWidth="md" disableGutters>
-        <Accordion
-          disableGutters
-          expanded={propertiesExpanded}
-          onChange={(_, expanded) => setPropertiesExpanded(expanded)}
-          ref={propertiesSectionRef}
-          sx={{ scrollMarginTop: 56 }}
-        >
-          <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
-            프로퍼티
-          </AccordionSummary>
-          <AccordionDetails>
-            <PageToolbar
-              divider={false}
-              label="사용자에 대한 추가 속성을 관리합니다."
-              actions={
-                <Stack direction="row" spacing={1}>
+        <Stack spacing={2}>
+          <Container maxWidth="md" disableGutters>
+            <Grid container spacing={1} alignItems="center">
+              <Grid size={12} sx={{ mb: 5 }}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Avatar
+                    alt={user.username}
+                    src={avatarImageId ? avatarUrl : NO_AVATAR}
+                    imgProps={{
+                      onError: (event) => {
+                        event.currentTarget.src = NO_AVATAR;
+                      },
+                    }}
+                    sx={{ width: 120, height: 120, bgcolor: "grey.200" }}
+                  />
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      component="label"
+                      variant="outlined"
+                      startIcon={<UploadOutlined />}
+                      disabled={saving}
+                    >
+                      아바타 업로드
+                      <input
+                        hidden
+                        accept="image/*"
+                        type="file"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          void handleAvatarUpload(file);
+                          event.currentTarget.value = "";
+                        }}
+                      />
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      startIcon={<DeleteOutlined />}
+                      disabled={saving || !avatarImageId}
+                      onClick={() => void handleAvatarDelete()}
+                    >
+                      아바타 삭제
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  label="아이디"
+                  value={user.username}
+                  InputProps={{ readOnly: true }}
+                  size="small"
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  label="이름"
+                  value={form.name}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, name: event.target.value }))
+                  }
+                  size="small"
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <TextField
+                  label="이메일"
+                  value={form.email}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, email: event.target.value }))
+                  }
+                  size="small"
+                  fullWidth
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.emailVisble}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          emailVisble: event.target.checked,
+                        }))
+                      }
+                    />
+                  }
+                  label="이메일 공개"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.nameVisible}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          nameVisible: event.target.checked,
+                        }))
+                      }
+                    />
+                  }
+                  label="이름 공개"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={form.enabled}
+                      onChange={(event) =>
+                        setForm((current) => ({
+                          ...current,
+                          enabled: event.target.checked,
+                        }))
+                      }
+                    />
+                  }
+                  label="계정 활성화"
+                />
+              </Grid>
+              <Grid size={12} sx={{ mt: 10 }}>
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
                   <Button
-                    size="small"
                     variant="outlined"
-                    startIcon={<AddOutlined />}
-                    onClick={() => propertiesEditorRef.current?.addRow()}
-                    disabled={propertiesBusy}
+                    startIcon={<ManageAccountsOutlined />}
+                    onClick={() => setRolesOpen(true)}
                   >
-                    행 추가
+                    역할 관리
                   </Button>
                   <Button
-                    size="small"
+                    variant="outlined"
+                    startIcon={<KeyOutlined />}
+                    onClick={() => setResetOpen(true)}
+                  >
+                    비밀번호 재설정
+                  </Button>
+                  <Button
                     variant="outlined"
                     startIcon={<SaveOutlined />}
-                    onClick={() => void handleSaveProperties()}
-                    disabled={propertiesBusy || !propertiesChanged}
+                    onClick={handleSave}
+                    disabled={saving}
                   >
-                    {propertiesSaving ? <CircularProgress size={16} /> : "저장"}
+                    {saving ? <CircularProgress size={20} /> : "저장"}
                   </Button>
                 </Stack>
-              }
-            />
-            <PropertiesEditor
-              ref={propertiesEditorRef}
-              value={draftProperties}
-              onChange={setDraftProperties}
-              type="users"
-              disabled={propertiesBusy}
-              resetKey={propertiesResetKey}
-            />
-          </AccordionDetails>
-        </Accordion>
-      </Container>
+              </Grid>
+            </Grid>
+          </Container>
+          <Container maxWidth="md" disableGutters>
+            <Accordion
+              disableGutters
+              expanded={propertiesExpanded}
+              onChange={(_, expanded) => setPropertiesExpanded(expanded)}
+              ref={propertiesSectionRef}
+              sx={{ scrollMarginTop: 56 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
+                프로퍼티
+              </AccordionSummary>
+              <AccordionDetails>
+                <PageToolbar
+                  divider={false}
+                  label="사용자에 대한 추가 속성을 관리합니다."
+                  actions={
+                    <Stack direction="row" spacing={1}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<AddOutlined />}
+                        onClick={() => propertiesEditorRef.current?.addRow()}
+                        disabled={propertiesBusy}
+                      >
+                        행 추가
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<SaveOutlined />}
+                        onClick={() => void handleSaveProperties()}
+                        disabled={propertiesBusy || !propertiesChanged}
+                      >
+                        {propertiesSaving ? <CircularProgress size={16} /> : "저장"}
+                      </Button>
+                    </Stack>
+                  }
+                />
+                <PropertiesEditor
+                  ref={propertiesEditorRef}
+                  value={draftProperties}
+                  onChange={setDraftProperties}
+                  type="users"
+                  disabled={propertiesBusy}
+                  resetKey={propertiesResetKey}
+                />
+              </AccordionDetails>
+            </Accordion>
+          </Container>
+        </Stack>
         <Box
           component="aside"
           sx={{
