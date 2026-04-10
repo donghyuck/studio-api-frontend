@@ -25,6 +25,8 @@ interface Props {
   value: Record<string, string>;
   onChange: (next: Record<string, string>) => void;
   disabled?: boolean;
+  actions?: React.ReactNode;
+  onAdd?: () => void;
 }
 
 function toRows(value: Record<string, string>): PropertyRow[] {
@@ -80,7 +82,13 @@ function createEmptyRow() {
   };
 }
 
-export function PropertiesEditor({ value, onChange, disabled = false }: Props) {
+export function PropertiesEditor({
+  value,
+  onChange,
+  disabled = false,
+  actions,
+  onAdd,
+}: Props) {
   const [rows, setRows] = useState<PropertyRow[]>(() => validateRows(toRows(value)));
 
   useEffect(() => {
@@ -127,15 +135,17 @@ export function PropertiesEditor({ value, onChange, disabled = false }: Props) {
     <Stack spacing={1}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Box />
-        <Button
-          size="small"
-          variant="outlined"
-          startIcon={<AddOutlined />}
-          onClick={handleAddRow}
-          disabled={disabled}
-        >
-          행 추가
-        </Button>
+        {actions ?? (
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<AddOutlined />}
+            onClick={onAdd ?? handleAddRow}
+            disabled={disabled}
+          >
+            행 추가
+          </Button>
+        )}
       </Box>
       <Table size="small">
         <TableHead>

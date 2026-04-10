@@ -148,6 +148,23 @@ export function UserDetailPage() {
     }
   }
 
+  const handleAddPropertyRow = useCallback(() => {
+    setProperties((current) => {
+      const nextKey = `new_property_${Object.keys(current).length + 1}`;
+      if (!(nextKey in current)) {
+        return { ...current, [nextKey]: "" };
+      }
+
+      let index = 1;
+      let candidate = `${nextKey}_${index}`;
+      while (candidate in current) {
+        index += 1;
+        candidate = `${nextKey}_${index}`;
+      }
+      return { ...current, [candidate]: "" };
+    });
+  }, []);
+
   if (loading)
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
@@ -316,13 +333,25 @@ export function UserDetailPage() {
             프로퍼티
           </AccordionSummary>
           <AccordionDetails>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-              사용자에 대한 추가 속성을 관리합니다.
-            </Typography>
+            <PageToolbar
+              divider={false}
+              label="사용자에 대한 추가 속성을 관리합니다."
+              actions={
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={handleAddPropertyRow}
+                  disabled={saving}
+                >
+                  행 추가
+                </Button>
+              }
+            />
             <PropertiesEditor
               value={properties}
               onChange={setProperties}
               disabled={saving}
+              actions={null}
             />
           </AccordionDetails>
         </Accordion>
