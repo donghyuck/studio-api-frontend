@@ -95,11 +95,10 @@ export function PropertiesEditor({ value, onChange, disabled = false }: Props) {
   function updateRows(nextRows: PropertyRow[]) {
     const validated = validateRows(nextRows);
     setRows(validated);
-    if (!validated.some((row) => row.keyError != null)) {
-      onChange(toMap(validated));
+    if (validated.some((row) => row.keyError != null)) {
       return;
     }
-    onChange(toMap(validated.filter((row) => row.keyError == null)));
+    onChange(toMap(validated));
   }
 
   function handleRowChange(id: string, field: "key" | "value", nextValue: string) {
