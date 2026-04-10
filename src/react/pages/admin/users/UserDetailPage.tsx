@@ -194,8 +194,13 @@ export function UserDetailPage() {
   }
 
   const handleSectionChange = useCallback(() => {
-    setPropertiesExpanded(true);
-    propertiesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setPropertiesExpanded((current) => {
+      const next = !current;
+      if (next) {
+        propertiesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      return next;
+    });
   }, []);
 
   if (loading) {
