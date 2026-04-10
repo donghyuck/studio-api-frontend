@@ -163,13 +163,6 @@ export function PropertiesEditor({ value, onChange, disabled = false }: Props) {
                     value={row.key}
                     onChange={(event) => handleRowChange(row.id, "key", event.target.value)}
                     error={row.keyError != null}
-                    helperText={
-                      row.keyError === "required"
-                        ? "키를 입력하세요."
-                        : row.keyError === "duplicate"
-                          ? "중복된 키입니다."
-                          : undefined
-                    }
                     disabled={disabled}
                   />
                 </TableCell>
