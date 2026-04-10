@@ -5,6 +5,7 @@
 ### Changed
 
 - Issue `#83` aligned React group member deletion with the server contract by sending `DELETE /api/mgmt/groups/{id}/members` requests with `{ userIds: [...] }` bodies for both single and multiple deletion.
+- Neutral outlined close/cancel button styling is now provided by the MUI theme instead of per-dialog overrides.
 
 ### Verification
 
@@ -12,6 +13,7 @@
 - Issue `#83`: `npm run lint`
 - Issue `#83`: `npm run build`
 - Issue `#83`: manual check - group member delete flow keeps success toast, selection reset, and grid refresh behavior in code
+- Neutral button theme: `npm run typecheck`
 
 ## 2026-04-07
 

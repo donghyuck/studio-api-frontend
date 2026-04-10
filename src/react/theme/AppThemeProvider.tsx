@@ -42,6 +42,20 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
             paper: resolvedMode === "dark" ? "#111827" : "#ffffff",
           },
         },
+        components: {
+          MuiButton: {
+            variants: [
+              {
+                props: { variant: "outlined", color: "inherit" },
+                style: {
+                  color: "rgba(148, 163, 184, 0.95)",
+                  borderColor: "rgba(148, 163, 184, 0.45)",
+                  backgroundColor: "rgba(148, 163, 184, 0.10)",
+                },
+              },
+            ],
+          },
+        },
       }),
     [resolvedMode]
   );

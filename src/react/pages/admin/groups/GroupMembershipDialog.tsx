@@ -332,13 +332,9 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
           </Box>
           <Button
             variant="outlined"
+            color="inherit"
             onClick={onClose}
             disabled={saving}
-            sx={{
-              color: "rgba(148, 163, 184, 0.95)",
-              borderColor: "rgba(148, 163, 184, 0.45)",
-              bgcolor: "rgba(148, 163, 184, 0.10)",
-            }}
           >
             닫기
           </Button>
