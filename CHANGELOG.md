@@ -4,7 +4,7 @@
 
 ### Changed
 
-- Issue `#89` restores user detail properties editing with a reusable accordion-based key/value editor.
+- Issue `#89` restores user detail properties editing with a reusable accordion-based AG Grid editor backed by the dedicated user properties API.
 - Issue `#87` improves role detail user/group assignment dialogs with search-driven multi-select assign/revoke flows and current assignment grids.
 - Issue `#85` standardized dialog shell rounding and footer action button variants across create/edit and admin management dialogs.
 - Issue `#83` aligned React group member deletion with the server contract by sending `DELETE /api/mgmt/groups/{id}/members` requests with `{ userIds: [...] }` bodies for both single and multiple deletion.
@@ -15,7 +15,7 @@
 - Issue `#89`: `npm run typecheck`
 - Issue `#89`: `npm run lint`
 - Issue `#89`: `npm run build`
-- Issue `#89`: manual check - user detail properties accordion and save flow reviewed in code
+- Issue `#89`: manual check - user detail properties accordion, separate properties save flow, and key validation reviewed in code
 - Issue `#87`: `npm run typecheck`
 - Issue `#87`: `npm run lint`
 - Issue `#87`: `npm run build`

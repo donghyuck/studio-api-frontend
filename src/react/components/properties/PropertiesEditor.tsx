@@ -17,7 +17,7 @@ type PropertyRow = {
   id: string;
   key: string;
   value: string;
-  keyError?: "required" | "duplicate" | "pattern" | "reserved" | null;
+  keyError?: string | null;
 };
 
 interface Props {
@@ -85,7 +85,7 @@ function createEmptyRow(index: number): PropertyRow {
     id: `new-${Date.now()}-${index}`,
     key: "",
     value: "",
-    keyError: "required",
+    keyError: "키를 입력해 주세요.",
   };
 }
 
@@ -153,9 +153,14 @@ function PropertiesEditorInner(
         editable: !disabled,
         sortable: false,
         filter: false,
+        tooltipValueGetter: (params) => params.data?.keyError ?? "",
         cellStyle: (params) =>
           params.data?.keyError
-            ? { border: "1px solid #d32f2f", borderRadius: 4 }
+            ? {
+                border: "1px solid #d32f2f",
+                borderRadius: 4,
+                backgroundColor: "rgba(211, 47, 47, 0.06)",
+              }
             : undefined,
       },
       {

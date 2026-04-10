@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Avatar,
   Box,
-  Stack,
   Button,
-  Grid,
-  TextField,
-  FormControlLabel,
-  Switch,
   CircularProgress,
-  Alert,
   Container,
+  FormControlLabel,
+  Grid,
+  Stack,
+  Switch,
+  TextField,
 } from "@mui/material";
 import {
   AddOutlined,
@@ -25,18 +25,20 @@ import {
   SaveOutlined,
   UploadOutlined,
 } from "@mui/icons-material";
-import { useConfirm, useToast } from "@/react/feedback";
-import { reactUsersApi } from "./api";
-import { UserRolesDialog } from "./UserRolesDialog";
-import { PasswordResetDialog } from "./PasswordResetDialog";
-import type { UserDto } from "@/types/studio/user";
-import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
+import { getProperties, replaceProperties } from "@/react/api/properties";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 import {
   PropertiesEditor,
   type PropertiesEditorHandle,
 } from "@/react/components/properties/PropertiesEditor";
+import { useConfirm, useToast } from "@/react/feedback";
+import { diffProperties, normalizeProperties } from "@/react/utils/propertyKeys";
+import type { UserDto } from "@/types/studio/user";
+import { PasswordResetDialog } from "./PasswordResetDialog";
+import { reactUsersApi } from "./api";
+import { UserRolesDialog } from "./UserRolesDialog";
 
 export function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
@@ -48,6 +50,7 @@ export function UserDetailPage() {
   const [avatarVersion, setAvatarVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [propertiesSaving, setPropertiesSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rolesOpen, setRolesOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -60,31 +63,44 @@ export function UserDetailPage() {
     nameVisible: true,
     enabled: true,
   });
-  const [properties, setProperties] = useState<Record<string, string>>({});
+  const [initialProperties, setInitialProperties] = useState<Record<string, string>>({});
+  const [draftProperties, setDraftProperties] = useState<Record<string, string>>({});
 
   const loadUser = useCallback(() => {
     if (!userId) return;
     setLoading(true);
-    reactUsersApi
-      .getUser(Number(userId))
-      .then(async (u) => {
-        setUser(u);
+
+    Promise.allSettled([
+      reactUsersApi.getUser(Number(userId)),
+      getProperties("users", Number(userId)),
+    ])
+      .then(async ([userResult, propertiesResult]) => {
+        if (userResult.status !== "fulfilled") {
+          throw userResult.reason;
+        }
+
+        const nextUser = userResult.value;
+        setUser(nextUser);
         setForm({
-          name: u.name,
-          email: u.email ?? "",
-          emailVisble: u.emailVisble,
-          nameVisible: u.nameVisible,
-          enabled: u.enabled,
+          name: nextUser.name,
+          email: nextUser.email ?? "",
+          emailVisble: nextUser.emailVisble,
+          nameVisible: nextUser.nameVisible,
+          enabled: nextUser.enabled,
         });
-        setProperties(
-          Object.fromEntries(
-            Object.entries(u.properties ?? {}).map(([key, value]) => [
-              key,
-              value == null ? "" : String(value),
-            ])
-          )
-        );
+
+        const nextProperties =
+          propertiesResult.status === "fulfilled"
+            ? normalizeProperties(propertiesResult.value)
+            : {};
+        if (propertiesResult.status !== "fulfilled") {
+          toast.error("프로퍼티를 불러오지 못했습니다.");
+        }
+
+        setInitialProperties(nextProperties);
+        setDraftProperties(nextProperties);
         setPropertiesResetKey((current) => current + 1);
+
         const presence = await reactUsersApi
           .checkAvatarPresence(Number(userId))
           .catch(() => null);
@@ -94,7 +110,7 @@ export function UserDetailPage() {
       })
       .catch(() => setError("사용자를 불러오지 못했습니다."))
       .finally(() => setLoading(false));
-  }, [userId]);
+  }, [toast, userId]);
 
   useEffect(() => {
     loadUser();
@@ -102,19 +118,37 @@ export function UserDetailPage() {
 
   async function handleSave() {
     if (!userId) return;
-    const nextProperties = propertiesEditorRef.current?.getValue() ?? properties;
     setSaving(true);
     try {
-      await reactUsersApi.updateUser(Number(userId), {
-        ...form,
-        properties: nextProperties,
-      });
-      setProperties(nextProperties);
+      await reactUsersApi.updateUser(Number(userId), form);
       toast.success("저장되었습니다.");
     } catch {
       toast.error("저장에 실패했습니다.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSaveProperties() {
+    if (!userId) return;
+    if (propertiesEditorRef.current?.hasErrors()) {
+      toast.error("프로퍼티 키 오류를 먼저 수정해 주세요.");
+      return;
+    }
+
+    setPropertiesSaving(true);
+    try {
+      const nextProperties = propertiesEditorRef.current?.getValue() ?? draftProperties;
+      const saved = await replaceProperties("users", Number(userId), nextProperties);
+      const normalized = normalizeProperties(saved);
+      setInitialProperties(normalized);
+      setDraftProperties(normalized);
+      setPropertiesResetKey((current) => current + 1);
+      toast.success("프로퍼티가 저장되었습니다.");
+    } catch {
+      toast.error("프로퍼티 저장에 실패했습니다.");
+    } finally {
+      setPropertiesSaving(false);
     }
   }
 
@@ -156,16 +190,23 @@ export function UserDetailPage() {
     }
   }
 
-  if (loading)
+  if (loading) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
         <CircularProgress />
       </Box>
     );
+  }
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!user) return null;
 
   const avatarUrl = `${API_BASE_URL}/api/profile/${encodeURIComponent(user.username)}/avatar?v=${avatarVersion}`;
+  const propertiesDiff = diffProperties(initialProperties, draftProperties);
+  const propertiesChanged =
+    Object.keys(propertiesDiff.added).length > 0 ||
+    Object.keys(propertiesDiff.updated).length > 0 ||
+    propertiesDiff.removed.length > 0;
+  const propertiesBusy = saving || propertiesSaving;
 
   return (
     <Stack spacing={2}>
@@ -235,7 +276,9 @@ export function UserDetailPage() {
             <TextField
               label="이름"
               value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, name: event.target.value }))
+              }
               size="small"
               fullWidth
             />
@@ -244,8 +287,8 @@ export function UserDetailPage() {
             <TextField
               label="이메일"
               value={form.email}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, email: e.target.value }))
+              onChange={(event) =>
+                setForm((current) => ({ ...current, email: event.target.value }))
               }
               size="small"
               fullWidth
@@ -256,8 +299,11 @@ export function UserDetailPage() {
               control={
                 <Switch
                   checked={form.emailVisble}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, emailVisble: e.target.checked }))
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      emailVisble: event.target.checked,
+                    }))
                   }
                 />
               }
@@ -269,8 +315,11 @@ export function UserDetailPage() {
               control={
                 <Switch
                   checked={form.nameVisible}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, nameVisible: e.target.checked }))
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      nameVisible: event.target.checked,
+                    }))
                   }
                 />
               }
@@ -282,8 +331,11 @@ export function UserDetailPage() {
               control={
                 <Switch
                   checked={form.enabled}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, enabled: e.target.checked }))
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      enabled: event.target.checked,
+                    }))
                   }
                 />
               }
@@ -328,22 +380,34 @@ export function UserDetailPage() {
               divider={false}
               label="사용자에 대한 추가 속성을 관리합니다."
               actions={
-                <Button
-                  size="small"
-                  variant="outlined"
-                  startIcon={<AddOutlined />}
-                  onClick={() => propertiesEditorRef.current?.addRow()}
-                  disabled={saving}
-                >
-                  행 추가
-                </Button>
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<AddOutlined />}
+                    onClick={() => propertiesEditorRef.current?.addRow()}
+                    disabled={propertiesBusy}
+                  >
+                    행 추가
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<SaveOutlined />}
+                    onClick={() => void handleSaveProperties()}
+                    disabled={propertiesBusy || !propertiesChanged}
+                  >
+                    {propertiesSaving ? <CircularProgress size={16} /> : "프로퍼티 저장"}
+                  </Button>
+                </Stack>
               }
             />
             <PropertiesEditor
               ref={propertiesEditorRef}
-              value={properties}
-              onChange={() => {}}
-              disabled={saving}
+              value={draftProperties}
+              onChange={setDraftProperties}
+              type="users"
+              disabled={propertiesBusy}
               resetKey={propertiesResetKey}
             />
           </AccordionDetails>
