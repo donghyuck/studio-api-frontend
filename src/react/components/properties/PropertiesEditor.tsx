@@ -4,24 +4,27 @@ import {
   useImperativeHandle,
   useMemo,
   useState,
+  type ForwardedRef,
 } from "react";
 import { IconButton, Stack, Typography } from "@mui/material";
 import { DeleteOutlined } from "@mui/icons-material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import type { PropertyOwnerType } from "@/react/api/properties";
 import { GridContent } from "@/react/components/ag-grid/GridContent";
+import { validatePropertyKey } from "@/react/utils/propertyKeys";
 
 type PropertyRow = {
   id: string;
   key: string;
   value: string;
-  keyError?: "required" | "duplicate" | null;
+  keyError?: "required" | "duplicate" | "pattern" | "reserved" | null;
 };
 
 interface Props {
   value: Record<string, string>;
   onChange: (next: Record<string, string>) => void;
   disabled?: boolean;
-  hideDefaultAddAction?: boolean;
+  type?: PropertyOwnerType;
   resetKey?: string | number;
 }
 
@@ -31,7 +34,7 @@ export interface PropertiesEditorHandle {
   getValue: () => Record<string, string>;
 }
 
-function toRows(value: Record<string, string>): PropertyRow[] {
+function toRows(value: Record<string, string>) {
   return Object.entries(value).map(([key, rowValue], index) => ({
     id: `row-${index}`,
     key,
@@ -52,7 +55,7 @@ function toMap(rows: PropertyRow[]) {
   return next;
 }
 
-function validateRows(rows: PropertyRow[]) {
+function validateRows(rows: PropertyRow[], type: PropertyOwnerType) {
   const counts = new Map<string, number>();
 
   rows.forEach((row) => {
@@ -65,9 +68,11 @@ function validateRows(rows: PropertyRow[]) {
 
   return rows.map((row) => {
     const normalizedKey = row.key.trim();
-    if (!normalizedKey) {
-      return { ...row, keyError: "required" as const };
+    const keyError = validatePropertyKey(normalizedKey, type);
+    if (keyError) {
+      return { ...row, keyError };
     }
+
     return {
       ...row,
       keyError: (counts.get(normalizedKey) ?? 0) > 1 ? ("duplicate" as const) : null,
@@ -106,37 +111,36 @@ function ActionsCell({
 }
 
 function PropertiesEditorInner(
-  { value, onChange, disabled = false, resetKey }: Props,
-  ref: React.ForwardedRef<PropertiesEditorHandle>
+  { value, onChange, disabled = false, type = "users", resetKey }: Props,
+  ref: ForwardedRef<PropertiesEditorHandle>
 ) {
-  const [rows, setRows] = useState<PropertyRow[]>(() => validateRows(toRows(value)));
+  const [rows, setRows] = useState<PropertyRow[]>(() => validateRows(toRows(value), type));
 
   useEffect(() => {
-    const nextRows = validateRows(
-      Object.entries(value).map(([key, rowValue], index) => ({
-        id: `row-${index}`,
-        key,
-        value: rowValue,
-        keyError: null,
-      }))
-    );
-    setRows(nextRows);
-  }, [resetKey]);
+    setRows(validateRows(toRows(value), type));
+  }, [resetKey, type]);
 
-  function updateRows(nextRows: PropertyRow[]) {
-    const validated = validateRows(nextRows);
-    setRows(validated);
-    const nextValue = toMap(validated);
-    onChange(nextValue);
+  function updateRows(
+    nextRowsOrUpdater: PropertyRow[] | ((currentRows: PropertyRow[]) => PropertyRow[])
+  ) {
+    setRows((currentRows) => {
+      const nextRows =
+        typeof nextRowsOrUpdater === "function"
+          ? nextRowsOrUpdater(currentRows)
+          : nextRowsOrUpdater;
+      const validated = validateRows(nextRows, type);
+      onChange(toMap(validated));
+      return validated;
+    });
   }
 
   function handleDelete(rowId: string) {
-    updateRows(rows.filter((row) => row.id !== rowId));
+    updateRows((currentRows) => currentRows.filter((row) => row.id !== rowId));
   }
 
   function handleCellValueChanged(rowId: string, field: "key" | "value", nextValue: string) {
-    updateRows(
-      rows.map((row) => (row.id === rowId ? { ...row, [field]: nextValue } : row))
+    updateRows((currentRows) =>
+      currentRows.map((row) => (row.id === rowId ? { ...row, [field]: nextValue } : row))
     );
   }
 
@@ -167,9 +171,9 @@ function PropertiesEditorInner(
         headerName: "",
         width: 64,
         maxWidth: 64,
+        editable: false,
         sortable: false,
         filter: false,
-        editable: false,
         cellRenderer: (params: ICellRendererParams<PropertyRow>) =>
           params.data ? (
             <ActionsCell
@@ -180,19 +184,19 @@ function PropertiesEditorInner(
           ) : null,
       },
     ],
-    [disabled, rows]
+    [disabled]
   );
 
   useImperativeHandle(
     ref,
     () => ({
       addRow: () => {
-        updateRows([...rows, createEmptyRow(rows.length)]);
+        updateRows((currentRows) => [...currentRows, createEmptyRow(currentRows.length)]);
       },
       hasErrors: () => rows.some((row) => row.keyError != null),
-      getValue: () => toMap(validateRows(rows)),
+      getValue: () => toMap(validateRows(rows, type)),
     }),
-    [rows]
+    [rows, type]
   );
 
   return (
@@ -217,7 +221,7 @@ function PropertiesEditorInner(
       />
       {rows.some((row) => row.keyError != null) ? (
         <Typography variant="caption" color="error">
-          빈 키 또는 중복 키는 저장에서 제외됩니다.
+          빈 키, 중복 키, 형식 오류, 예약 prefix 키는 저장에서 제외됩니다.
         </Typography>
       ) : null}
     </Stack>
