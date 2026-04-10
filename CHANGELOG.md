@@ -4,6 +4,7 @@
 
 ### Changed
 
+- React login failure audit list now uses `/api/mgmt/audit/login-failure-log` to match the server route.
 - Issue `#81` updates group member and role dialogs with batch member selection and transfer-list role editing.
 - Issue `#79` stabilizes the user roles dialog loading layout with section skeletons and fixed content heights.
 - User roles management dialog now distinguishes group-inherited roles from directly granted roles and uses a transfer-list style editor for direct assignments.
@@ -20,6 +21,7 @@
 
 ### Verification
 
+- Login failure audit route: `npm run typecheck`
 - Issue `#81`: `npm run typecheck`
 - Issue `#81`: `npm run lint`
 - Issue `#81`: `npm run build`

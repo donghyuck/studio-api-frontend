@@ -3,6 +3,6 @@ import type { LoginFailureEvent } from "@/react/pages/audit/loginFailuresApi";
 
 export class LoginFailuresDataSource extends ReactPageDataSource<LoginFailureEvent> {
   constructor() {
-    super("/api/mgmt/audit/login-failures");
+    super("/api/mgmt/audit/login-failure-log");
   }
 }
