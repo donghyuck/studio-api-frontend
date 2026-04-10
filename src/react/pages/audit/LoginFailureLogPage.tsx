@@ -173,7 +173,7 @@ export function LoginFailureLogPage() {
               />
             </Stack>
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-              <ButtonGroup size="small" variant="outlined">
+              <ButtonGroup size="small" variant="text">
                 <Button onClick={setToday}>오늘</Button>
                 <Button onClick={set7days}>7일</Button>
                 <Button onClick={set30days}>30일</Button>
