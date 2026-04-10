@@ -245,7 +245,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
 
     setSaving(true);
     try {
-      await Promise.all(userIds.map((userId) => reactGroupsApi.removeMember(groupId, userId)));
+      await reactGroupsApi.removeMembers(groupId, userIds);
       setSelectedCount(0);
       setGridKey((current) => current + 1);
       toast.success(`${userIds.length}명의 멤버가 제거되었습니다.`);

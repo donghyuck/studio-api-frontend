@@ -1,9 +1,21 @@
 # Changelog
 
-## 2026-04-07
+## 2026-04-10
 
 ### Changed
 
+- Issue `#83` aligned React group member deletion with the server contract by sending `DELETE /api/mgmt/groups/{id}/members` requests with `{ userIds: [...] }` bodies for both single and multiple deletion.
+
+### Verification
+
+- Issue `#83`: `npm run typecheck`
+- Issue `#83`: `npm run lint`
+- Issue `#83`: `npm run build`
+- Issue `#83`: manual check - group member delete flow keeps success toast, selection reset, and grid refresh behavior in code
+
+## 2026-04-07
+
+### Changed
 - React login failure audit page header now follows the user list PageToolbar layout pattern.
 - React login failure audit page now uses the server-aligned route and field mapping, with toolbar-aligned search controls and grid column filters disabled.
 - React login failure audit list now uses `/api/mgmt/audit/login-failure-log` to match the server route.
@@ -22,7 +34,6 @@
 - Issue `#50` added `docs/react-maintainability-improvement-plan.md` to define the post-migration React structure improvement direction for the `2.x` runtime.
 
 ### Verification
-
 - Login failure audit toolbar layout: `npm run typecheck`
 - Login failure audit page cleanup: `npm run typecheck`
 - Login failure audit route: `npm run typecheck`
