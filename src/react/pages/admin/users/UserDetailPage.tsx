@@ -52,6 +52,7 @@ export function UserDetailPage() {
   const [rolesOpen, setRolesOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const propertiesEditorRef = useRef<PropertiesEditorHandle | null>(null);
+  const [propertiesResetKey, setPropertiesResetKey] = useState(0);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -83,6 +84,7 @@ export function UserDetailPage() {
             ])
           )
         );
+        setPropertiesResetKey((current) => current + 1);
         const presence = await reactUsersApi
           .checkAvatarPresence(Number(userId))
           .catch(() => null);
@@ -340,6 +342,7 @@ export function UserDetailPage() {
               value={properties}
               onChange={setProperties}
               disabled={saving}
+              resetKey={propertiesResetKey}
             />
           </AccordionDetails>
         </Accordion>

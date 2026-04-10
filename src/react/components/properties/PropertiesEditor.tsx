@@ -3,7 +3,6 @@ import {
   useEffect,
   useImperativeHandle,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import { IconButton, Stack, Typography } from "@mui/material";
@@ -23,6 +22,7 @@ interface Props {
   onChange: (next: Record<string, string>) => void;
   disabled?: boolean;
   hideDefaultAddAction?: boolean;
+  resetKey?: string | number;
 }
 
 export interface PropertiesEditorHandle {
@@ -83,19 +83,6 @@ function createEmptyRow(index: number): PropertyRow {
   };
 }
 
-function sameMap(left: Record<string, string>, right: Record<string, string>) {
-  const leftEntries = Object.entries(left).sort(([a], [b]) => a.localeCompare(b));
-  const rightEntries = Object.entries(right).sort(([a], [b]) => a.localeCompare(b));
-
-  return (
-    leftEntries.length === rightEntries.length &&
-    leftEntries.every(
-      ([leftKey, leftValue], index) =>
-        leftKey === rightEntries[index]?.[0] && leftValue === rightEntries[index]?.[1]
-    )
-  );
-}
-
 function ActionsCell({
   data,
   disabled,
@@ -118,36 +105,27 @@ function ActionsCell({
 }
 
 function PropertiesEditorInner(
-  { value, onChange, disabled = false }: Props,
+  { value, onChange, disabled = false, resetKey }: Props,
   ref: React.ForwardedRef<PropertiesEditorHandle>
 ) {
   const [rows, setRows] = useState<PropertyRow[]>(() => validateRows(toRows(value)));
-  const lastEmittedValueRef = useRef<Record<string, string>>(value);
 
   useEffect(() => {
-    if (sameMap(lastEmittedValueRef.current, value)) {
-      return;
-    }
-
     const nextRows = validateRows(
       Object.entries(value).map(([key, rowValue], index) => ({
-        id: rows[index]?.id ?? `row-${index}`,
+        id: `row-${index}`,
         key,
         value: rowValue,
         keyError: null,
       }))
     );
-
-    if (!sameMap(toMap(rows), value)) {
-      setRows(nextRows);
-    }
-  }, [value]);
+    setRows(nextRows);
+  }, [resetKey]);
 
   function updateRows(nextRows: PropertyRow[]) {
     const validated = validateRows(nextRows);
     setRows(validated);
     const nextValue = toMap(validated);
-    lastEmittedValueRef.current = nextValue;
     onChange(nextValue);
   }
 
