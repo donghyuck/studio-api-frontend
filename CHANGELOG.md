@@ -4,6 +4,7 @@
 
 ### Changed
 
+- React login failure audit page header now follows the user list PageToolbar layout pattern.
 - React login failure audit page now supports Vue-parity search filters for date range and username.
 - React login failure audit list now uses `/api/mgmt/audit/login-failure-log` to match the server route.
 - Issue `#81` updates group member and role dialogs with batch member selection and transfer-list role editing.
@@ -22,6 +23,7 @@
 
 ### Verification
 
+- Login failure audit toolbar layout: `npm run typecheck`
 - Login failure audit search: `npm run typecheck`
 - Login failure audit search: `npm run build`
 - Login failure audit route: `npm run typecheck`
