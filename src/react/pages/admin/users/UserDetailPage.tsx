@@ -197,7 +197,9 @@ export function UserDetailPage() {
     setPropertiesExpanded((current) => {
       const next = !current;
       if (next) {
-        propertiesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        window.setTimeout(() => {
+          propertiesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 0);
       }
       return next;
     });
