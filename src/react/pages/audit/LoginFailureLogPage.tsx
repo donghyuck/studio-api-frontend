@@ -7,7 +7,7 @@ import {
   Stack,
   TextField,
 } from "@mui/material";
-import { RefreshOutlined } from "@mui/icons-material";
+import { RefreshOutlined, SearchOutlined } from "@mui/icons-material";
 import type { ColDef } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
@@ -185,7 +185,7 @@ export function LoginFailureLogPage() {
               </ButtonGroup>
               <Button
                 variant="outlined"
-                startIcon={searching ? <CircularProgress size={16} /> : <RefreshOutlined />}
+                startIcon={searching ? <CircularProgress size={16} /> : <SearchOutlined />}
                 onClick={handleSearch}
                 disabled={!validRange || searching}
               >
