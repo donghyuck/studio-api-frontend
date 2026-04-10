@@ -4,12 +4,17 @@
 
 ### Changed
 
+- Issue `#87` improves role detail user/group assignment dialogs with search-driven multi-select assign/revoke flows and current assignment grids.
 - Issue `#85` standardized dialog shell rounding and footer action button variants across create/edit and admin management dialogs.
 - Issue `#83` aligned React group member deletion with the server contract by sending `DELETE /api/mgmt/groups/{id}/members` requests with `{ userIds: [...] }` bodies for both single and multiple deletion.
 - Neutral outlined close/cancel button styling is now provided by the MUI theme instead of per-dialog overrides.
 
 ### Verification
 
+- Issue `#87`: `npm run typecheck`
+- Issue `#87`: `npm run lint`
+- Issue `#87`: `npm run build`
+- Issue `#87`: manual check - role detail user/group assignment dialog flows reviewed in code
 - Issue `#85`: `npm run typecheck`
 - Issue `#85`: `npm run lint`
 - Issue `#85`: `npm run build`
