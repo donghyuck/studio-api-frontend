@@ -119,6 +119,18 @@ export function UserDetailPage() {
     loadUser();
   }, [loadUser]);
 
+  useEffect(() => {
+    if (!propertiesExpanded) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      propertiesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [propertiesExpanded]);
+
   async function handleSave() {
     if (!userId) return;
     setSaving(true);
@@ -194,15 +206,7 @@ export function UserDetailPage() {
   }
 
   const handleSectionChange = useCallback(() => {
-    setPropertiesExpanded((current) => {
-      const next = !current;
-      if (next) {
-        window.setTimeout(() => {
-          propertiesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 0);
-      }
-      return next;
-    });
+    setPropertiesExpanded((current) => !current);
   }, []);
 
   if (loading) {
