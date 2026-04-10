@@ -18,6 +18,14 @@ async function batchRequests(requests: Array<Promise<void>>) {
   await Promise.all(requests);
 }
 
+function unwrapArrayPayload<T>(payload: T[] | PageResponse<T>) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  return payload.content ?? [];
+}
+
 export const reactRolesApi = {
   getRole: (roleId: number) =>
     apiRequest<RoleDto>("get", `/api/mgmt/roles/${roleId}`),
@@ -34,8 +42,13 @@ export const reactRolesApi = {
         size: params?.size ?? 15,
       },
     }),
-  getGrantedUsers: (roleId: number) =>
-    apiRequest<UserDto[]>("get", `/api/mgmt/roles/${roleId}/users`),
+  getGrantedUsers: async (roleId: number) =>
+    unwrapArrayPayload(
+      await apiRequest<UserDto[] | PageResponse<UserDto>>(
+        "get",
+        `/api/mgmt/roles/${roleId}/users`
+      )
+    ),
   addUser: (roleId: number, userId: number) =>
     apiRequest<void>("post", `/api/mgmt/roles/${roleId}/users`, { data: { userId } }),
   removeUser: (roleId: number, userId: number) =>
@@ -52,8 +65,13 @@ export const reactRolesApi = {
         size: params?.size ?? 15,
       },
     }),
-  getGrantedGroups: (roleId: number) =>
-    apiRequest<GrantedGroupDto[]>("get", `/api/mgmt/roles/${roleId}/groups`),
+  getGrantedGroups: async (roleId: number) =>
+    unwrapArrayPayload(
+      await apiRequest<GrantedGroupDto[] | PageResponse<GrantedGroupDto>>(
+        "get",
+        `/api/mgmt/roles/${roleId}/groups`
+      )
+    ),
   addGroup: (roleId: number, groupId: number) =>
     apiRequest<void>("post", `/api/mgmt/roles/${roleId}/groups`, { data: { groupId } }),
   removeGroup: (roleId: number, groupId: number) =>
