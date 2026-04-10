@@ -5,7 +5,7 @@
 ### Changed
 
 - React login failure audit page header now follows the user list PageToolbar layout pattern.
-- React login failure audit page now uses the server-aligned route and field mapping without the non-working filter UI.
+- React login failure audit page now uses the server-aligned route and field mapping, with toolbar-aligned search controls and grid column filters disabled.
 - React login failure audit list now uses `/api/mgmt/audit/login-failure-log` to match the server route.
 - Issue `#81` updates group member and role dialogs with batch member selection and transfer-list role editing.
 - Issue `#79` stabilizes the user roles dialog loading layout with section skeletons and fixed content heights.
