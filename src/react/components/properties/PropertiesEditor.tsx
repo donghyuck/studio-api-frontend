@@ -128,6 +128,7 @@ export function PropertiesEditor({ value, onChange, disabled = false }: Props) {
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <Typography variant="subtitle2">프로퍼티 목록</Typography>
         <Button
+          size="small"
           variant="outlined"
           startIcon={<AddOutlined />}
           onClick={handleAddRow}
