@@ -1,18 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
 import {
-  Box,
-  Button,
-  IconButton,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from "@mui/material";
-import { AddOutlined, DeleteOutlined } from "@mui/icons-material";
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useState,
+} from "react";
+import { IconButton, Stack, Typography } from "@mui/material";
+import { DeleteOutlined } from "@mui/icons-material";
+import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import { GridContent } from "@/react/components/ag-grid/GridContent";
 
 type PropertyRow = {
   id: string;
@@ -25,9 +21,12 @@ interface Props {
   value: Record<string, string>;
   onChange: (next: Record<string, string>) => void;
   disabled?: boolean;
-  actions?: React.ReactNode;
-  onAdd?: () => void;
   hideDefaultAddAction?: boolean;
+}
+
+export interface PropertiesEditorHandle {
+  addRow: () => void;
+  hasErrors: () => boolean;
 }
 
 function toRows(value: Record<string, string>): PropertyRow[] {
@@ -43,7 +42,7 @@ function toMap(rows: PropertyRow[]) {
   const next: Record<string, string> = {};
   rows.forEach((row) => {
     const normalizedKey = row.key.trim();
-    if (!normalizedKey) {
+    if (!normalizedKey || row.keyError) {
       return;
     }
     next[normalizedKey] = row.value;
@@ -74,140 +73,167 @@ function validateRows(rows: PropertyRow[]) {
   });
 }
 
-function createEmptyRow() {
+function createEmptyRow(index: number): PropertyRow {
   return {
-    id: `${Date.now()}-${Math.random()}`,
+    id: `new-${Date.now()}-${index}`,
     key: "",
     value: "",
-    keyError: "required" as const,
+    keyError: "required",
   };
 }
 
-export function PropertiesEditor({
-  value,
-  onChange,
-  disabled = false,
-  actions,
-  onAdd,
-  hideDefaultAddAction = false,
-}: Props) {
+function sameMap(left: Record<string, string>, right: Record<string, string>) {
+  const leftEntries = Object.entries(left).sort(([a], [b]) => a.localeCompare(b));
+  const rightEntries = Object.entries(right).sort(([a], [b]) => a.localeCompare(b));
+
+  return (
+    leftEntries.length === rightEntries.length &&
+    leftEntries.every(
+      ([leftKey, leftValue], index) =>
+        leftKey === rightEntries[index]?.[0] && leftValue === rightEntries[index]?.[1]
+    )
+  );
+}
+
+function ActionsCell({
+  data,
+  disabled,
+  onDelete,
+}: {
+  data: PropertyRow;
+  disabled: boolean;
+  onDelete: (rowId: string) => void;
+}) {
+  return (
+    <IconButton
+      size="small"
+      color="error"
+      onClick={() => onDelete(data.id)}
+      disabled={disabled}
+    >
+      <DeleteOutlined fontSize="small" />
+    </IconButton>
+  );
+}
+
+function PropertiesEditorInner(
+  { value, onChange, disabled = false }: Props,
+  ref: React.ForwardedRef<PropertiesEditorHandle>
+) {
   const [rows, setRows] = useState<PropertyRow[]>(() => validateRows(toRows(value)));
 
   useEffect(() => {
-    setRows((currentRows) => {
-      const nextRows = Object.entries(value).map(([key, rowValue], index) => ({
-        id: currentRows[index]?.id ?? `row-${index}`,
+    const nextRows = validateRows(
+      Object.entries(value).map(([key, rowValue], index) => ({
+        id: rows[index]?.id ?? `row-${index}`,
         key,
         value: rowValue,
         keyError: null,
-      }));
-      return validateRows(nextRows);
-    });
-  }, [value]);
+      }))
+    );
 
-  const hasErrors = useMemo(
-    () => rows.some((row) => row.keyError != null),
-    [rows]
-  );
+    if (!sameMap(toMap(rows), value)) {
+      setRows(nextRows);
+    }
+  }, [value]);
 
   function updateRows(nextRows: PropertyRow[]) {
     const validated = validateRows(nextRows);
     setRows(validated);
-    if (validated.some((row) => row.keyError != null)) {
-      return;
-    }
     onChange(toMap(validated));
   }
 
-  function handleRowChange(id: string, field: "key" | "value", nextValue: string) {
+  function handleDelete(rowId: string) {
+    updateRows(rows.filter((row) => row.id !== rowId));
+  }
+
+  function handleCellValueChanged(rowId: string, field: "key" | "value", nextValue: string) {
     updateRows(
-      rows.map((row) => (row.id === id ? { ...row, [field]: nextValue } : row))
+      rows.map((row) => (row.id === rowId ? { ...row, [field]: nextValue } : row))
     );
   }
 
-  function handleAddRow() {
-    updateRows([...rows, createEmptyRow()]);
-  }
+  const columnDefs = useMemo<ColDef<PropertyRow>[]>(
+    () => [
+      {
+        field: "key",
+        headerName: "키",
+        flex: 1,
+        editable: !disabled,
+        sortable: false,
+        filter: false,
+        cellStyle: (params) =>
+          params.data?.keyError
+            ? { border: "1px solid #d32f2f", borderRadius: 4 }
+            : undefined,
+      },
+      {
+        field: "value",
+        headerName: "값",
+        flex: 1.4,
+        editable: !disabled,
+        sortable: false,
+        filter: false,
+      },
+      {
+        colId: "actions",
+        headerName: "",
+        width: 64,
+        maxWidth: 64,
+        sortable: false,
+        filter: false,
+        editable: false,
+        cellRenderer: (params: ICellRendererParams<PropertyRow>) =>
+          params.data ? (
+            <ActionsCell
+              data={params.data}
+              disabled={disabled}
+              onDelete={handleDelete}
+            />
+          ) : null,
+      },
+    ],
+    [disabled, rows]
+  );
 
-  function handleDeleteRow(id: string) {
-    updateRows(rows.filter((row) => row.id !== id));
-  }
+  useImperativeHandle(
+    ref,
+    () => ({
+      addRow: () => {
+        updateRows([...rows, createEmptyRow(rows.length)]);
+      },
+      hasErrors: () => rows.some((row) => row.keyError != null),
+    }),
+    [rows]
+  );
 
   return (
     <Stack spacing={1}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Box />
-        {actions ?? (hideDefaultAddAction ? null : (
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<AddOutlined />}
-            onClick={onAdd ?? handleAddRow}
-            disabled={disabled}
-          >
-            행 추가
-          </Button>
-        ))}
-      </Box>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell sx={{ width: "35%" }}>키</TableCell>
-            <TableCell>값</TableCell>
-            <TableCell align="right" sx={{ width: 64 }}>작업</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={3} align="center">
-                <Typography variant="body2" color="text.secondary">
-                  등록된 프로퍼티가 없습니다.
-                </Typography>
-              </TableCell>
-            </TableRow>
-          ) : (
-            rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    value={row.key}
-                    onChange={(event) => handleRowChange(row.id, "key", event.target.value)}
-                    error={row.keyError != null}
-                    disabled={disabled}
-                  />
-                </TableCell>
-                <TableCell>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    value={row.value}
-                    onChange={(event) => handleRowChange(row.id, "value", event.target.value)}
-                    disabled={disabled}
-                  />
-                </TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    size="small"
-                    color="error"
-                    onClick={() => handleDeleteRow(row.id)}
-                    disabled={disabled}
-                  >
-                    <DeleteOutlined fontSize="small" />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))
-          )}
-        </TableBody>
-      </Table>
-      {hasErrors ? (
+      <GridContent<PropertyRow>
+        rowData={rows}
+        columns={columnDefs}
+        height={220}
+        options={{
+          stopEditingWhenCellsLoseFocus: true,
+          suppressCellFocus: false,
+          singleClickEdit: true,
+          getRowId: (params) => params.data.id,
+          onCellValueChanged: (event) => {
+            const field = event.colDef.field as "key" | "value" | undefined;
+            if (!field || !event.data) {
+              return;
+            }
+            handleCellValueChanged(event.data.id, field, String(event.newValue ?? ""));
+          },
+        }}
+      />
+      {rows.some((row) => row.keyError != null) ? (
         <Typography variant="caption" color="error">
-          빈 키 또는 중복 키가 있으면 저장 시 제외됩니다.
+          빈 키 또는 중복 키는 저장에서 제외됩니다.
         </Typography>
       ) : null}
     </Stack>
   );
 }
+
+export const PropertiesEditor = forwardRef(PropertiesEditorInner);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Accordion,
@@ -15,7 +15,6 @@ import {
   CircularProgress,
   Alert,
   Container,
-  Typography,
 } from "@mui/material";
 import {
   AddOutlined,
@@ -34,7 +33,10 @@ import type { UserDto } from "@/types/studio/user";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
-import { PropertiesEditor } from "@/react/components/properties/PropertiesEditor";
+import {
+  PropertiesEditor,
+  type PropertiesEditorHandle,
+} from "@/react/components/properties/PropertiesEditor";
 
 export function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
@@ -49,6 +51,7 @@ export function UserDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [rolesOpen, setRolesOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const propertiesEditorRef = useRef<PropertiesEditorHandle | null>(null);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -148,23 +151,6 @@ export function UserDetailPage() {
       setSaving(false);
     }
   }
-
-  const handleAddPropertyRow = useCallback(() => {
-    setProperties((current) => {
-      const nextKey = `new_property_${Object.keys(current).length + 1}`;
-      if (!(nextKey in current)) {
-        return { ...current, [nextKey]: "" };
-      }
-
-      let index = 1;
-      let candidate = `${nextKey}_${index}`;
-      while (candidate in current) {
-        index += 1;
-        candidate = `${nextKey}_${index}`;
-      }
-      return { ...current, [candidate]: "" };
-    });
-  }, []);
 
   if (loading)
     return (
@@ -342,7 +328,7 @@ export function UserDetailPage() {
                   size="small"
                   variant="outlined"
                   startIcon={<AddOutlined />}
-                  onClick={handleAddPropertyRow}
+                  onClick={() => propertiesEditorRef.current?.addRow()}
                   disabled={saving}
                 >
                   행 추가
@@ -350,10 +336,10 @@ export function UserDetailPage() {
               }
             />
             <PropertiesEditor
+              ref={propertiesEditorRef}
               value={properties}
               onChange={setProperties}
               disabled={saving}
-              hideDefaultAddAction
             />
           </AccordionDetails>
         </Accordion>
