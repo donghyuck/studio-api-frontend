@@ -14,6 +14,10 @@ export interface GroupMemberDto {
   enabled?: boolean;
 }
 
+type GroupMemberIdsPayload = {
+  userIds: number[];
+};
+
 function unwrapMemberList(payload: GroupMemberDto[] | PageResponse<GroupMemberDto>) {
   if (Array.isArray(payload)) {
     return payload;
@@ -53,9 +57,13 @@ export const reactGroupsApi = {
       )
     ),
   addMembers: (groupId: number, userIds: number[]) =>
-    apiRequest<void>("post", `/api/mgmt/groups/${groupId}/members`, { data: { userIds } }),
-  removeMember: (groupId: number, userId: number) =>
-    apiRequest<void>("delete", `/api/mgmt/groups/${groupId}/members/${userId}`),
+    apiRequest<void>("post", `/api/mgmt/groups/${groupId}/members`, {
+      data: { userIds } satisfies GroupMemberIdsPayload,
+    }),
+  removeMembers: (groupId: number, userIds: number[]) =>
+    apiRequest<void>("delete", `/api/mgmt/groups/${groupId}/members`, {
+      data: { userIds } satisfies GroupMemberIdsPayload,
+    }),
   getGroupRoles: (groupId: number) =>
     apiRequest<{ roleId: number; name: string }[]>("get", `/api/mgmt/groups/${groupId}/roles`),
   getAvailableRoles: (params?: { page?: number; size?: number; sort?: string }) =>
