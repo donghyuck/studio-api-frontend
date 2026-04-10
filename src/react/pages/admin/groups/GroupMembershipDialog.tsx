@@ -332,7 +332,6 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
           </Box>
           <Button
             variant="outlined"
-            color="inherit"
             onClick={onClose}
             disabled={saving}
           >

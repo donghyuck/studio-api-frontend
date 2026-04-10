@@ -57,7 +57,6 @@ export function GroupDialog({ open, onClose, onCreated }: Props) {
       <DialogActions>
         <Button
           variant="outlined"
-          color="inherit"
           onClick={onClose}
           disabled={loading}
         >
