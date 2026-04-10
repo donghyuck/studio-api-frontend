@@ -378,7 +378,13 @@ export function UserDetailPage() {
           </Grid>
         </Grid>
       </Container>
-      <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1fr) 180px" }, gap: 3 }}>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 200px" },
+          gap: { xs: 0, lg: 3 },
+        }}
+      >
         <Container maxWidth="md" disableGutters>
         <Accordion
           disableGutters
@@ -431,7 +437,7 @@ export function UserDetailPage() {
         <Box
           component="aside"
           sx={{
-            display: { xs: "none", xl: "block" },
+            display: { xs: "none", lg: "block" },
             position: "sticky",
             top: 16,
             alignSelf: "start",
@@ -441,7 +447,7 @@ export function UserDetailPage() {
             py: 1,
           }}
         >
-          <Typography variant="caption" color="text.secondary" fontWeight={700}>
+          <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 0.2 }}>
             Contents
           </Typography>
           <Stack spacing={0.5} sx={{ mt: 1 }}>
