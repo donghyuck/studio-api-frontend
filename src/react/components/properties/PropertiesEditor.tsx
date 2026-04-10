@@ -28,6 +28,7 @@ interface Props {
 export interface PropertiesEditorHandle {
   addRow: () => void;
   hasErrors: () => boolean;
+  getValue: () => Record<string, string>;
 }
 
 function toRows(value: Record<string, string>): PropertyRow[] {
@@ -189,6 +190,7 @@ function PropertiesEditorInner(
         updateRows([...rows, createEmptyRow(rows.length)]);
       },
       hasErrors: () => rows.some((row) => row.keyError != null),
+      getValue: () => toMap(validateRows(rows)),
     }),
     [rows]
   );

@@ -102,12 +102,14 @@ export function UserDetailPage() {
 
   async function handleSave() {
     if (!userId) return;
+    const nextProperties = propertiesEditorRef.current?.getValue() ?? properties;
     setSaving(true);
     try {
       await reactUsersApi.updateUser(Number(userId), {
         ...form,
-        properties,
+        properties: nextProperties,
       });
+      setProperties(nextProperties);
       toast.success("저장되었습니다.");
     } catch {
       toast.error("저장에 실패했습니다.");
@@ -340,7 +342,7 @@ export function UserDetailPage() {
             <PropertiesEditor
               ref={propertiesEditorRef}
               value={properties}
-              onChange={setProperties}
+              onChange={() => {}}
               disabled={saving}
               resetKey={propertiesResetKey}
             />
