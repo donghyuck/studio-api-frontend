@@ -174,8 +174,8 @@ function PropertiesEditorInner(
       {
         colId: "actions",
         headerName: "",
-        width: 64,
-        maxWidth: 64,
+        width: 96,
+        maxWidth: 96,
         editable: false,
         sortable: false,
         filter: false,
