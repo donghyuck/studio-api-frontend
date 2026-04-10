@@ -394,53 +394,53 @@ export function UserDetailPage() {
             </Grid>
           </Container>
           <Container maxWidth="md" disableGutters>
-            <Accordion
-              disableGutters
-              expanded={propertiesExpanded}
-              onChange={(_, expanded) => setPropertiesExpanded(expanded)}
-              ref={propertiesSectionRef}
-              sx={{ scrollMarginTop: 56 }}
-            >
-              <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
-                프로퍼티
-              </AccordionSummary>
-              <AccordionDetails>
-                <PageToolbar
-                  divider={false}
-                  label="사용자에 대한 추가 속성을 관리합니다."
-                  actions={
-                    <Stack direction="row" spacing={1}>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<AddOutlined />}
-                        onClick={() => propertiesEditorRef.current?.addRow()}
-                        disabled={propertiesBusy}
-                      >
-                        행 추가
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<SaveOutlined />}
-                        onClick={() => void handleSaveProperties()}
-                        disabled={propertiesBusy || !propertiesChanged}
-                      >
-                        {propertiesSaving ? <CircularProgress size={16} /> : "저장"}
-                      </Button>
-                    </Stack>
-                  }
-                />
-                <PropertiesEditor
-                  ref={propertiesEditorRef}
-                  value={draftProperties}
-                  onChange={setDraftProperties}
-                  type="users"
-                  disabled={propertiesBusy}
-                  resetKey={propertiesResetKey}
-                />
-              </AccordionDetails>
-            </Accordion>
+            <Box ref={propertiesSectionRef} sx={{ scrollMarginTop: 56 }}>
+              <Accordion
+                disableGutters
+                expanded={propertiesExpanded}
+                onChange={(_, expanded) => setPropertiesExpanded(expanded)}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
+                  프로퍼티
+                </AccordionSummary>
+                <AccordionDetails>
+                  <PageToolbar
+                    divider={false}
+                    label="사용자에 대한 추가 속성을 관리합니다."
+                    actions={
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<AddOutlined />}
+                          onClick={() => propertiesEditorRef.current?.addRow()}
+                          disabled={propertiesBusy}
+                        >
+                          행 추가
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<SaveOutlined />}
+                          onClick={() => void handleSaveProperties()}
+                          disabled={propertiesBusy || !propertiesChanged}
+                        >
+                          {propertiesSaving ? <CircularProgress size={16} /> : "저장"}
+                        </Button>
+                      </Stack>
+                    }
+                  />
+                  <PropertiesEditor
+                    ref={propertiesEditorRef}
+                    value={draftProperties}
+                    onChange={setDraftProperties}
+                    type="users"
+                    disabled={propertiesBusy}
+                    resetKey={propertiesResetKey}
+                  />
+                </AccordionDetails>
+              </Accordion>
+            </Box>
           </Container>
         </Stack>
         <Box
