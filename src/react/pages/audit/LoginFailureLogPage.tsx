@@ -133,10 +133,10 @@ export function LoginFailureLogPage() {
         <Box
           sx={{
             border: 1,
-            borderColor: "divider",
-            borderRadius: 1,
-            px: 1,
-            py: 1,
+            borderColor: "rgb(191 191 191)",
+            borderRadius: 2,
+            px: 1.5,
+            py: 1.5,
           }}
         >
           <Stack spacing={1}>

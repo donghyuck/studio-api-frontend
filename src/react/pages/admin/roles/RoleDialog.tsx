@@ -34,7 +34,7 @@ export function RoleDialog({ open, onClose, onCreated }: Props) {
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle>역할 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -43,8 +43,8 @@ export function RoleDialog({ open, onClose, onCreated }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>취소</Button>
-        <Button variant="contained" onClick={handleCreate} disabled={loading || !name.trim()}>
+        <Button variant="outlined" onClick={onClose} disabled={loading}>취소</Button>
+        <Button variant="outlined" onClick={handleCreate} disabled={loading || !name.trim()}>
           {loading ? <CircularProgress size={20} /> : "생성"}
         </Button>
       </DialogActions>

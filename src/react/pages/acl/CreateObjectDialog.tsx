@@ -65,7 +65,7 @@ export function CreateObjectDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle>오브젝트 아이덴티티 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
@@ -124,11 +124,11 @@ export function CreateObjectDialog({
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+        <Button variant="outlined" onClick={onClose} disabled={loading}>
           취소
         </Button>
         <Button
-          variant="contained"
+          variant="outlined"
           onClick={() => void handleCreate()}
           disabled={loading || !classId || !objectIdIdentity.trim()}
         >

@@ -152,7 +152,7 @@ export function ForumMembershipDialog({ open, forumSlug, onClose }: Props) {
 
   return (
     <>
-      <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="md" fullWidth>
+      <Dialog open={open} onClose={saving ? undefined : onClose} maxWidth="md" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
         <DialogTitle>멤버 관리</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>

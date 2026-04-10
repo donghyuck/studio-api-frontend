@@ -41,7 +41,7 @@ export function CreateDocumentDialog({ open, onClose, onCreated }: Props) {
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
       <DialogTitle>문서 생성</DialogTitle>
       <DialogContent>
         <TextField
@@ -55,11 +55,11 @@ export function CreateDocumentDialog({ open, onClose, onCreated }: Props) {
         />
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>
+        <Button variant="outlined" onClick={onClose} disabled={loading}>
           취소
         </Button>
         <Button
-          variant="contained"
+          variant="outlined"
           onClick={() => void handleCreate()}
           disabled={loading || !title.trim()}
         >
