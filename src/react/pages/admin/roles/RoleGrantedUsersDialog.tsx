@@ -458,27 +458,32 @@ export function RoleGrantedUsersDialog({
 
           <Stack spacing={1}>
             <Typography variant="subtitle2">권한 부여 대상 검색</Typography>
-            <Stack direction="row" spacing={1}>
-              <TextField
-                label="이름, 아이디, 이메일 검색"
-                size="small"
-                value={candidateSearchInput}
-                onChange={(event) => setCandidateSearchInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    handleCandidateSearch();
-                  }
-                }}
-                fullWidth
-              />
-              <Button
-                variant="outlined"
-                startIcon={<SearchOutlined />}
-                onClick={handleCandidateSearch}
-              >
-                검색
-              </Button>
-            </Stack>
+            <TextField
+              label="이름, 아이디, 이메일 검색"
+              size="small"
+              value={candidateSearchInput}
+              onChange={(event) => setCandidateSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleCandidateSearch();
+                }
+              }}
+              fullWidth
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <Button
+                      size="small"
+                      variant="text"
+                      startIcon={<SearchOutlined />}
+                      onClick={handleCandidateSearch}
+                    >
+                      검색
+                    </Button>
+                  ),
+                },
+              }}
+            />
             {hasSearchedCandidates ? (
               <PageableGridContent<UserDto>
                 key={candidateGridKey}
@@ -509,27 +514,32 @@ export function RoleGrantedUsersDialog({
 
           <Stack spacing={1}>
             <Typography variant="subtitle2">현재 권한이 부여된 사용자</Typography>
-            <Stack direction="row" spacing={1}>
-              <TextField
-                label="현재 부여 사용자 검색"
-                size="small"
-                value={grantedSearchInput}
-                onChange={(event) => setGrantedSearchInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    handleGrantedSearch();
-                  }
-                }}
-                fullWidth
-              />
-              <Button
-                variant="outlined"
-                startIcon={<SearchOutlined />}
-                onClick={handleGrantedSearch}
-              >
-                검색
-              </Button>
-            </Stack>
+            <TextField
+              label="현재 부여 사용자 검색"
+              size="small"
+              value={grantedSearchInput}
+              onChange={(event) => setGrantedSearchInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleGrantedSearch();
+                }
+              }}
+              fullWidth
+              slotProps={{
+                input: {
+                  endAdornment: (
+                    <Button
+                      size="small"
+                      variant="text"
+                      startIcon={<SearchOutlined />}
+                      onClick={handleGrantedSearch}
+                    >
+                      검색
+                    </Button>
+                  ),
+                },
+              }}
+            />
             {loadingGranted ? (
               <UsersGridSkeleton />
             ) : (
