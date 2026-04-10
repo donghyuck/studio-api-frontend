@@ -132,11 +132,11 @@ export function LoginFailureLogPage() {
             border: 1,
             borderColor: "divider",
             borderRadius: 1,
-            px: 1.5,
-            py: 1.25,
+            px: 1,
+            py: 1,
           }}
         >
-          <Stack spacing={0.5}>
+          <Stack spacing={1}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
               <TextField
                 label="시작일(포함)"
