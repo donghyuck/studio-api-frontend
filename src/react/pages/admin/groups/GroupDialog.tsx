@@ -55,8 +55,13 @@ export function GroupDialog({ open, onClose, onCreated }: Props) {
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>취소</Button>
-        <Button variant="contained" onClick={handleCreate} disabled={loading || !name.trim()}>
+        <Button variant="outlined" onClick={onClose} disabled={loading}>취소</Button>
+        <Button
+          variant="outlined"
+          color="primary"
+          onClick={handleCreate}
+          disabled={loading || !name.trim()}
+        >
           {loading ? <CircularProgress size={20} /> : "생성"}
         </Button>
       </DialogActions>
