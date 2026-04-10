@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   ButtonGroup,
+  CircularProgress,
   Stack,
   TextField,
 } from "@mui/material";
@@ -16,7 +17,8 @@ import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 export function LoginFailureLogPage() {
   const gridRef = useRef<PageableGridContentHandle<LoginFailureEvent>>(null);
-  const dataSource = useMemo(() => new LoginFailuresDataSource(), []);
+  const [searching, setSearching] = useState(false);
+  const dataSource = useMemo(() => new LoginFailuresDataSource(setSearching), []);
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [usernameLike, setUsernameLike] = useState("");
@@ -182,11 +184,11 @@ export function LoginFailureLogPage() {
               </ButtonGroup>
               <Button
                 variant="outlined"
-                startIcon={<RefreshOutlined />}
+                startIcon={searching ? <CircularProgress size={16} /> : <RefreshOutlined />}
                 onClick={handleSearch}
-                disabled={!validRange}
+                disabled={!validRange || searching}
               >
-                조회
+                {searching ? "조회 중..." : "조회"}
               </Button>
             </Box>
           </Stack>
