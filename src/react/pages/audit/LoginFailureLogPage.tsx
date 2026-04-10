@@ -127,57 +127,69 @@ export function LoginFailureLogPage() {
       />
 
       <Stack spacing={1}>
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
-          <TextField
-            label="시작일(포함)"
-            type="date"
-            size="small"
-            value={dateStart}
-            onChange={(event) => setDateStart(event.target.value)}
-            InputLabelProps={{ shrink: true }}
-            error={!validRange}
-            fullWidth
-          />
-          <TextField
-            label="종료일(포함)"
-            type="date"
-            size="small"
-            value={dateEnd}
-            onChange={(event) => setDateEnd(event.target.value)}
-            InputLabelProps={{ shrink: true }}
-            error={!validRange}
-            helperText={!validRange ? "시작일이 종료일보다 늦을 수 없습니다." : " "}
-            fullWidth
-          />
-          <TextField
-            label="아이디"
-            size="small"
-            value={usernameLike}
-            onChange={(event) => setUsernameLike(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                handleSearch();
-              }
-            }}
-            fullWidth
-          />
-        </Stack>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-          <ButtonGroup size="small" variant="outlined">
-            <Button onClick={setToday}>오늘</Button>
-            <Button onClick={set7days}>7일</Button>
-            <Button onClick={set30days}>30일</Button>
-            <Button onClick={set6Months}>6개월</Button>
-            <Button onClick={setThisMonth}>이번달</Button>
-          </ButtonGroup>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshOutlined />}
-            onClick={handleSearch}
-            disabled={!validRange}
-          >
-            조회
-          </Button>
+        <Box
+          sx={{
+            border: 1,
+            borderColor: "divider",
+            borderRadius: 1,
+            px: 1.5,
+            py: 1.25,
+          }}
+        >
+          <Stack spacing={1}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1}>
+              <TextField
+                label="시작일(포함)"
+                type="date"
+                size="small"
+                value={dateStart}
+                onChange={(event) => setDateStart(event.target.value)}
+                InputLabelProps={{ shrink: true }}
+                error={!validRange}
+                fullWidth
+              />
+              <TextField
+                label="종료일(포함)"
+                type="date"
+                size="small"
+                value={dateEnd}
+                onChange={(event) => setDateEnd(event.target.value)}
+                InputLabelProps={{ shrink: true }}
+                error={!validRange}
+                helperText={!validRange ? "시작일이 종료일보다 늦을 수 없습니다." : " "}
+                fullWidth
+              />
+              <TextField
+                label="아이디"
+                size="small"
+                value={usernameLike}
+                onChange={(event) => setUsernameLike(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    handleSearch();
+                  }
+                }}
+                fullWidth
+              />
+            </Stack>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+              <ButtonGroup size="small" variant="outlined">
+                <Button onClick={setToday}>오늘</Button>
+                <Button onClick={set7days}>7일</Button>
+                <Button onClick={set30days}>30일</Button>
+                <Button onClick={set6Months}>6개월</Button>
+                <Button onClick={setThisMonth}>이번달</Button>
+              </ButtonGroup>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshOutlined />}
+                onClick={handleSearch}
+                disabled={!validRange}
+              >
+                조회
+              </Button>
+            </Box>
+          </Stack>
         </Box>
       </Stack>
 
