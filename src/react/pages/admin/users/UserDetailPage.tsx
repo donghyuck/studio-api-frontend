@@ -412,26 +412,15 @@ export function UserDetailPage() {
                     divider={false}
                     label="사용자에 대한 추가 속성을 관리합니다."
                     actions={
-                      <Stack direction="row" spacing={1}>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<AddOutlined />}
-                          onClick={() => propertiesEditorRef.current?.addRow()}
-                          disabled={propertiesBusy}
-                        >
-                          행 추가
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<SaveOutlined />}
-                          onClick={() => void handleSaveProperties()}
-                          disabled={propertiesBusy || !propertiesChanged}
-                        >
-                          {propertiesSaving ? <CircularProgress size={16} /> : "저장"}
-                        </Button>
-                      </Stack>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<AddOutlined />}
+                        onClick={() => propertiesEditorRef.current?.addRow()}
+                        disabled={propertiesBusy}
+                      >
+                        행 추가
+                      </Button>
                     }
                   />
                   <PropertiesEditor
@@ -442,6 +431,17 @@ export function UserDetailPage() {
                     disabled={propertiesBusy}
                     resetKey={propertiesResetKey}
                   />
+                  <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ mt: 1.5 }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      startIcon={<SaveOutlined />}
+                      onClick={() => void handleSaveProperties()}
+                      disabled={propertiesBusy || !propertiesChanged}
+                    >
+                      {propertiesSaving ? <CircularProgress size={16} /> : "저장"}
+                    </Button>
+                  </Stack>
                 </AccordionDetails>
               </Accordion>
             </Box>
