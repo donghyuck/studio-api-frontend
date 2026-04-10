@@ -397,7 +397,7 @@ export function UserDetailPage() {
                     onClick={() => void handleSaveProperties()}
                     disabled={propertiesBusy || !propertiesChanged}
                   >
-                    {propertiesSaving ? <CircularProgress size={16} /> : "프로퍼티 저장"}
+                    {propertiesSaving ? <CircularProgress size={16} /> : "저장"}
                   </Button>
                 </Stack>
               }
