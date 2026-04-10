@@ -1,5 +1,6 @@
 import type { PropertyOwnerType } from "@/react/api/properties";
 
+// Keep in sync with the server-side reserved prefix list.
 export const RESERVED_PREFIXES = [
   "security.",
   "auth.",

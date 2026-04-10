@@ -126,7 +126,7 @@ export function UserDetailPage() {
 
     const timer = window.setTimeout(() => {
       propertiesSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }, 120);
+    }, 300); // wait for MUI Accordion transition to complete
 
     return () => window.clearTimeout(timer);
   }, [propertiesExpanded]);

@@ -1,5 +1,6 @@
 import {
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useMemo,
@@ -116,6 +117,8 @@ function PropertiesEditorInner(
 ) {
   const [rows, setRows] = useState<PropertyRow[]>(() => validateRows(toRows(value), type));
 
+  // Rows are re-initialized only when resetKey changes (controlled reset from parent),
+  // not on every value prop update. Parent must increment resetKey to trigger a reset.
   useEffect(() => {
     setRows(validateRows(toRows(value), type));
   }, [resetKey, type]);
@@ -134,9 +137,9 @@ function PropertiesEditorInner(
     });
   }
 
-  function handleDelete(rowId: string) {
+  const handleDelete = useCallback((rowId: string) => {
     updateRows((currentRows) => currentRows.filter((row) => row.id !== rowId));
-  }
+  }, []);
 
   function handleCellValueChanged(rowId: string, field: "key" | "value", nextValue: string) {
     updateRows((currentRows) =>
@@ -189,7 +192,7 @@ function PropertiesEditorInner(
           ) : null,
       },
     ],
-    [disabled]
+    [disabled, handleDelete]
   );
 
   useImperativeHandle(
