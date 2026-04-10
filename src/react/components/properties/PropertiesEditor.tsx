@@ -100,6 +100,7 @@ function ActionsCell({
   return (
     <Button
       size="small"
+      variant="outlined"
       color="error"
       onClick={() => onDelete(data.id)}
       disabled={disabled}
