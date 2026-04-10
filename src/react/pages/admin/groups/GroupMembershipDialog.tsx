@@ -330,7 +330,12 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
               선택 멤버 제거
             </Button>
           </Box>
-          <Button variant="outlined" onClick={onClose} disabled={saving}>
+          <Button
+            variant="outlined"
+            onClick={onClose}
+            disabled={saving}
+            sx={{ color: "rgba(148, 163, 184, 0.95)", borderColor: "rgba(148, 163, 184, 0.45)" }}
+          >
             닫기
           </Button>
         </DialogActions>
