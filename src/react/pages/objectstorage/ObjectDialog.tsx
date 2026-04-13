@@ -65,16 +65,35 @@ export function ObjectDialog({
       return;
     }
 
+    let ignored = false;
+    const requestedKey = objectKey;
+
     setLoading(true);
     reactObjectStorageApi
       .fetchObjectHead({
         providerId: bucket.providerId,
         bucket: bucket.bucket,
-        key: objectKey,
+        key: requestedKey,
       })
-      .then(setHead)
-      .catch((error) => toast.error(resolveAxiosError(error)))
-      .finally(() => setLoading(false));
+      .then((data) => {
+        if (!ignored && data.key === requestedKey) {
+          setHead(data);
+        }
+      })
+      .catch((error) => {
+        if (!ignored) {
+          toast.error(resolveAxiosError(error));
+        }
+      })
+      .finally(() => {
+        if (!ignored) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      ignored = true;
+    };
   }, [open, bucket, objectKey]);
 
   useEffect(() => {
@@ -90,15 +109,30 @@ export function ObjectDialog({
       return;
     }
 
+    let ignored = false;
+    const requestedKey = objectKey;
+
     reactObjectStorageApi
       .presignGet({
         providerId: bucket.providerId,
         bucket: bucket.bucket,
-        key: objectKey,
+        key: requestedKey,
         disposition: "inline",
       })
-      .then((data) => setPreviewUrl(data.url || null))
-      .catch((error) => toast.error(resolveAxiosError(error)));
+      .then((data) => {
+        if (!ignored && head.key === requestedKey) {
+          setPreviewUrl(data.url || null);
+        }
+      })
+      .catch((error) => {
+        if (!ignored) {
+          toast.error(resolveAxiosError(error));
+        }
+      });
+
+    return () => {
+      ignored = true;
+    };
   }, [open, bucket, objectKey, isHeadLoaded, head?.contentType]);
 
   async function handlePresign() {
