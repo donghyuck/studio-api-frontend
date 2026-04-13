@@ -2,6 +2,7 @@ import { apiRequest } from "@/react/query/fetcher";
 import type { GroupDto, RoleDto } from "@/react/pages/admin/datasource";
 import type { UserDto } from "@/types/studio/user";
 import type { PageResponse } from "@/types/studio/api-common";
+import { reactGroupsApi } from "@/react/pages/admin/groups/api";
 
 export interface GrantedGroupDto {
   groupId: number;
@@ -16,6 +17,23 @@ async function batchRequests(requests: Array<Promise<void>>) {
   }
 
   await Promise.all(requests);
+}
+
+async function updateGroupRoleMembership(
+  groupId: number,
+  roleId: number,
+  mode: "assign" | "revoke"
+) {
+  const currentRoles = await reactGroupsApi.getGroupRoles(groupId);
+  const currentRoleIds = currentRoles
+    .map((role) => role.roleId)
+    .filter((id): id is number => typeof id === "number");
+  const nextRoleIds =
+    mode === "assign"
+      ? Array.from(new Set([...currentRoleIds, roleId]))
+      : currentRoleIds.filter((currentRoleId) => currentRoleId !== roleId);
+
+  await reactGroupsApi.setGroupRoles(groupId, nextRoleIds);
 }
 
 function unwrapArrayPayload<T>(payload: T[] | PageResponse<T>) {
@@ -73,9 +91,9 @@ export const reactRolesApi = {
       )
     ),
   addGroup: (roleId: number, groupId: number) =>
-    apiRequest<void>("post", `/api/mgmt/roles/${roleId}/groups`, { data: { groupId } }),
+    updateGroupRoleMembership(groupId, roleId, "assign"),
   removeGroup: (roleId: number, groupId: number) =>
-    apiRequest<void>("delete", `/api/mgmt/roles/${roleId}/groups/${groupId}`),
+    updateGroupRoleMembership(groupId, roleId, "revoke"),
   assignGroups: (roleId: number, groupIds: number[]) =>
     batchRequests(groupIds.map((groupId) => reactRolesApi.addGroup(roleId, groupId))),
   revokeGroups: (roleId: number, groupIds: number[]) =>
