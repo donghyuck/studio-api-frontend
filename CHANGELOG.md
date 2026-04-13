@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Issue `#93` simplifies the role detail group assignment dialog to a transfer-list style flow for smaller group sets.
 - Issue `#91` restores group detail properties editing with the shared accordion-based AG Grid editor and dedicated group properties API.
 - Issue `#89` restores user detail properties editing with a reusable accordion-based AG Grid editor backed by the dedicated user properties API.
 - Issue `#87` improves role detail user/group assignment dialogs with search-driven multi-select assign/revoke flows and current assignment grids.
@@ -13,6 +14,10 @@
 
 ### Verification
 
+- Issue `#93`: `npm run typecheck`
+- Issue `#93`: `npm run lint`
+- Issue `#93`: `npm run build`
+- Issue `#93`: manual check - role group assignment transfer-list flow reviewed in code
 - Issue `#91`: `npm run typecheck`
 - Issue `#91`: `npm run lint`
 - Issue `#91`: `npm run build`
