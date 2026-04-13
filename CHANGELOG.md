@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Object Storage list and detail pages now disable AG Grid column filters, the provider detail page uses the shared PageToolbar header, the object path uses an active-last breadcrumb, file and folder rows show icons in the object name column, object sizes use readable byte units, and object details open in a drawer with metadata, share URL copy/expiry, preview gating, and automatic image/video preview support.
 - Issue `#95` aligns role-group assignment calls with the group-based role replacement API to avoid unsupported role-based group POST calls.
 - Issue `#93` simplifies the role detail group assignment dialog to a transfer-list style flow for smaller group sets.
 - Issue `#93` prevents stale role group assignment state from remaining after load failures and disables transfer actions while loading or saving.
@@ -16,6 +17,9 @@
 
 ### Verification
 
+- Object Storage toolbar and grid filters: `npm run typecheck`
+- Object Storage toolbar and grid filters: `npm run lint`
+- Object Storage toolbar and grid filters: `npm run build`
 - Issue `#95`: `npm run typecheck`
 - Issue `#95`: `npm run lint`
 - Issue `#95`: `npm run build`

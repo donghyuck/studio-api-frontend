@@ -1,17 +1,33 @@
 import { useEffect, useState } from "react";
 import {
+  Box,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
+  CircularProgress,
+  Divider,
+  Drawer,
+  IconButton,
   Stack,
-  TextField,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tooltip,
+  Typography,
 } from "@mui/material";
+import {
+  CloseOutlined,
+  ContentCopyOutlined,
+  DownloadOutlined,
+  IosShareOutlined,
+  OpenInNewOutlined,
+} from "@mui/icons-material";
+import dayjs from "dayjs";
 import { toast } from "@/react/feedback";
 import { reactObjectStorageApi } from "@/react/pages/objectstorage/api";
 import type { BucketDto, ObjectInfoDto, PresignedUrlDto } from "@/types/studio/storage";
-import { resolveAxiosError } from "@/utils/helpers";
+import { isVideoOrAudioOrImgOrPdf, resolveAxiosError } from "@/utils/helpers";
 
 export function ObjectDialog({
   open,
@@ -26,26 +42,105 @@ export function ObjectDialog({
 }) {
   const [head, setHead] = useState<ObjectInfoDto | null>(null);
   const [presigned, setPresigned] = useState<PresignedUrlDto | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const isHeadLoaded = Boolean(head?.key && head.key === objectKey);
+  const previewable = Boolean(
+    isHeadLoaded && head?.contentType && isVideoOrAudioOrImgOrPdf(head.contentType)
+  );
+  const inlinePreviewable = Boolean(
+    isHeadLoaded &&
+      previewUrl &&
+      (head?.contentType?.startsWith("image/") || head?.contentType?.startsWith("video/"))
+  );
+  const metadataEntries = Object.entries(head?.metadata ?? {});
 
   useEffect(() => {
+    setHead(null);
+    setPresigned(null);
+    setPreviewUrl(null);
+
     if (!open || !bucket || !objectKey) {
       return;
     }
+
+    let ignored = false;
+    const requestedKey = objectKey;
+
+    setLoading(true);
     reactObjectStorageApi
       .fetchObjectHead({
         providerId: bucket.providerId,
         bucket: bucket.bucket,
-        key: objectKey,
+        key: requestedKey,
       })
-      .then(setHead)
-      .catch((error) => toast.error(resolveAxiosError(error)));
+      .then((data) => {
+        if (!ignored && data.key === requestedKey) {
+          setHead(data);
+        }
+      })
+      .catch((error) => {
+        if (!ignored) {
+          toast.error(resolveAxiosError(error));
+        }
+      })
+      .finally(() => {
+        if (!ignored) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      ignored = true;
+    };
   }, [open, bucket, objectKey]);
 
+  useEffect(() => {
+    if (
+      !open ||
+      !bucket ||
+      !objectKey ||
+      !isHeadLoaded ||
+      !head?.contentType ||
+      (!head.contentType.startsWith("image/") && !head.contentType.startsWith("video/"))
+    ) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    let ignored = false;
+    const requestedKey = objectKey;
+
+    reactObjectStorageApi
+      .presignGet({
+        providerId: bucket.providerId,
+        bucket: bucket.bucket,
+        key: requestedKey,
+        disposition: "inline",
+      })
+      .then((data) => {
+        if (!ignored && head.key === requestedKey) {
+          setPreviewUrl(data.url || null);
+        }
+      })
+      .catch((error) => {
+        if (!ignored) {
+          toast.error(resolveAxiosError(error));
+        }
+      });
+
+    return () => {
+      ignored = true;
+    };
+  }, [open, bucket, objectKey, isHeadLoaded, head?.contentType]);
+
   async function handlePresign() {
-    if (!bucket || !objectKey) {
+    if (!bucket || !objectKey || !isHeadLoaded) {
       return;
     }
     try {
+      setLoading(true);
       const data = await reactObjectStorageApi.presignGet({
         providerId: bucket.providerId,
         bucket: bucket.bucket,
@@ -54,11 +149,13 @@ export function ObjectDialog({
       setPresigned(data);
     } catch (error) {
       toast.error(resolveAxiosError(error));
+    } finally {
+      setLoading(false);
     }
   }
 
   async function handleDownload() {
-    if (!bucket || !head?.key) {
+    if (!bucket || !isHeadLoaded || !head?.key) {
       return;
     }
     try {
@@ -69,7 +166,7 @@ export function ObjectDialog({
   }
 
   async function handlePreview() {
-    if (!bucket || !head?.key) {
+    if (!bucket || !previewable || !head?.key) {
       return;
     }
     try {
@@ -79,30 +176,244 @@ export function ObjectDialog({
     }
   }
 
+  async function handleCopyPresignedUrl() {
+    if (!presigned?.url) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(presigned.url);
+      toast.success("URL을 복사했습니다.");
+    } catch (error) {
+      toast.error(resolveAxiosError(error));
+    }
+  }
+
+  function formatBytes(value?: number | null) {
+    if (value == null) {
+      return "";
+    }
+
+    if (value === 0) {
+      return "0 B";
+    }
+
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+    const size = value / 1024 ** index;
+
+    return `${size >= 10 || index === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`;
+  }
+
+  function formatDate(value?: Date | string | null) {
+    return value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "";
+  }
+
+  function renderDetail(label: string, value?: string | number | null) {
+    return (
+      <Box>
+        <Typography variant="caption" color="text.secondary" display="block">
+          {label}
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={{
+            mt: 0.25,
+            overflowWrap: "anywhere",
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {value || "-"}
+        </Typography>
+      </Box>
+    );
+  }
+
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{objectKey || "Object"}</DialogTitle>
-      <DialogContent>
-        <Stack spacing={1.5} sx={{ mt: 1 }}>
-          <TextField label="이름" value={head?.name ?? ""} InputProps={{ readOnly: true }} />
-          <TextField label="콘텐츠 종류" value={head?.contentType ?? ""} InputProps={{ readOnly: true }} />
-          <TextField label="크기" value={head?.size ?? ""} InputProps={{ readOnly: true }} />
-          <TextField label="etag" value={head?.eTag ?? ""} InputProps={{ readOnly: true }} />
-          <TextField
-            label="Pre Signed URL"
-            value={presigned?.url ?? ""}
-            InputProps={{ readOnly: true }}
-            multiline
-            minRows={2}
-          />
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      PaperProps={{
+        sx: {
+          width: { xs: "100%", sm: 480 },
+          maxWidth: "100%",
+        },
+      }}
+    >
+      <Stack spacing={0} sx={{ height: "100%", position: "relative" }}>
+        <Box
+          sx={{
+            minHeight: 56,
+            px: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 2,
+          }}
+        >
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h6" noWrap>
+              {head?.name || objectKey || "Object"}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" noWrap>
+              {bucket?.bucket ?? ""}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={onClose}>
+            <CloseOutlined fontSize="small" />
+          </IconButton>
+        </Box>
+        <Divider />
+
+        <Stack spacing={2} sx={{ p: 2, flex: 1, overflow: "auto" }}>
+          {renderDetail("이름", head?.name)}
+          {renderDetail("콘텐츠 종류", head?.contentType)}
+          {renderDetail("크기", formatBytes(head?.size))}
+          {renderDetail("수정일", formatDate(head?.modifiedDate))}
+          {renderDetail("etag", head?.eTag)}
+          {metadataEntries.length > 0 ? (
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                Metadata
+              </Typography>
+              <TableContainer>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Name</TableCell>
+                      <TableCell>Value</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {metadataEntries.map(([key, value]) => (
+                      <TableRow key={key}>
+                        <TableCell>{key}</TableCell>
+                        <TableCell sx={{ overflowWrap: "anywhere" }}>{String(value)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Box>
+          ) : null}
+          <Box>
+            <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+              <Typography variant="caption" color="text.secondary">
+                Pre Signed Access URL
+              </Typography>
+              <Tooltip title="외부 공유를 위한 만료 시간이 있는 보안 접근 URL을 생성합니다.">
+                <span>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<IosShareOutlined fontSize="small" />}
+                    disabled={!isHeadLoaded || loading || Boolean(presigned?.url)}
+                    onClick={() => void handlePresign()}
+                  >
+                    공유 URL 생성
+                  </Button>
+                </span>
+              </Tooltip>
+            </Stack>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
+              외부 사용자에게 공유할 수 있는 만료 시간이 있는 접근 URL입니다.
+            </Typography>
+            {presigned?.url ? (
+              <Box sx={{ mt: 0.25 }}>
+                <Stack direction="row" spacing={1} alignItems="flex-start">
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      flex: 1,
+                      overflowWrap: "anywhere",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {presigned.url}
+                  </Typography>
+                  <Tooltip title="클립보드에 복사">
+                    <IconButton size="small" onClick={() => void handleCopyPresignedUrl()}>
+                      <ContentCopyOutlined fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                  생성된 URL은 {formatDate(presigned.expiresAt)}까지 유효합니다.
+                </Typography>
+              </Box>
+            ) : null}
+          </Box>
+          {inlinePreviewable ? (
+            <Box>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                미리보기
+              </Typography>
+              {head?.contentType?.startsWith("image/") ? (
+                <Box
+                  component="img"
+                  src={previewUrl ?? undefined}
+                  alt={head?.name ?? "Object preview"}
+                  sx={{
+                    width: "100%",
+                    maxHeight: 280,
+                    bgcolor: "grey.100",
+                    borderRadius: 1,
+                    objectFit: "contain",
+                  }}
+                />
+              ) : (
+                <Box
+                  component="video"
+                  src={previewUrl ?? undefined}
+                  controls
+                  sx={{
+                    width: "100%",
+                    maxHeight: 280,
+                    bgcolor: "grey.100",
+                    borderRadius: 1,
+                  }}
+                />
+              )}
+            </Box>
+          ) : null}
         </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => void handlePresign()}>URL 생성</Button>
-        <Button onClick={() => void handleDownload()}>다운로드</Button>
-        <Button onClick={() => void handlePreview()}>미리보기</Button>
-        <Button onClick={onClose}>닫기</Button>
-      </DialogActions>
-    </Dialog>
+
+        <Divider />
+        <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ p: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadOutlined fontSize="small" />}
+            disabled={!isHeadLoaded}
+            onClick={() => void handleDownload()}
+          >
+            다운로드
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<OpenInNewOutlined fontSize="small" />}
+            disabled={!previewable}
+            onClick={() => void handlePreview()}
+          >
+            새 탭에서 열기
+          </Button>
+          <Button onClick={onClose}>닫기</Button>
+        </Stack>
+        {loading ? (
+          <Box
+            sx={{
+              position: "absolute",
+              inset: 0,
+              bgcolor: "rgba(255, 255, 255, 0.56)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <CircularProgress />
+          </Box>
+        ) : null}
+      </Stack>
+    </Drawer>
   );
 }
