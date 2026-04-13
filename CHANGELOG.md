@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Issue `#95` aligns role-group assignment calls with the group-based role replacement API to avoid unsupported role-based group POST calls.
 - Issue `#93` simplifies the role detail group assignment dialog to a transfer-list style flow for smaller group sets.
 - Issue `#93` prevents stale role group assignment state from remaining after load failures and disables transfer actions while loading or saving.
 - Issue `#91` restores group detail properties editing with the shared accordion-based AG Grid editor and dedicated group properties API.
@@ -15,6 +16,10 @@
 
 ### Verification
 
+- Issue `#95`: `npm run typecheck`
+- Issue `#95`: `npm run lint`
+- Issue `#95`: `npm run build`
+- Issue `#95`: manual check - role group assignment no longer calls `POST /api/mgmt/roles/{roleId}/groups`
 - Issue `#93`: `npm run typecheck`
 - Issue `#93`: `npm run lint`
 - Issue `#93`: `npm run build`
