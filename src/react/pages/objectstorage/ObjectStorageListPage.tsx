@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Alert, Box, Button, Stack } from "@mui/material";
+import { Alert, Box, Stack } from "@mui/material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import type { GridContentHandle } from "@/react/components/ag-grid/types";
@@ -26,6 +26,7 @@ export function ObjectStorageListPage() {
         headerName: "ID",
         flex: 0.7,
         sortable: true,
+        filter: false,
         cellRenderer: (params: ICellRendererParams<ProviderDto>) => (
           <Box
             component="button"
@@ -46,10 +47,10 @@ export function ObjectStorageListPage() {
           </Box>
         ),
       },
-      { field: "type", headerName: "유형", flex: 0.4, sortable: true },
-      { field: "health", headerName: "상태", flex: 0.35, sortable: true },
-      { field: "region", headerName: "리전", flex: 0.35, sortable: true },
-      { field: "endpointMasked", headerName: "엔드포인트", flex: 1.2 },
+      { field: "type", headerName: "유형", flex: 0.4, sortable: true, filter: false },
+      { field: "health", headerName: "상태", flex: 0.35, sortable: true, filter: false },
+      { field: "region", headerName: "리전", flex: 0.35, sortable: true, filter: false },
+      { field: "endpointMasked", headerName: "엔드포인트", flex: 1.2, filter: false },
     ],
     [navigate]
   );
