@@ -1,25 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Box,
   Button,
+  Card,
+  CardContent,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
+  List,
+  ListItemButton,
+  ListItemText,
   Skeleton,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
-import { SearchOutlined } from "@mui/icons-material";
-import type { ColDef, SelectionChangedEvent } from "ag-grid-community";
+import { ArrowBackOutlined, ArrowForwardOutlined } from "@mui/icons-material";
 import type { GroupDto } from "@/react/pages/admin/datasource";
-import { PageableGridContent } from "@/react/components/ag-grid";
-import type {
-  AgGridCompatibleDataSource,
-  PageableGridContentHandle,
-} from "@/react/components/ag-grid/types";
 import { useConfirm, useToast } from "@/react/feedback";
 import { reactRolesApi, type GrantedGroupDto } from "./api";
 
@@ -30,374 +30,239 @@ interface Props {
   roleName: string;
 }
 
-const GRID_HEIGHT = 240;
+const TRANSFER_SECTION_MIN_HEIGHT = 300;
+const GROUP_LIST_MAX_HEIGHT = 220;
 
-class CandidateGroupsDataSource implements AgGridCompatibleDataSource<GroupDto> {
-  isLoaded = false;
-  loading = false;
-  error: unknown = null;
-  dataItems: GroupDto[] = [];
-  total = 0;
-  pageSize = 15;
-  page = 0;
-  private q = "";
+type TransferGroup = {
+  groupId: number;
+  name: string;
+  description?: string | null;
+  memberCount?: number;
+};
 
-  setPage(page: number) {
-    this.page = page;
-  }
-
-  setPageSize(size: number) {
-    this.pageSize = size;
-  }
-
-  setSort() {}
-
-  setSearch(q?: string) {
-    this.q = (q ?? "").trim();
-  }
-
-  setFilter(q?: string) {
-    this.setSearch(q);
-  }
-
-  applyFilter(filter?: Record<string, unknown>) {
-    this.q = String(filter?.q ?? "").trim();
-  }
-
-  async fetch() {
-    this.loading = true;
-    try {
-      const response = await reactRolesApi.searchGroups({
-        q: this.q || undefined,
-        page: this.page,
-        size: this.pageSize,
-      });
-      this.dataItems = response.content ?? [];
-      this.total = response.totalElements ?? 0;
-      this.isLoaded = true;
-    } finally {
-      this.loading = false;
-    }
-  }
-
-  async fetchForAgGrid({
-    startRow,
-    endRow,
-  }: {
-    startRow: number;
-    endRow: number;
-  }) {
-    const size = endRow - startRow || this.pageSize;
-    const page = Math.floor(startRow / size);
-    const response = await reactRolesApi.searchGroups({
-      q: this.q || undefined,
-      page,
-      size,
-    });
-
-    return {
-      rows: response.content ?? [],
-      total: response.totalElements ?? 0,
-    };
-  }
+function byName(left: { name: string }, right: { name: string }) {
+  return left.name.localeCompare(right.name);
 }
 
-class GrantedGroupsDataSource implements AgGridCompatibleDataSource<GrantedGroupDto> {
-  isLoaded = false;
-  loading = false;
-  error: unknown = null;
-  dataItems: GrantedGroupDto[] = [];
-  total = 0;
-  pageSize = 15;
-  page = 0;
-
-  constructor(
-    private readonly groups: GrantedGroupDto[],
-    private readonly q: string
-  ) {}
-
-  setPage(page: number) {
-    this.page = page;
-  }
-
-  setPageSize(size: number) {
-    this.pageSize = size;
-  }
-
-  setSort() {}
-  setSearch() {}
-  setFilter() {}
-  applyFilter() {}
-
-  private filterGroups() {
-    const keyword = this.q.trim().toLowerCase();
-    if (!keyword) {
-      return this.groups;
-    }
-
-    return this.groups.filter((group) =>
-      [group.name, group.description]
-        .filter((value): value is string => typeof value === "string")
-        .some((value) => value.toLowerCase().includes(keyword))
-    );
-  }
-
-  async fetch() {
-    const filtered = this.filterGroups();
-    const start = this.page * this.pageSize;
-    const end = start + this.pageSize;
-    this.dataItems = filtered.slice(start, end);
-    this.total = filtered.length;
-    this.isLoaded = true;
-  }
-
-  async fetchForAgGrid({
-    startRow,
-    endRow,
-  }: {
-    startRow: number;
-    endRow: number;
-  }) {
-    const filtered = this.filterGroups();
-    return {
-      rows: filtered.slice(startRow, endRow),
-      total: filtered.length,
-    };
-  }
-}
-
-function GroupsGridSkeleton() {
+function GroupsListSkeleton({ rows = 4 }: { rows?: number }) {
   return (
     <Stack spacing={1}>
-      {Array.from({ length: 5 }).map((_, index) => (
-        <Skeleton key={index} variant="rounded" height={40} />
-      ))}
+      <Skeleton variant="rounded" height={40} />
+      <Divider />
+      <Stack spacing={0.75}>
+        {Array.from({ length: rows }).map((_, index) => (
+          <Skeleton key={index} variant="rounded" height={48} />
+        ))}
+      </Stack>
     </Stack>
   );
 }
 
-export function RoleGrantedGroupsDialog({
-  open,
-  onClose,
-  roleId,
-  roleName,
-}: Props) {
+function toTransferGroup(group: GroupDto | GrantedGroupDto): TransferGroup {
+  return {
+    groupId: group.groupId,
+    name: group.name,
+    description: group.description,
+    memberCount: group.memberCount,
+  };
+}
+
+function sameIds(left: TransferGroup[], right: TransferGroup[]) {
+  const leftIds = left.map((group) => group.groupId).sort((a, b) => a - b);
+  const rightIds = right.map((group) => group.groupId).sort((a, b) => a - b);
+  return (
+    leftIds.length === rightIds.length &&
+    leftIds.every((groupId, index) => groupId === rightIds[index])
+  );
+}
+
+export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Props) {
   const toast = useToast();
   const confirm = useConfirm();
-  const candidatesGridRef = useRef<PageableGridContentHandle<GroupDto>>(null);
-  const grantedGridRef = useRef<PageableGridContentHandle<GrantedGroupDto>>(null);
-  const candidatesDataSource = useMemo(() => new CandidateGroupsDataSource(), []);
-  const [grantedGroups, setGrantedGroups] = useState<GrantedGroupDto[]>([]);
-  const [loadingGranted, setLoadingGranted] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [candidateSearchInput, setCandidateSearchInput] = useState("");
-  const [grantedSearchInput, setGrantedSearchInput] = useState("");
-  const [candidateGridKey, setCandidateGridKey] = useState(0);
-  const [grantedGridKey, setGrantedGridKey] = useState(0);
-  const [hasSearchedCandidates, setHasSearchedCandidates] = useState(false);
-  const [selectedCandidateCount, setSelectedCandidateCount] = useState(0);
-  const [selectedGrantedCount, setSelectedGrantedCount] = useState(0);
+  const [loadedRoleId, setLoadedRoleId] = useState<number | null>(null);
+  const [allGroups, setAllGroups] = useState<TransferGroup[]>([]);
+  const [grantedGroups, setGrantedGroups] = useState<TransferGroup[]>([]);
+  const [initialGrantedGroups, setInitialGrantedGroups] = useState<TransferGroup[]>([]);
+  const [selectedLeft, setSelectedLeft] = useState<number[]>([]);
+  const [selectedRight, setSelectedRight] = useState<number[]>([]);
+  const [searchLeft, setSearchLeft] = useState("");
+  const [searchRight, setSearchRight] = useState("");
+
+  function resetTransferState() {
+    setLoadedRoleId(null);
+    setAllGroups([]);
+    setGrantedGroups([]);
+    setInitialGrantedGroups([]);
+    setSelectedLeft([]);
+    setSelectedRight([]);
+    setSearchLeft("");
+    setSearchRight("");
+  }
+
+  async function loadData() {
+    resetTransferState();
+    setLoading(true);
+    try {
+      const [groupsResponse, grantedResponse] = await Promise.all([
+        reactRolesApi.searchGroups({ page: 0, size: 200 }),
+        reactRolesApi.getGrantedGroups(roleId),
+      ]);
+      const groups = (groupsResponse.content ?? []).map(toTransferGroup).sort(byName);
+      const granted = (Array.isArray(grantedResponse) ? grantedResponse : [])
+        .map((group) => {
+          const groupDetail = groups.find((candidate) => candidate.groupId === group.groupId);
+          return {
+            ...toTransferGroup(group),
+            description: group.description ?? groupDetail?.description,
+            memberCount: group.memberCount ?? groupDetail?.memberCount,
+          };
+        })
+        .sort(byName);
+
+      setAllGroups(groups);
+      setGrantedGroups(granted);
+      setInitialGrantedGroups(granted);
+      setSelectedLeft([]);
+      setSelectedRight([]);
+      setSearchLeft("");
+      setSearchRight("");
+      setLoadedRoleId(roleId);
+    } catch {
+      resetTransferState();
+      toast.error("그룹 권한 목록 로딩 실패");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (open) {
+      void loadData();
+    }
+  }, [open, roleId]);
 
   const grantedGroupIds = useMemo(
     () => new Set(grantedGroups.map((group) => group.groupId)),
     [grantedGroups]
   );
 
-  const grantedDataSource = useMemo(
-    () => new GrantedGroupsDataSource(grantedGroups, grantedSearchInput),
-    [grantedGroups, grantedSearchInput]
+  const availableGroups = useMemo(
+    () =>
+      allGroups
+        .filter((group) => !grantedGroupIds.has(group.groupId))
+        .filter((group) => {
+          const keyword = searchLeft.trim().toLowerCase();
+          if (!keyword) return true;
+          return (
+            group.name.toLowerCase().includes(keyword) ||
+            String(group.groupId).includes(keyword) ||
+            (group.description ?? "").toLowerCase().includes(keyword)
+          );
+        }),
+    [allGroups, grantedGroupIds, searchLeft]
   );
 
-  const groupColumns = useMemo<ColDef<GroupDto | GrantedGroupDto>[]>(
-    () => [
-      { field: "name", headerName: "이름", flex: 0.8, filter: false, sortable: false },
-      {
-        field: "description",
-        headerName: "설명",
-        flex: 1.1,
-        filter: false,
-        sortable: false,
-        valueGetter: (params) => params.data?.description ?? "",
-      },
-      {
-        field: "memberCount",
-        headerName: "멤버",
-        width: 90,
-        maxWidth: 90,
-        filter: false,
-        sortable: false,
-        valueGetter: (params) => params.data?.memberCount ?? "",
-        cellStyle: { textAlign: "center" },
-      },
-    ],
-    []
+  const filteredGrantedGroups = useMemo(
+    () =>
+      grantedGroups.filter((group) => {
+        const keyword = searchRight.trim().toLowerCase();
+        if (!keyword) return true;
+        return (
+          group.name.toLowerCase().includes(keyword) ||
+          String(group.groupId).includes(keyword) ||
+          (group.description ?? "").toLowerCase().includes(keyword)
+        );
+      }),
+    [grantedGroups, searchRight]
   );
 
-  const candidateEvents = useMemo(
-    () => [
-      {
-        type: "selectionChanged",
-        listener: (event: SelectionChangedEvent<GroupDto>) =>
-          setSelectedCandidateCount(event.api.getSelectedRows().length ?? 0),
-      },
-    ],
-    []
-  );
-
-  const grantedEvents = useMemo(
-    () => [
-      {
-        type: "selectionChanged",
-        listener: (event: SelectionChangedEvent<GrantedGroupDto>) =>
-          setSelectedGrantedCount(event.api.getSelectedRows().length ?? 0),
-      },
-    ],
-    []
-  );
-
-  const resetSelection = useCallback(() => {
-    setSelectedCandidateCount(0);
-    setSelectedGrantedCount(0);
-    candidatesGridRef.current?.deselectAll();
-    grantedGridRef.current?.deselectAll();
-  }, []);
-
-  const loadGrantedGroups = useCallback(async () => {
-    setLoadingGranted(true);
-    try {
-      const data = await reactRolesApi.getGrantedGroups(roleId);
-      setGrantedGroups(Array.isArray(data) ? data : []);
-      setGrantedGridKey((current) => current + 1);
-    } catch {
-      toast.error("부여된 그룹 목록 로딩 실패");
-    } finally {
-      setLoadingGranted(false);
-    }
-  }, [roleId, toast]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setCandidateSearchInput("");
-    setGrantedSearchInput("");
-    setHasSearchedCandidates(false);
-    setCandidateGridKey(0);
-    resetSelection();
-    void loadGrantedGroups();
-  }, [open, loadGrantedGroups, resetSelection]);
-
-  const handleCandidateSearch = useCallback(() => {
-    const trimmed = candidateSearchInput.trim();
-    if (!trimmed) {
-      candidatesDataSource.applyFilter({});
-      setHasSearchedCandidates(false);
-      setSelectedCandidateCount(0);
-      setCandidateGridKey((current) => current + 1);
-      return;
-    }
-
-    candidatesDataSource.applyFilter({ q: trimmed });
-    setHasSearchedCandidates(true);
-    setSelectedCandidateCount(0);
-    setCandidateGridKey((current) => current + 1);
-  }, [candidateSearchInput, candidatesDataSource]);
-
-  const handleGrantedSearch = useCallback(() => {
-    setSelectedGrantedCount(0);
-    setGrantedGridKey((current) => current + 1);
-  }, []);
-
-  async function handleAssign() {
-    const selectedGroups = candidatesGridRef.current?.selectedRows() ?? [];
-    const groupIds = Array.from(
-      new Set(
-        selectedGroups
-          .map((group) => group.groupId)
-          .filter(
-            (groupId): groupId is number =>
-              typeof groupId === "number" && !grantedGroupIds.has(groupId)
-          )
-      )
+  const loaded = loadedRoleId === roleId;
+  function toggleSelected(
+    selected: number[],
+    setter: (value: number[]) => void,
+    groupId: number
+  ) {
+    if (loading || saving || !loaded) return;
+    setter(
+      selected.includes(groupId)
+        ? selected.filter((value) => value !== groupId)
+        : [...selected, groupId]
     );
+  }
 
-    if (groupIds.length === 0) {
-      toast.info("부여할 그룹이 없습니다.");
+  function moveToGranted() {
+    if (loading || saving || !loaded) return;
+    const nextGroups = allGroups.filter((group) => selectedLeft.includes(group.groupId));
+
+    setGrantedGroups((current) =>
+      [...current, ...nextGroups]
+        .filter(
+          (group, index, groups) =>
+            groups.findIndex((candidate) => candidate.groupId === group.groupId) === index
+        )
+        .sort(byName)
+    );
+    setSelectedLeft([]);
+  }
+
+  function moveToAvailable() {
+    if (loading || saving || !loaded) return;
+    setGrantedGroups((current) =>
+      current.filter((group) => !selectedRight.includes(group.groupId))
+    );
+    setSelectedRight([]);
+  }
+
+  async function handleSave() {
+    if (loading || saving) return;
+    if (!loaded) {
+      toast.error("그룹 권한 목록을 먼저 불러와야 합니다.");
       return;
     }
+
+    if (sameIds(initialGrantedGroups, grantedGroups)) {
+      toast.info("변경된 그룹 권한이 없습니다.");
+      onClose();
+      return;
+    }
+
+    const initialIds = new Set(initialGrantedGroups.map((group) => group.groupId));
+    const currentIds = new Set(grantedGroups.map((group) => group.groupId));
+    const toAdd = grantedGroups.filter((group) => !initialIds.has(group.groupId));
+    const toRemove = initialGrantedGroups.filter((group) => !currentIds.has(group.groupId));
 
     const ok = await confirm({
-      title: "권한 부여 확인",
-      message: `선택된 그룹 ${groupIds.length}곳에 "${roleName}" 권한을 부여하시겠습니까?`,
-      okText: "확인",
+      title: "그룹 권한 변경 저장",
+      message: `그룹 ${toAdd.length}곳에 권한을 부여하고, ${toRemove.length}곳에서 권한을 회수하시겠습니까?`,
+      okText: "저장",
       cancelText: "취소",
     });
-    if (!ok) {
-      return;
-    }
+    if (!ok) return;
 
     setSaving(true);
     try {
-      await reactRolesApi.assignGroups(roleId, groupIds);
-      toast.success(`${groupIds.length}개 그룹에 권한을 부여했습니다.`);
-      resetSelection();
-      await loadGrantedGroups();
-      if (hasSearchedCandidates) {
-        setCandidateGridKey((current) => current + 1);
-      }
+      await Promise.all([
+        reactRolesApi.assignGroups(roleId, toAdd.map((group) => group.groupId)),
+        reactRolesApi.revokeGroups(roleId, toRemove.map((group) => group.groupId)),
+      ]);
+      toast.success("그룹 권한이 저장되었습니다.");
+      onClose();
     } catch {
-      toast.error("그룹 권한 부여에 실패했습니다.");
+      toast.error("그룹 권한 저장에 실패했습니다.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleRevoke() {
-    const selectedGroups = grantedGridRef.current?.selectedRows() ?? [];
-    const groupIds = Array.from(
-      new Set(
-        selectedGroups
-          .map((group) => group.groupId)
-          .filter((groupId): groupId is number => typeof groupId === "number")
-      )
-    );
-
-    if (groupIds.length === 0) {
-      return;
-    }
-
-    const ok = await confirm({
-      title: "권한 회수 확인",
-      message: `선택된 그룹 ${groupIds.length}곳에서 "${roleName}" 권한을 회수하시겠습니까?`,
-      okText: "확인",
-      cancelText: "취소",
-    });
-    if (!ok) {
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await reactRolesApi.revokeGroups(roleId, groupIds);
-      toast.success(`${groupIds.length}개 그룹의 권한을 회수했습니다.`);
-      resetSelection();
-      await loadGrantedGroups();
-      if (hasSearchedCandidates) {
-        setCandidateGridKey((current) => current + 1);
-      }
-    } catch {
-      toast.error("그룹 권한 회수에 실패했습니다.");
-    } finally {
-      setSaving(false);
-    }
-  }
+  const interactionDisabled = loading || saving || !loaded;
 
   return (
     <Dialog
       open={open}
       onClose={saving ? undefined : onClose}
-      maxWidth="lg"
+      maxWidth="md"
       fullWidth
       slotProps={{ paper: { sx: { borderRadius: 3 } } }}
     >
@@ -405,129 +270,138 @@ export function RoleGrantedGroupsDialog({
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           <Alert severity="info">
-            검색 결과에서 그룹을 선택해 현재 역할을 부여하고, 아래 목록에서 현재 권한이 부여된 그룹을 선택해 회수할 수 있습니다.
+            그룹에 현재 역할을 부여하거나 회수합니다. 변경 내용은 저장 시점에 반영됩니다.
           </Alert>
 
-          <Stack spacing={1}>
-            <Typography variant="subtitle2">권한 부여 대상 그룹 검색</Typography>
-            <TextField
-              label="이름, 설명 검색"
-              size="small"
-              value={candidateSearchInput}
-              onChange={(event) => setCandidateSearchInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  handleCandidateSearch();
-                }
-              }}
-              fullWidth
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <Button
-                      size="small"
-                      variant="text"
-                      startIcon={<SearchOutlined />}
-                      onClick={handleCandidateSearch}
-                    >
-                      검색
-                    </Button>
-                  ),
-                },
-              }}
-            />
-            {hasSearchedCandidates ? (
-              <PageableGridContent<GroupDto>
-                key={candidateGridKey}
-                ref={candidatesGridRef}
-                datasource={candidatesDataSource}
-                columns={groupColumns as ColDef<GroupDto>[]}
-                events={candidateEvents}
-                rowSelection="multiple"
-                height={GRID_HEIGHT}
-              />
-            ) : (
-              <Box
-                sx={{
-                  height: GRID_HEIGHT,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  border: "1px solid",
-                  borderColor: "divider",
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  검색어를 입력한 뒤 검색을 실행하면 결과가 표시됩니다.
-                </Typography>
-              </Box>
-            )}
-          </Stack>
+          <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="stretch">
+            <Card variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
+              <CardContent>
+                <Stack spacing={1} sx={{ minHeight: TRANSFER_SECTION_MIN_HEIGHT }}>
+                  <Typography variant="subtitle2">부여 가능한 그룹</Typography>
+                  {loading ? (
+                    <GroupsListSkeleton />
+                  ) : (
+                    <>
+                      <TextField
+                        label="그룹 검색"
+                        size="small"
+                        value={searchLeft}
+                        onChange={(event) => setSearchLeft(event.target.value)}
+                        disabled={saving || !loaded}
+                        fullWidth
+                      />
+                      <Divider />
+                      {availableGroups.length === 0 ? (
+                        <Typography color="text.secondary" variant="body2">
+                          선택 가능한 그룹 없음
+                        </Typography>
+                      ) : (
+                        <List dense sx={{ maxHeight: GROUP_LIST_MAX_HEIGHT, overflowY: "auto" }}>
+                          {availableGroups.map((group) => (
+                            <ListItemButton
+                              key={group.groupId}
+                              selected={selectedLeft.includes(group.groupId)}
+                              disabled={interactionDisabled}
+                              onClick={() =>
+                                toggleSelected(selectedLeft, setSelectedLeft, group.groupId)
+                              }
+                            >
+                              <ListItemText
+                                primary={group.name}
+                                secondary={`ID: ${group.groupId}${group.description ? ` · ${group.description}` : ""}`}
+                              />
+                            </ListItemButton>
+                          ))}
+                        </List>
+                      )}
+                    </>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
 
-          <Stack spacing={1}>
-            <Typography variant="subtitle2">현재 권한이 부여된 그룹</Typography>
-            <TextField
-              label="현재 부여 그룹 검색"
-              size="small"
-              value={grantedSearchInput}
-              onChange={(event) => setGrantedSearchInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  handleGrantedSearch();
-                }
-              }}
-              fullWidth
-              slotProps={{
-                input: {
-                  endAdornment: (
-                    <Button
-                      size="small"
-                      variant="text"
-                      startIcon={<SearchOutlined />}
-                      onClick={handleGrantedSearch}
-                    >
-                      검색
-                    </Button>
-                  ),
-                },
-              }}
-            />
-            {loadingGranted ? (
-              <GroupsGridSkeleton />
-            ) : (
-              <PageableGridContent<GrantedGroupDto>
-                key={grantedGridKey}
-                ref={grantedGridRef}
-                datasource={grantedDataSource}
-                columns={groupColumns as ColDef<GrantedGroupDto>[]}
-                events={grantedEvents}
-                rowSelection="multiple"
-                height={GRID_HEIGHT}
-              />
-            )}
+            <Stack
+              direction={{ xs: "row", md: "column" }}
+              spacing={1}
+              justifyContent="center"
+              alignItems="center"
+            >
+              <Button
+                variant="outlined"
+                startIcon={<ArrowForwardOutlined />}
+                onClick={moveToGranted}
+                disabled={interactionDisabled || selectedLeft.length === 0}
+              >
+                추가
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<ArrowBackOutlined />}
+                onClick={moveToAvailable}
+                disabled={interactionDisabled || selectedRight.length === 0}
+              >
+                제거
+              </Button>
+            </Stack>
+
+            <Card variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
+              <CardContent>
+                <Stack spacing={1} sx={{ minHeight: TRANSFER_SECTION_MIN_HEIGHT }}>
+                  <Typography variant="subtitle2">현재 권한이 부여된 그룹</Typography>
+                  {loading ? (
+                    <GroupsListSkeleton />
+                  ) : (
+                    <>
+                      <TextField
+                        label="부여 그룹 검색"
+                        size="small"
+                        value={searchRight}
+                        onChange={(event) => setSearchRight(event.target.value)}
+                        disabled={saving || !loaded}
+                        fullWidth
+                      />
+                      <Divider />
+                      {filteredGrantedGroups.length === 0 ? (
+                        <Typography color="text.secondary" variant="body2">
+                          부여된 그룹 없음
+                        </Typography>
+                      ) : (
+                        <List dense sx={{ maxHeight: GROUP_LIST_MAX_HEIGHT, overflowY: "auto" }}>
+                          {filteredGrantedGroups.map((group) => (
+                            <ListItemButton
+                              key={group.groupId}
+                              selected={selectedRight.includes(group.groupId)}
+                              disabled={interactionDisabled}
+                              onClick={() =>
+                                toggleSelected(selectedRight, setSelectedRight, group.groupId)
+                              }
+                            >
+                              <ListItemText
+                                primary={group.name}
+                                secondary={`ID: ${group.groupId}${group.description ? ` · ${group.description}` : ""}`}
+                              />
+                            </ListItemButton>
+                          ))}
+                        </List>
+                      )}
+                    </>
+                  )}
+                </Stack>
+              </CardContent>
+            </Card>
           </Stack>
         </Stack>
       </DialogContent>
       <DialogActions>
-        <Box sx={{ display: "flex", gap: 1, mr: "auto" }}>
-          <Button
-            variant="outlined"
-            onClick={() => void handleAssign()}
-            disabled={saving || selectedCandidateCount === 0}
-          >
-            Assign Role
-          </Button>
-          <Button
-            variant="outlined"
-            color="error"
-            onClick={() => void handleRevoke()}
-            disabled={saving || selectedGrantedCount === 0}
-          >
-            Revoke Role
-          </Button>
-        </Box>
         <Button variant="outlined" onClick={onClose} disabled={saving}>
-          닫기
+          취소
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={() => void handleSave()}
+          disabled={saving || loading || !loaded}
+        >
+          {saving ? <CircularProgress size={20} /> : "저장"}
         </Button>
       </DialogActions>
     </Dialog>
