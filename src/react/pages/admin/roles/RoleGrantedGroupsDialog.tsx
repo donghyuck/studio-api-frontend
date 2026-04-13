@@ -81,6 +81,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
   const confirm = useConfirm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const [allGroups, setAllGroups] = useState<TransferGroup[]>([]);
   const [grantedGroups, setGrantedGroups] = useState<TransferGroup[]>([]);
   const [initialGrantedGroups, setInitialGrantedGroups] = useState<TransferGroup[]>([]);
@@ -89,7 +90,19 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
   const [searchLeft, setSearchLeft] = useState("");
   const [searchRight, setSearchRight] = useState("");
 
+  function resetTransferState() {
+    setLoaded(false);
+    setAllGroups([]);
+    setGrantedGroups([]);
+    setInitialGrantedGroups([]);
+    setSelectedLeft([]);
+    setSelectedRight([]);
+    setSearchLeft("");
+    setSearchRight("");
+  }
+
   async function loadData() {
+    resetTransferState();
     setLoading(true);
     try {
       const [groupsResponse, grantedResponse] = await Promise.all([
@@ -115,7 +128,9 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
       setSelectedRight([]);
       setSearchLeft("");
       setSearchRight("");
+      setLoaded(true);
     } catch {
+      resetTransferState();
       toast.error("그룹 권한 목록 로딩 실패");
     } finally {
       setLoading(false);
@@ -168,6 +183,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
     setter: (value: number[]) => void,
     groupId: number
   ) {
+    if (loading || saving || !loaded) return;
     setter(
       selected.includes(groupId)
         ? selected.filter((value) => value !== groupId)
@@ -176,6 +192,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
   }
 
   function moveToGranted() {
+    if (loading || saving || !loaded) return;
     const nextGroups = allGroups.filter((group) => selectedLeft.includes(group.groupId));
 
     setGrantedGroups((current) =>
@@ -190,6 +207,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
   }
 
   function moveToAvailable() {
+    if (loading || saving || !loaded) return;
     setGrantedGroups((current) =>
       current.filter((group) => !selectedRight.includes(group.groupId))
     );
@@ -197,6 +215,12 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
   }
 
   async function handleSave() {
+    if (loading || saving) return;
+    if (!loaded) {
+      toast.error("그룹 권한 목록을 먼저 불러와야 합니다.");
+      return;
+    }
+
     if (sameIds(initialGrantedGroups, grantedGroups)) {
       toast.info("변경된 그룹 권한이 없습니다.");
       onClose();
@@ -231,6 +255,8 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
     }
   }
 
+  const interactionDisabled = loading || saving || !loaded;
+
   return (
     <Dialog
       open={open}
@@ -260,6 +286,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
                         size="small"
                         value={searchLeft}
                         onChange={(event) => setSearchLeft(event.target.value)}
+                        disabled={saving || !loaded}
                         fullWidth
                       />
                       <Divider />
@@ -273,6 +300,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
                             <ListItemButton
                               key={group.groupId}
                               selected={selectedLeft.includes(group.groupId)}
+                              disabled={interactionDisabled}
                               onClick={() =>
                                 toggleSelected(selectedLeft, setSelectedLeft, group.groupId)
                               }
@@ -301,7 +329,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
                 variant="outlined"
                 startIcon={<ArrowForwardOutlined />}
                 onClick={moveToGranted}
-                disabled={loading || selectedLeft.length === 0}
+                disabled={interactionDisabled || selectedLeft.length === 0}
               >
                 추가
               </Button>
@@ -309,7 +337,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
                 variant="outlined"
                 startIcon={<ArrowBackOutlined />}
                 onClick={moveToAvailable}
-                disabled={loading || selectedRight.length === 0}
+                disabled={interactionDisabled || selectedRight.length === 0}
               >
                 제거
               </Button>
@@ -328,6 +356,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
                         size="small"
                         value={searchRight}
                         onChange={(event) => setSearchRight(event.target.value)}
+                        disabled={saving || !loaded}
                         fullWidth
                       />
                       <Divider />
@@ -341,6 +370,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
                             <ListItemButton
                               key={group.groupId}
                               selected={selectedRight.includes(group.groupId)}
+                              disabled={interactionDisabled}
                               onClick={() =>
                                 toggleSelected(selectedRight, setSelectedRight, group.groupId)
                               }
@@ -365,7 +395,11 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
         <Button variant="outlined" onClick={onClose} disabled={saving}>
           취소
         </Button>
-        <Button variant="outlined" onClick={() => void handleSave()} disabled={saving}>
+        <Button
+          variant="outlined"
+          onClick={() => void handleSave()}
+          disabled={saving || loading || !loaded}
+        >
           {saving ? <CircularProgress size={20} /> : "저장"}
         </Button>
       </DialogActions>
