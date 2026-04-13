@@ -81,7 +81,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
   const confirm = useConfirm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loadedRoleId, setLoadedRoleId] = useState<number | null>(null);
   const [allGroups, setAllGroups] = useState<TransferGroup[]>([]);
   const [grantedGroups, setGrantedGroups] = useState<TransferGroup[]>([]);
   const [initialGrantedGroups, setInitialGrantedGroups] = useState<TransferGroup[]>([]);
@@ -91,7 +91,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
   const [searchRight, setSearchRight] = useState("");
 
   function resetTransferState() {
-    setLoaded(false);
+    setLoadedRoleId(null);
     setAllGroups([]);
     setGrantedGroups([]);
     setInitialGrantedGroups([]);
@@ -128,7 +128,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
       setSelectedRight([]);
       setSearchLeft("");
       setSearchRight("");
-      setLoaded(true);
+      setLoadedRoleId(roleId);
     } catch {
       resetTransferState();
       toast.error("그룹 권한 목록 로딩 실패");
@@ -178,6 +178,7 @@ export function RoleGrantedGroupsDialog({ open, onClose, roleId, roleName }: Pro
     [grantedGroups, searchRight]
   );
 
+  const loaded = loadedRoleId === roleId;
   function toggleSelected(
     selected: number[],
     setter: (value: number[]) => void,
