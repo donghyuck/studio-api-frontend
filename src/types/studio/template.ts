@@ -1,5 +1,10 @@
 import type { IsoInstant } from "@/types/studio/api-common";
 
+export interface TemplateUserRef {
+  userId: number;
+  username: string;
+}
+
 export interface TemplateDto {
   templateId: number;
   objectType: number;
@@ -9,8 +14,8 @@ export interface TemplateDto {
   description?: string | null;
   subject?: string | null;
   body?: string | null;
-  createdBy: number;
-  updatedBy: number;
+  createdBy: TemplateUserRef | null;
+  updatedBy: TemplateUserRef | null;
   createdAt: IsoInstant;
   updatedAt: IsoInstant;
   properties?: Record<string, string> | null;

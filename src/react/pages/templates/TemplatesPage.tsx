@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Avatar,
@@ -6,6 +6,7 @@ import {
   Stack,
   IconButton,
   Tooltip,
+  MenuItem,
   TextField,
   Typography,
 } from "@mui/material";
@@ -15,10 +16,14 @@ import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { CreateTemplateDialog } from "@/react/pages/templates/CreateTemplateDialog";
+import { reactObjectTypeApi } from "@/react/pages/objecttype/api";
 import type { TemplateSummaryDto } from "@/types/studio/template";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { useConfirm, useToast } from "@/react/feedback";
 import { reactTemplatesApi } from "@/react/pages/templates/api";
+import type { ObjectTypeDto } from "@/types/studio/objecttype";
+import { API_BASE_URL } from "@/config/backend";
+import NO_AVATAR from "@/assets/images/users/no-avatar.png";
 
 class TemplatesDataSource extends ReactPageDataSource<TemplateSummaryDto> {
   constructor() {
@@ -36,8 +41,16 @@ export function TemplatesPage() {
   const [keyword, setKeyword] = useState("");
   const [objectType, setObjectType] = useState("");
   const [objectId, setObjectId] = useState("");
+  const [objectTypes, setObjectTypes] = useState<ObjectTypeDto[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const selectedCount = selectedIds.length;
+
+  useEffect(() => {
+    void reactObjectTypeApi
+      .list({ status: "ACTIVE" })
+      .then(setObjectTypes)
+      .catch(() => {});
+  }, []);
 
   const columnDefs = useMemo<ColDef<TemplateSummaryDto>[]>(
     () => [
@@ -78,36 +91,60 @@ export function TemplatesPage() {
         field: "createdBy",
         headerName: "생성자",
         flex: 0.75,
-        sortable: true,
+        sortable: false,
         filter: false,
-        cellRenderer: (params: ICellRendererParams<TemplateSummaryDto>) => (
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ height: "100%" }}>
-            <Avatar sx={{ width: 24, height: 24, fontSize: 12 }}>
-              {String(params.value ?? "?").slice(0, 1)}
-            </Avatar>
-            <Typography variant="body2" noWrap>
-              {params.value ? `#${params.value}` : "-"}
-            </Typography>
-          </Stack>
-        ),
+        cellRenderer: (params: ICellRendererParams<TemplateSummaryDto>) => {
+          const user = params.value as TemplateSummaryDto["createdBy"];
+          return (
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ height: "100%" }}>
+              <Avatar
+                alt={user?.username ?? ""}
+                src={
+                  user
+                    ? `${API_BASE_URL}/api/profile/${encodeURIComponent(user.username)}/avatar`
+                    : NO_AVATAR
+                }
+                imgProps={{
+                  onError: (e) => { e.currentTarget.src = NO_AVATAR; },
+                }}
+                sx={{ width: 24, height: 24, bgcolor: "grey.200" }}
+              />
+              <Typography variant="body2" noWrap>
+                {user ? user.username : "-"}
+              </Typography>
+            </Stack>
+          );
+        },
       },
       { field: "createdAt", headerName: "생성일시", type: "datetime", flex: 1, sortable: true, filter: false },
       {
         field: "updatedBy",
         headerName: "수정자",
         flex: 0.75,
-        sortable: true,
+        sortable: false,
         filter: false,
-        cellRenderer: (params: ICellRendererParams<TemplateSummaryDto>) => (
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ height: "100%" }}>
-            <Avatar sx={{ width: 24, height: 24, fontSize: 12 }}>
-              {String(params.value ?? "?").slice(0, 1)}
-            </Avatar>
-            <Typography variant="body2" noWrap>
-              {params.value ? `#${params.value}` : "-"}
-            </Typography>
-          </Stack>
-        ),
+        cellRenderer: (params: ICellRendererParams<TemplateSummaryDto>) => {
+          const user = params.value as TemplateSummaryDto["updatedBy"];
+          return (
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ height: "100%" }}>
+              <Avatar
+                alt={user?.username ?? ""}
+                src={
+                  user
+                    ? `${API_BASE_URL}/api/profile/${encodeURIComponent(user.username)}/avatar`
+                    : NO_AVATAR
+                }
+                imgProps={{
+                  onError: (e) => { e.currentTarget.src = NO_AVATAR; },
+                }}
+                sx={{ width: 24, height: 24, bgcolor: "grey.200" }}
+              />
+              <Typography variant="body2" noWrap>
+                {user ? user.username : "-"}
+              </Typography>
+            </Stack>
+          );
+        },
       },
       { field: "updatedAt", headerName: "수정일시", type: "datetime", flex: 1, sortable: true, filter: false },
     ],
@@ -215,14 +252,39 @@ export function TemplatesPage() {
       <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ py: 0.5 }}>
         <TextField
           label="객체 유형"
-          type="number"
           value={objectType}
           onChange={(event) => setObjectType(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") applyFilters();
           }}
           size="small"
-        />
+          select
+          sx={{ minWidth: 240 }}
+          SelectProps={{
+            renderValue: (selected) => {
+              const selectedType = objectTypes.find(
+                (item) => String(item.objectType) === String(selected)
+              );
+              return selectedType
+                ? `${selectedType.code} #${selectedType.objectType}`
+                : "선택";
+            },
+          }}
+        >
+          <MenuItem value="">선택</MenuItem>
+          {objectTypes.map((item) => (
+            <MenuItem key={item.objectType} value={String(item.objectType)}>
+              <Stack spacing={0}>
+                <Typography variant="body2">
+                  {item.code} #{item.objectType}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {item.name}
+                </Typography>
+              </Stack>
+            </MenuItem>
+          ))}
+        </TextField>
         <TextField
           label="객체 식별자"
           type="number"
