@@ -209,9 +209,9 @@ export function AclPage() {
         flex: 1,
         filter: false,
         valueGetter: (params) =>
-          String(params.data?.objectIdIdentity) === "__root__"
+          String(params.data?.objectIdentity ?? params.data?.objectIdIdentity) === "__root__"
             ? "__root__"
-            : String(params.data?.objectIdIdentity ?? ""),
+            : String(params.data?.objectIdentity ?? params.data?.objectIdIdentity ?? ""),
       },
       {
         colId: "ownerSidId",
@@ -251,19 +251,56 @@ export function AclPage() {
   );
 
   const entriesColumnDefs = useMemo<ColDef<AclEntryDto>[]>(
-    () => [
-      { field: "id", headerName: "ID", sortable: true, flex: 0.5, filter: false },
+    () => {
+      const describeEntry = (entry?: AclEntryDto) => {
+        if (!entry) return "";
+
+        const objectIdentityId = entry.objectIdentityId ?? entry.aclObjectIdentity ?? -1;
+        const objectIdentity = objectById[objectIdentityId];
+        const objectIdentityValue =
+          objectIdentity?.objectIdentity ??
+          objectIdentity?.objectIdIdentity ??
+          entry.objectIdentity ??
+          objectIdentityId;
+        const objectLabel = objectIdentity
+          ? `${objectIdentity.className}#${String(objectIdentityValue)}`
+          : String(objectIdentityValue);
+        const sidId = entry.sidId ?? -1;
+        const sidLabel = entry.sid ?? sidById[sidId]?.sid ?? `SID #${sidId}`;
+        const actionLabel = actionByMask[entry.mask] ?? `mask ${entry.mask}`;
+        const decision = entry.granting ? "허용" : "거부";
+        const audits = [
+          entry.auditSuccess ? "성공 감사" : null,
+          entry.auditFailure ? "실패 감사" : null,
+        ].filter(Boolean);
+
+        return [
+          `${sidLabel}에게 ${objectLabel}의 ${actionLabel} 권한을 ${decision}합니다.`,
+          `평가 순서: ${entry.aceOrder}`,
+          `감사: ${audits.length > 0 ? audits.join(", ") : "없음"}`,
+        ].join("\n");
+      };
+      const entryTooltip = (params: { data?: AclEntryDto }) => describeEntry(params.data);
+
+      return [
+      { field: "id", headerName: "ID", sortable: true, flex: 0.5, filter: false, tooltipValueGetter: entryTooltip },
       {
         colId: "object",
-        headerName: "오브젝트",
+        headerName: "대상 객체 (OID)",
         sortable: false,
         flex: 1.5,
         filter: false,
+        tooltipValueGetter: entryTooltip,
         valueGetter: (params) => {
-          const objectIdentity = objectById[params.data?.aclObjectIdentity ?? -1];
+          const objectIdentityId = params.data?.objectIdentityId ?? params.data?.aclObjectIdentity ?? -1;
+          const objectIdentity = objectById[objectIdentityId];
+          const objectIdentityValue =
+            objectIdentity?.objectIdentity ??
+            objectIdentity?.objectIdIdentity ??
+            params.data?.objectIdentity;
           return objectIdentity
-            ? `${objectIdentity.className}#${String(objectIdentity.objectIdIdentity)}`
-            : params.data?.aclObjectIdentity;
+            ? `${objectIdentity.className}#${String(objectIdentityValue ?? "")}`
+            : objectIdentityValue ?? objectIdentityId;
         },
       },
       {
@@ -272,7 +309,11 @@ export function AclPage() {
         sortable: false,
         flex: 1,
         filter: false,
-        valueGetter: (params) => sidById[params.data?.sid ?? -1]?.sid ?? params.data?.sid,
+        tooltipValueGetter: entryTooltip,
+        valueGetter: (params) => {
+          const sidId = params.data?.sidId ?? -1;
+          return params.data?.sid ?? sidById[sidId]?.sid ?? sidId;
+        },
       },
       {
         colId: "mask",
@@ -280,15 +321,17 @@ export function AclPage() {
         sortable: false,
         flex: 1,
         filter: false,
+        tooltipValueGetter: entryTooltip,
         valueGetter: (params) => actionByMask[params.data?.mask ?? -1] ?? params.data?.mask,
       },
-      { field: "aceOrder", headerName: "순서", sortable: true, flex: 0.6, filter: false },
+      { field: "aceOrder", headerName: "순서", sortable: true, flex: 0.6, filter: false, tooltipValueGetter: entryTooltip },
       {
         colId: "granting",
         headerName: "허용 여부",
         sortable: true,
         flex: 0.8,
         filter: false,
+        tooltipValueGetter: entryTooltip,
         cellRenderer: (params: { data?: AclEntryDto }) => (
           <Chip
             size="small"
@@ -303,6 +346,7 @@ export function AclPage() {
         sortable: false,
         flex: 1,
         filter: false,
+        tooltipValueGetter: entryTooltip,
         cellRenderer: (params: { data?: AclEntryDto }) => (
           <Stack direction="row" spacing={0.5}>
             {params.data?.auditSuccess ? <Chip size="small" label="성공" /> : null}
@@ -325,7 +369,8 @@ export function AclPage() {
           </IconButton>
         ),
       },
-    ],
+    ];
+    },
     [actionByMask, objectById, sidById]
   );
 
@@ -361,19 +406,19 @@ export function AclPage() {
 
   async function handleDeleteObject(id: number) {
     const ok = await confirm({
-      title: "ACL 오브젝트 삭제",
+      title: "오브젝트 아이덴티티 삭제",
       message: "이 오브젝트 아이덴티티를 삭제하시겠습니까?",
     });
     if (!ok) return;
 
     try {
       await reactAclApi.deleteObject(id);
-      toast.success("ACL 오브젝트가 삭제되었습니다.");
+      toast.success("오브젝트 아이덴티티가 삭제되었습니다.");
       objectsGridRef.current?.refresh();
       entriesGridRef.current?.refresh();
       await refreshLookups();
     } catch {
-      toast.error("ACL 오브젝트 삭제에 실패했습니다.");
+      toast.error("오브젝트 아이덴티티 삭제에 실패했습니다.");
     }
   }
 
@@ -547,7 +592,7 @@ export function AclPage() {
                 onRefresh={() => entriesGridRef.current?.refresh()}
               />
               <Alert severity="info">
-                권한 엔트리는 OID(객체 식별자)와 순서 값을 기준으로 평가됩니다. 동일 OID에 여러 권한을
+                권한 엔트리는 대상 객체(OID)와 순서 값을 기준으로 평가됩니다. 동일 대상 객체에 여러 권한을
                 추가할 때는 평가 순서 값을 다르게 지정해야 합니다.
               </Alert>
               <PageableGridContent<AclEntryDto>

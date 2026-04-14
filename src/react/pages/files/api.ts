@@ -1,4 +1,6 @@
 import { apiRequest } from "@/react/query/fetcher";
+import { apiClient } from "@/react/api/client";
+import type { RagIndexRequestDto } from "@/types/studio/ai";
 import type { AttachmentDto } from "@/types/studio/files";
 
 export interface PaginatedFilesResponse {
@@ -15,6 +17,9 @@ export interface FileListParams {
 }
 
 export const reactFilesApi = {
+  async getById(attachmentId: number) {
+    return apiRequest<AttachmentDto>("get", `/api/mgmt/files/${attachmentId}`);
+  },
   async list(params: FileListParams) {
     return apiRequest<PaginatedFilesResponse>("get", "/api/mgmt/files", {
       params,
@@ -39,5 +44,30 @@ export const reactFilesApi = {
   },
   async deleteById(attachmentId: number) {
     await apiRequest("delete", `/api/mgmt/files/${attachmentId}`);
+  },
+  async extractText(attachmentId: number) {
+    return apiRequest<string>("get", `/api/mgmt/files/${attachmentId}/text`);
+  },
+  async hasEmbedding(attachmentId: number) {
+    return apiRequest<boolean>("get", `/api/mgmt/files/${attachmentId}/embedding/exists`);
+  },
+  async ragIndex(attachmentId: number, options?: Partial<RagIndexRequestDto>) {
+    await apiRequest("post", `/api/mgmt/files/${attachmentId}/rag/index`, {
+      data: options ?? {},
+    });
+  },
+  async ragMetadata(attachmentId: number) {
+    return apiRequest<Record<string, unknown>>(
+      "get",
+      `/api/mgmt/files/${attachmentId}/rag/metadata`
+    );
+  },
+  async fetchThumbnail(attachmentId: number, size = 256, format = "png") {
+    const response = await apiClient.get<Blob>(`/api/attachments/${attachmentId}/thumbnail`, {
+      params: { size, format },
+      responseType: "blob",
+      withCredentials: true,
+    });
+    return response.data;
   },
 };

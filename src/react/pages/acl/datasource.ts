@@ -9,7 +9,7 @@ import { reactAclApi } from "./api";
 
 export class AclClassesDataSource extends ReactPageDataSource<AclClassDto> {
   constructor() {
-    super("/api/security/acl/admin/classes");
+    super("/api/mgmt/acl/admin/classes");
   }
 
   override async fetchForAgGrid({ startRow, endRow, sortModel }: { startRow: number; endRow: number; sortModel?: { colId: string; sort: string }[]; }) {
@@ -23,7 +23,7 @@ export class AclClassesDataSource extends ReactPageDataSource<AclClassDto> {
 
 export class AclSidsDataSource extends ReactPageDataSource<AclSidDto> {
   constructor() {
-    super("/api/security/acl/admin/sids");
+    super("/api/mgmt/acl/admin/sids");
   }
 
   override async fetchForAgGrid({ startRow, endRow, sortModel }: { startRow: number; endRow: number; sortModel?: { colId: string; sort: string }[]; }) {
@@ -37,7 +37,7 @@ export class AclSidsDataSource extends ReactPageDataSource<AclSidDto> {
 
 export class AclObjectsDataSource extends ReactPageDataSource<AclObjectIdentityDto> {
   constructor() {
-    super("/api/security/acl/admin/objects");
+    super("/api/mgmt/acl/admin/objects");
   }
 
   override async fetchForAgGrid({ startRow, endRow, sortModel }: { startRow: number; endRow: number; sortModel?: { colId: string; sort: string }[]; }) {
@@ -51,7 +51,7 @@ export class AclObjectsDataSource extends ReactPageDataSource<AclObjectIdentityD
 
 export class AclEntriesDataSource extends ReactPageDataSource<AclEntryDto> {
   constructor() {
-    super("/api/security/acl/admin/entries");
+    super("/api/mgmt/acl/admin/entries");
   }
 
   override async fetchForAgGrid({ startRow, endRow, sortModel }: { startRow: number; endRow: number; sortModel?: { colId: string; sort: string }[]; }) {

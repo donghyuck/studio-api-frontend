@@ -90,7 +90,7 @@ export function CreateEntryDialog({
           </Alert>
           <TextField
             select
-            label="오브젝트 아이덴티티"
+            label="대상 객체 (OID)"
             size="small"
             fullWidth
             value={objectIdentityId}
@@ -99,7 +99,7 @@ export function CreateEntryDialog({
           >
             {objects.map((objectIdentity) => (
               <MenuItem key={objectIdentity.id} value={objectIdentity.id}>
-                {objectIdentity.className}#{String(objectIdentity.objectIdIdentity)}
+                {objectIdentity.className}#{String(objectIdentity.objectIdentity ?? objectIdentity.objectIdIdentity)}
               </MenuItem>
             ))}
           </TextField>

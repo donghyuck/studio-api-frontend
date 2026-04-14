@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   CircularProgress,
@@ -6,11 +6,15 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  MenuItem,
   Stack,
   TextField,
+  Typography,
 } from "@mui/material";
 import { useToast } from "@/react/feedback";
 import { reactTemplatesApi } from "./api";
+import { reactObjectTypeApi } from "@/react/pages/objecttype/api";
+import type { ObjectTypeDto } from "@/types/studio/objecttype";
 
 interface Props {
   open: boolean;
@@ -24,7 +28,16 @@ export function CreateTemplateDialog({ open, onClose, onCreated }: Props) {
   const [displayName, setDisplayName] = useState("");
   const [objectType, setObjectType] = useState("");
   const [objectId, setObjectId] = useState("");
+  const [objectTypes, setObjectTypes] = useState<ObjectTypeDto[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    reactObjectTypeApi
+      .list({ status: "ACTIVE" })
+      .then(setObjectTypes)
+      .catch(() => toast.error("오브젝트 타입 목록을 불러오지 못했습니다."));
+  }, [open, toast]);
 
   async function handleCreate() {
     if (!name.trim() || !objectType || !objectId) return;
@@ -72,14 +85,39 @@ export function CreateTemplateDialog({ open, onClose, onCreated }: Props) {
             onChange={(event) => setDisplayName(event.target.value)}
           />
           <TextField
-            label="오브젝트 타입 (objectType)"
+            label="오브젝트 타입"
             size="small"
             fullWidth
             value={objectType}
             onChange={(event) => setObjectType(event.target.value)}
             required
-            type="number"
-          />
+            select
+            helperText="등록된 ACTIVE 객체 유형만 선택할 수 있습니다."
+            SelectProps={{
+              renderValue: (selected) => {
+                const selectedType = objectTypes.find(
+                  (item) => String(item.objectType) === String(selected)
+                );
+                return selectedType
+                  ? `${selectedType.code} #${selectedType.objectType}`
+                  : "선택";
+              },
+            }}
+          >
+            <MenuItem value="">선택</MenuItem>
+            {objectTypes.map((item) => (
+              <MenuItem key={item.objectType} value={String(item.objectType)}>
+                <Stack spacing={0}>
+                  <Typography variant="body2">
+                    {item.code} #{item.objectType}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {item.name}
+                  </Typography>
+                </Stack>
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             label="오브젝트 ID (objectId)"
             size="small"
@@ -98,7 +136,7 @@ export function CreateTemplateDialog({ open, onClose, onCreated }: Props) {
         <Button
           variant="outlined"
           onClick={() => void handleCreate()}
-          disabled={loading || !name.trim()}
+          disabled={loading || !name.trim() || !objectType || !objectId}
         >
           {loading ? <CircularProgress size={20} /> : "생성"}
         </Button>

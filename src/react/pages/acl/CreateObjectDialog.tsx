@@ -46,7 +46,7 @@ export function CreateObjectDialog({
     try {
       await reactAclApi.createObject({
         classId: Number(classId),
-        objectIdIdentity: objectIdIdentity.trim(),
+        objectIdentity: objectIdIdentity.trim(),
         ownerSidId: ownerSidId ? Number(ownerSidId) : null,
         entriesInheriting,
       });

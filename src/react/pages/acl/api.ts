@@ -12,7 +12,8 @@ import type {
 import type { AclActionMaskDto } from "@/types/studio/ai";
 import type { PageResponse } from "@/types/studio/api-common";
 
-const API_BASE = "/api/security/acl/admin";
+const API_BASE = "/api/mgmt/acl/admin";
+const SYNC_BASE = "/api/mgmt/acl/sync";
 
 function compareValues(left: unknown, right: unknown) {
   if (left == null && right == null) return 0;
@@ -92,4 +93,6 @@ export const reactAclApi = {
   deleteEntry: (id: number) => apiRequest<void>("delete", `${API_BASE}/entries/${id}`),
 
   listActions: () => apiRequest<AclActionMaskDto[]>("get", `${API_BASE}/actions`),
+  listDefaultPolicies: () => apiRequest<unknown[]>("get", `${SYNC_BASE}/defaults`),
+  syncDefaultPolicies: () => apiRequest<void>("post", `${SYNC_BASE}/sync/defaults`),
 };
