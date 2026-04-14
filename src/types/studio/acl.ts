@@ -35,7 +35,8 @@ export interface AclObjectIdentityDto {
   className: string ;
 
   /** 실제 도메인 객체의 PK 또는 '__root__' 같은 특수 키 */
-  objectIdIdentity: string | number;
+  objectIdentity: string | number;
+  objectIdIdentity?: string | number;
 
   /** 상위 ACL (부모 object_identity)의 id. 없으면 null */
   parentId?: number | null;
@@ -53,7 +54,8 @@ export interface AclObjectIdentityNode extends AclObjectIdentityDto {
 
 export interface AclObjectIdentityRequest {
   classId: number;
-  objectIdIdentity: string | number;
+  objectIdentity: string | number;
+  objectIdIdentity?: string | number;
   parentId?: number | null;
   ownerSidId?: number | null;
   entriesInheriting: boolean;
@@ -64,13 +66,16 @@ export interface AclEntryDto {
   id: number;
 
   /** 어떤 object identity에 대한 엔트리인지 (acl_object_identity.id) */
-  aclObjectIdentity: number;
+  objectIdentityId: number;
+  aclObjectIdentity?: number;
+  objectIdentity?: string | number;
 
   /** 같은 객체 안에서 ACE 평가 순서 */
   aceOrder: number;
 
   /** 대상 SID (acl_sid.id) */
-  sid: number;
+  sidId: number;
+  sid?: string;
 
   /** 권한 비트 마스크 (READ=1, WRITE=2, DELETE=8, ADMIN=16 등) */
   mask: number;

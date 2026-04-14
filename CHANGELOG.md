@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-04-13
+
+### Changed
+
+- File management now restores Vue-parity creator display, multi-select deletion, Uppy upload, drawer-based file details with thumbnails, text extraction, and RAG indexing metadata workflows.
+- Template management now aligns list selection/deletion and object type selection with the file management UI.
+- ACL management API calls now use the server-aligned `/api/mgmt/acl` base path.
+- ACL management now maps object identity DTO fields to the server contract to avoid undefined OID labels.
+- ACL entry rows now provide explanatory tooltips for target object, SID, action, decision, order, and audit behavior.
+
+### Verification
+
+- File management UI improvements: `npm run typecheck`
+- File management UI improvements: `npm run lint`
+- File management UI improvements: `npm run build`
+- Template management UI alignment: `npm run typecheck`
+- Template management UI alignment: `npm run lint`
+- Template management UI alignment: `npm run build`
+- ACL management API path alignment: `npm run typecheck`
+- ACL management API path alignment: `npm run lint`
+- ACL management API path alignment: `npm run build`
+- ACL object identity field mapping: `npm run typecheck`
+- ACL object identity field mapping: `npm run lint`
+- ACL entry explanatory tooltips: `npm run typecheck`
+- ACL entry explanatory tooltips: `npm run lint`
+- ACL entry explanatory tooltips: `npm run build`
+
 ## 2026-04-10
 
 ### Changed
