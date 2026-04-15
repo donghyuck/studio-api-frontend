@@ -14,9 +14,10 @@ import {
   TemplateCodeEditor,
   type EditorLanguage,
 } from "@/react/components/code-editor/TemplateCodeEditor";
-import { PreviewOutlined, SaveOutlined } from "@mui/icons-material";
+import { AutoFixHigh, PreviewOutlined, SaveOutlined } from "@mui/icons-material";
 import { useToast, useConfirm } from "@/react/feedback";
 import { PreviewTemplateDialog } from "@/react/pages/templates/PreviewTemplateDialog";
+import { AiGenerateDrawer } from "@/react/components/ai/AiGenerateDrawer";
 import { reactTemplatesApi } from "./api";
 import type { TemplateDto } from "@/types/studio/template";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
@@ -54,6 +55,7 @@ export function TemplateDetailsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [aiDrawerOpen, setAiDrawerOpen] = useState(false);
   const [language, setLanguage] = useState<EditorLanguage>("html");
   const [savedLanguage, setSavedLanguage] = useState<EditorLanguage>("html");
 
@@ -234,6 +236,13 @@ export function TemplateDetailsPage() {
             <Stack direction="row" spacing={1} justifyContent="flex-end">
               <Button
                 variant="outlined"
+                startIcon={<AutoFixHigh />}
+                onClick={() => setAiDrawerOpen(true)}
+              >
+                AI 생성
+              </Button>
+              <Button
+                variant="outlined"
                 startIcon={<PreviewOutlined />}
                 onClick={() => setPreviewOpen(true)}
               >
@@ -255,6 +264,17 @@ export function TemplateDetailsPage() {
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
         templateId={template.templateId}
+      />
+      <AiGenerateDrawer
+        open={aiDrawerOpen}
+        onClose={() => setAiDrawerOpen(false)}
+        context={{
+          subject: form.subject,
+          description: form.description,
+          language,
+        }}
+        currentBody={form.body}
+        onApply={(v) => setForm((f) => ({ ...f, body: v }))}
       />
     </Stack>
   );
