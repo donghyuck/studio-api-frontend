@@ -62,7 +62,7 @@ export function ObjectTypeDetailPage() {
             allowedMime: pol.allowedMime ?? "",
           });
         }
-        setPolicySource(effective?.source ?? null);
+        setPolicySource(effective?.source ?? (pol === null ? "default" : "stored"));
         setError(null);
       })
       .catch(() => setError("오브젝트 타입을 불러오지 못했습니다."))
