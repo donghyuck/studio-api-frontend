@@ -230,16 +230,16 @@ export function ObjectTypeDetailPage() {
         </Grid>
       </Container>
       <Container maxWidth="md" disableGutters>
+        {policySource === "default" && (
+          <Alert severity="info" sx={{ mb: 1 }}>
+            저장된 정책이 없습니다. 현재 파일 크기·확장자·MIME 제한이 없는 기본 정책이 적용됩니다.
+          </Alert>
+        )}
         <Accordion disableGutters>
           <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
             파일 정책
           </AccordionSummary>
           <AccordionDetails>
-            {policySource === "default" && (
-              <Alert severity="info" sx={{ mb: 2 }}>
-                저장된 정책이 없습니다. 현재 파일 크기·확장자·MIME 제한이 없는 기본 정책이 적용됩니다.
-              </Alert>
-            )}
             <Grid container spacing={1} alignItems="center">
               <Grid size={{ xs: 12, md: 4 }}>
                 <TextField
