@@ -49,8 +49,8 @@ const PLACEHOLDER: Record<Mode, string> = {
     "예) 내용을 더 친근한 말투로 바꾸고, 마무리 문구를 추가해줘.",
 };
 
-function buildSystemPrompt(mode: Mode, context: Context, language: string): string {
-  const lang = language || context.language || "html";
+function buildSystemPrompt(mode: Mode, context: Context): string {
+  const lang = context.language || "html";
   const parts = [
     `당신은 ${lang.toUpperCase()} 템플릿 전문 작성자입니다.`,
     `코드 블록(\`\`\`)이나 설명 없이 템플릿 내용만 반환하세요.`,
@@ -84,7 +84,7 @@ export function AiGenerateDrawer({ open, onClose, context = {}, currentBody = ""
     setError("");
     setResult("");
     try {
-      const systemPrompt = buildSystemPrompt(mode, context, model);
+      const systemPrompt = buildSystemPrompt(mode, context);
       const userContent = buildUserMessage(mode, prompt, currentBody);
       const response = await reactAiApi.sendChat({
         provider: provider || undefined,
