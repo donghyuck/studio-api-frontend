@@ -28,6 +28,7 @@ export function ObjectTypeDetailPage() {
   const { user } = useAuthStore();
   const [objectType, setObjectType] = useState<ObjectTypeDto | null>(null);
   const [policy, setPolicy] = useState<ObjectTypePolicyDto | null>(null);
+  const [policySource, setPolicySource] = useState<"stored" | "default" | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,8 +45,9 @@ export function ObjectTypeDetailPage() {
     Promise.all([
       reactObjectTypeApi.get(Number(objectTypeId)),
       reactObjectTypeApi.getPolicy(Number(objectTypeId)).catch(() => null),
+      reactObjectTypeApi.getEffectivePolicy(Number(objectTypeId)).catch(() => null),
     ])
-      .then(([ot, pol]) => {
+      .then(([ot, pol, effective]) => {
         setObjectType(ot);
         setForm({
           name: ot.name,
@@ -60,6 +62,7 @@ export function ObjectTypeDetailPage() {
             allowedMime: pol.allowedMime ?? "",
           });
         }
+        setPolicySource(effective?.source ?? null);
         setError(null);
       })
       .catch(() => setError("오브젝트 타입을 불러오지 못했습니다."))
@@ -227,6 +230,11 @@ export function ObjectTypeDetailPage() {
         </Grid>
       </Container>
       <Container maxWidth="md" disableGutters>
+        {policySource === "default" && (
+          <Alert severity="info" sx={{ mb: 1 }}>
+            저장된 정책이 없습니다. 현재 파일 크기·확장자·MIME 제한이 없는 기본 정책이 적용됩니다.
+          </Alert>
+        )}
         <Accordion disableGutters>
           <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
             파일 정책

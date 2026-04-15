@@ -29,6 +29,15 @@ export interface ObjectTypePolicyDto {
   updatedAt?: string | null;
 }
 
+export interface ObjectTypeEffectivePolicyDto {
+  objectType: number;
+  maxFileMb?: number | null;
+  allowedExt?: string | null;
+  allowedMime?: string | null;
+  policyJson?: string | null;
+  source: "stored" | "default";
+}
+
 export interface ObjectTypeDefinitionDto {
   type: ObjectTypeDto;
   policy?: ObjectTypePolicyDto | null;

@@ -1,6 +1,7 @@
 import { apiRequest } from "@/react/query/fetcher";
 import type {
   ObjectTypeDto,
+  ObjectTypeEffectivePolicyDto,
   ObjectTypePatchRequest,
   ObjectTypePolicyDto,
   ObjectTypePolicyUpsertRequest,
@@ -27,6 +28,9 @@ export const reactObjectTypeApi = {
 
   getPolicy: (objectType: number) =>
     apiRequest<ObjectTypePolicyDto>("get", `${BASE}/${objectType}/policy`),
+
+  getEffectivePolicy: (objectType: number) =>
+    apiRequest<ObjectTypeEffectivePolicyDto>("get", `${BASE}/${objectType}/policy/effective`),
 
   upsertPolicy: (objectType: number, payload: ObjectTypePolicyUpsertRequest) =>
     apiRequest<ObjectTypePolicyDto>("put", `${BASE}/${objectType}/policy`, { data: payload }),
