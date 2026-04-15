@@ -19,8 +19,9 @@ import {
   Toolbar,
   Typography,
 } from "@mui/material";
-import { Add, Close, Delete, PlayArrow } from "@mui/icons-material";
+import { Add, AutoFixHigh, Close, Delete, PlayArrow } from "@mui/icons-material";
 import { useToast } from "@/react/feedback";
+import { reactAiApi } from "@/react/pages/ai/api";
 import { reactTemplatesApi } from "./api";
 
 interface Props {
@@ -71,6 +72,7 @@ export function PreviewTemplateDialog({ open, onClose, templateId }: Props) {
 
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   const [templateBody, setTemplateBody] = useState("");
@@ -197,6 +199,46 @@ export function PreviewTemplateDialog({ open, onClose, templateId }: Props) {
     setVars((prev) => prev.filter((_, i) => i !== index));
   }
 
+  async function handleAiFill() {
+    const names = vars.map((v) => v.name.trim()).filter(Boolean);
+    if (names.length === 0) return;
+    setAiLoading(true);
+    try {
+      const response = await reactAiApi.sendChat({
+        messages: [
+          {
+            role: "user",
+            content: `다음 변수들에 대해 현실적인 테스트 값을 JSON 객체로 반환해주세요. 다른 설명 없이 JSON만 반환하세요.\n변수: ${names.join(", ")}`,
+          },
+        ],
+        systemPrompt:
+          "당신은 테스트 데이터 생성 전문가입니다. 요청된 변수명에 맞는 현실적인 테스트 값을 JSON 객체 형식으로만 반환합니다.",
+      });
+      const assistant = [...response.messages]
+        .reverse()
+        .find((m) => m.role === "assistant");
+      const content = assistant?.content ?? "";
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+        setVars((prev) =>
+          prev.map((v) =>
+            v.name.trim() in parsed
+              ? { ...v, value: String(parsed[v.name.trim()]) }
+              : v
+          )
+        );
+        toast.success("AI가 테스트 값을 채웠습니다.");
+      } else {
+        toast.error("AI 응답을 파싱하지 못했습니다.");
+      }
+    } catch {
+      toast.error("AI 요청에 실패했습니다.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   const requiredVars = extractFreemarkerVariables(templateBody);
 
   return (
@@ -235,6 +277,16 @@ export function PreviewTemplateDialog({ open, onClose, templateId }: Props) {
                   템플릿 테스트를 위해 필요한 변수 값을 입력하세요.
                 </Typography>
                 <Box flex={1} />
+                <Button
+                  size="small"
+                  startIcon={
+                    aiLoading ? <CircularProgress size={14} color="inherit" /> : <AutoFixHigh />
+                  }
+                  onClick={() => void handleAiFill()}
+                  disabled={aiLoading || vars.length === 0}
+                >
+                  AI로 값 채우기
+                </Button>
                 <Button size="small" startIcon={<Add />} onClick={handleAddVar}>
                   추가
                 </Button>
