@@ -12,8 +12,15 @@ export interface ChatRequestDto {
   systemPrompt?: string; // 선택
   temperature?: number; // 선택
   topP?: number; // 선택
+  topK?: number; // 선택
   maxOutputTokens?: number; // 선택
   stopSequences?: string[]; // 선택
+  memory?: ChatMemoryOptionsDto;
+}
+
+export interface ChatMemoryOptionsDto {
+  enabled?: boolean;
+  conversationId?: string;
 }
 
 export interface ChatResponseDto {
@@ -28,6 +35,7 @@ export interface ChatRagRequestDto {
   ragTopK?: number; // 선택
   objectType?: string;
   objectId?: string;
+  debug?: boolean;
 }
 
 export interface TokenUsageDto {
@@ -59,6 +67,18 @@ export interface AiInfoResponse {
   readonly providers: ProviderInfo[];
   readonly defaultProvider: string;
   readonly vector: VectorInfo;
+  readonly chat?: ChatInfo;
+}
+
+export interface ChatInfo {
+  readonly memory?: ChatMemoryInfo;
+}
+
+export interface ChatMemoryInfo {
+  readonly enabled: boolean;
+  readonly maxMessages?: number;
+  readonly maxConversations?: number;
+  readonly ttl?: string;
 }
 
 export interface AclActionMaskDto {
@@ -86,6 +106,9 @@ export interface SearchResponseDto {
 
 export interface VectorSearchRequestDto extends SearchRequestDto {
   embedding?: number[];
+  objectType?: string;
+  objectId?: string;
+  minScore?: number;
 }
 
 export interface VectorDocumentDto {

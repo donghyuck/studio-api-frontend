@@ -27,7 +27,6 @@ export function AiProviderSelect({ provider, model, onChange, size = "small" }: 
       })
       .catch(() => setError(true))
       .finally(() => setLoading(false));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function handleProviderChange(next: string) {
