@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Box,
   Button,
   Card,
   CardContent,
@@ -28,11 +29,15 @@ export function RagPage() {
   const [model, setModel] = useState("");
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState("3");
+  const [objectType, setObjectType] = useState("");
+  const [objectId, setObjectId] = useState("");
+  const [debug, setDebug] = useState(false);
   const [expandedQuery, setExpandedQuery] = useState("");
   const [expandedKeywords, setExpandedKeywords] = useState<string[]>([]);
   const [rows, setRows] = useState<VectorSearchResultDto[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessageDto[]>([]);
+  const [ragDiagnostics, setRagDiagnostics] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const providers = useMemo<ProviderInfo[]>(() => aiInfo?.providers ?? [], [aiInfo]);
@@ -53,6 +58,17 @@ export function RagPage() {
     () => [
       { field: "id", headerName: "ID", flex: 0.5 },
       { field: "score", headerName: "유사도", flex: 0.3, sortable: true },
+      {
+        colId: "objectScope",
+        headerName: "객체 범위",
+        flex: 0.6,
+        valueGetter: (params) => {
+          const metadata = params.data?.metadata ?? {};
+          const type = metadata.objectType;
+          const id = metadata.objectId;
+          return type || id ? `${type ?? "-"}#${id ?? "-"}` : "-";
+        },
+      },
       { field: "content", headerName: "콘텐츠", flex: 1.3 },
     ],
     []
@@ -65,6 +81,8 @@ export function RagPage() {
         query: usingExpandedQuery ? expandedQuery : query,
         topK: Number(topK) || 3,
         hybrid: true,
+        objectType: objectType.trim() || undefined,
+        objectId: objectId.trim() || undefined,
       });
       setRows(data);
     } catch (searchError) {
@@ -96,6 +114,7 @@ export function RagPage() {
 
     setChatMessages(nextMessages);
     setChatInput("");
+    setRagDiagnostics(null);
     setError(null);
 
     try {
@@ -107,6 +126,9 @@ export function RagPage() {
         },
         ragQuery: expandedQuery.trim() || query.trim() || trimmed,
         ragTopK: Number(topK) || 3,
+        objectType: objectType.trim() || undefined,
+        objectId: objectId.trim() || undefined,
+        debug,
       });
 
       const assistant = [...response.messages]
@@ -116,6 +138,9 @@ export function RagPage() {
       if (assistant) {
         setChatMessages((current) => [...current, assistant]);
       }
+      setRagDiagnostics(
+        (response.metadata?.ragDiagnostics as Record<string, unknown> | undefined) ?? null
+      );
     } catch (chatError) {
       setError(resolveAxiosError(chatError));
     }
@@ -154,6 +179,38 @@ export function RagPage() {
               </TextField>
               <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth size="small" />
               <TextField label="topK" value={topK} onChange={(event) => setTopK(event.target.value)} sx={{ maxWidth: 140 }} size="small" />
+            </Stack>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+              <TextField
+                label="objectType"
+                value={objectType}
+                onChange={(event) => setObjectType(event.target.value)}
+                placeholder="예: attachment"
+                helperText="첨부 파일 RAG는 attachment를 사용합니다."
+                fullWidth
+                size="small"
+              />
+              <TextField
+                label="objectId"
+                value={objectId}
+                onChange={(event) => setObjectId(event.target.value)}
+                placeholder="예: 123"
+                helperText="파일 기반 RAG는 attachmentId를 입력합니다."
+                fullWidth
+                size="small"
+              />
+              <TextField
+                select
+                label="debug"
+                value={debug ? "true" : "false"}
+                onChange={(event) => setDebug(event.target.value === "true")}
+                sx={{ maxWidth: 140 }}
+                size="small"
+                helperText="운영 정보 표시"
+              >
+                <MenuItem value="false">false</MenuItem>
+                <MenuItem value="true">true</MenuItem>
+              </TextField>
             </Stack>
             <TextField label="쿼리" value={query} onChange={(event) => setQuery(event.target.value)} size="small" />
             <Stack direction="row" spacing={1}>
@@ -216,6 +273,28 @@ export function RagPage() {
                 ))}
               </Stack>
               <TextField label="확장 쿼리" value={expandedQuery} InputProps={{ readOnly: true }} />
+            </Stack>
+          </CardContent>
+        </Card>
+      ) : null}
+      {ragDiagnostics ? (
+        <Card variant="outlined">
+          <CardContent>
+            <Stack spacing={1}>
+              <Typography variant="subtitle2">RAG Diagnostics</Typography>
+              <Box
+                component="pre"
+                sx={{
+                  m: 0,
+                  p: 1,
+                  bgcolor: "grey.100",
+                  borderRadius: 1,
+                  overflow: "auto",
+                  fontSize: 12,
+                }}
+              >
+                {JSON.stringify(ragDiagnostics, null, 2)}
+              </Box>
             </Stack>
           </CardContent>
         </Card>

@@ -11,6 +11,7 @@ import type {
 } from "@/types/studio/ai";
 
 const BASE = "/api/ai";
+const MGMT_BASE = "/api/mgmt/ai";
 
 export const reactAiApi = {
   sendChat(req: ChatRequestDto) {
@@ -26,7 +27,7 @@ export const reactAiApi = {
   },
 
   searchVector(req: VectorSearchRequestDto) {
-    return apiRequest<VectorSearchResultDto[]>("post", `${BASE}/vectors/search`, { data: req });
+    return apiRequest<VectorSearchResultDto[]>("post", `${MGMT_BASE}/vectors/search`, { data: req });
   },
 
   rewriteQuery(req: QueryRewriteRequestDto) {
