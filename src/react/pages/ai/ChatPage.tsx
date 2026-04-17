@@ -337,8 +337,7 @@ export function ChatPage() {
                       }}
                     >
                       {message.role === "assistant" ? (
-                        <Typography variant="ca
-                        ption" color="text.secondary">
+                        <Typography variant="caption" color="text.secondary">
                           Assistant{message.model ? ` · ${message.model}` : ""}
                         </Typography>
                       ) : null}
