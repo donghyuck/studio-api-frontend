@@ -2,17 +2,17 @@ import { useMemo, useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import {
   Alert,
+  alpha,
   Box,
   Button,
   CircularProgress,
-  Container,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Grid,
   IconButton,
   InputAdornment,
-  Paper,
   Stack,
   TextField,
   Typography,
@@ -118,82 +118,136 @@ export function LoginPage() {
     <Box
       sx={{
         minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         backgroundColor: "background.default",
       }}
     >
-      <Container maxWidth="sm">
-        <Paper elevation={10} sx={{ p: { xs: 3, sm: 5 }, borderRadius: 3 }}>
-          <Typography variant="h4" textAlign="center" sx={{ mb: 4 }}>
-            Studio One Platform
-          </Typography>
-
-          <Box component="form" onSubmit={submitLogin} noValidate>
-            <Stack spacing={2}>
-              <Controller
-                name="username"
-                control={loginForm.control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    fullWidth
-                    label="아이디"
-                    error={!!loginForm.formState.errors.username}
-                    helperText={loginForm.formState.errors.username?.message}
-                  />
-                )}
-              />
-              <Controller
-                name="password"
-                control={loginForm.control}
-                render={({ field }) => (
-                  <TextField
-                    {...field}
-                    fullWidth
-                    label="비밀번호"
-                    type={showPassword ? "text" : "password"}
-                    error={!!loginForm.formState.errors.password}
-                    helperText={loginForm.formState.errors.password?.message}
-                    slotProps={{
-                      input: {
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <IconButton
-                              onClick={() => setShowPassword((v) => !v)}
-                              edge="end"
-                            >
-                              {showPassword ? <VisibilityOff /> : <Visibility />}
-                            </IconButton>
-                          </InputAdornment>
-                        ),
-                      },
-                    }}
-                  />
-                )}
-              />
-              <Box sx={{ textAlign: "right" }}>
-                <Button
-                  variant="text"
-                  onClick={() => setResetOpen(true)}
-                  disabled={submitting}
-                >
-                  비밀번호 재설정
-                </Button>
-              </Box>
-              <Button type="submit" variant="contained" size="large" disabled={submitting}>
-                {submitting ? (
-                  <CircularProgress size={20} color="inherit" />
-                ) : (
-                  "로그인"
-                )}
-              </Button>
-              {loginError ? <Alert severity="error">{loginError}</Alert> : null}
+      <Grid container sx={{ minHeight: "100vh" }}>
+        <Grid
+          size={{ xs: false, md: 7 }}
+          sx={{
+            display: { xs: "none", md: "block" },
+            position: "relative",
+            backgroundImage: (theme) =>
+              `linear-gradient(${alpha(theme.palette.common.black, theme.palette.mode === "dark" ? 0.28 : 0.20)}, ${alpha(theme.palette.common.black, theme.palette.mode === "dark" ? 0.70 : 0.56)}), url(https://picsum.photos/1600/1200)`,
+            backgroundRepeat: "no-repeat",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          <Box
+            sx={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "flex-end",
+              p: 8,
+              color: "common.white",
+            }}
+          >
+            <Stack spacing={2} sx={{ maxWidth: 560 }}>
+              <Typography variant="h3" fontWeight={700}>
+                Studio One Platform
+              </Typography>
+              <Typography variant="h6" sx={{ opacity: 0.92, lineHeight: 1.6 }}>
+                운영 데이터와 서비스 흐름을 한 곳에서 관리합니다.
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.78 }}>
+                계정으로 로그인해 관리 콘솔을 계속 진행하세요.
+              </Typography>
             </Stack>
           </Box>
-        </Paper>
-      </Container>
+        </Grid>
+
+        <Grid
+          size={{ xs: 12, md: 5 }}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            px: { xs: 3, sm: 6 },
+            py: 6,
+            bgcolor: "background.paper",
+          }}
+        >
+          <Box sx={{ width: "100%", maxWidth: 420 }}>
+            <Stack spacing={3}>
+              <Box>
+                <Typography variant="h4" fontWeight={700}>
+                  로그인
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  Studio One Platform에 접속합니다.
+                </Typography>
+              </Box>
+
+              <Box component="form" onSubmit={submitLogin} noValidate>
+                <Stack spacing={2}>
+                  <Controller
+                    name="username"
+                    control={loginForm.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="아이디"
+                        autoComplete="username"
+                        error={!!loginForm.formState.errors.username}
+                        helperText={loginForm.formState.errors.username?.message}
+                      />
+                    )}
+                  />
+                  <Controller
+                    name="password"
+                    control={loginForm.control}
+                    render={({ field }) => (
+                      <TextField
+                        {...field}
+                        fullWidth
+                        label="비밀번호"
+                        autoComplete="current-password"
+                        type={showPassword ? "text" : "password"}
+                        error={!!loginForm.formState.errors.password}
+                        helperText={loginForm.formState.errors.password?.message}
+                        slotProps={{
+                          input: {
+                            endAdornment: (
+                              <InputAdornment position="end">
+                                <IconButton
+                                  onClick={() => setShowPassword((v) => !v)}
+                                  edge="end"
+                                >
+                                  {showPassword ? <VisibilityOff /> : <Visibility />}
+                                </IconButton>
+                              </InputAdornment>
+                            ),
+                          },
+                        }}
+                      />
+                    )}
+                  />
+                  <Box sx={{ textAlign: "right" }}>
+                    <Button
+                      variant="text"
+                      onClick={() => setResetOpen(true)}
+                      disabled={submitting}
+                    >
+                      비밀번호 재설정
+                    </Button>
+                  </Box>
+                  <Button type="submit" variant="contained" size="large" disabled={submitting} fullWidth>
+                    {submitting ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : (
+                      "로그인"
+                    )}
+                  </Button>
+                  {loginError ? <Alert severity="error">{loginError}</Alert> : null}
+                </Stack>
+              </Box>
+            </Stack>
+          </Box>
+        </Grid>
+      </Grid>
 
       <Dialog open={resetOpen} onClose={() => setResetOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>비밀번호 재설정</DialogTitle>

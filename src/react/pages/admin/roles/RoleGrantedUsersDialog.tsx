@@ -195,14 +195,85 @@ function renderUserChip(params: ICellRendererParams<UserDto>) {
         fontSize: 11,
         ...(params.value
           ? {
-              bgcolor: "#2563eb",
-              color: "#ffffff",
-              borderColor: "#1d4ed8",
+              bgcolor: "primary.main",
+              color: "primary.contrastText",
+              borderColor: "primary.dark",
             }
           : {}),
       }}
     />
   );
+}
+
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  ariaLabel,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  ariaLabel: string;
+  onChange: (checked: boolean) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="checkbox"
+      aria-label={ariaLabel}
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      onClick={(event) => event.stopPropagation()}
+      style={{
+        width: 16,
+        height: 16,
+        margin: 0,
+        accentColor: "#1565c0",
+        cursor: "pointer",
+      }}
+    />
+  );
+}
+
+function getDisplayedSelectionState(api: {
+  getLastDisplayedRowIndex: () => number;
+  getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+}) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  if (lastIndex < 0) {
+    return { displayedCount: 0, selectedCount: 0 };
+  }
+
+  let displayedCount = 0;
+  let selectedCount = 0;
+  for (let index = 0; index <= lastIndex; index += 1) {
+    const row = api.getDisplayedRowAtIndex(index);
+    if (!row) continue;
+    displayedCount += 1;
+    if (row.isSelected()) selectedCount += 1;
+  }
+  return { displayedCount, selectedCount };
+}
+
+function toggleDisplayedRows(
+  api: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  },
+  selected: boolean
+) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  for (let index = 0; index <= lastIndex; index += 1) {
+    api.getDisplayedRowAtIndex(index)?.setSelected(selected);
+  }
 }
 
 export function RoleGrantedUsersDialog({
@@ -226,6 +297,8 @@ export function RoleGrantedUsersDialog({
   const [hasSearchedCandidates, setHasSearchedCandidates] = useState(false);
   const [selectedCandidateCount, setSelectedCandidateCount] = useState(0);
   const [selectedGrantedCount, setSelectedGrantedCount] = useState(0);
+  const [candidateDisplayedCount, setCandidateDisplayedCount] = useState(0);
+  const [grantedDisplayedCount, setGrantedDisplayedCount] = useState(0);
 
   const grantedUserIds = useMemo(
     () => new Set(grantedUsers.map((user) => user.userId)),
@@ -236,6 +309,66 @@ export function RoleGrantedUsersDialog({
     () => new GrantedUsersDataSource(grantedUsers, grantedSearchInput),
     [grantedUsers, grantedSearchInput]
   );
+
+  function renderGrantedHeaderCheckbox(api?: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  }) {
+    const currentState = api
+      ? getDisplayedSelectionState(api)
+      : { displayedCount: grantedDisplayedCount, selectedCount: selectedGrantedCount };
+    const allDisplayedSelected =
+      currentState.displayedCount > 0 &&
+      currentState.selectedCount === currentState.displayedCount;
+    const partiallySelected =
+      currentState.selectedCount > 0 &&
+      currentState.selectedCount < currentState.displayedCount;
+
+    return (
+      <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+        <SelectionCheckbox
+          ariaLabel="전체 선택"
+          checked={allDisplayedSelected}
+          indeterminate={partiallySelected}
+          onChange={() => {
+            if (api) {
+              toggleDisplayedRows(api, !allDisplayedSelected);
+            }
+          }}
+        />
+      </Box>
+    );
+  }
+
+  function renderCandidateHeaderCheckbox(api?: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  }) {
+    const currentState = api
+      ? getDisplayedSelectionState(api)
+      : { displayedCount: candidateDisplayedCount, selectedCount: selectedCandidateCount };
+    const allDisplayedSelected =
+      currentState.displayedCount > 0 &&
+      currentState.selectedCount === currentState.displayedCount;
+    const partiallySelected =
+      currentState.selectedCount > 0 &&
+      currentState.selectedCount < currentState.displayedCount;
+
+    return (
+      <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+        <SelectionCheckbox
+          ariaLabel="전체 선택"
+          checked={allDisplayedSelected}
+          indeterminate={partiallySelected}
+          onChange={() => {
+            if (api) {
+              toggleDisplayedRows(api, !allDisplayedSelected);
+            }
+          }}
+        />
+      </Box>
+    );
+  }
 
   const userColumns = useMemo<ColDef<UserDto>[]>(
     () => [
@@ -281,12 +414,100 @@ export function RoleGrantedUsersDialog({
     []
   );
 
+  const grantedColumns = useMemo<ColDef<UserDto>[]>(
+    () => [
+      {
+        colId: "rowSelect",
+        headerName: "",
+        width: 40,
+        minWidth: 40,
+        maxWidth: 40,
+        pinned: "left",
+        sortable: false,
+        resizable: false,
+        suppressMovable: true,
+        lockPosition: true,
+        cellClass: "selection-column-centered",
+        headerClass: "selection-column-centered",
+        headerComponent: (props: {
+          api: {
+            getLastDisplayedRowIndex: () => number;
+            getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+          };
+        }) => renderGrantedHeaderCheckbox(props.api),
+        cellRenderer: (params: ICellRendererParams<UserDto>) => {
+          const checked = params.node.isSelected();
+          return (
+            <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+              <SelectionCheckbox
+                ariaLabel="행 선택"
+                checked={checked}
+                onChange={(nextChecked) => params.node.setSelected(nextChecked)}
+              />
+            </Box>
+          );
+        },
+      },
+      ...userColumns,
+    ],
+    [grantedDisplayedCount, selectedGrantedCount, userColumns]
+  );
+
+  const candidateColumns = useMemo<ColDef<UserDto>[]>(
+    () => [
+      {
+        colId: "rowSelect",
+        headerName: "",
+        width: 40,
+        minWidth: 40,
+        maxWidth: 40,
+        pinned: "left",
+        sortable: false,
+        resizable: false,
+        suppressMovable: true,
+        lockPosition: true,
+        cellClass: "selection-column-centered",
+        headerClass: "selection-column-centered",
+        headerComponent: (props: {
+          api: {
+            getLastDisplayedRowIndex: () => number;
+            getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+          };
+        }) => renderCandidateHeaderCheckbox(props.api),
+        cellRenderer: (params: ICellRendererParams<UserDto>) => {
+          const checked = params.node.isSelected();
+          return (
+            <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+              <SelectionCheckbox
+                ariaLabel="행 선택"
+                checked={checked}
+                onChange={(nextChecked) => params.node.setSelected(nextChecked)}
+              />
+            </Box>
+          );
+        },
+      },
+      ...userColumns,
+    ],
+    [candidateDisplayedCount, selectedCandidateCount, userColumns]
+  );
+
   const grantedEvents = useMemo(
     () => [
       {
         type: "selectionChanged",
-        listener: (event: SelectionChangedEvent<UserDto>) =>
-          setSelectedGrantedCount(event.api.getSelectedRows().length ?? 0),
+        listener: (event: SelectionChangedEvent<UserDto>) => {
+          setSelectedGrantedCount(event.api.getSelectedRows().length ?? 0);
+          setGrantedDisplayedCount(event.api.getDisplayedRowCount());
+          event.api.refreshHeader?.();
+        },
+      },
+      {
+        type: "modelUpdated",
+        listener: (event: { api: { getDisplayedRowCount: () => number; refreshHeader?: () => void } }) => {
+          setGrantedDisplayedCount(event.api.getDisplayedRowCount());
+          event.api.refreshHeader?.();
+        },
       },
     ],
     []
@@ -296,8 +517,18 @@ export function RoleGrantedUsersDialog({
     () => [
       {
         type: "selectionChanged",
-        listener: (event: SelectionChangedEvent<UserDto>) =>
-          setSelectedCandidateCount(event.api.getSelectedRows().length ?? 0),
+        listener: (event: SelectionChangedEvent<UserDto>) => {
+          setSelectedCandidateCount(event.api.getSelectedRows().length ?? 0);
+          setCandidateDisplayedCount(event.api.getDisplayedRowCount());
+          event.api.refreshHeader?.();
+        },
+      },
+      {
+        type: "modelUpdated",
+        listener: (event: { api: { getDisplayedRowCount: () => number; refreshHeader?: () => void } }) => {
+          setCandidateDisplayedCount(event.api.getDisplayedRowCount());
+          event.api.refreshHeader?.();
+        },
       },
     ],
     []
@@ -489,9 +720,15 @@ export function RoleGrantedUsersDialog({
                 key={candidateGridKey}
                 ref={candidatesGridRef}
                 datasource={candidatesDataSource}
-                columns={userColumns}
+                columns={candidateColumns}
                 events={candidateEvents}
-                rowSelection="multiple"
+                rowSelection={{
+                  mode: "multiRow",
+                  enableClickSelection: false,
+                  checkboxes: false,
+                  headerCheckbox: false,
+                }}
+                options={{ suppressRowClickSelection: true }}
                 height={GRID_HEIGHT}
               />
             ) : (
@@ -547,9 +784,15 @@ export function RoleGrantedUsersDialog({
                 key={grantedGridKey}
                 ref={grantedGridRef}
                 datasource={grantedDataSource}
-                columns={userColumns}
+                columns={grantedColumns}
                 events={grantedEvents}
-                rowSelection="multiple"
+                rowSelection={{
+                  mode: "multiRow",
+                  enableClickSelection: false,
+                  checkboxes: false,
+                  headerCheckbox: false,
+                }}
+                options={{ suppressRowClickSelection: true }}
                 height={GRID_HEIGHT}
               />
             )}

@@ -1,10 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   CssBaseline,
-  ThemeProvider,
-  createTheme,
   useMediaQuery,
 } from "@mui/material";
+import { ThemeProvider, createTheme } from "@mui/material/styles";
 
 const THEME_MODE_KEY = "theme_mode";
 
@@ -38,8 +37,8 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
             main: "#1565c0",
           },
           background: {
-            default: resolvedMode === "dark" ? "#0f172a" : "#f5f7fb",
-            paper: resolvedMode === "dark" ? "#111827" : "#ffffff",
+            default: resolvedMode === "dark" ? "#182230" : "#f5f7fb",
+            paper: resolvedMode === "dark" ? "#1f2836" : "#ffffff",
           },
         },
         components: {
@@ -68,6 +67,12 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     window.localStorage.setItem(THEME_MODE_KEY, mode);
   }, [mode]);
+
+  useEffect(() => {
+    document.documentElement.dataset.themeMode = resolvedMode;
+    document.documentElement.dataset.agThemeMode = resolvedMode;
+    document.documentElement.style.colorScheme = resolvedMode;
+  }, [resolvedMode]);
 
   const value = useMemo(
     () => ({ mode, setMode, resolvedMode }),

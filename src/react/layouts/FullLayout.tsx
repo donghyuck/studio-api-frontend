@@ -173,7 +173,7 @@ export function FullLayout() {
           sx={{
             flex: 1,
             minWidth: 0,
-            bgcolor: "#ffffff",
+            bgcolor: "background.paper",
             px: { xs: 2, md: 3 },
             py: 3,
           }}

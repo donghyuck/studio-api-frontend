@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, Avatar, Box, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
@@ -28,6 +28,80 @@ class FilesDataSource extends ReactPageDataSource<AttachmentDto> {
   }
 }
 
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  ariaLabel,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  ariaLabel: string;
+  onChange: (checked: boolean) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="checkbox"
+      aria-label={ariaLabel}
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      onClick={(event) => event.stopPropagation()}
+      style={{
+        width: 16,
+        height: 16,
+        margin: 0,
+        accentColor: "#1565c0",
+        cursor: "pointer",
+      }}
+    />
+  );
+}
+
+function getDisplayedSelectionState(api: {
+  getLastDisplayedRowIndex: () => number;
+  getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+}) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  if (lastIndex < 0) {
+    return { displayedCount: 0, selectedCount: 0 };
+  }
+
+  let displayedCount = 0;
+  let selectedCount = 0;
+  for (let index = 0; index <= lastIndex; index += 1) {
+    const row = api.getDisplayedRowAtIndex(index);
+    if (!row) continue;
+    displayedCount += 1;
+    if (row.isSelected()) {
+      selectedCount += 1;
+    }
+  }
+
+  return { displayedCount, selectedCount };
+}
+
+function toggleDisplayedRows(
+  api: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  },
+  selected: boolean
+) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  for (let index = 0; index <= lastIndex; index += 1) {
+    api.getDisplayedRowAtIndex(index)?.setSelected(selected);
+  }
+}
+
 export function FilesPage() {
   const queryClient = useQueryClient();
   const gridRef = useRef<PageableGridContentHandle<AttachmentDto>>(null);
@@ -39,11 +113,87 @@ export function FilesPage() {
   const [detailAttachmentId, setDetailAttachmentId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [displayedCount, setDisplayedCount] = useState(0);
   const selectedCount = selectedIds.length;
+
+  function renderHeaderCheckbox(api?: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  }) {
+    const currentState = api
+      ? getDisplayedSelectionState(api)
+      : { displayedCount, selectedCount };
+    const allDisplayedSelected =
+      currentState.displayedCount > 0 &&
+      currentState.selectedCount === currentState.displayedCount;
+    const partiallySelected =
+      currentState.selectedCount > 0 &&
+      currentState.selectedCount < currentState.displayedCount;
+
+    return (
+      <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+        <SelectionCheckbox
+          ariaLabel="전체 선택"
+          checked={allDisplayedSelected}
+          indeterminate={partiallySelected}
+          onChange={() => {
+            if (api) {
+              toggleDisplayedRows(api, !allDisplayedSelected);
+            }
+          }}
+        />
+      </Box>
+    );
+  }
 
   const columnDefs = useMemo<ColDef<AttachmentDto>[]>(
     () => [
-      { field: "attachmentId", headerName: "ID", flex: 0.35, sortable: true, type: "number", filter: false },
+      {
+        colId: "rowSelect",
+        headerName: "",
+        width: 40,
+        minWidth: 40,
+        maxWidth: 40,
+        pinned: "left",
+        sortable: false,
+        resizable: false,
+        suppressMovable: true,
+        lockPosition: true,
+        cellClass: "selection-column-centered",
+        headerClass: "selection-column-centered",
+        headerComponent: (props: {
+          api: {
+            getLastDisplayedRowIndex: () => number;
+            getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+          };
+        }) => renderHeaderCheckbox(props.api),
+        cellRenderer: (params: ICellRendererParams<AttachmentDto>) => {
+          const checked = params.node.isSelected();
+
+          return (
+            <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+              <SelectionCheckbox
+                ariaLabel="행 선택"
+                checked={checked}
+                onChange={(nextChecked) => params.node.setSelected(nextChecked)}
+              />
+            </Box>
+          );
+        },
+      },
+      {
+        field: "attachmentId",
+        headerName: "ID",
+        width: 64,
+        minWidth: 64,
+        maxWidth: 64,
+        sortable: true,
+        type: "number",
+        filter: false,
+        cellStyle: { textAlign: "center" },
+        headerClass: "id-column-centered",
+        cellClass: "id-column-centered",
+      },
       {
         field: "name",
         headerName: "파일",
@@ -108,22 +258,18 @@ export function FilesPage() {
       },
       { field: "createdAt", headerName: "생성일시", flex: 0.75, sortable: true, type: "datetime", filter: false },
     ],
-    []
+    [displayedCount, selectedCount]
   );
 
   const gridOptions = useMemo(
     () => ({
-      rowSelection: { mode: "multiRow" as const, enableClickSelection: false, checkboxes: true, headerCheckbox: false },
-      suppressRowClickSelection: true,
-      selectionColumnDef: {
-        width: 65,
-        minWidth: 65,
-        maxWidth: 65,
-        pinned: "left" as const,
-        sortable: false,
-        filter: false,
-        resizable: false,
+      rowSelection: {
+        mode: "multiRow" as const,
+        enableClickSelection: false,
+        checkboxes: false,
+        headerCheckbox: false,
       },
+      suppressRowClickSelection: true,
       rowMultiSelectWithClick: true,
     }),
     []
@@ -140,6 +286,14 @@ export function FilesPage() {
               .map((row) => Number(row.attachmentId))
               .filter((id) => Number.isFinite(id) && id > 0)
           );
+          setDisplayedCount((event as SelectionChangedEvent<AttachmentDto>).api.getDisplayedRowCount());
+        },
+      },
+      {
+        type: "modelUpdated",
+        listener: (event: { api: { getDisplayedRowCount: () => number; refreshHeader?: () => void } }) => {
+          setDisplayedCount(event.api.getDisplayedRowCount());
+          event.api.refreshHeader?.();
         },
       },
     ],

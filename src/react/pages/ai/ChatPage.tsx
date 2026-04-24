@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  alpha,
   Avatar,
   Box,
   Button,
@@ -31,7 +32,11 @@ import {
   SmartToyOutlined,
 } from "@mui/icons-material";
 import { reactAiApi } from "@/react/pages/ai/api";
-import type { AiInfoResponse, ChatMessageDto, ProviderInfo } from "@/types/studio/ai";
+import type {
+  AiInfoResponse,
+  ChatMessageDto,
+  ProviderInfo,
+} from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 
@@ -48,7 +53,9 @@ export function ChatPage() {
   const [model, setModel] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [memoryEnabled, setMemoryEnabled] = useState(false);
-  const [conversationId, setConversationId] = useState(() => crypto.randomUUID());
+  const [conversationId, setConversationId] = useState(() =>
+    crypto.randomUUID(),
+  );
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -56,7 +63,10 @@ export function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  const providers = useMemo<ProviderInfo[]>(() => aiInfo?.providers ?? [], [aiInfo]);
+  const providers = useMemo<ProviderInfo[]>(
+    () => aiInfo?.providers ?? [],
+    [aiInfo],
+  );
   const selectedProvider = providers.find((item) => item.name === provider);
   const configurationMissing = !provider || !model;
   const serverMemoryEnabled = aiInfo?.chat?.memory?.enabled === true;
@@ -68,7 +78,9 @@ export function ChatPage() {
       .then((data) => {
         setAiInfo(data);
         setProvider(data.defaultProvider);
-        const match = data.providers.find((item) => item.name === data.defaultProvider);
+        const match = data.providers.find(
+          (item) => item.name === data.defaultProvider,
+        );
         setModel(match?.chat.model ?? "");
       })
       .catch((loadError) => setError(resolveAxiosError(loadError)));
@@ -114,11 +126,19 @@ export function ChatPage() {
         systemPrompt: systemPrompt.trim() || undefined,
         memory: memoryEnabled ? { enabled: true, conversationId } : undefined,
       });
-      const assistant = [...response.messages].reverse().find((item) => item.role === "assistant");
+      const assistant = [...response.messages]
+        .reverse()
+        .find((item) => item.role === "assistant");
       if (assistant) {
         setMessages((current) => [
           ...current,
-          { ...assistant, id: crypto.randomUUID(), model: response.model ?? model, metadata: response.metadata, createdAt: new Date().toISOString() },
+          {
+            ...assistant,
+            id: crypto.randomUUID(),
+            model: response.model ?? model,
+            metadata: response.metadata,
+            createdAt: new Date().toISOString(),
+          },
         ]);
       }
     } catch (sendError) {
@@ -126,7 +146,13 @@ export function ChatPage() {
       setError(message);
       setMessages((current) => [
         ...current,
-        { id: crypto.randomUUID(), role: "assistant", content: `오류: ${message}`, model, createdAt: new Date().toISOString() },
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `오류: ${message}`,
+          model,
+          createdAt: new Date().toISOString(),
+        },
       ]);
     } finally {
       setSending(false);
@@ -147,9 +173,13 @@ export function ChatPage() {
     if (!usage) return null;
 
     return (
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 0.75, display: "block", fontSize: 11 }}>
-        tokens · input {usage.inputTokens ?? "-"} · output {usage.outputTokens ?? "-"} · total{" "}
-        {usage.totalTokens ?? "-"}
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ mt: 0.75, display: "block", fontSize: 11 }}
+      >
+        tokens · input {usage.inputTokens ?? "-"} · output{" "}
+        {usage.outputTokens ?? "-"} · total {usage.totalTokens ?? "-"}
       </Typography>
     );
   }
@@ -179,9 +209,19 @@ export function ChatPage() {
         label="Provider와 모델을 선택해 AI Chat 요청을 보냅니다."
         actions={
           <>
-            <Tooltip title={memoryEnabled ? "새 대화 시작" : "대화 기억을 켜면 새 대화를 시작할 수 있습니다"}>
+            <Tooltip
+              title={
+                memoryEnabled
+                  ? "새 대화 시작"
+                  : "대화 기억을 켜면 새 대화를 시작할 수 있습니다"
+              }
+            >
               <span>
-                <IconButton size="small" onClick={handleNewConversation} disabled={!memoryEnabled}>
+                <IconButton
+                  size="small"
+                  onClick={handleNewConversation}
+                  disabled={!memoryEnabled}
+                >
                   <EditNoteOutlined fontSize="small" />
                 </IconButton>
               </span>
@@ -197,8 +237,8 @@ export function ChatPage() {
       {error ? <Alert severity="error">{error}</Alert> : null}
       {configurationMissing ? (
         <Alert severity="warning">
-          AI Chat을 사용하려면 Provider와 Model 설정이 필요합니다. 상단 설정 아이콘을 눌러 사용할
-          provider와 모델을 선택하거나 입력하세요.
+          AI Chat을 사용하려면 Provider와 Model 설정이 필요합니다. 상단 설정
+          아이콘을 눌러 사용할 provider와 모델을 선택하거나 입력하세요.
         </Alert>
       ) : null}
       {memoryEnabled ? (
@@ -222,13 +262,15 @@ export function ChatPage() {
         <DialogContent>
           <Stack spacing={2}>
             <Alert severity="info">
-              Provider를 비우면 서버 기본 provider가 사용됩니다. System Prompt는 별도 systemPrompt
-              필드로 전송되며, 대화 메시지에는 사용자와 assistant 메시지만 유지됩니다.
+              Provider를 비우면 서버 기본 provider가 사용됩니다. System Prompt는
+              별도 systemPrompt 필드로 전송되며, 대화 메시지에는 사용자와
+              assistant 메시지만 유지됩니다.
             </Alert>
             {serverMemoryEnabled ? (
               <Alert severity="info">
-                서버가 conversationId 기반 대화 기억을 지원합니다. 켜면 이전 대화는 서버 메모리에서
-                이어지며, 클라이언트는 현재 턴 메시지만 전송합니다.
+                서버가 conversationId 기반 대화 기억을 지원합니다. 켜면 이전
+                대화는 서버 메모리에서 이어지며, 클라이언트는 현재 턴 메시지만
+                전송합니다.
               </Alert>
             ) : (
               <Alert severity="warning">
@@ -255,12 +297,23 @@ export function ChatPage() {
                   </MenuItem>
                 ))}
               </TextField>
-              <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth size="small" />
+              <TextField
+                label="Model"
+                value={model}
+                onChange={(event) => setModel(event.target.value)}
+                fullWidth
+                size="small"
+              />
             </Stack>
             {selectedProvider ? (
               <Typography variant="caption" color="text.secondary">
-                Embedding: {selectedProvider.embedding.enabled ? selectedProvider.embedding.model : "disabled"}
-                {aiInfo?.vector.available ? ` · Vector: ${aiInfo.vector.implementation}` : " · Vector: unavailable"}
+                Embedding:{" "}
+                {selectedProvider.embedding.enabled
+                  ? selectedProvider.embedding.model
+                  : "disabled"}
+                {aiInfo?.vector.available
+                  ? ` · Vector: ${aiInfo.vector.implementation}`
+                  : " · Vector: unavailable"}
               </Typography>
             ) : null}
             <TextField
@@ -272,11 +325,17 @@ export function ChatPage() {
               size="small"
               fullWidth
             />
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={1}
+              alignItems={{ sm: "center" }}
+            >
               <Stack spacing={0} sx={{ flex: 1 }}>
                 <Typography variant="body2">대화 기억</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {memoryEnabled ? `사용 중 · ${conversationId}` : "사용하지 않음"}
+                  {memoryEnabled
+                    ? `사용 중 · ${conversationId}`
+                    : "사용하지 않음"}
                 </Typography>
               </Stack>
               <Switch
@@ -296,23 +355,36 @@ export function ChatPage() {
 
       <Paper
         elevation={0}
-        sx={{ minHeight: "calc(100vh - 170px)", display: "flex", flexDirection: "column" }}
+        sx={{
+          minHeight: "calc(100vh - 170px)",
+          display: "flex",
+          flexDirection: "column",
+        }}
       >
         <Box sx={{ flex: 1, overflowY: "auto", px: { xs: 1, md: 8 }, py: 3 }}>
           <Stack spacing={2}>
             {messages.length === 0 ? (
-              <Stack spacing={1} alignItems="center" justifyContent="center" sx={{ minHeight: 260 }}>
+              <Stack
+                spacing={1}
+                alignItems="center"
+                justifyContent="center"
+                sx={{ minHeight: 260 }}
+              >
                 <Avatar sx={{ bgcolor: "primary.main" }}>
                   <SmartToyOutlined />
                 </Avatar>
-                <Typography color="text.secondary">메시지를 입력해 AI와 대화를 시작하세요.</Typography>
+                <Typography color="text.secondary">
+                  메시지를 입력해 AI와 대화를 시작하세요.
+                </Typography>
               </Stack>
             ) : (
               messages.map((message, index) => (
                 <Stack
                   key={`${message.role}-${index}`}
                   direction="row"
-                  justifyContent={message.role === "user" ? "flex-end" : "flex-start"}
+                  justifyContent={
+                    message.role === "user" ? "flex-end" : "flex-start"
+                  }
                   sx={{
                     "& .user-message-actions": {
                       opacity: 0,
@@ -323,17 +395,36 @@ export function ChatPage() {
                     },
                   }}
                 >
-                  <Stack spacing={0.5} alignItems={message.role === "user" ? "flex-end" : "flex-start"}>
+                  <Stack
+                    spacing={0.5}
+                    alignItems={
+                      message.role === "user" ? "flex-end" : "flex-start"
+                    }
+                    sx={{ width: "100%" }}
+                  >
                     <Box
                       sx={{
-                        maxWidth: { xs: "92%", md: message.role === "user" ? "76%" : "72%" },
+                        maxWidth: {
+                          xs: "92%",
+                          md: message.role === "user" ? "86%" : "72%",
+                        },
                         px: message.role === "user" ? 1.75 : 2,
                         py: message.role === "user" ? 1 : 1.5,
-                        borderRadius: message.role === "user" ? 2 : "18px 18px 18px 4px",
-                        bgcolor: message.role === "user" ? "rgba(2, 132, 199, 0.10)" : "background.paper",
-                        color: message.role === "user" ? "info.main" : "text.primary",
+                        borderRadius:
+                          message.role === "user" ? 2 : "18px 18px 18px 4px",
+                        bgcolor:
+                          message.role === "user"
+                            ? (theme) => alpha(theme.palette.info.main, theme.palette.mode === "dark" ? 0.18 : 0.1)
+                            : "background.paper",
+                        color:
+                          message.role === "user"
+                            ? "info.main"
+                            : "text.primary",
                         border: "none",
-                        boxShadow: message.role === "user" ? "0 1px 2px rgba(15, 23, 42, 0.08)" : "none",
+                        boxShadow:
+                          message.role === "user"
+                            ? (theme) => `0 1px 2px ${alpha(theme.palette.common.black, theme.palette.mode === "dark" ? 0.28 : 0.08)}`
+                            : "none",
                       }}
                     >
                       {message.role === "assistant" ? (
@@ -341,10 +432,18 @@ export function ChatPage() {
                           Assistant{message.model ? ` · ${message.model}` : ""}
                         </Typography>
                       ) : null}
-                      <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: message.role === "assistant" ? 13 : 14 }}>
+                      <Typography
+                        sx={{
+                          whiteSpace: "pre-wrap",
+                          overflowWrap: "anywhere",
+                          fontSize: message.role === "assistant" ? 13 : 14,
+                        }}
+                      >
                         {message.content}
                       </Typography>
-                      {message.role === "assistant" ? renderTokenUsage(message.metadata) : null}
+                      {message.role === "assistant"
+                        ? renderTokenUsage(message.metadata)
+                        : null}
                     </Box>
                     {message.role === "user" ? (
                       <Stack
@@ -358,12 +457,22 @@ export function ChatPage() {
                           {formatMessageTime(message.createdAt)}
                         </Typography>
                         <Tooltip title="복사">
-                          <IconButton size="small" onClick={() => void handleCopyMessage(message.content)}>
+                          <IconButton
+                            size="small"
+                            onClick={() =>
+                              void handleCopyMessage(message.content)
+                            }
+                          >
                             <ContentCopyOutlined fontSize="inherit" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="편집">
-                          <IconButton size="small" onClick={() => handleEditMessage(index, message.content)}>
+                          <IconButton
+                            size="small"
+                            onClick={() =>
+                              handleEditMessage(index, message.content)
+                            }
+                          >
                             <EditNoteOutlined fontSize="inherit" />
                           </IconButton>
                         </Tooltip>
@@ -402,7 +511,8 @@ export function ChatPage() {
             sx={{
               borderRadius: 3,
               bgcolor: "background.paper",
-              boxShadow: "0 8px 28px rgba(15, 23, 42, 0.08)",
+              boxShadow: (theme) =>
+                `0 8px 28px ${alpha(theme.palette.common.black, theme.palette.mode === "dark" ? 0.28 : 0.08)}`,
             }}
           >
             <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
@@ -411,7 +521,10 @@ export function ChatPage() {
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                    if (
+                      event.key === "Enter" &&
+                      (event.ctrlKey || event.metaKey)
+                    ) {
                       void handleSend();
                     }
                   }}
@@ -446,7 +559,9 @@ export function ChatPage() {
                       <IconButton
                         color="primary"
                         onClick={() => void handleSend()}
-                        disabled={sending || !input.trim() || configurationMissing}
+                        disabled={
+                          sending || !input.trim() || configurationMissing
+                        }
                         sx={{
                           width: 40,
                           height: 40,
@@ -501,12 +616,16 @@ export function ChatPage() {
                       }}
                     >
                       <Box>
-                        <Typography variant="body2">{item.chat.model || item.name}</Typography>
+                        <Typography variant="body2">
+                          {item.chat.model || item.name}
+                        </Typography>
                         <Typography variant="caption" color="text.secondary">
                           {item.name}
                         </Typography>
                       </Box>
-                      {selected ? <CheckOutlined color="primary" fontSize="small" /> : null}
+                      {selected ? (
+                        <CheckOutlined color="primary" fontSize="small" />
+                      ) : null}
                     </Button>
                   );
                 })}
@@ -516,7 +635,12 @@ export function ChatPage() {
                   handleModelMenuClose();
                   setSettingsOpen(true);
                 }}
-                sx={{ justifyContent: "space-between", color: "text.primary", px: 1.5, py: 1 }}
+                sx={{
+                  justifyContent: "space-between",
+                  color: "text.primary",
+                  px: 1.5,
+                  py: 1,
+                }}
               >
                 <Box>
                   <Typography variant="body2">더 많은 모델</Typography>
@@ -524,11 +648,20 @@ export function ChatPage() {
                     provider와 model을 직접 설정합니다.
                   </Typography>
                 </Box>
-                <ExpandMoreOutlined fontSize="small" sx={{ transform: "rotate(-90deg)" }} />
+                <ExpandMoreOutlined
+                  fontSize="small"
+                  sx={{ transform: "rotate(-90deg)" }}
+                />
               </Button>
             </Stack>
           </Popover>
-          <Typography variant="caption" color="text.secondary" display="block" textAlign="center" sx={{ mt: 1 }}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            display="block"
+            textAlign="center"
+            sx={{ mt: 1 }}
+          >
             AI는 실수할 수 있습니다. 중요한 결과는 다시 확인하세요.
           </Typography>
         </Box>

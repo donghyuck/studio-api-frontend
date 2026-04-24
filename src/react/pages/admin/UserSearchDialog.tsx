@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Avatar,
+  Box,
   Chip,
   Dialog,
   DialogTitle,
@@ -25,6 +26,77 @@ import type { UserDto } from "@/types/studio/user";
 import { useConfirm } from "@/react/feedback";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
+
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  ariaLabel,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  ariaLabel: string;
+  onChange: (checked: boolean) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="checkbox"
+      aria-label={ariaLabel}
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      onClick={(event) => event.stopPropagation()}
+      style={{
+        width: 16,
+        height: 16,
+        margin: 0,
+        accentColor: "#1565c0",
+        cursor: "pointer",
+      }}
+    />
+  );
+}
+
+function getDisplayedSelectionState(api: {
+  getLastDisplayedRowIndex: () => number;
+  getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+}) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  if (lastIndex < 0) {
+    return { displayedCount: 0, selectedCount: 0 };
+  }
+
+  let displayedCount = 0;
+  let selectedCount = 0;
+  for (let index = 0; index <= lastIndex; index += 1) {
+    const row = api.getDisplayedRowAtIndex(index);
+    if (!row) continue;
+    displayedCount += 1;
+    if (row.isSelected()) selectedCount += 1;
+  }
+  return { displayedCount, selectedCount };
+}
+
+function toggleDisplayedRows(
+  api: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  },
+  selected: boolean
+) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  for (let index = 0; index <= lastIndex; index += 1) {
+    api.getDisplayedRowAtIndex(index)?.setSelected(selected);
+  }
+}
 
 interface Props {
   open: boolean;
@@ -55,8 +127,71 @@ export function UserSearchDialog({
   const [query, setQuery] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
 
+  function renderHeaderCheckbox(api?: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  }) {
+    const currentState = api
+      ? getDisplayedSelectionState(api)
+      : { displayedCount, selectedCount };
+    const allDisplayedSelected =
+      currentState.displayedCount > 0 &&
+      currentState.selectedCount === currentState.displayedCount;
+    const partiallySelected =
+      currentState.selectedCount > 0 &&
+      currentState.selectedCount < currentState.displayedCount;
+
+    return (
+      <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+        <SelectionCheckbox
+          ariaLabel="전체 선택"
+          checked={allDisplayedSelected}
+          indeterminate={partiallySelected}
+          onChange={() => {
+            if (api) {
+              toggleDisplayedRows(api, !allDisplayedSelected);
+            }
+          }}
+        />
+      </Box>
+    );
+  }
+
   const columnDefs = useMemo<ColDef<UserDto>[]>(() => {
     const baseColumns: ColDef<UserDto>[] = [
+      {
+        colId: "rowSelect",
+        headerName: "",
+        width: 40,
+        minWidth: 40,
+        maxWidth: 40,
+        pinned: "left",
+        sortable: false,
+        resizable: false,
+        suppressMovable: true,
+        lockPosition: true,
+        cellClass: "selection-column-centered",
+        headerClass: "selection-column-centered",
+        headerComponent: (props: {
+          api: {
+            getLastDisplayedRowIndex: () => number;
+            getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+          };
+        }) => renderHeaderCheckbox(props.api),
+        cellRenderer: (params: ICellRendererParams<UserDto>) => {
+          if (!isMultiple) return null;
+          const checked = params.node.isSelected();
+          return (
+            <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+              <SelectionCheckbox
+                ariaLabel="행 선택"
+                checked={checked}
+                onChange={(nextChecked) => params.node.setSelected(nextChecked)}
+              />
+            </Box>
+          );
+        },
+      },
       {
         field: "username",
         headerName: "아이디",
@@ -101,9 +236,9 @@ export function UserSearchDialog({
               fontSize: 11,
               ...(params.value
                 ? {
-                    bgcolor: "#2563eb",
-                    color: "#ffffff",
-                    borderColor: "#1d4ed8",
+                    bgcolor: "primary.main",
+                    color: "primary.contrastText",
+                    borderColor: "primary.dark",
                   }
                 : {}),
             }}
@@ -124,12 +259,8 @@ export function UserSearchDialog({
       },
     ];
 
-    if (isMultiple) {
-      return baseColumns;
-    }
-
     return [
-      ...baseColumns,
+      ...(isMultiple ? baseColumns : baseColumns.slice(1)),
       {
         colId: "select",
         headerName: "",
@@ -147,7 +278,7 @@ export function UserSearchDialog({
         ),
       },
     ];
-  }, [isMultiple, onClose, onSelect]);
+  }, [displayedCount, isMultiple, onClose, onSelect, selectedCount]);
 
   async function handleConfirmSelection() {
     const users = gridRef.current?.selectedRows() ?? [];
@@ -183,13 +314,16 @@ export function UserSearchDialog({
               listener: (event: SelectionChangedEvent<UserDto>) => {
                 const nextSelectedCount = event.api.getSelectedRows().length ?? 0;
                 setSelectedCount(nextSelectedCount);
+                setDisplayedCount(event.api.getDisplayedRowCount() ?? 0);
+                event.api.refreshHeader?.();
               },
             },
             {
               type: "paginationChanged",
-              listener: (event: PaginationChangedEvent<UserDto>) => {
+              listener: (event: PaginationChangedEvent<UserDto> & { api: { refreshHeader?: () => void } }) => {
                 const nextDisplayedCount = event.api.getDisplayedRowCount() ?? 0;
                 setDisplayedCount(nextDisplayedCount);
+                event.api.refreshHeader?.();
               },
             },
           ]
@@ -278,7 +412,17 @@ export function UserSearchDialog({
               datasource={dataSource}
               columns={columnDefs}
               events={gridEvents}
-              rowSelection={isMultiple ? "multiple" : undefined}
+              rowSelection={
+                isMultiple
+                  ? {
+                      mode: "multiRow",
+                      enableClickSelection: false,
+                      checkboxes: false,
+                      headerCheckbox: false,
+                    }
+                  : undefined
+              }
+              options={isMultiple ? { suppressRowClickSelection: true } : undefined}
             />
           ) : (
             <Stack

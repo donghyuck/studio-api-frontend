@@ -47,6 +47,14 @@ function formatDate(value?: Date | string | null) {
   return value ? dayjs(value).format("YYYY-MM-DD HH:mm:ss") : "";
 }
 
+function normalizeExtractedText(value: string) {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u0000/g, "")
+    .replace(/\f/g, "\n\n")
+    .trim();
+}
+
 export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const toast = useToast();
   const [file, setFile] = useState<AttachmentDto | null>(null);
@@ -199,7 +207,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     setTextExtracting(true);
     try {
       const text = await reactFilesApi.extractText(attachmentId);
-      setExtractedText(text);
+      setExtractedText(normalizeExtractedText(text));
       setTextExtracted(true);
     } catch (error) {
       toast.error(resolveAxiosError(error));
@@ -334,7 +342,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               <Box>
                 <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
                   <Typography variant="caption" color="text.secondary">
-                    Text
+                    텍스트 추출 결과
                   </Typography>
                   {!textExtracted ? (
                     <Tooltip title="콘텐츠에서 텍스트를 추출합니다.">
@@ -359,12 +367,29 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                   )}
                 </Stack>
                 {textExtracted ? (
-                  <Typography
-                    variant="body2"
-                    sx={{ mt: 0.75, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}
+                  <Box
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      mt: 0.75,
+                      maxHeight: 280,
+                      overflow: "auto",
+                      whiteSpace: "pre-wrap",
+                      overflowWrap: "anywhere",
+                      wordBreak: "break-word",
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      bgcolor: "background.default",
+                      color: "text.primary",
+                      p: 1.25,
+                      fontFamily: (theme) => theme.typography.fontFamily,
+                      fontSize: 12,
+                      lineHeight: 1.7,
+                    }}
                   >
                     {extractedText || "-"}
-                  </Typography>
+                  </Box>
                 ) : null}
               </Box>
 
