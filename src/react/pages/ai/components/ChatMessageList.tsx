@@ -36,7 +36,7 @@ export function ChatMessageList({
   );
 
   return (
-    <Box sx={{ flex: 1, overflowY: "auto", px: { xs: 1, md: 4 }, py: 3 }}>
+    <Box sx={{ flex: 1, minHeight: 0, overflowY: "auto", px: { xs: 1, md: 4 }, py: 3 }}>
       <Stack spacing={2}>
         {summaryVisible ? (
           <SummaryCard

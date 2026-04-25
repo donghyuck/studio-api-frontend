@@ -9,7 +9,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { DeleteOutlineOutlined, RefreshOutlined } from "@mui/icons-material";
+import { CloseOutlined, DeleteOutlineOutlined, RefreshOutlined } from "@mui/icons-material";
 import type { ConversationSummaryDto } from "@/react/pages/ai/components/chatTypes";
 
 function formatRelative(value?: string) {
@@ -29,6 +29,8 @@ interface Props {
   onOpen: (conversationId: string) => void;
   onDelete: (conversationId: string) => void;
   onRefresh: () => void;
+  onClose?: () => void;
+  drawer?: boolean;
 }
 
 export function ConversationSidebar({
@@ -38,13 +40,22 @@ export function ConversationSidebar({
   onOpen,
   onDelete,
   onRefresh,
+  onClose,
+  drawer = false,
 }: Props) {
   return (
     <Paper
       variant="outlined"
-      sx={{ width: { xs: "100%", md: 320 }, p: 1.5, borderRadius: 3, flexShrink: 0 }}
+      sx={{
+        width: drawer ? "100%" : { xs: "100%", md: 320 },
+        height: drawer ? "100%" : "auto",
+        p: 1.5,
+        borderRadius: drawer ? 0 : 3,
+        flexShrink: 0,
+        overflow: "hidden",
+      }}
     >
-      <Stack spacing={1}>
+      <Stack spacing={1} sx={{ height: "100%" }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between">
           <Typography variant="subtitle2">대화 목록</Typography>
           <Stack direction="row" spacing={0.5} alignItems="center">
@@ -54,9 +65,16 @@ export function ConversationSidebar({
                 <RefreshOutlined fontSize="small" />
               </IconButton>
             </Tooltip>
+            {onClose ? (
+              <Tooltip title="닫기">
+                <IconButton size="small" onClick={onClose}>
+                  <CloseOutlined fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
           </Stack>
         </Stack>
-        <List dense sx={{ py: 0 }}>
+        <List dense sx={{ py: 0, overflowY: "auto" }}>
           {conversations.map((conversation) => (
             <ListItemButton
               key={conversation.conversationId}

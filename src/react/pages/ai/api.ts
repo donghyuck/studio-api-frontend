@@ -1,6 +1,7 @@
 import { apiRequest } from "@/react/query/fetcher";
 import { API_BASE_URL } from "@/config/backend";
 import { authStore } from "@/react/auth/store";
+import { parseJwtExp } from "@/utils/jwt";
 import type {
   AiInfoResponse,
   ChatRagRequestDto,
@@ -21,6 +22,25 @@ import type {
 
 const BASE = "/api/ai";
 const MGMT_BASE = "/api/mgmt/ai";
+
+function isTokenExpired(token: string, skewSeconds = 30) {
+  const exp = parseJwtExp(token);
+  if (!exp) return true;
+  return exp < Math.floor(Date.now() / 1000) + skewSeconds;
+}
+
+async function getAccessTokenForFetch() {
+  const state = authStore.getState();
+  let token = state.token;
+
+  if (!token) {
+    token = await state.refreshTokens();
+  } else if (isTokenExpired(token)) {
+    token = await state.refreshTokens();
+  }
+
+  return token;
+}
 
 export const reactAiApi = {
   sendChat(req: ChatRequestDto) {
@@ -59,7 +79,7 @@ export const reactAiApi = {
       onComplete?: (payload: ChatStreamCompleteEventDto) => void;
     }
   ) {
-    const token = authStore.getState().token;
+    const token = await getAccessTokenForFetch();
     const response = await fetch(`${API_BASE_URL}${BASE}/chat/stream`, {
       method: "POST",
       headers: {

@@ -99,19 +99,27 @@ export interface ChatMemoryInfo {
 }
 
 export interface ChatStreamDeltaEventDto {
+  delta?: string;
   content?: string;
 }
 
-export type ChatStreamUsageEventDto = TokenUsageDto;
+export interface ChatStreamUsageEventDto extends Partial<TokenUsageDto> {
+  type?: string;
+  requestId?: string;
+  metadata?: ChatResponseMetadataDto;
+}
 
 export interface ChatStreamCompleteEventDto {
+  type?: string;
   requestId?: string;
+  model?: string;
   provider?: string;
   resolvedModel?: string;
   conversationId?: string;
   latencyMs?: number;
   fallbackUsed?: boolean;
   finishReason?: string;
+  metadata?: ChatResponseMetadataDto;
 }
 
 export interface ConversationSummaryDto {

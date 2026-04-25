@@ -137,6 +137,7 @@ function SelectionCheckbox({
         margin: 0,
         accentColor: "#1565c0",
         cursor: "pointer",
+        transform: ariaLabel === "행 선택" ? "translateY(2px)" : "none",
       }}
     />
   );
@@ -202,7 +203,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
       currentState.selectedCount < currentState.displayedCount;
 
     return (
-      <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+      <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <SelectionCheckbox
           ariaLabel="전체 선택"
           checked={allDisplayedSelected}
@@ -242,7 +243,7 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
           const checked = params.node.isSelected();
 
           return (
-            <Box sx={{ width: "100%", display: "flex", justifyContent: "center" }}>
+            <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <SelectionCheckbox
                 ariaLabel="행 선택"
                 checked={checked}

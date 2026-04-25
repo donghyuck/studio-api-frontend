@@ -6,6 +6,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Drawer,
   IconButton,
   MenuItem,
   Paper,
@@ -17,6 +18,7 @@ import {
 } from "@mui/material";
 import {
   EditNoteOutlined,
+  HistoryOutlined,
   SettingsOutlined,
   SyncOutlined,
 } from "@mui/icons-material";
@@ -24,7 +26,10 @@ import { reactAiApi } from "@/react/pages/ai/api";
 import type {
   AiInfoResponse,
   ChatMessageDto,
+  ChatStreamCompleteEventDto,
+  ChatStreamUsageEventDto,
   ProviderInfo,
+  TokenUsageDto,
 } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
@@ -34,6 +39,38 @@ import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
 import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
 
 const CHAT_INPUT_HISTORY_KEY = "ai_chat_input_history";
+
+function normalizeStreamUsage(payload: ChatStreamUsageEventDto): TokenUsageDto | undefined {
+  const usage = payload.metadata?.tokenUsage ?? payload;
+  const hasUsage =
+    usage.inputTokens !== undefined ||
+    usage.outputTokens !== undefined ||
+    usage.totalTokens !== undefined;
+
+  if (!hasUsage) return undefined;
+
+  const inputTokens = usage.inputTokens ?? 0;
+  const outputTokens = usage.outputTokens ?? 0;
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: usage.totalTokens ?? inputTokens + outputTokens,
+  };
+}
+
+function normalizeStreamComplete(payload: ChatStreamCompleteEventDto) {
+  const metadata = payload.metadata ?? {};
+
+  return {
+    provider: payload.provider ?? metadata.provider,
+    resolvedModel: payload.resolvedModel ?? metadata.resolvedModel ?? payload.model,
+    conversationId: payload.conversationId ?? metadata.conversationId,
+    latencyMs: payload.latencyMs ?? metadata.latencyMs,
+    finishReason: payload.finishReason ?? metadata.finishReason,
+    fallbackUsed: payload.fallbackUsed,
+    tokenUsage: metadata.tokenUsage,
+  };
+}
 
 function toRequestMessage(message: ChatMessage): ChatMessageDto {
   return {
@@ -52,6 +89,7 @@ export function ChatPage() {
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [conversationDrawerOpen, setConversationDrawerOpen] = useState(false);
   const [modelAnchorEl, setModelAnchorEl] = useState<HTMLElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -103,9 +141,9 @@ export function ChatPage() {
     const lastUser = [...recentMessages].reverse().find((item) => item.role === "user")?.content;
     const lastAssistant = [...recentMessages].reverse().find((item) => item.role === "assistant")?.content;
     return [
-      `최근 메시지 ${recentMessages.length}개 기준`,
-      lastUser ? `사용자: ${lastUser.slice(0, 120)}` : "",
-      lastAssistant ? `Assistant: ${lastAssistant.slice(0, 160)}` : "",
+      `최근 ${recentMessages.length}개 메시지`,
+      lastUser ? `질문: ${lastUser.slice(0, 120)}` : "",
+      lastAssistant ? `답변: ${lastAssistant.slice(0, 160)}` : "",
     ]
       .filter(Boolean)
       .join("\n");
@@ -119,6 +157,7 @@ export function ChatPage() {
         setProvider(data.defaultProvider);
         const match = data.providers.find((item) => item.name === data.defaultProvider);
         setModel(match?.chat.model ?? "");
+        setMemoryEnabled(data.chat?.memory?.enabled === true);
       })
       .catch((loadError) => setError(resolveAxiosError(loadError)));
   }, []);
@@ -174,6 +213,7 @@ export function ChatPage() {
           createdAt: message.createdAt,
         }))
       );
+      setConversationDrawerOpen(false);
       setError(null);
     } catch (loadError) {
       if (activeConversationLoadIdRef.current !== loadId) return;
@@ -246,13 +286,15 @@ export function ChatPage() {
             setMessages((current) =>
               current.map((message) =>
                 message.id === assistantMessageId
-                  ? { ...message, content: `${message.content}${payload.content ?? ""}` }
+                  ? { ...message, content: `${message.content}${payload.delta ?? payload.content ?? ""}` }
                   : message
               )
             );
           },
           onUsage: (payload) => {
             if (activeStreamIdRef.current !== streamId) return;
+            const tokenUsage = normalizeStreamUsage(payload);
+            if (!tokenUsage) return;
             setMessages((current) =>
               current.map((message) =>
                 message.id === assistantMessageId
@@ -260,7 +302,7 @@ export function ChatPage() {
                       ...message,
                       metadata: {
                         ...(message.metadata ?? {}),
-                        tokenUsage: payload,
+                        tokenUsage,
                       },
                     }
                   : message
@@ -269,23 +311,25 @@ export function ChatPage() {
           },
           onComplete: (payload) => {
             if (activeStreamIdRef.current !== streamId) return;
-            if (payload.conversationId) {
-              setConversationId(payload.conversationId);
+            const complete = normalizeStreamComplete(payload);
+            if (complete.conversationId) {
+              setConversationId(complete.conversationId);
             }
             setMessages((current) =>
               current.map((message) =>
                 message.id === assistantMessageId
                   ? {
                       ...message,
-                      model: payload.resolvedModel ?? model,
+                      model: complete.resolvedModel ?? model,
                       metadata: {
                         ...(message.metadata ?? {}),
-                        provider: payload.provider,
-                        resolvedModel: payload.resolvedModel,
-                        conversationId: payload.conversationId,
-                        latencyMs: payload.latencyMs,
-                        finishReason: payload.finishReason,
-                        fallbackUsed: payload.fallbackUsed,
+                        provider: complete.provider,
+                        resolvedModel: complete.resolvedModel,
+                        conversationId: complete.conversationId,
+                        latencyMs: complete.latencyMs,
+                        finishReason: complete.finishReason,
+                        fallbackUsed: complete.fallbackUsed,
+                        tokenUsage: message.metadata?.tokenUsage ?? complete.tokenUsage,
                       },
                     }
                   : message
@@ -426,6 +470,11 @@ export function ChatPage() {
                 </IconButton>
               </span>
             </Tooltip>
+            <Tooltip title="대화 목록">
+              <IconButton size="small" onClick={() => setConversationDrawerOpen(true)}>
+                <HistoryOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="답변 다시 생성">
               <span>
                 <IconButton size="small" onClick={() => void handleRegenerate()} disabled={!canRegenerate}>
@@ -489,16 +538,30 @@ export function ChatPage() {
         </DialogActions>
       </Dialog>
 
-      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ minHeight: 'calc(100vh - 170px)' }}>
+      <Drawer
+        anchor="right"
+        open={conversationDrawerOpen}
+        onClose={() => setConversationDrawerOpen(false)}
+        PaperProps={{
+          sx: {
+            width: { xs: "100%", sm: 380 },
+          },
+        }}
+      >
         <ConversationSidebar
+          drawer
           conversationId={conversationId}
           conversations={conversations}
           loading={loadingConversations}
           onOpen={(nextConversationId) => void handleOpenConversation(nextConversationId)}
           onDelete={(targetConversationId) => void handleDeleteConversation(targetConversationId)}
           onRefresh={() => void loadConversations()}
+          onClose={() => setConversationDrawerOpen(false)}
         />
-        <Paper elevation={0} sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      </Drawer>
+
+      <Stack sx={{ height: 'calc(100vh - 170px)', minHeight: 0 }}>
+        <Paper elevation={0} sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <ChatMessageList
             messages={visibleMessages}
             sending={sending}
@@ -521,6 +584,7 @@ export function ChatPage() {
             chatModeLabel={chatModeLabel}
             chatModeDescription={chatModeDescription}
             latencyMs={lastAssistantMessage?.metadata?.latencyMs}
+            tokenUsage={lastAssistantMessage?.metadata?.tokenUsage}
             inputHistory={inputHistory}
             onInputChange={setInput}
             onSubmit={() => void handleSend()}

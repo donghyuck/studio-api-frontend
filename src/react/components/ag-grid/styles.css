@@ -70,6 +70,11 @@
   padding: 0;
 }
 
+.react-grid-host .ag-selection-checkbox .ag-checkbox-input-wrapper {
+  display: inline-flex;
+  line-height: 1;
+}
+
 .react-grid-host .ag-cell[col-id="ag-Grid-SelectionColumn"] .ag-cell-wrapper,
 .react-grid-host .ag-cell[col-id="ag-Grid-SelectionColumn"] .ag-cell-value {
   justify-content: center;
@@ -82,8 +87,12 @@
 .react-grid-host .ag-header-cell.selection-column-centered .ag-header-cell-comp-wrapper,
 .react-grid-host .ag-header-cell.selection-column-centered .ag-header-select-all,
 .react-grid-host .ag-cell.selection-column-centered .ag-cell-wrapper,
-.react-grid-host .ag-cell.selection-column-centered .ag-cell-value {
+.react-grid-host .ag-cell.selection-column-centered .ag-cell-value,
+.react-grid-host .ag-cell.selection-column-centered .ag-react-container {
+  height: 100%;
   width: 100%;
+  display: flex;
+  align-items: center;
   justify-content: center;
 }
 
@@ -102,7 +111,31 @@
   flex: 0 0 auto;
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.react-grid-host .ag-cell.selection-column-centered .ag-react-container > .MuiBox-root,
+.react-grid-host .ag-header-cell.selection-column-centered .MuiBox-root {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.react-grid-host .ag-cell.selection-column-centered input[type="checkbox"],
+.react-grid-host .ag-header-cell.selection-column-centered input[type="checkbox"] {
+  display: block;
+  flex: 0 0 auto;
+  vertical-align: middle;
+}
+
+.react-grid-host input[type="checkbox"][aria-label="전체 선택"] {
+  vertical-align: middle;
+}
+
+.react-grid-host input[type="checkbox"][aria-label="행 선택"] {
+  vertical-align: middle;
 }
 
 .react-grid-host .ag-header-cell.id-column-centered .ag-header-cell-comp-wrapper,
