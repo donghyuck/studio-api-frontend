@@ -1,13 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  alpha,
-  Avatar,
-  Box,
   Button,
-  Card,
-  CardContent,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -15,7 +9,6 @@ import {
   IconButton,
   MenuItem,
   Paper,
-  Popover,
   Stack,
   Switch,
   TextField,
@@ -23,13 +16,9 @@ import {
   Typography,
 } from "@mui/material";
 import {
-  ArrowUpwardOutlined,
-  CheckOutlined,
-  ContentCopyOutlined,
   EditNoteOutlined,
-  ExpandMoreOutlined,
   SettingsOutlined,
-  SmartToyOutlined,
+  SyncOutlined,
 } from "@mui/icons-material";
 import { reactAiApi } from "@/react/pages/ai/api";
 import type {
@@ -39,13 +28,19 @@ import type {
 } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import type { ChatMessage, ConversationSummaryDto } from "@/react/pages/ai/components/chatTypes";
+import { ConversationSidebar } from "@/react/pages/ai/components/ConversationSidebar";
+import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
+import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
 
-type ChatMessage = ChatMessageDto & {
-  id?: string;
-  createdAt?: string;
-  model?: string;
-  metadata?: Record<string, unknown>;
-};
+const CHAT_INPUT_HISTORY_KEY = "ai_chat_input_history";
+
+function toRequestMessage(message: ChatMessage): ChatMessageDto {
+  return {
+    role: message.role,
+    content: message.content,
+  };
+}
 
 export function ChatPage() {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
@@ -53,24 +48,68 @@ export function ChatPage() {
   const [model, setModel] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [memoryEnabled, setMemoryEnabled] = useState(false);
-  const [conversationId, setConversationId] = useState(() =>
-    crypto.randomUUID(),
-  );
+  const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelAnchorEl, setModelAnchorEl] = useState<HTMLElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversations, setConversations] = useState<ConversationSummaryDto[]>([]);
+  const [loadingConversations, setLoadingConversations] = useState(false);
+  const [inputHistory, setInputHistory] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(CHAT_INPUT_HISTORY_KEY);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const [compactMode, setCompactMode] = useState(true);
+  const activeStreamIdRef = useRef<string | null>(null);
+  const activeConversationLoadIdRef = useRef<string | null>(null);
 
-  const providers = useMemo<ProviderInfo[]>(
-    () => aiInfo?.providers ?? [],
-    [aiInfo],
-  );
+  const providers = useMemo<ProviderInfo[]>(() => aiInfo?.providers ?? [], [aiInfo]);
   const selectedProvider = providers.find((item) => item.name === provider);
   const configurationMissing = !provider || !model;
   const serverMemoryEnabled = aiInfo?.chat?.memory?.enabled === true;
   const modelMenuOpen = Boolean(modelAnchorEl);
+  const chatModeLabel = memoryEnabled ? "서버 메모리" : "클라이언트 누적 전송";
+  const chatModeDescription = memoryEnabled
+    ? "conversationId 기준으로 서버가 이전 대화를 이어갑니다."
+    : "클라이언트가 지금까지의 대화 메시지를 함께 전송합니다.";
+  const shouldShowSummary = messages.length >= 8;
+  const lastAssistantMessage = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "assistant"),
+    [messages]
+  );
+  const regenerateConversationId =
+    lastAssistantMessage?.metadata?.conversationId ?? (memoryEnabled ? conversationId : undefined);
+  const canRegenerate = Boolean(regenerateConversationId && !sending && lastAssistantMessage);
+  const visibleMessages = useMemo(() => {
+    if (!compactMode || messages.length <= 6) {
+      return messages;
+    }
+    return messages.slice(-6);
+  }, [compactMode, messages]);
+  const collapsedMessageCount = Math.max(messages.length - visibleMessages.length, 0);
+  const summaryText = useMemo(() => {
+    if (!shouldShowSummary) {
+      return "";
+    }
+    const recentMessages = messages.slice(-6);
+    const lastUser = [...recentMessages].reverse().find((item) => item.role === "user")?.content;
+    const lastAssistant = [...recentMessages].reverse().find((item) => item.role === "assistant")?.content;
+    return [
+      `최근 메시지 ${recentMessages.length}개 기준`,
+      lastUser ? `사용자: ${lastUser.slice(0, 120)}` : "",
+      lastAssistant ? `Assistant: ${lastAssistant.slice(0, 160)}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }, [messages, shouldShowSummary]);
 
   useEffect(() => {
     reactAiApi
@@ -78,13 +117,31 @@ export function ChatPage() {
       .then((data) => {
         setAiInfo(data);
         setProvider(data.defaultProvider);
-        const match = data.providers.find(
-          (item) => item.name === data.defaultProvider,
-        );
+        const match = data.providers.find((item) => item.name === data.defaultProvider);
         setModel(match?.chat.model ?? "");
       })
       .catch((loadError) => setError(resolveAxiosError(loadError)));
   }, []);
+
+  useEffect(() => {
+    void loadConversations();
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(CHAT_INPUT_HISTORY_KEY, JSON.stringify(inputHistory.slice(0, 30)));
+  }, [inputHistory]);
+
+  async function loadConversations() {
+    setLoadingConversations(true);
+    try {
+      const list = await reactAiApi.listConversations();
+      setConversations(list);
+    } catch {
+      // ignore sidebar load failure
+    } finally {
+      setLoadingConversations(false);
+    }
+  }
 
   function handleProviderChange(nextProvider: string) {
     setProvider(nextProvider);
@@ -101,11 +158,51 @@ export function ChatPage() {
     handleModelMenuClose();
   }
 
+  async function handleOpenConversation(nextConversationId: string) {
+    activeStreamIdRef.current = null;
+    const loadId = crypto.randomUUID();
+    activeConversationLoadIdRef.current = loadId;
+    setSending(false);
+    try {
+      const detail = await reactAiApi.getConversation(nextConversationId);
+      if (activeConversationLoadIdRef.current !== loadId) return;
+      setConversationId(detail.conversationId);
+      setMessages(
+        (detail.messages ?? []).map((message) => ({
+          ...message,
+          id: message.messageId ?? crypto.randomUUID(),
+          createdAt: message.createdAt,
+        }))
+      );
+      setError(null);
+    } catch (loadError) {
+      if (activeConversationLoadIdRef.current !== loadId) return;
+      setError(resolveAxiosError(loadError));
+    } finally {
+      if (activeConversationLoadIdRef.current === loadId) {
+        activeConversationLoadIdRef.current = null;
+      }
+    }
+  }
+
+  async function handleDeleteConversation(targetConversationId: string) {
+    try {
+      await reactAiApi.deleteConversation(targetConversationId);
+      if (targetConversationId === conversationId) {
+        handleNewConversation();
+      }
+      await loadConversations();
+    } catch (deleteError) {
+      setError(resolveAxiosError(deleteError));
+    }
+  }
+
   async function handleSend() {
     const trimmed = input.trim();
-    if (!trimmed) {
+    if (!trimmed || sending || configurationMissing) {
       return;
     }
+
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: "user",
@@ -113,92 +210,205 @@ export function ChatPage() {
       createdAt: new Date().toISOString(),
     };
     const nextMessages: ChatMessage[] = [...messages, userMessage];
-    const requestMessages = memoryEnabled ? [userMessage] : nextMessages;
-    setMessages(nextMessages);
+    const requestMessages = (memoryEnabled ? [userMessage] : nextMessages).map(toRequestMessage);
+    const assistantMessageId = crypto.randomUUID();
+    const streamId = crypto.randomUUID();
+    activeStreamIdRef.current = streamId;
+    setInputHistory((current) => [trimmed, ...current.filter((item) => item !== trimmed)].slice(0, 30));
+    setHistoryIndex(-1);
+
+    setMessages([
+      ...nextMessages,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+        model,
+      },
+    ]);
     setInput("");
     setSending(true);
     setError(null);
+
     try {
-      const response = await reactAiApi.sendChat({
-        provider: provider || undefined,
-        model: model || undefined,
-        messages: requestMessages,
-        systemPrompt: systemPrompt.trim() || undefined,
-        memory: memoryEnabled ? { enabled: true, conversationId } : undefined,
-      });
-      const assistant = [...response.messages]
-        .reverse()
-        .find((item) => item.role === "assistant");
+      await reactAiApi.sendChatStream(
+        {
+          provider: provider || undefined,
+          model: model || undefined,
+          messages: requestMessages,
+          systemPrompt: systemPrompt.trim() || undefined,
+          memory: memoryEnabled ? { enabled: true, conversationId } : undefined,
+        },
+        {
+          onDelta: (payload) => {
+            if (activeStreamIdRef.current !== streamId) return;
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantMessageId
+                  ? { ...message, content: `${message.content}${payload.content ?? ""}` }
+                  : message
+              )
+            );
+          },
+          onUsage: (payload) => {
+            if (activeStreamIdRef.current !== streamId) return;
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantMessageId
+                  ? {
+                      ...message,
+                      metadata: {
+                        ...(message.metadata ?? {}),
+                        tokenUsage: payload,
+                      },
+                    }
+                  : message
+              )
+            );
+          },
+          onComplete: (payload) => {
+            if (activeStreamIdRef.current !== streamId) return;
+            if (payload.conversationId) {
+              setConversationId(payload.conversationId);
+            }
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantMessageId
+                  ? {
+                      ...message,
+                      model: payload.resolvedModel ?? model,
+                      metadata: {
+                        ...(message.metadata ?? {}),
+                        provider: payload.provider,
+                        resolvedModel: payload.resolvedModel,
+                        conversationId: payload.conversationId,
+                        latencyMs: payload.latencyMs,
+                        finishReason: payload.finishReason,
+                        fallbackUsed: payload.fallbackUsed,
+                      },
+                    }
+                  : message
+              )
+            );
+          },
+        }
+      );
+      if (activeStreamIdRef.current === streamId) {
+        await loadConversations();
+      }
+    } catch (sendError) {
+      if (activeStreamIdRef.current !== streamId) return;
+      const message = resolveAxiosError(sendError);
+      setError(message);
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === assistantMessageId
+            ? {
+                ...item,
+                content: `오류: ${message}`,
+                metadata: { ...(item.metadata ?? {}), finishReason: "error" },
+              }
+            : item
+        )
+      );
+    } finally {
+      if (activeStreamIdRef.current === streamId) {
+        activeStreamIdRef.current = null;
+        setSending(false);
+      }
+    }
+  }
+
+  async function handleRegenerate() {
+    if (!canRegenerate || !regenerateConversationId) return;
+    const requestId = crypto.randomUUID();
+    activeStreamIdRef.current = requestId;
+    setSending(true);
+    try {
+      const response = await reactAiApi.regenerate({ conversationId: regenerateConversationId });
+      if (activeStreamIdRef.current !== requestId) return;
+      const assistant = [...response.messages].reverse().find((item) => item.role === "assistant");
       if (assistant) {
+        const nextConversationId = response.metadata?.conversationId ?? response.conversationId;
+        if (nextConversationId) {
+          setConversationId(nextConversationId);
+        }
         setMessages((current) => [
           ...current,
           {
             ...assistant,
             id: crypto.randomUUID(),
-            model: response.model ?? model,
-            metadata: response.metadata,
             createdAt: new Date().toISOString(),
+            metadata: nextConversationId
+              ? { ...(response.metadata ?? {}), conversationId: nextConversationId }
+              : response.metadata,
+            model: response.metadata?.resolvedModel ?? model,
           },
         ]);
       }
-    } catch (sendError) {
-      const message = resolveAxiosError(sendError);
-      setError(message);
-      setMessages((current) => [
-        ...current,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: `오류: ${message}`,
-          model,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+      await loadConversations();
+    } catch (regenerateError) {
+      if (activeStreamIdRef.current !== requestId) return;
+      setError(resolveAxiosError(regenerateError));
     } finally {
-      setSending(false);
+      if (activeStreamIdRef.current === requestId) {
+        activeStreamIdRef.current = null;
+        setSending(false);
+      }
     }
   }
 
+  async function handleRetryLastUserMessage() {
+    const lastUser = [...messages].reverse().find((item) => item.role === "user");
+    if (!lastUser?.content) {
+      return;
+    }
+    setInput(lastUser.content);
+  }
+
   function handleNewConversation() {
+    activeStreamIdRef.current = null;
+    activeConversationLoadIdRef.current = null;
+    setSending(false);
     setConversationId(crypto.randomUUID());
     setMessages([]);
     setInput("");
     setError(null);
   }
 
-  function renderTokenUsage(metadata?: Record<string, unknown>) {
-    const usage = metadata?.tokenUsage as
-      | { inputTokens?: number; outputTokens?: number; totalTokens?: number }
-      | undefined;
-    if (!usage) return null;
-
-    return (
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ mt: 0.75, display: "block", fontSize: 11 }}
-      >
-        tokens · input {usage.inputTokens ?? "-"} · output{" "}
-        {usage.outputTokens ?? "-"} · total {usage.totalTokens ?? "-"}
-      </Typography>
-    );
-  }
-
-  function formatMessageTime(value?: string) {
-    if (!value) return "";
-    return new Date(value).toLocaleTimeString("ko-KR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
   async function handleCopyMessage(content: string) {
     await navigator.clipboard.writeText(content);
   }
 
-  function handleEditMessage(index: number, content: string) {
+  function handleEditMessage(messageId: string | undefined, content: string) {
     setInput(content);
-    setMessages((current) => current.slice(0, index));
+    setMessages((current) => {
+      const index = current.findIndex((message) => message.id === messageId);
+      return index >= 0 ? current.slice(0, index) : current;
+    });
+  }
+
+  function handleInputHistoryNavigation(direction: "prev" | "next") {
+    if (inputHistory.length === 0) {
+      return;
+    }
+
+    if (direction === "prev") {
+      const nextIndex = historyIndex + 1 >= inputHistory.length ? inputHistory.length - 1 : historyIndex + 1;
+      setHistoryIndex(nextIndex);
+      setInput(inputHistory[nextIndex] ?? "");
+      return;
+    }
+
+    const nextIndex = historyIndex - 1;
+    if (nextIndex < 0) {
+      setHistoryIndex(-1);
+      setInput("");
+      return;
+    }
+    setHistoryIndex(nextIndex);
+    setInput(inputHistory[nextIndex] ?? "");
   }
 
   return (
@@ -209,20 +419,17 @@ export function ChatPage() {
         label="Provider와 모델을 선택해 AI Chat 요청을 보냅니다."
         actions={
           <>
-            <Tooltip
-              title={
-                memoryEnabled
-                  ? "새 대화 시작"
-                  : "대화 기억을 켜면 새 대화를 시작할 수 있습니다"
-              }
-            >
+            <Tooltip title={memoryEnabled ? "새 대화 시작" : "대화 기억을 켜면 새 대화를 시작할 수 있습니다"}>
               <span>
-                <IconButton
-                  size="small"
-                  onClick={handleNewConversation}
-                  disabled={!memoryEnabled}
-                >
+                <IconButton size="small" onClick={handleNewConversation} disabled={!memoryEnabled}>
                   <EditNoteOutlined fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="답변 다시 생성">
+              <span>
+                <IconButton size="small" onClick={() => void handleRegenerate()} disabled={!canRegenerate}>
+                  <SyncOutlined fontSize="small" />
                 </IconButton>
               </span>
             </Tooltip>
@@ -236,436 +443,119 @@ export function ChatPage() {
       />
       {error ? <Alert severity="error">{error}</Alert> : null}
       {configurationMissing ? (
-        <Alert severity="warning">
-          AI Chat을 사용하려면 Provider와 Model 설정이 필요합니다. 상단 설정
-          아이콘을 눌러 사용할 provider와 모델을 선택하거나 입력하세요.
-        </Alert>
-      ) : null}
-      {memoryEnabled ? (
-        <Alert severity="info">
-          대화 기억 사용 중입니다. 새 대화를 시작하면 이전 대화와 분리됩니다.
-        </Alert>
+        <Alert severity="warning">AI Chat을 사용하려면 Provider와 Model 설정이 필요합니다. 상단 설정 아이콘을 눌러 사용할 provider와 모델을 선택하거나 입력하세요.</Alert>
       ) : null}
 
-      <Dialog
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: { borderRadius: 3 },
-          },
-        }}
-      >
+      <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="sm" fullWidth slotProps={{ paper: { sx: { borderRadius: 3 } } }}>
         <DialogTitle>AI 모델 설정</DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
-            <Alert severity="info">
-              Provider를 비우면 서버 기본 provider가 사용됩니다. System Prompt는
-              별도 systemPrompt 필드로 전송되며, 대화 메시지에는 사용자와
-              assistant 메시지만 유지됩니다.
-            </Alert>
             {serverMemoryEnabled ? (
-              <Alert severity="info">
-                서버가 conversationId 기반 대화 기억을 지원합니다. 켜면 이전
-                대화는 서버 메모리에서 이어지며, 클라이언트는 현재 턴 메시지만
-                전송합니다.
-              </Alert>
+              <Alert severity="info">서버가 conversationId 기반 대화 기억을 지원합니다.</Alert>
             ) : (
-              <Alert severity="warning">
-                서버에서 대화 기억 기능이 비활성화되어 있습니다.
-              </Alert>
+              <Alert severity="warning">서버에서 대화 기억 기능이 비활성화되어 있습니다.</Alert>
             )}
             <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField
-                select
-                label="Provider"
-                value={provider}
-                onChange={(event) => handleProviderChange(event.target.value)}
-                fullWidth
-                size="small"
-              >
+              <TextField select label="Provider" value={provider} onChange={(event) => handleProviderChange(event.target.value)} fullWidth size="small">
                 {providers.map((item) => (
                   <MenuItem key={item.name} value={item.name}>
                     <Stack spacing={0}>
                       <Typography variant="body2">{item.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        chat: {item.chat.enabled ? item.chat.model : "disabled"}
-                      </Typography>
+                      <Typography variant="caption" color="text.secondary">chat: {item.chat.enabled ? item.chat.model : "disabled"}</Typography>
                     </Stack>
                   </MenuItem>
                 ))}
               </TextField>
-              <TextField
-                label="Model"
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
-                fullWidth
-                size="small"
-              />
+              <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth size="small" />
             </Stack>
             {selectedProvider ? (
               <Typography variant="caption" color="text.secondary">
-                Embedding:{" "}
-                {selectedProvider.embedding.enabled
-                  ? selectedProvider.embedding.model
-                  : "disabled"}
-                {aiInfo?.vector.available
-                  ? ` · Vector: ${aiInfo.vector.implementation}`
-                  : " · Vector: unavailable"}
+                Embedding: {selectedProvider.embedding.enabled ? selectedProvider.embedding.model : "disabled"}
+                {aiInfo?.vector.available ? ` · Vector: ${aiInfo.vector.implementation}` : " · Vector: unavailable"}
               </Typography>
             ) : null}
-            <TextField
-              label="System Prompt"
-              value={systemPrompt}
-              onChange={(event) => setSystemPrompt(event.target.value)}
-              multiline
-              minRows={2}
-              size="small"
-              fullWidth
-            />
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1}
-              alignItems={{ sm: "center" }}
-            >
+            <TextField label="System Prompt" value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} multiline minRows={2} size="small" fullWidth />
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
               <Stack spacing={0} sx={{ flex: 1 }}>
                 <Typography variant="body2">대화 기억</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {memoryEnabled
-                    ? `사용 중 · ${conversationId}`
-                    : "사용하지 않음"}
-                </Typography>
+                <Typography variant="caption" color="text.secondary">{memoryEnabled ? `사용 중 · ${conversationId}` : "사용하지 않음"}</Typography>
               </Stack>
-              <Switch
-                checked={memoryEnabled}
-                disabled={!serverMemoryEnabled}
-                onChange={(event) => setMemoryEnabled(event.target.checked)}
-              />
+              <Switch checked={memoryEnabled} disabled={!serverMemoryEnabled} onChange={(event) => setMemoryEnabled(event.target.checked)} />
             </Stack>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button variant="outlined" onClick={() => setSettingsOpen(false)}>
-            닫기
-          </Button>
+          <Button variant="outlined" onClick={() => setSettingsOpen(false)}>닫기</Button>
         </DialogActions>
       </Dialog>
 
-      <Paper
-        elevation={0}
-        sx={{
-          minHeight: "calc(100vh - 170px)",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <Box sx={{ flex: 1, overflowY: "auto", px: { xs: 1, md: 8 }, py: 3 }}>
-          <Stack spacing={2}>
-            {messages.length === 0 ? (
-              <Stack
-                spacing={1}
-                alignItems="center"
-                justifyContent="center"
-                sx={{ minHeight: 260 }}
-              >
-                <Avatar sx={{ bgcolor: "primary.main" }}>
-                  <SmartToyOutlined />
-                </Avatar>
-                <Typography color="text.secondary">
-                  메시지를 입력해 AI와 대화를 시작하세요.
-                </Typography>
-              </Stack>
-            ) : (
-              messages.map((message, index) => (
-                <Stack
-                  key={`${message.role}-${index}`}
-                  direction="row"
-                  justifyContent={
-                    message.role === "user" ? "flex-end" : "flex-start"
-                  }
-                  sx={{
-                    "& .user-message-actions": {
-                      opacity: 0,
-                      transition: "opacity 120ms ease",
-                    },
-                    "&:hover .user-message-actions": {
-                      opacity: 1,
-                    },
-                  }}
-                >
-                  <Stack
-                    spacing={0.5}
-                    alignItems={
-                      message.role === "user" ? "flex-end" : "flex-start"
-                    }
-                    sx={{ width: "100%" }}
-                  >
-                    <Box
-                      sx={{
-                        maxWidth: {
-                          xs: "92%",
-                          md: message.role === "user" ? "86%" : "72%",
-                        },
-                        px: message.role === "user" ? 1.75 : 2,
-                        py: message.role === "user" ? 1 : 1.5,
-                        borderRadius:
-                          message.role === "user" ? 2 : "18px 18px 18px 4px",
-                        bgcolor:
-                          message.role === "user"
-                            ? (theme) => alpha(theme.palette.info.main, theme.palette.mode === "dark" ? 0.18 : 0.1)
-                            : "background.paper",
-                        color:
-                          message.role === "user"
-                            ? "info.main"
-                            : "text.primary",
-                        border: "none",
-                        boxShadow:
-                          message.role === "user"
-                            ? (theme) => `0 1px 2px ${alpha(theme.palette.common.black, theme.palette.mode === "dark" ? 0.28 : 0.08)}`
-                            : "none",
-                      }}
-                    >
-                      {message.role === "assistant" ? (
-                        <Typography variant="caption" color="text.secondary">
-                          Assistant{message.model ? ` · ${message.model}` : ""}
-                        </Typography>
-                      ) : null}
-                      <Typography
-                        sx={{
-                          whiteSpace: "pre-wrap",
-                          overflowWrap: "anywhere",
-                          fontSize: message.role === "assistant" ? 13 : 14,
-                        }}
-                      >
-                        {message.content}
-                      </Typography>
-                      {message.role === "assistant"
-                        ? renderTokenUsage(message.metadata)
-                        : null}
-                    </Box>
-                    {message.role === "user" ? (
-                      <Stack
-                        className="user-message-actions"
-                        direction="row"
-                        spacing={0.5}
-                        alignItems="center"
-                        sx={{ pr: 0.5 }}
-                      >
-                        <Typography variant="caption" color="text.secondary">
-                          {formatMessageTime(message.createdAt)}
-                        </Typography>
-                        <Tooltip title="복사">
-                          <IconButton
-                            size="small"
-                            onClick={() =>
-                              void handleCopyMessage(message.content)
-                            }
-                          >
-                            <ContentCopyOutlined fontSize="inherit" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="편집">
-                          <IconButton
-                            size="small"
-                            onClick={() =>
-                              handleEditMessage(index, message.content)
-                            }
-                          >
-                            <EditNoteOutlined fontSize="inherit" />
-                          </IconButton>
-                        </Tooltip>
-                      </Stack>
-                    ) : null}
-                  </Stack>
-                </Stack>
-              ))
-            )}
-            {sending ? (
-              <Stack direction="row" justifyContent="flex-start">
-                <Box
-                  sx={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1,
-                    p: 1.5,
-                    borderRadius: 2,
-                    bgcolor: "background.paper",
-                    border: "1px solid",
-                    borderColor: "divider",
-                  }}
-                >
-                  <CircularProgress size={16} />
-                  <Typography variant="body2" color="text.secondary">
-                    응답 생성 중...
-                  </Typography>
-                </Box>
-              </Stack>
-            ) : null}
-          </Stack>
-        </Box>
-        <Box sx={{ px: { xs: 1, md: 6 }, pb: 2 }}>
-          <Card
-            variant="outlined"
-            sx={{
-              borderRadius: 3,
-              bgcolor: "background.paper",
-              boxShadow: (theme) =>
-                `0 8px 28px ${alpha(theme.palette.common.black, theme.palette.mode === "dark" ? 0.28 : 0.08)}`,
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ minHeight: 'calc(100vh - 170px)' }}>
+        <ConversationSidebar
+          conversationId={conversationId}
+          conversations={conversations}
+          loading={loadingConversations}
+          onOpen={(nextConversationId) => void handleOpenConversation(nextConversationId)}
+          onDelete={(targetConversationId) => void handleDeleteConversation(targetConversationId)}
+          onRefresh={() => void loadConversations()}
+        />
+        <Paper elevation={0} sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <ChatMessageList
+            messages={visibleMessages}
+            sending={sending}
+            collapsedMessageCount={collapsedMessageCount}
+            summaryText={summaryText}
+            summaryVisible={shouldShowSummary}
+            onToggleSummary={() => setCompactMode((current) => !current)}
+            onCopy={(content) => void handleCopyMessage(content)}
+            onEditUser={handleEditMessage}
+            onRegenerate={() => void handleRegenerate()}
+            onRetryLastUser={() => void handleRetryLastUserMessage()}
+          />
+          <ChatComposer
+            input={input}
+            sending={sending}
+            configurationMissing={configurationMissing}
+            model={model}
+            provider={provider}
+            conversationId={conversationId}
+            chatModeLabel={chatModeLabel}
+            chatModeDescription={chatModeDescription}
+            latencyMs={lastAssistantMessage?.metadata?.latencyMs}
+            inputHistory={inputHistory}
+            onInputChange={setInput}
+            onSubmit={() => void handleSend()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                void handleSend();
+                return;
+              }
+              if (event.key === 'ArrowUp' && !event.shiftKey && !input.trim()) {
+                event.preventDefault();
+                handleInputHistoryNavigation("prev");
+                return;
+              }
+              if (event.key === 'ArrowDown' && !event.shiftKey && historyIndex >= 0) {
+                event.preventDefault();
+                handleInputHistoryNavigation("next");
+              }
             }}
-          >
-            <CardContent sx={{ p: 1.5, "&:last-child": { pb: 1.5 } }}>
-              <Stack spacing={1}>
-                <TextField
-                  value={input}
-                  onChange={(event) => setInput(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (
-                      event.key === "Enter" &&
-                      (event.ctrlKey || event.metaKey)
-                    ) {
-                      void handleSend();
-                    }
-                  }}
-                  placeholder="답글..."
-                  multiline
-                  minRows={2}
-                  maxRows={6}
-                  fullWidth
-                  variant="standard"
-                  InputProps={{ disableUnderline: true }}
-                />
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Box sx={{ flex: 1 }} />
-                  <Tooltip title="모델 선택">
-                    <Button
-                      size="small"
-                      variant="text"
-                      endIcon={<ExpandMoreOutlined fontSize="small" />}
-                      onClick={(event) => setModelAnchorEl(event.currentTarget)}
-                      sx={{
-                        color: "text.primary",
-                        px: 1,
-                        minWidth: 0,
-                        "&:hover": { bgcolor: "action.hover" },
-                      }}
-                    >
-                      {model || "모델 설정"}
-                    </Button>
-                  </Tooltip>
-                  <Tooltip title="보내기">
-                    <span>
-                      <IconButton
-                        color="primary"
-                        onClick={() => void handleSend()}
-                        disabled={
-                          sending || !input.trim() || configurationMissing
-                        }
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          bgcolor: "primary.main",
-                          color: "primary.contrastText",
-                          "&:hover": { bgcolor: "primary.dark" },
-                          "&.Mui-disabled": {
-                            bgcolor: "action.disabledBackground",
-                            color: "action.disabled",
-                          },
-                        }}
-                      >
-                        <ArrowUpwardOutlined fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                </Stack>
-              </Stack>
-            </CardContent>
-          </Card>
-          <Popover
-            open={modelMenuOpen}
-            anchorEl={modelAnchorEl}
-            onClose={handleModelMenuClose}
-            anchorOrigin={{ vertical: "top", horizontal: "right" }}
-            transformOrigin={{ vertical: "bottom", horizontal: "right" }}
-            PaperProps={{
-              sx: {
-                width: 360,
-                borderRadius: 2,
-                p: 1,
-                mb: 1,
-              },
+            onOpenModelMenu={(event) => setModelAnchorEl(event.currentTarget)}
+            modelMenuOpen={modelMenuOpen}
+            modelAnchorEl={modelAnchorEl}
+            providers={providers}
+            onCloseModelMenu={handleModelMenuClose}
+            onSelectProvider={(nextProvider) => handleModelSelect(nextProvider)}
+            onOpenSettings={() => {
+              handleModelMenuClose();
+              setSettingsOpen(true);
             }}
-          >
-            <Stack spacing={0.5}>
-              {providers
-                .filter((item) => item.chat.enabled)
-                .map((item) => {
-                  const selected = item.name === provider;
-                  return (
-                    <Button
-                      key={item.name}
-                      variant="text"
-                      onClick={() => handleModelSelect(item.name)}
-                      sx={{
-                        justifyContent: "space-between",
-                        textAlign: "left",
-                        color: "text.primary",
-                        px: 1.5,
-                        py: 1,
-                      }}
-                    >
-                      <Box>
-                        <Typography variant="body2">
-                          {item.chat.model || item.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {item.name}
-                        </Typography>
-                      </Box>
-                      {selected ? (
-                        <CheckOutlined color="primary" fontSize="small" />
-                      ) : null}
-                    </Button>
-                  );
-                })}
-              <Button
-                variant="text"
-                onClick={() => {
-                  handleModelMenuClose();
-                  setSettingsOpen(true);
-                }}
-                sx={{
-                  justifyContent: "space-between",
-                  color: "text.primary",
-                  px: 1.5,
-                  py: 1,
-                }}
-              >
-                <Box>
-                  <Typography variant="body2">더 많은 모델</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    provider와 model을 직접 설정합니다.
-                  </Typography>
-                </Box>
-                <ExpandMoreOutlined
-                  fontSize="small"
-                  sx={{ transform: "rotate(-90deg)" }}
-                />
-              </Button>
-            </Stack>
-          </Popover>
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            display="block"
-            textAlign="center"
-            sx={{ mt: 1 }}
-          >
-            AI는 실수할 수 있습니다. 중요한 결과는 다시 확인하세요.
-          </Typography>
-        </Box>
-      </Paper>
+            onSelectHistory={(value) => {
+              setInput(value);
+              setHistoryIndex(-1);
+            }}
+          />
+        </Paper>
+      </Stack>
     </Stack>
   );
 }

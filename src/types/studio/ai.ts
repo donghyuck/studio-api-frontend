@@ -1,8 +1,10 @@
 export type Role = "system" | "user" | "assistant";
 
 export interface ChatMessageDto {
+  messageId?: string;
   role: Role;
   content: string;
+  createdAt?: string;
 }
 
 export interface ChatRequestDto {
@@ -24,9 +26,24 @@ export interface ChatMemoryOptionsDto {
 }
 
 export interface ChatResponseDto {
+  conversationId?: string;
   messages: ChatMessageDto[];
   model?: string;
-  metadata?: Record<string, any>;
+  metadata?: ChatResponseMetadataDto;
+}
+
+export interface ChatResponseMetadataDto {
+  provider?: string;
+  resolvedModel?: string;
+  tokenUsage?: TokenUsageDto;
+  latencyMs?: number;
+  memoryUsed?: boolean;
+  conversationId?: string;
+  memoryEnabled?: boolean;
+  memoryMessageCount?: number;
+  responseId?: string;
+  finishReason?: string;
+  [key: string]: unknown;
 }
 
 export interface ChatRagRequestDto {
@@ -79,6 +96,43 @@ export interface ChatMemoryInfo {
   readonly maxMessages?: number;
   readonly maxConversations?: number;
   readonly ttl?: string;
+}
+
+export interface ChatStreamDeltaEventDto {
+  content?: string;
+}
+
+export type ChatStreamUsageEventDto = TokenUsageDto;
+
+export interface ChatStreamCompleteEventDto {
+  requestId?: string;
+  provider?: string;
+  resolvedModel?: string;
+  conversationId?: string;
+  latencyMs?: number;
+  fallbackUsed?: boolean;
+  finishReason?: string;
+}
+
+export interface ConversationSummaryDto {
+  conversationId: string;
+  title?: string;
+  summary?: string;
+  messageCount?: number;
+  lastUpdatedAt?: string;
+}
+
+export interface ConversationDetailDto extends ConversationSummaryDto {
+  messages: ChatMessageDto[];
+}
+
+export interface ConversationDeleteResponseDto {
+  conversationId: string;
+  deleted: boolean;
+}
+
+export interface RegenerateRequestDto {
+  conversationId: string;
 }
 
 export interface AclActionMaskDto {

@@ -50,7 +50,7 @@ function formatDate(value?: Date | string | null) {
 function normalizeExtractedText(value: string) {
   return value
     .replace(/\r\n?/g, "\n")
-    .replace(/\u0000/g, "")
+    .replaceAll(String.fromCharCode(0), "")
     .replace(/\f/g, "\n\n")
     .trim();
 }
