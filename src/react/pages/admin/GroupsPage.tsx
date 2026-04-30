@@ -19,11 +19,15 @@ import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import type { GroupDto } from "@/react/pages/admin/datasource";
 import { GroupsDataSource } from "@/react/pages/admin/datasource";
+import { reactGroupsApi } from "@/react/pages/admin/groups/api";
 import { GroupDialog } from "@/react/pages/admin/groups/GroupDialog";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import { useConfirm, useToast } from "@/react/feedback";
 
 export function GroupsPage() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const toast = useToast();
   const gridRef = useRef<PageableGridContentHandle<GroupDto>>(null);
   const dataSource = useMemo(() => new GroupsDataSource(), []);
   const [searchInput, setSearchInput] = useState("");
@@ -42,6 +46,7 @@ export function GroupsPage() {
           <Box
             component="button"
             type="button"
+            aria-label={`${params.value} 상세보기`}
             onClick={() => navigate(`/admin/groups/${params.data?.groupId}`)}
             sx={{
               border: 0,
@@ -67,7 +72,7 @@ export function GroupsPage() {
       },
       {
         field: "memberCount",
-        headerName: "맴버",
+        headerName: "멤버",
         filter: false,
         sortable: false,
         flex: 0.4,
@@ -91,26 +96,34 @@ export function GroupsPage() {
       },
       {
         colId: "actions",
-        headerName: "",
+        headerName: "작업",
         filter: false,
         sortable: false,
-        flex: 0.65,
-        minWidth: 132,
+        width: 112,
+        minWidth: 112,
+        maxWidth: 112,
+        pinned: "right",
+        cellStyle: { display: "flex", alignItems: "center", justifyContent: "center" },
         cellRenderer: (params: ICellRendererParams<GroupDto>) => (
           <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
-            <Tooltip title="멤버 관리는 아직 연결되지 않았습니다.">
+            <Tooltip title="멤버 관리">
               <IconButton
                 size="small"
-                disabled
+                aria-label="멤버 관리"
+                onClick={() =>
+                  params.data?.groupId &&
+                  navigate(`/admin/groups/${params.data.groupId}`, { state: { openMembers: true } })
+                }
               >
                 <GroupOutlined fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Tooltip title="그룹 삭제는 아직 연결되지 않았습니다.">
+            <Tooltip title="삭제">
               <IconButton
                 size="small"
                 color="error"
-                disabled
+                aria-label="삭제"
+                onClick={() => params.data && void handleDeleteGroup(params.data)}
               >
                 <DeleteOutlined fontSize="small" />
               </IconButton>
@@ -118,6 +131,7 @@ export function GroupsPage() {
             <Tooltip title="상세보기">
               <IconButton
                 size="small"
+                aria-label="상세보기"
                 onClick={() => navigate(`/admin/groups/${params.data?.groupId}`)}
               >
                 <ChevronRight fontSize="small" />
@@ -145,6 +159,26 @@ export function GroupsPage() {
     gridRef.current?.refresh();
   };
 
+  async function handleDeleteGroup(group: GroupDto) {
+    const ok = await confirm({
+      title: "그룹 삭제",
+      message: `${group.name} 그룹을 삭제하시겠습니까?`,
+      okText: "삭제",
+      cancelText: "취소",
+    });
+    if (!ok) {
+      return;
+    }
+
+    try {
+      await reactGroupsApi.deleteGroup(group.groupId);
+      toast.success("그룹이 삭제되었습니다.");
+      gridRef.current?.refresh();
+    } catch {
+      toast.error("그룹 삭제에 실패했습니다.");
+    }
+  }
+
   return (
     <Stack spacing={0.5}>
       <PageToolbar
@@ -157,8 +191,8 @@ export function GroupsPage() {
         onSearchValueChange={setSearchInput}
         onSearch={handleSearch}
         actions={
-          <Tooltip title="새로운 그룹을 생성합니다.">
-            <IconButton size="small" onClick={() => setCreateOpen(true)}>
+          <Tooltip title="그룹 생성">
+            <IconButton size="small" aria-label="그룹 생성" onClick={() => setCreateOpen(true)}>
               <GroupAddOutlined fontSize="small" />
             </IconButton>
           </Tooltip>

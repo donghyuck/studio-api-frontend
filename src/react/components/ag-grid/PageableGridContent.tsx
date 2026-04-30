@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTheme } from "@mui/material/styles";
 import type {
   ColDef,
   GridApi,
@@ -19,6 +20,7 @@ import type {
 import { AgGridReact } from "ag-grid-react";
 import { toast } from "@/react/feedback";
 import { defaultGridOptions } from "@/react/components/ag-grid/gridOptions";
+import { createAgGridTheme } from "@/react/components/ag-grid/theme";
 import type {
   AgGridCompatibleDataSource,
   PageableGridContentHandle,
@@ -55,6 +57,7 @@ function PageableGridContentInner<TData = unknown>(
   }: PageableGridContentProps<TData>,
   ref: React.ForwardedRef<PageableGridContentHandle<TData>>
 ) {
+  const muiTheme = useTheme();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridApiRef = useRef<GridApi<TData> | null>(null);
   const [gridHeight, setGridHeight] = useState(height ?? 400);
@@ -73,6 +76,7 @@ function PageableGridContentInner<TData = unknown>(
     () => normalizeRowSelection(rowSelection),
     [rowSelection]
   );
+  const agGridTheme = useMemo(() => createAgGridTheme(muiTheme), [muiTheme]);
 
   const columnDefs = useMemo<ColDef<TData>[]>(
     () =>
@@ -215,12 +219,13 @@ function PageableGridContentInner<TData = unknown>(
   return (
     <div
       ref={containerRef}
-      className="ag-theme-material react-grid-host"
+      className="react-grid-host"
       style={{ width: "100%", height: gridHeight }}
     >
       <AgGridReact<TData>
         rowModelType={effectiveRowModelType}
         gridOptions={gridOptions}
+        theme={agGridTheme}
         rowSelection={normalizedRowSelection}
         columnDefs={columnDefs}
         pagination

@@ -33,6 +33,8 @@ export const reactGroupsApi = {
     apiRequest<GroupDto>("put", `/api/mgmt/groups/${groupId}`, { data: payload }),
   createGroup: (payload: { name: string; description?: string }) =>
     apiRequest<GroupDto>("post", "/api/mgmt/groups", { data: payload }),
+  deleteGroup: (groupId: number) =>
+    apiRequest<void>("delete", `/api/mgmt/groups/${groupId}`),
   getMemberSummaries: (
     groupId: number,
     params?: { q?: string; page?: number; size?: number; sort?: string }

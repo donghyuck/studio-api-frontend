@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-04-28
+
+### Changed
+
+- AI RAG management now uses a job-list-first screen with `sourceName` document display and a dedicated job detail route for logs, chunks, and metadata.
+- AI RAG management now exposes the chunking simulation dialog from the job list toolbar.
+- AI RAG job list and detail pages now follow the admin users list/detail layout pattern with icon-only list actions and right-side detail contents navigation.
+- AI RAG job list status chips now include status icons so failed and warning jobs are distinguishable beyond background color.
+- AI RAG job detail now renders the indexed chunk result grid directly instead of hiding it behind an accordion.
+- AI RAG job detail chunk grid now follows the ACL entry grid pattern with a section header, taller grid, and row tooltips.
+- AI RAG job detail summary now shows the chunking strategy, falling back to chunk metadata when the job response does not include explicit chunking fields.
+- AI RAG search validation now lives on the job list page and runs against the selected job scope, while the job detail page focuses on progress, chunks, logs, and metadata.
+- AI RAG job detail summary now includes a progress stepper for pending, extraction, chunking, embedding, indexing, and completion states.
+- AI RAG job detail now shows selected chunk details in a structured inspector with content, provenance, chunk links, embedding fields, and collapsed raw metadata.
+- AI RAG job detail no longer shows a separate object metadata section because selected chunk metadata is available in the chunk inspector.
+- AI RAG job detail now shows failure and warning logs as a direct grid section instead of an accordion.
+- AI RAG job detail chunk review now uses compact provenance, length quality bars, a smaller status chip, a two-column chunk inspector, image-caption cues, and a selected-chunk similarity test action.
+
+### Verification
+
+- AI RAG job list/detail split: `npm run typecheck`
+- AI RAG job list/detail split: `npm run lint`
+- AI RAG job list/detail split: `npm run build`
+- AI RAG chunking simulation dialog: `npm run typecheck`
+- AI RAG chunking simulation dialog: `npm run lint`
+- AI RAG admin-users layout alignment: `npm run typecheck`
+- AI RAG admin-users layout alignment: `npm run lint`
+- AI RAG status icon chips: `npm run typecheck`
+- AI RAG status icon chips: `npm run lint`
+- AI RAG direct chunk grid detail: `npm run typecheck`
+- AI RAG chunk grid ACL-entry alignment: `npm run typecheck`
+- AI RAG chunk grid ACL-entry alignment: `npm run lint`
+- AI RAG chunking strategy summary: `npm run typecheck`
+- AI RAG search validation list move and detail stepper: `npm run typecheck`
+- AI RAG search validation list move and detail stepper: `npm run lint`
+- AI RAG chunk detail inspector: `npm run typecheck`
+- AI RAG chunk detail inspector: `npm run lint`
+- AI RAG detail metadata section removal: `npm run typecheck`
+- AI RAG detail metadata section removal: `npm run lint`
+- AI RAG direct failure and warning log grid: `npm run typecheck`
+- AI RAG direct failure and warning log grid: `npm run lint`
+- AI RAG chunk review efficiency UI: `npm run typecheck`
+- AI RAG chunk review efficiency UI: `npm run lint`
+
 ## 2026-04-13
 
 ### Changed

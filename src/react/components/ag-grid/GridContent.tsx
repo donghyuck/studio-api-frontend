@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTheme } from "@mui/material/styles";
 import type {
   ColDef,
   FilterChangedEvent,
@@ -17,6 +18,7 @@ import type {
 } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 import { defaultGridOptions } from "@/react/components/ag-grid/gridOptions";
+import { createAgGridTheme } from "@/react/components/ag-grid/theme";
 import type {
   GridContentHandle,
   GridContentProps,
@@ -34,6 +36,7 @@ function GridContentInner<TData = unknown>(
     events,
     rowSelection,
     rowData,
+    loading,
     autoResize,
     height,
     onFilterActived,
@@ -41,6 +44,7 @@ function GridContentInner<TData = unknown>(
   }: GridContentProps<TData>,
   ref: React.ForwardedRef<GridContentHandle<TData>>
 ) {
+  const muiTheme = useTheme();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const gridApiRef = useRef<GridApi<TData> | null>(null);
   const reservedScrollIndexRef = useRef(0);
@@ -57,6 +61,7 @@ function GridContentInner<TData = unknown>(
     () => normalizeRowSelection(rowSelection),
     [rowSelection]
   );
+  const agGridTheme = useMemo(() => createAgGridTheme(muiTheme), [muiTheme]);
 
   const resizeGrid = useCallback(() => {
     if (!containerRef.current) {
@@ -109,6 +114,28 @@ function GridContentInner<TData = unknown>(
   }, [rowData]);
 
   useEffect(() => {
+    gridApiRef.current?.setGridOption("loading", Boolean(loading));
+  }, [loading]);
+
+  useEffect(() => {
+    const gridApi = gridApiRef.current;
+    if (!gridApi) {
+      return;
+    }
+
+    if (loading) {
+      gridApi.hideOverlay();
+      return;
+    }
+
+    if (rowData.length > 0) {
+      gridApi.hideOverlay();
+    } else {
+      gridApi.showNoRowsOverlay();
+    }
+  }, [loading, rowData]);
+
+  useEffect(() => {
     if (!shouldAutoResize) {
       return;
     }
@@ -148,14 +175,16 @@ function GridContentInner<TData = unknown>(
   return (
     <div
       ref={containerRef}
-      className="ag-theme-material react-grid-host"
+      className="react-grid-host"
       style={{ width: "100%", height: gridHeight }}
     >
       <AgGridReact<TData>
         gridOptions={gridOptions}
+        theme={agGridTheme}
         rowSelection={normalizedRowSelection}
         columnDefs={columnDefs}
         rowData={rowData}
+        loading={loading}
         onRowSelected={onRowSelected}
         onFilterChanged={handleFilterChanged}
         onSelectionChanged={handleSelectionChanged}

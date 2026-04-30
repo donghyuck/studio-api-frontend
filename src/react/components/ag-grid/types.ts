@@ -18,6 +18,7 @@ export interface GridContentProps<TData = unknown> {
   events?: GridEventListener[];
   rowSelection?: RowSelectionOptions<TData> | "single" | "multiple";
   rowData: TData[];
+  loading?: boolean;
   autoResize?: boolean;
   height?: number;
   onFilterActived?: (active: boolean) => void;

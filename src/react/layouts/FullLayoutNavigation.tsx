@@ -1,4 +1,5 @@
 import {
+  alpha,
   Box,
   List,
   ListItemButton,
@@ -117,6 +118,11 @@ export function buildNavSections(): NavSection[] {
           icon: <PsychologyAltOutlined fontSize="small" />,
         },
         {
+          label: "AI RAG Chat",
+          path: "/services/ai/rag-chat",
+          icon: <PsychologyAltOutlined fontSize="small" />,
+        },
+        {
           label: "AI RAG",
           path: "/services/ai/rag",
           icon: <TopicOutlined fontSize="small" />,
@@ -162,8 +168,8 @@ export function FullLayoutNavigation({
         height: "100%",
         display: "flex",
         flexDirection: "column",
-        bgcolor: "#ffffff",
-        color: "#1f2937",
+        bgcolor: "background.paper",
+        color: "text.primary",
       }}
     >
       <Box sx={{ flex: 1, overflowY: "auto", py: 2 }}>
@@ -184,11 +190,11 @@ export function FullLayoutNavigation({
                   px: 0,
                   py: 0.5,
                   justifyContent: "space-between",
-                  color: "#111827",
+                  color: "text.primary",
                   bgcolor: "transparent",
                   "&:hover": {
                     bgcolor: "transparent",
-                    color: "#2563eb",
+                    color: "primary.main",
                   },
                 }}
               >
@@ -218,7 +224,8 @@ export function FullLayoutNavigation({
                 ml: 0,
                 pl: collapsed ? 0 : 1.5,
                 pr: 0,
-                borderLeft: collapsed ? "none" : "1px solid rgba(148,163,184,0.45)",
+                borderLeft: collapsed ? "none" : "1px solid",
+                borderColor: "divider",
                 display: collapsed || expandedSections[section.title] ? "block" : "none",
               }}
             >
@@ -238,18 +245,18 @@ export function FullLayoutNavigation({
                       py: 0.25,
                       ml: -0.5,
                       justifyContent: collapsed ? "center" : "flex-start",
-                      color: active ? "#2563eb" : "#4b5563",
+                      color: active ? "primary.main" : "text.secondary",
                       "&.Mui-selected": {
                         bgcolor: "transparent",
-                        color: "#2563eb",
+                        color: "primary.main",
                         fontWeight: 700,
                       },
                       "&.Mui-selected:hover": {
-                        bgcolor: "rgba(37,99,235,0.06)",
+                        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
                       },
                       "&:hover": {
-                        bgcolor: "rgba(37,99,235,0.06)",
-                        color: "#2563eb",
+                        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
+                        color: "primary.main",
                       },
                     }}
                   >

@@ -8,6 +8,7 @@ import { java } from "@codemirror/lang-java";
 import { markdown } from "@codemirror/lang-markdown";
 import { json } from "@codemirror/lang-json";
 import {
+  alpha,
   Box,
   FormControl,
   FormControlLabel,
@@ -17,6 +18,7 @@ import {
   Switch,
   Typography,
 } from "@mui/material";
+import { useTheme, type Theme as MuiTheme } from "@mui/material/styles";
 import type { Extension } from "@codemirror/state";
 
 export type EditorLanguage =
@@ -38,8 +40,64 @@ const LANGUAGE_OPTIONS: { value: EditorLanguage; label: string }[] = [
   { value: "text", label: "Plain Text" },
 ];
 
-function getExtensions(language: EditorLanguage, wordWrap: boolean): Extension[] {
-  const langExt: Extension[] = [];
+function getEditorTheme(theme: MuiTheme): Extension {
+  const dark = theme.palette.mode === "dark";
+
+  return EditorView.theme(
+    {
+      "&": {
+        color: theme.palette.text.primary,
+        backgroundColor: theme.palette.background.paper,
+      },
+      ".cm-content": {
+        color: theme.palette.text.primary,
+        caretColor: theme.palette.primary.main,
+      },
+      ".cm-line": {
+        color: theme.palette.text.primary,
+      },
+      ".cm-gutters": {
+        color: theme.palette.text.secondary,
+        backgroundColor: dark
+          ? alpha(theme.palette.common.black, 0.16)
+          : theme.palette.grey[50],
+        borderRightColor: theme.palette.divider,
+      },
+      ".cm-activeLine": {
+        backgroundColor: dark
+          ? alpha(theme.palette.primary.main, 0.12)
+          : alpha(theme.palette.primary.main, 0.06),
+      },
+      ".cm-activeLineGutter": {
+        color: theme.palette.text.primary,
+        backgroundColor: dark
+          ? alpha(theme.palette.primary.main, 0.16)
+          : alpha(theme.palette.primary.main, 0.08),
+      },
+      ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
+        backgroundColor: dark
+          ? alpha(theme.palette.primary.light, 0.35)
+          : alpha(theme.palette.primary.main, 0.22),
+      },
+      ".cm-cursor": {
+        borderLeftColor: theme.palette.primary.main,
+      },
+      ".cm-tooltip": {
+        color: theme.palette.text.primary,
+        backgroundColor: theme.palette.background.paper,
+        borderColor: theme.palette.divider,
+      },
+    },
+    { dark }
+  );
+}
+
+function getExtensions(
+  language: EditorLanguage,
+  wordWrap: boolean,
+  theme: MuiTheme
+): Extension[] {
+  const langExt: Extension[] = [getEditorTheme(theme)];
   switch (language) {
     case "html":
       langExt.push(html());
@@ -79,6 +137,7 @@ export function TemplateCodeEditor({
   language,
   onLanguageChange,
 }: TemplateCodeEditorProps) {
+  const theme = useTheme();
   const [wordWrap, setWordWrap] = useState(false);
 
   return (
@@ -104,7 +163,7 @@ export function TemplateCodeEditor({
           py: 0.75,
           borderBottom: "1px solid",
           borderColor: "divider",
-          bgcolor: "grey.50",
+          bgcolor: "background.default",
           flexWrap: "wrap",
         }}
       >
@@ -150,7 +209,8 @@ export function TemplateCodeEditor({
         <CodeMirror
           value={value}
           height="400px"
-          extensions={getExtensions(language, wordWrap)}
+          theme={theme.palette.mode}
+          extensions={getExtensions(language, wordWrap, theme)}
           onChange={onChange}
           basicSetup={{
             lineNumbers: true,

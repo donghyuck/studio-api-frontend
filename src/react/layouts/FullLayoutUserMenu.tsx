@@ -1,4 +1,5 @@
 import {
+  alpha,
   Avatar,
   Box,
   Button,
@@ -110,7 +111,7 @@ export function FullLayoutUserMenu({
                 display: "flex",
                 alignItems: "center",
                 gap: 1.5,
-                bgcolor: "rgba(37,99,235,0.04)",
+                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
                 borderBottom: "1px solid",
                 borderColor: "divider",
               }}

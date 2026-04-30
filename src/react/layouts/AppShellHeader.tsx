@@ -14,7 +14,7 @@ export function AppShellHeader({ children, leading }: Props) {
           justifyContent: "space-between",
           borderBottom: "1px solid",
           borderColor: "divider",
-          bgcolor: "#ffffff",
+          bgcolor: "background.paper",
         }}
       >
         <Box

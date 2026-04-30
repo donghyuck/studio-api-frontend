@@ -21,15 +21,21 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import type { UserDto } from "@/types/studio/user";
 import { UsersDataSource } from "@/react/pages/admin/datasource";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import { UserDialog } from "@/react/pages/admin/users/UserDialog";
+import { reactUsersApi } from "@/react/pages/admin/users/api";
+import { useConfirm, useToast } from "@/react/feedback";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
 
 export function UsersPage() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const toast = useToast();
   const gridRef = useRef<PageableGridContentHandle<UserDto>>(null);
   const dataSource = useMemo(() => new UsersDataSource(), []);
   const [searchInput, setSearchInput] = useState("");
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const columnDefs = useMemo<ColDef<UserDto>[]>(
     () => [
@@ -43,6 +49,7 @@ export function UsersPage() {
           <Box
             component="button"
             type="button"
+            aria-label={`${params.value} 상세보기`}
             onClick={() => navigate(`/admin/users/${params.data?.userId}`)}
             sx={{
               display: "inline-flex",
@@ -59,7 +66,8 @@ export function UsersPage() {
             }}
           >
             <Avatar
-              alt={String(params.value ?? "")}
+              alt=""
+              aria-hidden="true"
               src={
                 params.value
                   ? `${API_BASE_URL}/api/profile/${encodeURIComponent(String(params.value))}/avatar`
@@ -106,9 +114,9 @@ export function UsersPage() {
               fontSize: 11,
               ...(params.value
                 ? {
-                    bgcolor: "#2563eb",
-                    color: "#ffffff",
-                    borderColor: "#1d4ed8",
+                    bgcolor: "primary.main",
+                    color: "primary.contrastText",
+                    borderColor: "primary.dark",
                   }
                 : {}),
             }}
@@ -134,26 +142,34 @@ export function UsersPage() {
       },
       {
         colId: "actions",
-        headerName: "",
+        headerName: "작업",
         filter: false,
         sortable: false,
-        flex: 0.65,
-        minWidth: 132,
+        width: 112,
+        minWidth: 112,
+        maxWidth: 112,
+        pinned: "right",
+        cellStyle: { display: "flex", alignItems: "center", justifyContent: "center" },
         cellRenderer: (params: ICellRendererParams<UserDto>) => (
           <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
-            <Tooltip title="권한 관리는 아직 연결되지 않았습니다.">
+            <Tooltip title="역할 관리">
               <IconButton
                 size="small"
-                disabled
+                aria-label="역할 관리"
+                onClick={() =>
+                  params.data?.userId &&
+                  navigate(`/admin/users/${params.data.userId}`, { state: { openRoles: true } })
+                }
               >
                 <ManageAccountsOutlined fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Tooltip title="사용자 삭제는 아직 연결되지 않았습니다.">
+            <Tooltip title="삭제">
               <IconButton
                 size="small"
                 color="error"
-                disabled
+                aria-label="삭제"
+                onClick={() => params.data && void handleDeleteUser(params.data)}
               >
                 <DeleteOutlined fontSize="small" />
               </IconButton>
@@ -161,6 +177,7 @@ export function UsersPage() {
             <Tooltip title="상세보기">
               <IconButton
                 size="small"
+                aria-label="상세보기"
                 onClick={() => navigate(`/admin/users/${params.data?.userId}`)}
               >
                 <ChevronRight fontSize="small" />
@@ -188,6 +205,26 @@ export function UsersPage() {
     gridRef.current?.refresh();
   };
 
+  async function handleDeleteUser(user: UserDto) {
+    const ok = await confirm({
+      title: "사용자 삭제",
+      message: `${user.username} 사용자를 삭제하시겠습니까?`,
+      okText: "삭제",
+      cancelText: "취소",
+    });
+    if (!ok) {
+      return;
+    }
+
+    try {
+      await reactUsersApi.deleteUser(user.userId);
+      toast.success("사용자가 삭제되었습니다.");
+      gridRef.current?.refresh();
+    } catch {
+      toast.error("사용자 삭제에 실패했습니다.");
+    }
+  }
+
   return (
     <Stack spacing={0.5}>
       <PageToolbar
@@ -201,10 +238,11 @@ export function UsersPage() {
         onSearchValueChange={setSearchInput}
         onSearch={handleSearch}
         actions={
-          <Tooltip title="새로운 사용자를 생성합니다.">
+          <Tooltip title="사용자 생성">
             <IconButton
               size="small"
-              disabled
+              aria-label="사용자 생성"
+              onClick={() => setCreateOpen(true)}
             >
               <PersonAddAlt1Outlined fontSize="small" />
             </IconButton>
@@ -218,6 +256,11 @@ export function UsersPage() {
         ref={gridRef}
         datasource={dataSource}
         columns={columnDefs}
+      />
+      <UserDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => gridRef.current?.refresh()}
       />
     </Stack>
   );

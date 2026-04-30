@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -20,6 +20,7 @@ import { PageToolbar } from "@/react/components/page/PageToolbar";
 
 export function RoleDetailPage() {
   const { roleId } = useParams<{ roleId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
   const [role, setRole] = useState<RoleDto | null>(null);
@@ -47,6 +48,17 @@ export function RoleDetailPage() {
   useEffect(() => {
     loadRole();
   }, [loadRole]);
+
+  useEffect(() => {
+    const state = location.state as { openUsers?: boolean; openGroups?: boolean } | null;
+    if (state?.openUsers) {
+      setUsersOpen(true);
+      navigate(".", { replace: true, state: null });
+    } else if (state?.openGroups) {
+      setGroupsOpen(true);
+      navigate(".", { replace: true, state: null });
+    }
+  }, [location.state, navigate]);
 
   async function handleSave() {
     if (!roleId) return;

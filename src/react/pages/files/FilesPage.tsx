@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, Avatar, Box, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import type { SelectionChangedEvent } from "ag-grid-community";
@@ -28,6 +29,293 @@ class FilesDataSource extends ReactPageDataSource<AttachmentDto> {
   }
 }
 
+type ThumbnailCacheEntry = {
+  url?: string | null;
+  promise?: Promise<string | null>;
+  unavailableUntil?: number;
+};
+
+const thumbnailCache = new Map<number, ThumbnailCacheEntry>();
+const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
+const THUMBNAIL_RETRY_LIMIT = 6;
+const THUMBNAIL_MISSING_TTL_MS = 30_000;
+
+function getCachedThumbnailUrl(attachmentId: number) {
+  const entry = thumbnailCache.get(attachmentId);
+  if (!entry) {
+    return undefined;
+  }
+  if (entry.url === null && entry.unavailableUntil && entry.unavailableUntil < Date.now()) {
+    thumbnailCache.delete(attachmentId);
+    return undefined;
+  }
+  return entry.url;
+}
+
+async function requestThumbnail(attachmentId: number) {
+  const cached = getCachedThumbnailUrl(attachmentId);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const existing = thumbnailCache.get(attachmentId);
+  if (existing?.promise) {
+    return existing.promise;
+  }
+
+  const promise = new Promise<string | null>((resolve) => {
+    let attempt = 0;
+
+    function markUnavailable() {
+      thumbnailCache.set(attachmentId, {
+        url: null,
+        unavailableUntil: Date.now() + THUMBNAIL_MISSING_TTL_MS,
+      });
+      resolve(null);
+    }
+
+    function load() {
+      reactFilesApi
+        .fetchThumbnail(attachmentId, 128)
+        .then((blob) => {
+          if (blob.size === 0) {
+            if (attempt < THUMBNAIL_RETRY_LIMIT) {
+              attempt += 1;
+              window.setTimeout(load, THUMBNAIL_RETRY_INTERVAL_MS);
+            } else {
+              markUnavailable();
+            }
+            return;
+          }
+          const nextUrl = URL.createObjectURL(blob);
+          thumbnailCache.set(attachmentId, { url: nextUrl });
+          resolve(nextUrl);
+        })
+        .catch(() => {
+          if (attempt < THUMBNAIL_RETRY_LIMIT) {
+            attempt += 1;
+            window.setTimeout(load, THUMBNAIL_RETRY_INTERVAL_MS);
+          } else {
+            markUnavailable();
+          }
+        });
+    }
+
+    load();
+  });
+
+  thumbnailCache.set(attachmentId, { promise });
+  return promise;
+}
+
+const FileThumbnail = memo(function FileThumbnail({ attachmentId, name }: { attachmentId: number; name: string }) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null | undefined>(() =>
+    getCachedThumbnailUrl(attachmentId)
+  );
+
+  useEffect(() => {
+    const node = rootRef.current;
+    if (!node || visible) {
+      return;
+    }
+
+    if (!("IntersectionObserver" in window)) {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "160px" });
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [visible]);
+
+  useEffect(() => {
+    let ignore = false;
+    const cached = getCachedThumbnailUrl(attachmentId);
+    setThumbnailUrl(cached);
+
+    if (!attachmentId || !visible || cached !== undefined) {
+      return;
+    }
+
+    requestThumbnail(attachmentId).then((nextUrl) => {
+      if (!ignore) {
+        setThumbnailUrl(nextUrl);
+      }
+    });
+
+    return () => {
+      ignore = true;
+    };
+  }, [attachmentId, visible]);
+
+  useEffect(() => {
+    setVisible(false);
+    setThumbnailUrl(getCachedThumbnailUrl(attachmentId));
+  }, [attachmentId]);
+
+  return (
+    <Box
+      ref={rootRef}
+      sx={{
+        width: 32,
+        height: 32,
+        borderRadius: "6px",
+        flex: "0 0 auto",
+        overflow: "hidden",
+        border: "1px solid",
+        borderColor: "divider",
+        bgcolor: "transparent",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {thumbnailUrl ? (
+        <Box
+          component="img"
+          src={thumbnailUrl}
+          alt={`${name} 썸네일`}
+          sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        <InsertDriveFileOutlinedIcon sx={{ fontSize: 18, color: "text.secondary" }} />
+      )}
+    </Box>
+  );
+});
+
+function FileNameCell({
+  file,
+  onOpen,
+}: {
+  file: AttachmentDto;
+  onOpen: (attachmentId: number) => void;
+}) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen(file.attachmentId);
+      }}
+      sx={{
+        width: "100%",
+        height: "100%",
+        border: 0,
+        p: 0,
+        bgcolor: "transparent",
+        color: "primary.main",
+        cursor: "pointer",
+        font: "inherit",
+        textAlign: "left",
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+        minWidth: 0,
+        "&:hover .file-name-text": { textDecoration: "underline" },
+      }}
+    >
+      <FileThumbnail attachmentId={file.attachmentId} name={file.name} />
+      <Typography
+        className="file-name-text"
+        variant="body2"
+        noWrap
+        sx={{ minWidth: 0, color: "primary.main" }}
+        title={file.name}
+      >
+        {file.name}
+      </Typography>
+    </Box>
+  );
+}
+
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  ariaLabel,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  ariaLabel: string;
+  onChange: (checked: boolean) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="checkbox"
+      aria-label={ariaLabel}
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      onClick={(event) => event.stopPropagation()}
+      style={{
+        width: 16,
+        height: 16,
+        margin: 0,
+        accentColor: "#1565c0",
+        cursor: "pointer",
+        transform: ariaLabel === "행 선택" ? "translateY(2px)" : "none",
+      }}
+    />
+  );
+}
+
+function getDisplayedSelectionState(api: {
+  getLastDisplayedRowIndex: () => number;
+  getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+}) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  if (lastIndex < 0) {
+    return { displayedCount: 0, selectedCount: 0 };
+  }
+
+  let displayedCount = 0;
+  let selectedCount = 0;
+  for (let index = 0; index <= lastIndex; index += 1) {
+    const row = api.getDisplayedRowAtIndex(index);
+    if (!row) continue;
+    displayedCount += 1;
+    if (row.isSelected()) {
+      selectedCount += 1;
+    }
+  }
+
+  return { displayedCount, selectedCount };
+}
+
+function toggleDisplayedRows(
+  api: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  },
+  selected: boolean
+) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  for (let index = 0; index <= lastIndex; index += 1) {
+    api.getDisplayedRowAtIndex(index)?.setSelected(selected);
+  }
+}
+
 export function FilesPage() {
   const queryClient = useQueryClient();
   const gridRef = useRef<PageableGridContentHandle<AttachmentDto>>(null);
@@ -39,39 +327,100 @@ export function FilesPage() {
   const [detailAttachmentId, setDetailAttachmentId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [displayedCount, setDisplayedCount] = useState(0);
   const selectedCount = selectedIds.length;
+
+  function renderHeaderCheckbox(api?: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  }) {
+    const currentState = api
+      ? getDisplayedSelectionState(api)
+      : { displayedCount, selectedCount };
+    const allDisplayedSelected =
+      currentState.displayedCount > 0 &&
+      currentState.selectedCount === currentState.displayedCount;
+    const partiallySelected =
+      currentState.selectedCount > 0 &&
+      currentState.selectedCount < currentState.displayedCount;
+
+    return (
+      <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <SelectionCheckbox
+          ariaLabel="전체 선택"
+          checked={allDisplayedSelected}
+          indeterminate={partiallySelected}
+          onChange={() => {
+            if (api) {
+              toggleDisplayedRows(api, !allDisplayedSelected);
+            }
+          }}
+        />
+      </Box>
+    );
+  }
 
   const columnDefs = useMemo<ColDef<AttachmentDto>[]>(
     () => [
-      { field: "attachmentId", headerName: "ID", flex: 0.35, sortable: true, type: "number", filter: false },
+      {
+        colId: "rowSelect",
+        headerName: "",
+        width: 40,
+        minWidth: 40,
+        maxWidth: 40,
+        pinned: "left",
+        sortable: false,
+        resizable: false,
+        suppressMovable: true,
+        lockPosition: true,
+        cellClass: "selection-column-centered",
+        headerClass: "selection-column-centered",
+        headerComponent: (props: {
+          api: {
+            getLastDisplayedRowIndex: () => number;
+            getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+          };
+        }) => renderHeaderCheckbox(props.api),
+        cellRenderer: (params: ICellRendererParams<AttachmentDto>) => {
+          const checked = params.node.isSelected();
+
+          return (
+            <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <SelectionCheckbox
+                ariaLabel="행 선택"
+                checked={checked}
+                onChange={(nextChecked) => params.node.setSelected(nextChecked)}
+              />
+            </Box>
+          );
+        },
+      },
+      {
+        field: "attachmentId",
+        headerName: "ID",
+        width: 64,
+        minWidth: 64,
+        maxWidth: 64,
+        sortable: true,
+        type: "number",
+        filter: false,
+        cellStyle: { textAlign: "center" },
+        headerClass: "id-column-centered",
+        cellClass: "id-column-centered",
+      },
       {
         field: "name",
         headerName: "파일",
         flex: 1.6,
         sortable: true,
         filter: false,
-        cellRenderer: (params: ICellRendererParams<AttachmentDto>) => (
-          <Box
-            component="button"
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setDetailAttachmentId(params.data?.attachmentId ?? null);
-            }}
-            sx={{
-              border: 0,
-              p: 0,
-              bgcolor: "transparent",
-              color: "primary.main",
-              cursor: "pointer",
-              font: "inherit",
-              textAlign: "left",
-              "&:hover": { textDecoration: "underline" },
-            }}
-          >
-            {params.value}
-          </Box>
-        ),
+        cellRenderer: (params: ICellRendererParams<AttachmentDto>) =>
+          params.data ? (
+            <FileNameCell
+              file={params.data}
+              onOpen={(attachmentId) => setDetailAttachmentId(attachmentId)}
+            />
+          ) : null,
       },
       {
         field: "size",
@@ -108,23 +457,20 @@ export function FilesPage() {
       },
       { field: "createdAt", headerName: "생성일시", flex: 0.75, sortable: true, type: "datetime", filter: false },
     ],
-    []
+    [displayedCount, selectedCount]
   );
 
   const gridOptions = useMemo(
     () => ({
-      rowSelection: { mode: "multiRow" as const, enableClickSelection: false, checkboxes: true, headerCheckbox: false },
-      suppressRowClickSelection: true,
-      selectionColumnDef: {
-        width: 65,
-        minWidth: 65,
-        maxWidth: 65,
-        pinned: "left" as const,
-        sortable: false,
-        filter: false,
-        resizable: false,
+      rowSelection: {
+        mode: "multiRow" as const,
+        enableClickSelection: false,
+        checkboxes: false,
+        headerCheckbox: false,
       },
+      suppressRowClickSelection: true,
       rowMultiSelectWithClick: true,
+      rowHeight: 48,
     }),
     []
   );
@@ -140,6 +486,14 @@ export function FilesPage() {
               .map((row) => Number(row.attachmentId))
               .filter((id) => Number.isFinite(id) && id > 0)
           );
+          setDisplayedCount((event as SelectionChangedEvent<AttachmentDto>).api.getDisplayedRowCount());
+        },
+      },
+      {
+        type: "modelUpdated",
+        listener: (event: { api: { getDisplayedRowCount: () => number; refreshHeader?: () => void } }) => {
+          setDisplayedCount(event.api.getDisplayedRowCount());
+          event.api.refreshHeader?.();
         },
       },
     ],

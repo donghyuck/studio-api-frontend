@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -13,7 +13,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { DeleteOutlined, SelectAllOutlined, SyncOutlined } from "@mui/icons-material";
+import { DeleteOutlined, SyncOutlined } from "@mui/icons-material";
 import DOMPurify from "dompurify";
 import type { ColDef, ICellRendererParams, SelectionChangedEvent } from "ag-grid-community";
 import { useNavigate } from "react-router-dom";
@@ -151,6 +151,83 @@ function MailDetailDialog({
   );
 }
 
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  ariaLabel,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  ariaLabel: string;
+  onChange: (checked: boolean) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="checkbox"
+      aria-label={ariaLabel}
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      onClick={(event) => event.stopPropagation()}
+      style={{
+        width: 16,
+        height: 16,
+        margin: 0,
+        accentColor: "#1565c0",
+        cursor: "pointer",
+        transform: ariaLabel === "행 선택" ? "translateY(2px)" : "none",
+      }}
+    />
+  );
+}
+
+function getDisplayedSelectionState(api: {
+  getLastDisplayedRowIndex: () => number;
+  getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+}) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  if (lastIndex < 0) {
+    return { displayedCount: 0, selectedCount: 0 };
+  }
+
+  let displayedCount = 0;
+  let selectedCount = 0;
+  for (let index = 0; index <= lastIndex; index += 1) {
+    const row = api.getDisplayedRowAtIndex(index);
+    if (!row) {
+      continue;
+    }
+    displayedCount += 1;
+    if (row.isSelected()) {
+      selectedCount += 1;
+    }
+  }
+
+  return { displayedCount, selectedCount };
+}
+
+function toggleDisplayedRows(
+  api: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  },
+  selected: boolean
+) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  for (let index = 0; index <= lastIndex; index += 1) {
+    api.getDisplayedRowAtIndex(index)?.setSelected(selected);
+  }
+}
+
 export function MailInboxPage() {
   const navigate = useNavigate();
   const gridRef = useRef<PageableGridContentHandle<MailMessageDto>>(null);
@@ -160,9 +237,88 @@ export function MailInboxPage() {
   const [selectedMessage, setSelectedMessage] = useState<MailMessageDto | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedCount, setSelectedCount] = useState(0);
+  const [displayedCount, setDisplayedCount] = useState(0);
+
+  function renderHeaderCheckbox(api?: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  }) {
+    const currentState = api
+      ? getDisplayedSelectionState(api)
+      : { displayedCount, selectedCount };
+    const currentDisplayedCount = currentState.displayedCount;
+    const currentSelectedCount = currentState.selectedCount;
+    const allDisplayedSelected =
+      currentDisplayedCount > 0 && currentSelectedCount === currentDisplayedCount;
+    const partiallySelected =
+      currentSelectedCount > 0 && currentSelectedCount < currentDisplayedCount;
+
+    return (
+      <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <SelectionCheckbox
+          ariaLabel="전체 선택"
+          checked={allDisplayedSelected}
+          indeterminate={partiallySelected}
+          onChange={() => {
+            if (api) {
+              toggleDisplayedRows(api, !allDisplayedSelected);
+              return;
+            }
+            handleSelectAllToggle();
+          }}
+        />
+      </Box>
+    );
+  }
 
   const columnDefs = useMemo<ColDef<MailMessageDto>[]>(
     () => [
+      {
+        colId: "rowSelect",
+        headerName: "",
+        width: 40,
+        minWidth: 40,
+        maxWidth: 40,
+        pinned: "left",
+        sortable: false,
+        resizable: false,
+        suppressMovable: true,
+        lockPosition: true,
+        cellClass: "selection-column-centered",
+        headerClass: "selection-column-centered",
+        headerComponent: (props: {
+          api: {
+            getLastDisplayedRowIndex: () => number;
+            getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+          };
+        }) => renderHeaderCheckbox(props.api),
+        cellRenderer: (params: ICellRendererParams<MailMessageDto>) => {
+          const checked = params.node.isSelected();
+
+          return (
+            <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <SelectionCheckbox
+                ariaLabel="행 선택"
+                checked={checked}
+                onChange={(nextChecked) => params.node.setSelected(nextChecked)}
+              />
+            </Box>
+          );
+        },
+      },
+      {
+        field: "mailId",
+        headerName: "ID",
+        width: 64,
+        minWidth: 64,
+        maxWidth: 64,
+        sortable: true,
+        type: "number",
+        filter: false,
+        cellStyle: { textAlign: "center" },
+        headerClass: "id-column-centered",
+        cellClass: "id-column-centered",
+      },
       {
         field: "fromAddress",
         headerName: "보낸 사람",
@@ -212,15 +368,24 @@ export function MailInboxPage() {
         type: "datetime",
       },
     ],
-    []
+    [displayedCount, selectedCount]
   );
 
   const gridEvents = useMemo(
     () => [
       {
         type: "selectionChanged",
-        listener: (event: SelectionChangedEvent<MailMessageDto>) => {
+        listener: (event: SelectionChangedEvent<MailMessageDto> & { api: { refreshHeader?: () => void } }) => {
           setSelectedCount(event.api.getSelectedRows().length);
+          setDisplayedCount(event.api.getDisplayedRowCount());
+          event.api.refreshHeader?.();
+        },
+      },
+      {
+        type: "modelUpdated",
+        listener: (event: { api: { getDisplayedRowCount: () => number; refreshHeader?: () => void } }) => {
+          setDisplayedCount(event.api.getDisplayedRowCount());
+          event.api.refreshHeader?.();
         },
       },
     ],
@@ -292,11 +457,6 @@ export function MailInboxPage() {
           onSearch={handleSearch}
           actions={
             <Stack direction="row" spacing={0.5}>
-              <Tooltip title="전체 선택 / 선택 해제">
-                <IconButton size="small" onClick={handleSelectAllToggle}>
-                  <SelectAllOutlined fontSize="small" />
-                </IconButton>
-              </Tooltip>
               <Tooltip title="메일 동기화 화면으로 이동합니다.">
                 <IconButton size="small" onClick={() => navigate("/application/mail/sync")}>
                   <SyncOutlined fontSize="small" />
@@ -325,7 +485,15 @@ export function MailInboxPage() {
           datasource={dataSource}
           columns={columnDefs}
           events={gridEvents}
-          rowSelection="multiple"
+          rowSelection={{
+            mode: "multiRow",
+            enableClickSelection: false,
+            checkboxes: false,
+            headerCheckbox: false,
+          }}
+          options={{
+            suppressRowClickSelection: true,
+          }}
         />
       </Stack>
 

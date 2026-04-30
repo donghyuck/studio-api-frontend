@@ -1,4 +1,5 @@
 import {
+  alpha,
   Box,
   Breadcrumbs,
   Divider,
@@ -189,7 +190,9 @@ export function PageToolbar({
         </Box>
       </Stack>
 
-      {divider ? <Divider sx={{ mt: "4px", borderColor: "rgba(148, 163, 184, 0.45)" }} /> : null}
+      {divider ? (
+        <Divider sx={{ mt: "4px", borderColor: (theme) => alpha(theme.palette.divider, 0.9) }} />
+      ) : null}
     </Stack>
   );
 }

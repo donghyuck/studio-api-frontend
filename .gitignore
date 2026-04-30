@@ -22,7 +22,10 @@ replay_pid*
 **/bin
 **/build
 .gradle/
-
+.claude/
+.omx/
+.tmp/
+.policy*/
 .env.local
 .package-lock.json
 node_modules/
