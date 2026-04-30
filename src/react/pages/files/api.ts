@@ -63,7 +63,7 @@ export const reactFilesApi = {
     );
   },
   async fetchThumbnail(attachmentId: number, size = 256, format = "png") {
-    const response = await apiClient.get<Blob>(`/api/attachments/${attachmentId}/thumbnail`, {
+    const response = await apiClient.get<Blob>(`/api/mgmt/files/${attachmentId}/thumbnail`, {
       params: { size, format },
       responseType: "blob",
       withCredentials: true,

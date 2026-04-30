@@ -128,7 +128,7 @@ export function FileUploadDialog({
       autoProceed: false,
       locale: Korean,
       restrictions: {
-        maxFileSize: 20 * 1024 * 1024,
+        maxFileSize: 50 * 1024 * 1024,
         maxNumberOfFiles: 1,
       },
       onBeforeUpload: () => {

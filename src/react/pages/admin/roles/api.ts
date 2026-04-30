@@ -51,6 +51,8 @@ export const reactRolesApi = {
     apiRequest<RoleDto>("put", `/api/mgmt/roles/${roleId}`, { data: payload }),
   createRole: (payload: { name: string; description?: string }) =>
     apiRequest<RoleDto>("post", "/api/mgmt/roles", { data: payload }),
+  deleteRole: (roleId: number) =>
+    apiRequest<void>("delete", `/api/mgmt/roles/${roleId}`),
   searchUsers: (params?: { q?: string; page?: number; size?: number }) =>
     apiRequest<PageResponse<UserDto>>("get", "/api/mgmt/users", {
       params: {

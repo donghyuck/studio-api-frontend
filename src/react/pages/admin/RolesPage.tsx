@@ -21,10 +21,14 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import type { RoleDto } from "@/react/pages/admin/datasource";
 import { RolesDataSource } from "@/react/pages/admin/datasource";
 import { RoleDialog } from "@/react/pages/admin/roles/RoleDialog";
+import { reactRolesApi } from "@/react/pages/admin/roles/api";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import { useConfirm, useToast } from "@/react/feedback";
 
 export function RolesPage() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const toast = useToast();
   const gridRef = useRef<PageableGridContentHandle<RoleDto>>(null);
   const dataSource = useMemo(() => new RolesDataSource(), []);
   const [searchInput, setSearchInput] = useState("");
@@ -43,6 +47,7 @@ export function RolesPage() {
           <Box
             component="button"
             type="button"
+            aria-label={`${params.value} 상세보기`}
             onClick={() => navigate(`/admin/roles/${params.data?.roleId}`)}
             sx={{
               border: 0,
@@ -84,31 +89,54 @@ export function RolesPage() {
       },
       {
         colId: "actions",
-        headerName: "",
+        headerName: "작업",
         filter: false,
         sortable: false,
-        flex: 0.85,
-        minWidth: 168,
+        width: 144,
+        minWidth: 144,
+        maxWidth: 144,
+        pinned: "right",
+        cellStyle: { display: "flex", alignItems: "center", justifyContent: "center" },
         cellRenderer: (params: ICellRendererParams<RoleDto>) => (
           <Box sx={{ display: "flex", gap: 0.5, alignItems: "center", height: "100%" }}>
-            <Tooltip title="롤 사용자 관리는 아직 연결되지 않았습니다.">
-              <IconButton size="small" disabled>
+            <Tooltip title="사용자 관리">
+              <IconButton
+                size="small"
+                aria-label="사용자 관리"
+                onClick={() =>
+                  params.data?.roleId &&
+                  navigate(`/admin/roles/${params.data.roleId}`, { state: { openUsers: true } })
+                }
+              >
                 <PersonOutlined fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Tooltip title="롤 그룹 관리는 아직 연결되지 않았습니다.">
-              <IconButton size="small" disabled>
+            <Tooltip title="그룹 관리">
+              <IconButton
+                size="small"
+                aria-label="그룹 관리"
+                onClick={() =>
+                  params.data?.roleId &&
+                  navigate(`/admin/roles/${params.data.roleId}`, { state: { openGroups: true } })
+                }
+              >
                 <GroupOutlined fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Tooltip title="롤 삭제는 아직 연결되지 않았습니다.">
-              <IconButton size="small" color="error" disabled>
+            <Tooltip title="삭제">
+              <IconButton
+                size="small"
+                color="error"
+                aria-label="삭제"
+                onClick={() => params.data && void handleDeleteRole(params.data)}
+              >
                 <DeleteOutlined fontSize="small" />
               </IconButton>
             </Tooltip>
             <Tooltip title="상세보기">
               <IconButton
                 size="small"
+                aria-label="상세보기"
                 onClick={() => navigate(`/admin/roles/${params.data?.roleId}`)}
               >
                 <ChevronRight fontSize="small" />
@@ -136,6 +164,26 @@ export function RolesPage() {
     gridRef.current?.refresh();
   };
 
+  async function handleDeleteRole(role: RoleDto) {
+    const ok = await confirm({
+      title: "역할 삭제",
+      message: `${role.name} 역할을 삭제하시겠습니까?`,
+      okText: "삭제",
+      cancelText: "취소",
+    });
+    if (!ok) {
+      return;
+    }
+
+    try {
+      await reactRolesApi.deleteRole(role.roleId);
+      toast.success("역할이 삭제되었습니다.");
+      gridRef.current?.refresh();
+    } catch {
+      toast.error("역할 삭제에 실패했습니다.");
+    }
+  }
+
   return (
     <Stack spacing={0.5}>
       <PageToolbar
@@ -148,8 +196,8 @@ export function RolesPage() {
         onSearchValueChange={setSearchInput}
         onSearch={handleSearch}
         actions={
-          <Tooltip title="새로운 역할을 생성합니다.">
-            <IconButton size="small" onClick={() => setCreateOpen(true)}>
+          <Tooltip title="역할 생성">
+            <IconButton size="small" aria-label="역할 생성" onClick={() => setCreateOpen(true)}>
               <AddOutlined fontSize="small" />
             </IconButton>
           </Tooltip>

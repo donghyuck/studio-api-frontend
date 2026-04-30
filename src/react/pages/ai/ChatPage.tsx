@@ -17,7 +17,7 @@ import {
   Typography,
 } from "@mui/material";
 import {
-  EditNoteOutlined,
+  AddCommentOutlined,
   HistoryOutlined,
   SettingsOutlined,
   SyncOutlined,
@@ -112,6 +112,7 @@ export function ChatPage() {
   const providers = useMemo<ProviderInfo[]>(() => aiInfo?.providers ?? [], [aiInfo]);
   const selectedProvider = providers.find((item) => item.name === provider);
   const configurationMissing = !provider || !model;
+  const shouldShowConfigurationWarning = aiInfo !== null && configurationMissing;
   const serverMemoryEnabled = aiInfo?.chat?.memory?.enabled === true;
   const modelMenuOpen = Boolean(modelAnchorEl);
   const chatModeLabel = memoryEnabled ? "서버 메모리" : "클라이언트 누적 전송";
@@ -466,7 +467,7 @@ export function ChatPage() {
             <Tooltip title={memoryEnabled ? "새 대화 시작" : "대화 기억을 켜면 새 대화를 시작할 수 있습니다"}>
               <span>
                 <IconButton size="small" onClick={handleNewConversation} disabled={!memoryEnabled}>
-                  <EditNoteOutlined fontSize="small" />
+                  <AddCommentOutlined fontSize="small" />
                 </IconButton>
               </span>
             </Tooltip>
@@ -491,7 +492,7 @@ export function ChatPage() {
         }
       />
       {error ? <Alert severity="error">{error}</Alert> : null}
-      {configurationMissing ? (
+      {shouldShowConfigurationWarning ? (
         <Alert severity="warning">AI Chat을 사용하려면 Provider와 Model 설정이 필요합니다. 상단 설정 아이콘을 눌러 사용할 provider와 모델을 선택하거나 입력하세요.</Alert>
       ) : null}
 

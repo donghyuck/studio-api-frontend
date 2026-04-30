@@ -423,7 +423,6 @@ export function UserSearchDialog({
                     }
                   : undefined
               }
-              options={isMultiple ? { suppressRowClickSelection: true } : undefined}
             />
           ) : (
             <Stack

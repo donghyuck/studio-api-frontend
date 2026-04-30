@@ -36,6 +36,7 @@ function GridContentInner<TData = unknown>(
     events,
     rowSelection,
     rowData,
+    loading,
     autoResize,
     height,
     onFilterActived,
@@ -113,6 +114,28 @@ function GridContentInner<TData = unknown>(
   }, [rowData]);
 
   useEffect(() => {
+    gridApiRef.current?.setGridOption("loading", Boolean(loading));
+  }, [loading]);
+
+  useEffect(() => {
+    const gridApi = gridApiRef.current;
+    if (!gridApi) {
+      return;
+    }
+
+    if (loading) {
+      gridApi.hideOverlay();
+      return;
+    }
+
+    if (rowData.length > 0) {
+      gridApi.hideOverlay();
+    } else {
+      gridApi.showNoRowsOverlay();
+    }
+  }, [loading, rowData]);
+
+  useEffect(() => {
     if (!shouldAutoResize) {
       return;
     }
@@ -161,6 +184,7 @@ function GridContentInner<TData = unknown>(
         rowSelection={normalizedRowSelection}
         columnDefs={columnDefs}
         rowData={rowData}
+        loading={loading}
         onRowSelected={onRowSelected}
         onFilterChanged={handleFilterChanged}
         onSelectionChanged={handleSelectionChanged}

@@ -15,6 +15,18 @@ import type {
   ConversationSummaryDto,
   QueryRewriteRequestDto,
   QueryRewriteResponseDto,
+  RagChunkConfigResponseDto,
+  RagChunkPreviewRequestDto,
+  RagChunkPreviewResponseDto,
+  RagIndexChunkDto,
+  RagIndexChunkPageResponseDto,
+  RagIndexJobCreateRequestDto,
+  RagIndexJobDto,
+  RagIndexJobListResponseDto,
+  RagIndexJobLogDto,
+  RagIndexJobStatus,
+  SearchRequestDto,
+  SearchResponseDto,
   RegenerateRequestDto,
   VectorSearchRequestDto,
   VectorSearchResultDto,
@@ -157,6 +169,73 @@ export const reactAiApi = {
 
   searchVector(req: VectorSearchRequestDto) {
     return apiRequest<VectorSearchResultDto[]>("post", `${MGMT_BASE}/vectors/search`, { data: req });
+  },
+
+  async searchRag(req: SearchRequestDto) {
+    const response = await apiRequest<SearchResponseDto>("post", `${MGMT_BASE}/rag/search`, { data: req });
+    return response.results ?? [];
+  },
+
+  listRagJobs(params?: {
+    status?: RagIndexJobStatus | "";
+    objectType?: string;
+    objectId?: string;
+    documentId?: string;
+    offset?: number;
+    limit?: number;
+    sort?: string;
+    direction?: "asc" | "desc";
+  }) {
+    return apiRequest<RagIndexJobListResponseDto>("get", `${MGMT_BASE}/rag/jobs`, { params });
+  },
+
+  getRagJob(jobId: string) {
+    return apiRequest<RagIndexJobDto>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}`);
+  },
+
+  createRagJob(req: RagIndexJobCreateRequestDto) {
+    return apiRequest<RagIndexJobDto>("post", `${MGMT_BASE}/rag/jobs`, { data: req });
+  },
+
+  retryRagJob(jobId: string) {
+    return apiRequest<RagIndexJobDto>("post", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/retry`);
+  },
+
+  cancelRagJob(jobId: string) {
+    return apiRequest<RagIndexJobDto>("post", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/cancel`);
+  },
+
+  getRagJobLogs(jobId: string) {
+    return apiRequest<RagIndexJobLogDto[]>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/logs`);
+  },
+
+  getRagJobChunks(jobId: string, limit = 200) {
+    return apiRequest<RagIndexChunkDto[]>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/chunks`, {
+      params: { limit },
+    });
+  },
+
+  getRagObjectChunksPage(objectType: string, objectId: string, offset = 0, limit = 50) {
+    return apiRequest<RagIndexChunkPageResponseDto>(
+      "get",
+      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}/chunks/page`,
+      { params: { offset, limit } }
+    );
+  },
+
+  getRagObjectMetadata(objectType: string, objectId: string) {
+    return apiRequest<Record<string, unknown>>(
+      "get",
+      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}/metadata`
+    );
+  },
+
+  getRagChunkConfig() {
+    return apiRequest<RagChunkConfigResponseDto>("get", `${MGMT_BASE}/rag/chunks/config`);
+  },
+
+  previewRagChunks(req: RagChunkPreviewRequestDto) {
+    return apiRequest<RagChunkPreviewResponseDto>("post", `${MGMT_BASE}/rag/chunks/preview`, { data: req });
   },
 
   rewriteQuery(req: QueryRewriteRequestDto) {

@@ -47,11 +47,16 @@ export interface ChatResponseMetadataDto {
 }
 
 export interface ChatRagRequestDto {
-  chat:ChatRequestDto;
-  ragQuery?:string;
+  chat: ChatRequestDto;
+  ragQuery?: string;
   ragTopK?: number; // 선택
   objectType?: string;
   objectId?: string;
+  embeddingProfileId?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  topK?: number;
+  minScore?: number;
   debug?: boolean;
 }
 
@@ -152,6 +157,9 @@ export interface SearchRequestDto {
   query?: string | null;
   topK?: number;
   hybrid?:boolean
+  objectType?: string;
+  objectId?: string;
+  minScore?: number;
 }
 
 export interface SearchResultDto {
@@ -204,4 +212,178 @@ export interface RagIndexRequestDto {
   metadata?: Record<string, any>;
   keywords?: string[];
   useLlmKeywordExtraction?: boolean;
+}
+
+export type RagIndexJobStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "SUCCEEDED"
+  | "WARNING"
+  | "FAILED"
+  | "CANCELLED";
+
+export type RagIndexJobStep =
+  | "EXTRACTING"
+  | "CHUNKING"
+  | "EMBEDDING"
+  | "INDEXING"
+  | "COMPLETED";
+
+export type RagIndexJobLogLevel = "INFO" | "WARN" | "ERROR";
+
+export interface RagIndexJobCreateRequestDto extends RagIndexRequestDto {
+  text?: string;
+  sourceType?: string;
+  forceReindex?: boolean;
+  chunkingStrategy?: string;
+  chunkMaxSize?: number;
+  chunkOverlap?: number;
+  chunkUnit?: string;
+}
+
+export interface RagIndexJobDto {
+  jobId: string;
+  objectType: string;
+  objectId: string;
+  documentId?: string;
+  sourceType?: string;
+  sourceName?: string;
+  status: RagIndexJobStatus;
+  currentStep?: RagIndexJobStep;
+  chunkCount: number;
+  embeddedCount: number;
+  indexedCount: number;
+  warningCount: number;
+  errorMessage?: string;
+  chunkingStrategy?: string;
+  chunkMaxSize?: number;
+  chunkOverlap?: number;
+  chunkUnit?: string;
+  createdAt?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  durationMs?: number;
+}
+
+export interface RagIndexJobListResponseDto {
+  items: RagIndexJobDto[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
+export interface RagIndexJobLogDto {
+  logId: string;
+  jobId: string;
+  level: RagIndexJobLogLevel;
+  step?: RagIndexJobStep;
+  code?: string;
+  message?: string;
+  detail?: string;
+  createdAt?: string;
+}
+
+export interface RagIndexChunkDto {
+  chunkId: string;
+  documentId: string;
+  parentChunkId?: string;
+  chunkOrder?: number;
+  chunkType?: string;
+  content: string;
+  score?: number;
+  headingPath?: string;
+  sourceRef?: string;
+  page?: number;
+  slide?: number;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  indexedAt?: string;
+}
+
+export interface RagIndexChunkPageResponseDto {
+  items: RagIndexChunkDto[];
+  offset: number;
+  limit: number;
+  returned: number;
+  hasMore: boolean;
+}
+
+export interface RagChunkPreviewRequestDto {
+  text: string;
+  documentId?: string;
+  objectType?: string;
+  objectId?: string;
+  contentType?: string;
+  filename?: string;
+  strategy?: string;
+  maxSize?: number;
+  overlap?: number;
+  unit?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RagChunkPreviewItemDto {
+  chunkId: string;
+  content: string;
+  contentLength: number;
+  chunkOrder?: number;
+  chunkType?: string;
+  parentChunkId?: string;
+  previousChunkId?: string;
+  nextChunkId?: string;
+  headingPath?: string;
+  section?: string;
+  sourceRef?: string;
+  page?: number;
+  slide?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RagChunkPreviewResponseDto {
+  chunks: RagChunkPreviewItemDto[];
+  totalChunks: number;
+  totalChars: number;
+  strategy: string;
+  maxSize: number;
+  overlap: number;
+  unit: string;
+  warnings: string[];
+}
+
+export interface RagChunkConfigResponseDto {
+  chunking: {
+    available: boolean;
+    enabled: boolean;
+    strategy: string;
+    previewStrategy?: string | null;
+    defaultStrategyPreviewSupported: boolean;
+    maxSize: number;
+    overlap: number;
+    availableStrategies: string[];
+    registeredChunkers: string[];
+    chunkingOrchestratorAvailable: boolean;
+  };
+  legacyFallback: {
+    chunkSize: number;
+    chunkOverlap: number;
+    textChunkerAvailable: boolean;
+  };
+  ragContext: {
+    maxChunks: number;
+    maxChars: number;
+    includeScores: boolean;
+    expansion: {
+      enabled: boolean;
+      candidateMultiplier: number;
+      maxCandidates: number;
+      previousWindow: number;
+      nextWindow: number;
+      includeParentContent: boolean;
+    };
+  };
+  limits: {
+    enabled: boolean;
+    maxInputChars: number;
+    maxPreviewChunks: number;
+  };
 }

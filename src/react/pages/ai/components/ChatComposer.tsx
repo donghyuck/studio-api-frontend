@@ -3,6 +3,16 @@ import { ArrowUpwardOutlined, CheckOutlined, ExpandMoreOutlined, HistoryOutlined
 import { alpha, Box, Button, IconButton, Menu, MenuItem, Popover, Stack, Tooltip, Typography } from "@mui/material";
 import type { ProviderInfo } from "@/types/studio/ai";
 
+const numberFormatter = new Intl.NumberFormat("ko-KR");
+
+function formatNumber(value?: number) {
+  return typeof value === "number" ? numberFormatter.format(value) : "-";
+}
+
+function formatMilliseconds(value?: number) {
+  return typeof value === "number" ? `${numberFormatter.format(value)}ms` : "";
+}
+
 interface Props {
   input: string;
   sending: boolean;
@@ -30,6 +40,9 @@ interface Props {
   onSelectProvider: (provider: string) => void;
   onOpenSettings: () => void;
   onSelectHistory: (value: string) => void;
+  controls?: React.ReactNode;
+  settingsMenuLabel?: string;
+  settingsMenuDescription?: string;
 }
 
 export function ChatComposer({
@@ -55,6 +68,9 @@ export function ChatComposer({
   onSelectProvider,
   onOpenSettings,
   onSelectHistory,
+  controls,
+  settingsMenuLabel = "더 많은 모델",
+  settingsMenuDescription = "provider와 model을 직접 설정합니다.",
 }: Props) {
   const [historyAnchorEl, setHistoryAnchorEl] = useState<HTMLElement | null>(null);
   const historyMenuOpen = Boolean(historyAnchorEl);
@@ -102,6 +118,7 @@ export function ChatComposer({
               lineHeight: 1.55,
             }}
           />
+          {controls ? <Box>{controls}</Box> : null}
           <Stack direction="row" spacing={0.75} alignItems="center">
             <Tooltip title="최근 질문">
               <span>
@@ -124,15 +141,15 @@ export function ChatComposer({
                 </Tooltip>
                 {latencyMs ? (
                   <Typography variant="caption" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", px: 0.75, py: 0.25, borderRadius: "6px", bgcolor: "action.hover", fontSize: 11 }}>
-                    {latencyMs}ms
+                    {formatMilliseconds(latencyMs)}
                   </Typography>
                 ) : null}
                 {tokenUsage ? (
                   <Tooltip
-                    title={`input ${tokenUsage.inputTokens ?? "-"} · output ${tokenUsage.outputTokens ?? "-"} · total ${tokenUsage.totalTokens ?? "-"}`}
+                    title={`input ${formatNumber(tokenUsage.inputTokens)} · output ${formatNumber(tokenUsage.outputTokens)} · total ${formatNumber(tokenUsage.totalTokens)}`}
                   >
                     <Typography variant="caption" color="text.secondary" sx={{ display: "inline-flex", alignItems: "center", px: 0.75, py: 0.25, borderRadius: "6px", bgcolor: "action.hover", fontSize: 11 }}>
-                      tokens {tokenUsage.totalTokens ?? "-"}
+                      tokens {formatNumber(tokenUsage.totalTokens)}
                     </Typography>
                   </Tooltip>
                 ) : null}
@@ -217,8 +234,8 @@ export function ChatComposer({
           })}
           <Button variant="text" onClick={onOpenSettings} sx={{ justifyContent: "space-between", color: "text.primary", px: 1.5, py: 1 }}>
             <Box>
-              <Typography variant="body2">더 많은 모델</Typography>
-              <Typography variant="caption" color="text.secondary">provider와 model을 직접 설정합니다.</Typography>
+              <Typography variant="body2">{settingsMenuLabel}</Typography>
+              <Typography variant="caption" color="text.secondary">{settingsMenuDescription}</Typography>
             </Box>
             <ExpandMoreOutlined fontSize="small" sx={{ transform: "rotate(-90deg)" }} />
           </Button>

@@ -35,7 +35,7 @@ class GroupMemberSummariesDataSource implements AgGridCompatibleDataSource<Group
   error: unknown = null;
   dataItems: GroupMemberDto[] = [];
   total = 0;
-  pageSize = 20;
+  pageSize = 15;
   page = 0;
   private q = "";
 
@@ -460,7 +460,6 @@ export function GroupMembershipDialog({ open, onClose, groupId, groupName }: Pro
                 checkboxes: false,
                 headerCheckbox: false,
               }}
-              options={{ suppressRowClickSelection: true }}
             />
           </Stack>
         </DialogContent>

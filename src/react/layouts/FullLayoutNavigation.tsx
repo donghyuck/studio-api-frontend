@@ -118,6 +118,11 @@ export function buildNavSections(): NavSection[] {
           icon: <PsychologyAltOutlined fontSize="small" />,
         },
         {
+          label: "AI RAG Chat",
+          path: "/services/ai/rag-chat",
+          icon: <PsychologyAltOutlined fontSize="small" />,
+        },
+        {
           label: "AI RAG",
           path: "/services/ai/rag",
           icon: <TopicOutlined fontSize="small" />,

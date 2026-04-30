@@ -3,6 +3,12 @@ import type { RoleDto } from "@/react/pages/admin/datasource";
 import type { UserDto, PasswordPolicyDto, ResetPasswordRequest } from "@/types/studio/user";
 
 export interface UserRoleDto { roleId: number; name: string; description?: string | null; }
+export interface CreateUserRequest {
+  username: string;
+  password: string;
+  name: string;
+  email: string;
+}
 
 export interface UserAvatarPresence {
   hasAvatar: boolean;
@@ -12,10 +18,14 @@ export interface UserAvatarPresence {
 }
 
 export const reactUsersApi = {
+  createUser: (payload: CreateUserRequest) =>
+    apiRequest<number>("post", "/api/mgmt/users", { data: payload }),
   getUser: (userId: number) =>
     apiRequest<UserDto>("get", `/api/mgmt/users/${userId}`),
   updateUser: (userId: number, payload: Partial<UserDto>) =>
     apiRequest<UserDto>("put", `/api/mgmt/users/${userId}`, { data: payload }),
+  deleteUser: (userId: number) =>
+    apiRequest<void>("delete", `/api/mgmt/users/${userId}`),
   getUserRoles: (userId: number) =>
     apiRequest<UserRoleDto[]>("get", `/api/mgmt/users/${userId}/roles`),
   getUserDirectRoles: (userId: number) =>

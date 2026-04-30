@@ -729,7 +729,6 @@ export function RoleGrantedUsersDialog({
                   checkboxes: false,
                   headerCheckbox: false,
                 }}
-                options={{ suppressRowClickSelection: true }}
                 height={GRID_HEIGHT}
               />
             ) : (
@@ -793,7 +792,6 @@ export function RoleGrantedUsersDialog({
                   checkboxes: false,
                   headerCheckbox: false,
                 }}
-                options={{ suppressRowClickSelection: true }}
                 height={GRID_HEIGHT}
               />
             )}

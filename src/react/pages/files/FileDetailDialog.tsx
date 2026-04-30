@@ -25,9 +25,13 @@ import {
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import { useToast } from "@/react/feedback";
+import { reactAiApi } from "@/react/pages/ai/api";
 import { reactFilesApi } from "@/react/pages/files/api";
 import type { AttachmentDto } from "@/types/studio/files";
 import { resolveAxiosError } from "@/utils/helpers";
+
+const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
+const THUMBNAIL_RETRY_LIMIT = 8;
 
 interface Props {
   open: boolean;
@@ -55,6 +59,37 @@ function normalizeExtractedText(value: string) {
     .trim();
 }
 
+function ragObjectScopes(file: AttachmentDto | null, fallbackAttachmentId: number) {
+  const attachmentObjectId = String(fallbackAttachmentId);
+  const scopes: Array<{ objectType: string; objectId: string }> = [];
+  const append = (objectType?: string | number | null, objectId?: string | number | null) => {
+    const type = objectType == null ? "" : String(objectType).trim();
+    const id = objectId == null ? "" : String(objectId).trim();
+    if (!type || !id) {
+      return;
+    }
+    if (!scopes.some((scope) => scope.objectType === type && scope.objectId === id)) {
+      scopes.push({ objectType: type, objectId: id });
+    }
+  };
+
+  append(file?.objectType, attachmentObjectId);
+  append(file?.objectType, file?.objectId);
+  append("attachment", attachmentObjectId);
+
+  return scopes.length > 0 ? scopes : [{ objectType: "attachment", objectId: attachmentObjectId }];
+}
+
+function metadataMatchesAttachment(metadata: Record<string, unknown>, attachmentId: number) {
+  const expected = String(attachmentId);
+  const candidates = [
+    metadata.attachmentId,
+    metadata.sourceDocumentId,
+    metadata.documentId,
+  ];
+  return candidates.some((value) => value != null && String(value) === expected);
+}
+
 export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const toast = useToast();
   const [file, setFile] = useState<AttachmentDto | null>(null);
@@ -64,12 +99,20 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [textExtracted, setTextExtracted] = useState(false);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [thumbnailAvailable, setThumbnailAvailable] = useState(false);
+  const [thumbnailReloadKey, setThumbnailReloadKey] = useState(0);
+  const [ragJobId, setRagJobId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [textExtracting, setTextExtracting] = useState(false);
   const [ragIndexing, setRagIndexing] = useState(false);
 
   const metadataEntries = Object.entries(ragMetadata ?? {});
-  const thumbnailEligible = Boolean(file?.contentType?.startsWith("image/"));
+  const ragIndexCompleted = ragIndexed || metadataEntries.length > 0;
+  const ragIndexDisabled = loading || ragIndexCompleted || ragIndexing || Boolean(ragJobId);
+  const ragIndexTooltip = ragIndexCompleted
+    ? "이미 RAG 인덱싱이 완료된 파일입니다."
+    : ragJobId
+      ? "이미 RAG 색인 작업이 생성되었습니다."
+      : "이 파일을 RAG 검색 대상으로 색인합니다.";
 
   function clearThumbnail() {
     setThumbnailAvailable(false);
@@ -81,12 +124,31 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     });
   }
 
+  async function loadRagState(nextFile: AttachmentDto) {
+    for (const scope of ragObjectScopes(nextFile, nextFile.attachmentId)) {
+      const metadata = await reactAiApi.getRagObjectMetadata(scope.objectType, scope.objectId);
+      if (Object.keys(metadata ?? {}).length > 0 && metadataMatchesAttachment(metadata, nextFile.attachmentId)) {
+        return {
+          indexed: true,
+          metadata,
+        };
+      }
+    }
+
+    const indexed = await reactFilesApi.hasEmbedding(nextFile.attachmentId);
+    return {
+      indexed,
+      metadata: indexed ? await reactFilesApi.ragMetadata(nextFile.attachmentId) : null,
+    };
+  }
+
   useEffect(() => {
     setFile(null);
     setRagIndexed(false);
     setRagMetadata(null);
     setExtractedText("");
     setTextExtracted(false);
+    setRagJobId(null);
     clearThumbnail();
 
     if (!open || !attachmentId) {
@@ -108,20 +170,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         setExtractedText("");
         setTextExtracted(false);
 
-        const indexed = await reactFilesApi.hasEmbedding(requestedId);
+        const ragState = await loadRagState(nextFile);
         if (ignored) {
           return;
         }
 
-        setRagIndexed(indexed);
-        if (indexed) {
-          const metadata = await reactFilesApi.ragMetadata(requestedId);
-          if (!ignored) {
-            setRagMetadata(metadata);
-          }
-        } else {
-          setRagMetadata(null);
-        }
+        setRagIndexed(ragState.indexed);
+        setRagMetadata(ragState.metadata);
       } catch (error) {
         if (!ignored) {
           toast.error(resolveAxiosError(error));
@@ -143,39 +198,60 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }, [open, attachmentId, toast]);
 
   useEffect(() => {
-    if (!open || !attachmentId || !thumbnailEligible) {
+    if (!open || !attachmentId) {
       clearThumbnail();
       return;
     }
 
     let ignored = false;
+    let timer: number | undefined;
     const requestedId = attachmentId;
 
-    reactFilesApi
-      .fetchThumbnail(requestedId)
-      .then((blob) => {
-        if (ignored || requestedId !== attachmentId || blob.size === 0) {
-          return;
-        }
-        const objectUrl = URL.createObjectURL(blob);
-        setThumbnailUrl((currentUrl) => {
-          if (currentUrl) {
-            URL.revokeObjectURL(currentUrl);
+    function loadThumbnail(attempt: number) {
+      reactFilesApi
+        .fetchThumbnail(requestedId, 512)
+        .then((blob) => {
+          if (ignored || requestedId !== attachmentId) {
+            return;
           }
-          return objectUrl;
+          if (blob.size === 0) {
+            if (attempt < THUMBNAIL_RETRY_LIMIT) {
+              timer = window.setTimeout(() => loadThumbnail(attempt + 1), THUMBNAIL_RETRY_INTERVAL_MS);
+            } else {
+              setThumbnailAvailable(false);
+            }
+            return;
+          }
+          const objectUrl = URL.createObjectURL(blob);
+          setThumbnailUrl((currentUrl) => {
+            if (currentUrl) {
+              URL.revokeObjectURL(currentUrl);
+            }
+            return objectUrl;
+          });
+          setThumbnailAvailable(true);
+        })
+        .catch(() => {
+          if (ignored) {
+            return;
+          }
+          if (attempt < THUMBNAIL_RETRY_LIMIT) {
+            timer = window.setTimeout(() => loadThumbnail(attempt + 1), THUMBNAIL_RETRY_INTERVAL_MS);
+          } else {
+            setThumbnailAvailable(false);
+          }
         });
-        setThumbnailAvailable(true);
-      })
-      .catch(() => {
-        if (!ignored) {
-          setThumbnailAvailable(false);
-        }
-      });
+    }
+
+    loadThumbnail(0);
 
     return () => {
       ignored = true;
+      if (timer) {
+        window.clearTimeout(timer);
+      }
     };
-  }, [open, attachmentId, thumbnailEligible]);
+  }, [open, attachmentId, thumbnailReloadKey]);
 
   async function refreshDetail() {
     if (!attachmentId) return;
@@ -184,14 +260,16 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     setRagMetadata(null);
     setExtractedText("");
     setTextExtracted(false);
+    setRagJobId(null);
     clearThumbnail();
+    setThumbnailReloadKey((current) => current + 1);
     setLoading(true);
     try {
       const nextFile = await reactFilesApi.getById(attachmentId);
       setFile(nextFile);
-      const indexed = await reactFilesApi.hasEmbedding(attachmentId);
-      setRagIndexed(indexed);
-      setRagMetadata(indexed ? await reactFilesApi.ragMetadata(attachmentId) : null);
+      const ragState = await loadRagState(nextFile);
+      setRagIndexed(ragState.indexed);
+      setRagMetadata(ragState.metadata);
     } catch (error) {
       toast.error(resolveAxiosError(error));
     } finally {
@@ -237,15 +315,24 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }
 
   async function handleRagIndex() {
-    if (!attachmentId || !file || ragIndexed) return;
+    if (!attachmentId || !file || ragIndexCompleted) return;
 
     setRagIndexing(true);
     try {
-      await reactFilesApi.ragIndex(attachmentId, { useLlmKeywordExtraction: true });
-      setRagIndexed(true);
-      const metadata = await reactFilesApi.ragMetadata(attachmentId);
-      setRagMetadata(metadata);
-      toast.success(`${file.name} 파일은 문장(조각)으로 나눠 벡터 저장소에 저장되었습니다.`);
+      const [scope] = ragObjectScopes(file, attachmentId);
+      const job = await reactAiApi.createRagJob({
+        objectType: scope.objectType,
+        objectId: scope.objectId,
+        documentId: String(attachmentId),
+        sourceType: "attachment",
+        metadata: {
+          attachmentId: String(attachmentId),
+        },
+        forceReindex: true,
+        useLlmKeywordExtraction: true,
+      });
+      setRagJobId(job.jobId);
+      toast.success(`${file.name} 파일의 RAG 색인 작업이 생성되었습니다.`);
     } catch (error) {
       toast.error(resolveAxiosError(error));
     } finally {
@@ -331,7 +418,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     sx={{
                       width: "100%",
                       maxHeight: 220,
-                      bgcolor: "grey.100",
                       borderRadius: 1,
                       objectFit: "contain",
                     }}
@@ -398,20 +484,29 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                   <Typography variant="caption" color="text.secondary">
                     RAG
                   </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="error"
-                    startIcon={<TimelineOutlined fontSize="small" />}
-                    disabled={ragIndexed || ragIndexing}
-                    onClick={() => void handleRagIndex()}
-                  >
-                    RAG 인덱싱
-                  </Button>
+                  <Tooltip title={ragIndexTooltip}>
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        startIcon={<TimelineOutlined fontSize="small" />}
+                        disabled={ragIndexDisabled}
+                        onClick={() => void handleRagIndex()}
+                      >
+                        RAG 인덱싱
+                      </Button>
+                    </span>
+                  </Tooltip>
                 </Stack>
-                {ragIndexed ? (
+                {ragIndexCompleted ? (
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                     이 파일은 RAG 인덱싱이 완료되었습니다.
+                  </Typography>
+                ) : null}
+                {ragJobId ? (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                    RAG 색인 작업 ID: {ragJobId}
                   </Typography>
                 ) : null}
               </Box>

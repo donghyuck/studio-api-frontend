@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Accordion,
   AccordionDetails,
@@ -36,6 +36,7 @@ import type { GroupDto } from "@/react/pages/admin/datasource";
 
 export function GroupDetailPage() {
   const { groupId } = useParams<{ groupId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
   const propertiesEditorRef = useRef<PropertiesEditorHandle | null>(null);
@@ -89,6 +90,17 @@ export function GroupDetailPage() {
   useEffect(() => {
     loadGroup();
   }, [loadGroup]);
+
+  useEffect(() => {
+    const state = location.state as { openMembers?: boolean; openRoles?: boolean } | null;
+    if (state?.openMembers) {
+      setMembersOpen(true);
+      navigate(".", { replace: true, state: null });
+    } else if (state?.openRoles) {
+      setRolesOpen(true);
+      navigate(".", { replace: true, state: null });
+    }
+  }, [location.state, navigate]);
 
   useEffect(() => {
     if (!propertiesExpanded || !propertiesSectionRef.current) {

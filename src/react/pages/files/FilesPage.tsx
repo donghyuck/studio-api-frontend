@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, Avatar, Box, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import type { SelectionChangedEvent } from "ag-grid-community";
@@ -26,6 +27,218 @@ class FilesDataSource extends ReactPageDataSource<AttachmentDto> {
   constructor() {
     super("/api/mgmt/files");
   }
+}
+
+type ThumbnailCacheEntry = {
+  url?: string | null;
+  promise?: Promise<string | null>;
+  unavailableUntil?: number;
+};
+
+const thumbnailCache = new Map<number, ThumbnailCacheEntry>();
+const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
+const THUMBNAIL_RETRY_LIMIT = 6;
+const THUMBNAIL_MISSING_TTL_MS = 30_000;
+
+function getCachedThumbnailUrl(attachmentId: number) {
+  const entry = thumbnailCache.get(attachmentId);
+  if (!entry) {
+    return undefined;
+  }
+  if (entry.url === null && entry.unavailableUntil && entry.unavailableUntil < Date.now()) {
+    thumbnailCache.delete(attachmentId);
+    return undefined;
+  }
+  return entry.url;
+}
+
+async function requestThumbnail(attachmentId: number) {
+  const cached = getCachedThumbnailUrl(attachmentId);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const existing = thumbnailCache.get(attachmentId);
+  if (existing?.promise) {
+    return existing.promise;
+  }
+
+  const promise = new Promise<string | null>((resolve) => {
+    let attempt = 0;
+
+    function markUnavailable() {
+      thumbnailCache.set(attachmentId, {
+        url: null,
+        unavailableUntil: Date.now() + THUMBNAIL_MISSING_TTL_MS,
+      });
+      resolve(null);
+    }
+
+    function load() {
+      reactFilesApi
+        .fetchThumbnail(attachmentId, 128)
+        .then((blob) => {
+          if (blob.size === 0) {
+            if (attempt < THUMBNAIL_RETRY_LIMIT) {
+              attempt += 1;
+              window.setTimeout(load, THUMBNAIL_RETRY_INTERVAL_MS);
+            } else {
+              markUnavailable();
+            }
+            return;
+          }
+          const nextUrl = URL.createObjectURL(blob);
+          thumbnailCache.set(attachmentId, { url: nextUrl });
+          resolve(nextUrl);
+        })
+        .catch(() => {
+          if (attempt < THUMBNAIL_RETRY_LIMIT) {
+            attempt += 1;
+            window.setTimeout(load, THUMBNAIL_RETRY_INTERVAL_MS);
+          } else {
+            markUnavailable();
+          }
+        });
+    }
+
+    load();
+  });
+
+  thumbnailCache.set(attachmentId, { promise });
+  return promise;
+}
+
+const FileThumbnail = memo(function FileThumbnail({ attachmentId, name }: { attachmentId: number; name: string }) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null | undefined>(() =>
+    getCachedThumbnailUrl(attachmentId)
+  );
+
+  useEffect(() => {
+    const node = rootRef.current;
+    if (!node || visible) {
+      return;
+    }
+
+    if (!("IntersectionObserver" in window)) {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "160px" });
+    observer.observe(node);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [visible]);
+
+  useEffect(() => {
+    let ignore = false;
+    const cached = getCachedThumbnailUrl(attachmentId);
+    setThumbnailUrl(cached);
+
+    if (!attachmentId || !visible || cached !== undefined) {
+      return;
+    }
+
+    requestThumbnail(attachmentId).then((nextUrl) => {
+      if (!ignore) {
+        setThumbnailUrl(nextUrl);
+      }
+    });
+
+    return () => {
+      ignore = true;
+    };
+  }, [attachmentId, visible]);
+
+  useEffect(() => {
+    setVisible(false);
+    setThumbnailUrl(getCachedThumbnailUrl(attachmentId));
+  }, [attachmentId]);
+
+  return (
+    <Box
+      ref={rootRef}
+      sx={{
+        width: 32,
+        height: 32,
+        borderRadius: "6px",
+        flex: "0 0 auto",
+        overflow: "hidden",
+        border: "1px solid",
+        borderColor: "divider",
+        bgcolor: "transparent",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {thumbnailUrl ? (
+        <Box
+          component="img"
+          src={thumbnailUrl}
+          alt={`${name} 썸네일`}
+          sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        <InsertDriveFileOutlinedIcon sx={{ fontSize: 18, color: "text.secondary" }} />
+      )}
+    </Box>
+  );
+});
+
+function FileNameCell({
+  file,
+  onOpen,
+}: {
+  file: AttachmentDto;
+  onOpen: (attachmentId: number) => void;
+}) {
+  return (
+    <Box
+      component="button"
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen(file.attachmentId);
+      }}
+      sx={{
+        width: "100%",
+        height: "100%",
+        border: 0,
+        p: 0,
+        bgcolor: "transparent",
+        color: "primary.main",
+        cursor: "pointer",
+        font: "inherit",
+        textAlign: "left",
+        display: "flex",
+        alignItems: "center",
+        gap: 1,
+        minWidth: 0,
+        "&:hover .file-name-text": { textDecoration: "underline" },
+      }}
+    >
+      <FileThumbnail attachmentId={file.attachmentId} name={file.name} />
+      <Typography
+        className="file-name-text"
+        variant="body2"
+        noWrap
+        sx={{ minWidth: 0, color: "primary.main" }}
+        title={file.name}
+      >
+        {file.name}
+      </Typography>
+    </Box>
+  );
 }
 
 function SelectionCheckbox({
@@ -201,28 +414,13 @@ export function FilesPage() {
         flex: 1.6,
         sortable: true,
         filter: false,
-        cellRenderer: (params: ICellRendererParams<AttachmentDto>) => (
-          <Box
-            component="button"
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              setDetailAttachmentId(params.data?.attachmentId ?? null);
-            }}
-            sx={{
-              border: 0,
-              p: 0,
-              bgcolor: "transparent",
-              color: "primary.main",
-              cursor: "pointer",
-              font: "inherit",
-              textAlign: "left",
-              "&:hover": { textDecoration: "underline" },
-            }}
-          >
-            {params.value}
-          </Box>
-        ),
+        cellRenderer: (params: ICellRendererParams<AttachmentDto>) =>
+          params.data ? (
+            <FileNameCell
+              file={params.data}
+              onOpen={(attachmentId) => setDetailAttachmentId(attachmentId)}
+            />
+          ) : null,
       },
       {
         field: "size",
@@ -272,6 +470,7 @@ export function FilesPage() {
       },
       suppressRowClickSelection: true,
       rowMultiSelectWithClick: true,
+      rowHeight: 48,
     }),
     []
   );

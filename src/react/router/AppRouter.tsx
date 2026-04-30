@@ -8,7 +8,9 @@ import { ForumTopicDetailPage } from "@/react/pages/community/ForumTopicDetailPa
 import { ForumTopicListPage } from "@/react/pages/community/ForumTopicListPage";
 import { DashboardPage } from "@/react/pages/DashboardPage";
 import { ChatPage } from "@/react/pages/ai/ChatPage";
-import { RagPage } from "@/react/pages/ai/RagPage";
+import { RagChatPage } from "@/react/pages/ai/RagChatPage";
+import { RagJobDetailPage } from "@/react/pages/ai/RagJobDetailPage";
+import { RagJobListPage } from "@/react/pages/ai/RagJobListPage";
 import { DocumentListPage } from "@/react/pages/documents/DocumentListPage";
 import { DocumentEditorPage } from "@/react/pages/documents/DocumentEditorPage";
 import { FilesPage } from "@/react/pages/files/FilesPage";
@@ -76,7 +78,9 @@ export function AppRouter() {
             element={<ObjectStoragePage />}
           />
           <Route path="services/ai/chat" element={<ChatPage />} />
-          <Route path="services/ai/rag" element={<RagPage />} />
+          <Route path="services/ai/rag-chat" element={<RagChatPage />} />
+          <Route path="services/ai/rag" element={<RagJobListPage />} />
+          <Route path="services/ai/rag/jobs/:jobId" element={<RagJobDetailPage />} />
           {/* Admin and Security Pages */}
           <Route path="admin/*" element={<AdminRoutes />} />
         </Route>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Accordion,
   AccordionDetails,
@@ -43,6 +43,7 @@ import { UserRolesDialog } from "./UserRolesDialog";
 
 export function UserDetailPage() {
   const { userId } = useParams<{ userId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
@@ -118,6 +119,13 @@ export function UserDetailPage() {
   useEffect(() => {
     loadUser();
   }, [loadUser]);
+
+  useEffect(() => {
+    if ((location.state as { openRoles?: boolean } | null)?.openRoles) {
+      setRolesOpen(true);
+      navigate(".", { replace: true, state: null });
+    }
+  }, [location.state, navigate]);
 
   useEffect(() => {
     if (!propertiesExpanded) {
