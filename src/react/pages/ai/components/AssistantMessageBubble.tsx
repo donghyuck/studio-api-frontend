@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Box, Divider, IconButton, Popover, Stack, Tooltip, Typography } from "@mui/material";
 import { ContentCopyOutlined, DescriptionOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
 import type { ChatMessage, ChatResponseMetadataDto } from "@/react/pages/ai/components/chatTypes";
+import type { RagReferenceDto } from "@/types/studio/ai";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -9,7 +10,7 @@ function formatNumber(value?: number) {
   return typeof value === "number" ? numberFormatter.format(value) : "-";
 }
 
-interface RagReference {
+interface NormalizedRagReference {
   index?: number;
   title?: string;
   chunk?: string;
@@ -17,16 +18,64 @@ interface RagReference {
   content?: string;
 }
 
-function getRagReferences(metadata?: ChatResponseMetadataDto): RagReference[] {
-  const references = metadata?.ragReferences;
-  return Array.isArray(references) ? references.slice(0, 5) as RagReference[] : [];
+function stringifyValue(value: unknown) {
+  if (value == null || value === "") {
+    return "";
+  }
+  return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
-function formatReferenceTitle(reference: RagReference) {
+function metadataValue(reference: RagReferenceDto, keys: string[]) {
+  for (const key of keys) {
+    const value = reference.metadata?.[key];
+    if (value != null && value !== "") {
+      return stringifyValue(value);
+    }
+  }
+  return "";
+}
+
+function normalizeReference(reference: RagReferenceDto, fallbackIndex: number): NormalizedRagReference {
+  const title =
+    reference.sourceName ||
+    metadataValue(reference, ["sourceName", "fileName", "filename", "originalFilename", "documentName", "title"]) ||
+    reference.documentId ||
+    `근거 ${reference.index ?? fallbackIndex}`;
+  const page = reference.page ?? reference.pageNumber ?? metadataValue(reference, ["page", "pageNumber", "page_number"]);
+  const slide = reference.slide ?? reference.slideNumber ?? metadataValue(reference, ["slide", "slideNumber", "slide_number"]);
+  const chunkOrder = reference.chunkOrder ?? metadataValue(reference, ["chunkOrder", "chunkIndex", "chunk_order", "chunk_index"]);
+  const chunk =
+    (page != null && page !== "" ? `p.${stringifyValue(page)}` : "") ||
+    (slide != null && slide !== "" ? `slide ${stringifyValue(slide)}` : "") ||
+    (chunkOrder != null && chunkOrder !== "" ? `chunk #${stringifyValue(chunkOrder)}` : "") ||
+    reference.sourceRef ||
+    reference.chunkId ||
+    metadataValue(reference, ["sourceRef", "chunkId", "chunk_id", "id"]);
+
+  return {
+    index: reference.index ?? fallbackIndex,
+    title,
+    chunk,
+    score: reference.score,
+    content: reference.content,
+  };
+}
+
+function getRagReferences(metadata?: ChatResponseMetadataDto): NormalizedRagReference[] {
+  const references = metadata?.ragReferences;
+  return Array.isArray(references)
+    ? references
+        .slice(0, 5)
+        .filter((reference): reference is RagReferenceDto => typeof reference === "object" && reference !== null)
+        .map((reference, index) => normalizeReference(reference, index + 1))
+    : [];
+}
+
+function formatReferenceTitle(reference: NormalizedRagReference) {
   return [reference.title || `근거 ${reference.index ?? ""}`, reference.chunk].filter(Boolean).join(" · ");
 }
 
-function formatReferenceSummary(reference: RagReference) {
+function formatReferenceSummary(reference: NormalizedRagReference) {
   return (reference.content ?? "").replace(/\s+/g, " ").trim();
 }
 

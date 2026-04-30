@@ -21,7 +21,7 @@ import { reactAiApi } from "@/react/pages/ai/api";
 import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
 import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
 import type { ChatMessage } from "@/react/pages/ai/components/chatTypes";
-import type { AiInfoResponse, ChatMessageDto, ProviderInfo, SearchResultDto } from "@/types/studio/ai";
+import type { AiInfoResponse, ChatMessageDto, ProviderInfo } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 
 const RAG_CHAT_INPUT_HISTORY_KEY = "ai_rag_chat_input_history";
@@ -36,75 +36,6 @@ function toRequestMessage(message: ChatMessage): ChatMessageDto {
 function numberOrUndefined(value: string) {
   const nextValue = Number(value);
   return Number.isFinite(nextValue) ? nextValue : undefined;
-}
-
-function metadataValue(metadata: Record<string, unknown> | undefined, keys: string[]) {
-  if (!metadata) {
-    return undefined;
-  }
-  for (const key of keys) {
-    const value = metadata[key];
-    if (value != null && value !== "") {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-function formatMetadataValue(value: unknown) {
-  if (value == null || value === "") {
-    return "";
-  }
-  return typeof value === "object" ? JSON.stringify(value) : String(value);
-}
-
-function resultSourceName(row: SearchResultDto) {
-  const metadataName = metadataValue(row.metadata, [
-    "sourceName",
-    "fileName",
-    "filename",
-    "originalFilename",
-    "documentName",
-    "title",
-    "name",
-  ]);
-  if (metadataName != null) {
-    return formatMetadataValue(metadataName);
-  }
-
-  const objectType = metadataValue(row.metadata, ["objectType", "object_type"]);
-  const objectId = metadataValue(row.metadata, ["objectId", "object_id"]);
-  if (objectType != null && objectId != null) {
-    return `${formatMetadataValue(objectType)} #${formatMetadataValue(objectId)}`;
-  }
-
-  return row.documentId || "문서";
-}
-
-function resultChunkLabel(row: SearchResultDto) {
-  const page = metadataValue(row.metadata, ["page", "pageNumber", "page_number", "pageNo", "page_no"]);
-  if (page != null) {
-    return `p.${formatMetadataValue(page)}`;
-  }
-  const slide = metadataValue(row.metadata, ["slide", "slideNumber", "slide_number", "slideNo", "slide_no"]);
-  if (slide != null) {
-    return `slide ${formatMetadataValue(slide)}`;
-  }
-  const order = metadataValue(row.metadata, ["chunkOrder", "chunkIndex", "chunk_order", "chunk_index", "order", "index"]);
-  if (order != null) {
-    return `chunk #${formatMetadataValue(order)}`;
-  }
-  return formatMetadataValue(metadataValue(row.metadata, ["chunkId", "chunk_id", "id"]));
-}
-
-function toRagReferences(rows: SearchResultDto[]) {
-  return rows.slice(0, 5).map((row, index) => ({
-    index: index + 1,
-    title: resultSourceName(row),
-    chunk: resultChunkLabel(row),
-    score: row.score,
-    content: row.content,
-  }));
 }
 
 export function RagChatPage() {
@@ -205,15 +136,6 @@ export function RagChatPage() {
     setInput("");
 
     try {
-      const referencesPromise = reactAiApi
-        .searchRag({
-          query: trimmed,
-          topK: numericTopK,
-          minScore: numericMinScore,
-          hybrid: true,
-        })
-        .then(toRagReferences)
-        .catch(() => []);
       const response = await reactAiApi.sendRagChat({
         chat: {
           provider: provider || undefined,
@@ -232,7 +154,6 @@ export function RagChatPage() {
 
       const assistant = [...(response.messages ?? [])].reverse().find((item) => item.role === "assistant");
       const nextConversationId = response.metadata?.conversationId ?? response.conversationId;
-      const ragReferences = await referencesPromise;
       if (nextConversationId) {
         setConversationId(nextConversationId);
       }
@@ -245,8 +166,8 @@ export function RagChatPage() {
           createdAt: new Date().toISOString(),
           model: response.metadata?.resolvedModel ?? response.model ?? model,
           metadata: nextConversationId
-            ? { ...(response.metadata ?? {}), conversationId: nextConversationId, ragReferences }
-            : { ...(response.metadata ?? {}), ragReferences },
+            ? { ...(response.metadata ?? {}), conversationId: nextConversationId }
+            : response.metadata,
         },
       ]);
     } catch (sendError) {

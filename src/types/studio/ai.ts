@@ -43,7 +43,26 @@ export interface ChatResponseMetadataDto {
   memoryMessageCount?: number;
   responseId?: string;
   finishReason?: string;
+  ragReferences?: RagReferenceDto[];
   [key: string]: unknown;
+}
+
+export interface RagReferenceDto {
+  index?: number;
+  documentId?: string;
+  sourceName?: string;
+  chunkId?: string;
+  chunkOrder?: number | string;
+  score?: number;
+  content?: string;
+  page?: number | string;
+  pageNumber?: number | string;
+  slide?: number | string;
+  slideNumber?: number | string;
+  sourceRef?: string;
+  section?: string;
+  heading?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChatRagRequestDto {
