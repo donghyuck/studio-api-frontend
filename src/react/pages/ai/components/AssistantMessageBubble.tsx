@@ -35,6 +35,18 @@ function metadataValue(reference: RagReferenceDto, keys: string[]) {
   return "";
 }
 
+function formatLocationFromSourceRef(sourceRef: string) {
+  const pageMatch = sourceRef.match(/page\[(\d+)]/i) ?? sourceRef.match(/\bpage\s*[:#-]?\s*(\d+)/i);
+  if (pageMatch?.[1]) {
+    return `페이지 ${pageMatch[1]}`;
+  }
+  const slideMatch = sourceRef.match(/slide\[(\d+)]/i) ?? sourceRef.match(/\bslide\s*[:#-]?\s*(\d+)/i);
+  if (slideMatch?.[1]) {
+    return `슬라이드 ${slideMatch[1]}`;
+  }
+  return "";
+}
+
 function normalizeReference(reference: RagReferenceDto, fallbackIndex: number): NormalizedRagReference {
   const title =
     reference.sourceName ||
@@ -43,14 +55,11 @@ function normalizeReference(reference: RagReferenceDto, fallbackIndex: number): 
     `근거 ${reference.index ?? fallbackIndex}`;
   const page = reference.page ?? reference.pageNumber ?? metadataValue(reference, ["page", "pageNumber", "page_number"]);
   const slide = reference.slide ?? reference.slideNumber ?? metadataValue(reference, ["slide", "slideNumber", "slide_number"]);
-  const chunkOrder = reference.chunkOrder ?? metadataValue(reference, ["chunkOrder", "chunkIndex", "chunk_order", "chunk_index"]);
+  const sourceRef = reference.sourceRef || reference.sourceRefs || metadataValue(reference, ["sourceRef", "sourceRefs"]);
   const chunk =
-    (page != null && page !== "" ? `p.${stringifyValue(page)}` : "") ||
-    (slide != null && slide !== "" ? `slide ${stringifyValue(slide)}` : "") ||
-    (chunkOrder != null && chunkOrder !== "" ? `chunk #${stringifyValue(chunkOrder)}` : "") ||
-    reference.sourceRef ||
-    reference.chunkId ||
-    metadataValue(reference, ["sourceRef", "chunkId", "chunk_id", "id"]);
+    (page != null && page !== "" ? `페이지 ${stringifyValue(page)}` : "") ||
+    (slide != null && slide !== "" ? `슬라이드 ${stringifyValue(slide)}` : "") ||
+    (sourceRef ? formatLocationFromSourceRef(sourceRef) : "");
 
   return {
     index: reference.index ?? fallbackIndex,

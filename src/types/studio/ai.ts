@@ -60,6 +60,7 @@ export interface RagReferenceDto {
   slide?: number | string;
   slideNumber?: number | string;
   sourceRef?: string;
+  sourceRefs?: string;
   section?: string;
   heading?: string;
   metadata?: Record<string, unknown>;
