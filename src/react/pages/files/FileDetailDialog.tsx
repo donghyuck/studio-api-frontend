@@ -126,12 +126,16 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   async function loadRagState(nextFile: AttachmentDto) {
     for (const scope of ragObjectScopes(nextFile, nextFile.attachmentId)) {
-      const metadata = await reactAiApi.getRagObjectMetadata(scope.objectType, scope.objectId);
-      if (Object.keys(metadata ?? {}).length > 0 && metadataMatchesAttachment(metadata, nextFile.attachmentId)) {
-        return {
-          indexed: true,
-          metadata,
-        };
+      try {
+        const metadata = await reactAiApi.getRagObjectMetadata(scope.objectType, scope.objectId);
+        if (Object.keys(metadata ?? {}).length > 0 && metadataMatchesAttachment(metadata, nextFile.attachmentId)) {
+          return {
+            indexed: true,
+            metadata,
+          };
+        }
+      } catch {
+        // Continue with the next possible object scope before using the attachment fallback.
       }
     }
 

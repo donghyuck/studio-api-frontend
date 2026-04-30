@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Alert,
@@ -101,6 +101,7 @@ export function RagJobListPage() {
   const [documentId, setDocumentId] = useState("");
   const [indexText, setIndexText] = useState("");
   const [forceReindex, setForceReindex] = useState(false);
+  const selectedJobIdRef = useRef<string | null>(null);
 
   const objectTypeOptions = useMemo<ObjectTypeOption[]>(
     () =>
@@ -114,6 +115,11 @@ export function RagJobListPage() {
   );
 
   const selectedObjectType = objectTypeOptions.find((item) => item.value === objectType) ?? null;
+
+  const setCurrentSelectedJob = useCallback((job: RagIndexJobDto | null) => {
+    selectedJobIdRef.current = job?.jobId ?? null;
+    setSelectedJob(job);
+  }, []);
 
   const filteredJobs = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -180,9 +186,9 @@ export function RagJobListPage() {
 
   useEffect(() => {
     if (selectedJob && !jobs.some((job) => job.jobId === selectedJob.jobId)) {
-      setSelectedJob(null);
+      setCurrentSelectedJob(null);
     }
-  }, [jobs, selectedJob]);
+  }, [jobs, selectedJob, setCurrentSelectedJob]);
 
   const openDetail = useCallback((jobId: string) => {
     navigate(`/services/ai/rag/jobs/${encodeURIComponent(jobId)}`);
@@ -478,7 +484,7 @@ export function RagJobListPage() {
             rowSelection={{
               mode: "singleRow",
               checkboxes: false,
-              enableClickSelection: true,
+              enableClickSelection: false,
             }}
             rowData={displayedJobs}
             loading={loading}
@@ -490,26 +496,26 @@ export function RagJobListPage() {
                 return;
               }
               if (selected) {
-                setSelectedJob(row);
-              } else if (selectedJob?.jobId === row.jobId) {
-                setSelectedJob(null);
+                setCurrentSelectedJob(row);
+              } else if (selectedJobIdRef.current === row.jobId) {
+                setCurrentSelectedJob(null);
               }
             }}
             events={[
               {
                 type: "rowClicked",
                 listener: (event) => {
-                  const typedEvent = event as {
-                    data?: RagIndexJobRow;
-                    node?: { setSelected?: (selected: boolean) => void };
-                  };
-                  const row = typedEvent.data;
-                  if (row) {
-                    const nextSelected = selectedJob?.jobId !== row.jobId;
-                    typedEvent.node?.setSelected?.(nextSelected);
-                    setSelectedJob(nextSelected ? row : null);
-                  }
-                },
+	                  const typedEvent = event as {
+	                    data?: RagIndexJobRow;
+	                    node?: { setSelected?: (selected: boolean) => void };
+	                  };
+	                  const row = typedEvent.data;
+	                  if (row) {
+	                    const nextSelected = selectedJobIdRef.current !== row.jobId;
+	                    typedEvent.node?.setSelected?.(nextSelected);
+	                    setCurrentSelectedJob(nextSelected ? row : null);
+	                  }
+	                },
               },
               {
                 type: "rowDoubleClicked",
