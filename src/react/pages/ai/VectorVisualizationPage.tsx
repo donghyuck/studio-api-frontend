@@ -477,6 +477,8 @@ export function VectorVisualizationPage() {
   const pointFiltersRef = useRef({ targetType: "", query: "", clusterId: "", limit: String(DEFAULT_LIMIT) });
   const itemCacheRef = useRef(new Map<string, VectorItemDetail>());
   const searchCacheRef = useRef(new Map<string, SearchVisualizationResponse>());
+  const projectionRequestSeqRef = useRef(0);
+  const pointsRequestSeqRef = useRef(0);
   const itemRequestSeqRef = useRef(0);
   const selectedItemIdRef = useRef<string | null>(null);
   const itemErrorRef = useRef<string | null>(null);
@@ -567,6 +569,8 @@ export function VectorVisualizationPage() {
         return;
       }
       const filters = pointFiltersRef.current;
+      const requestSeq = pointsRequestSeqRef.current + 1;
+      pointsRequestSeqRef.current = requestSeq;
       setLoadingPoints(true);
       setPointsError(null);
       try {
@@ -577,6 +581,9 @@ export function VectorVisualizationPage() {
           limit: clampLimit(filters.limit),
           offset: 0,
         });
+        if (pointsRequestSeqRef.current !== requestSeq) {
+          return;
+        }
         setPointsResponse(response);
         setSelectedItem(null);
         setSelectedVectorItemId(null);
@@ -585,9 +592,13 @@ export function VectorVisualizationPage() {
         setSearchResponse(null);
         setSearchError(null);
       } catch (error) {
-        setPointsError(resolveVectorError(error));
+        if (pointsRequestSeqRef.current === requestSeq) {
+          setPointsError(resolveVectorError(error));
+        }
       } finally {
-        setLoadingPoints(false);
+        if (pointsRequestSeqRef.current === requestSeq) {
+          setLoadingPoints(false);
+        }
       }
     },
     [selectedProjectionId]
@@ -600,9 +611,14 @@ export function VectorVisualizationPage() {
         setPointsResponse(null);
         return;
       }
+      const requestSeq = projectionRequestSeqRef.current + 1;
+      projectionRequestSeqRef.current = requestSeq;
       setProjectionError(null);
       try {
         const detail = await reactAiApi.getVectorProjection(projectionId);
+        if (projectionRequestSeqRef.current !== requestSeq) {
+          return;
+        }
         setProjectionDetail(detail);
         if (detail.status === "COMPLETED") {
           await loadPoints(projectionId);
@@ -614,7 +630,9 @@ export function VectorVisualizationPage() {
           setSearchResponse(null);
         }
       } catch (error) {
-        setProjectionError(resolveVectorError(error));
+        if (projectionRequestSeqRef.current === requestSeq) {
+          setProjectionError(resolveVectorError(error));
+        }
       }
     },
     [loadPoints]

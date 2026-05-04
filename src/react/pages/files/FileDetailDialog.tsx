@@ -238,13 +238,27 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
 
     const indexed = await reactFilesApi.hasEmbedding(nextFile.attachmentId);
-    return {
-      indexed,
-      metadata: indexed ? await reactFilesApi.ragMetadata(nextFile.attachmentId) : null,
-    };
+    if (!indexed) {
+      return {
+        indexed,
+        metadata: null,
+      };
+    }
+
+    try {
+      return {
+        indexed,
+        metadata: await reactFilesApi.ragMetadata(nextFile.attachmentId),
+      };
+    } catch {
+      return {
+        indexed,
+        metadata: null,
+      };
+    }
   }
 
-  useEffect(() => {
+  function resetDetailState() {
     setFile(null);
     setRagIndexed(false);
     setRagMetadata(null);
@@ -252,6 +266,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     setTextExtracted(false);
     setRagJobId(null);
     clearThumbnail();
+  }
+
+  useEffect(() => {
+    resetDetailState();
 
     if (!open || !attachmentId) {
       return;

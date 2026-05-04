@@ -92,7 +92,7 @@ function buildUppyRestrictions(policy: ObjectTypePolicyDto | null) {
   const allowedFileTypes = [...allowedExt, ...allowedMime];
 
   return {
-    maxFileSize: policy?.maxFileMb != null ? policy.maxFileMb * 1024 * 1024 : 50 * 1024 * 1024,
+    maxFileSize: policy?.maxFileMb != null ? policy.maxFileMb * 1024 * 1024 : undefined,
     maxNumberOfFiles: 1,
     allowedFileTypes: allowedFileTypes.length > 0 ? allowedFileTypes : undefined,
   };
@@ -196,7 +196,6 @@ export function FileUploadDialog({
       autoProceed: false,
       locale: Korean,
       restrictions: {
-        maxFileSize: 50 * 1024 * 1024,
         maxNumberOfFiles: 1,
       },
       onBeforeFileAdded: (currentFile) => {

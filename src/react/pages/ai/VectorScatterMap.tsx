@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
-import Plotly from "plotly.js-dist-min";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Config, Data, Layout, PlotMouseEvent } from "plotly.js";
 import { useTheme } from "@mui/material";
 import type { ProjectionPoint, SearchResultPoint } from "@/types/studio/ai";
@@ -17,6 +16,7 @@ type PlotElement = HTMLDivElement & {
   on?: (eventName: "plotly_click", listener: (event: PlotMouseEvent) => void) => void;
   removeAllListeners?: (eventName: "plotly_click") => void;
 };
+type PlotlyStatic = typeof import("plotly.js-dist-min")["default"];
 
 export function targetStyle(targetType?: string) {
   return TARGET_STYLE[targetType ?? ""] ?? { color: "#6B7280", symbol: "circle" };
@@ -63,7 +63,22 @@ export function VectorScatterMap({
 }: Props) {
   const theme = useTheme();
   const plotRef = useRef<HTMLDivElement | null>(null);
+  const plotlyRef = useRef<PlotlyStatic | null>(null);
+  const [plotlyReady, setPlotlyReady] = useState(false);
   const activeTargetTypeSet = useMemo(() => new Set(activeTargetTypes ?? []), [activeTargetTypes]);
+
+  useEffect(() => {
+    let ignored = false;
+    void import("plotly.js-dist-min").then((module) => {
+      if (!ignored) {
+        plotlyRef.current = module.default;
+        setPlotlyReady(true);
+      }
+    });
+    return () => {
+      ignored = true;
+    };
+  }, []);
 
   const baseTraces = useMemo<Data[]>(() => {
     const grouped = points.reduce<Record<string, ProjectionPoint[]>>((acc, point) => {
@@ -109,7 +124,8 @@ export function VectorScatterMap({
       return hideLowSimilarity ? 0 : 0.18;
     };
     const visibleSearchResults = searchResults.filter((point) => !hideLowSimilarity || minSimilarity == null || point.similarity == null || point.similarity >= minSimilarity);
-    const searchOpacities = searchResults.map(similarityOpacity);
+    const displayedSearchResults = hideLowSimilarity ? visibleSearchResults : searchResults;
+    const searchOpacities = displayedSearchResults.map(similarityOpacity);
     const trajectoryTraces =
       showSearchTrajectory && hasQueryPoint && visibleSearchResults.length > 0
         ? visibleSearchResults.map((point, index) => ({
@@ -150,17 +166,17 @@ export function VectorScatterMap({
         : [];
 
     const resultTrace =
-      searchResults.length > 0
+      displayedSearchResults.length > 0
         ? ([
             {
               type: "scattergl",
               mode: "markers",
               name: "Top-K 결과",
-              x: searchResults.map((point) => point.x),
-              y: searchResults.map((point) => point.y),
-              text: searchResults.map(hoverText),
+              x: displayedSearchResults.map((point) => point.x),
+              y: displayedSearchResults.map((point) => point.y),
+              text: displayedSearchResults.map(hoverText),
               hoverinfo: "text",
-              customdata: searchResults.map((point) => point.vectorItemId),
+              customdata: displayedSearchResults.map((point) => point.vectorItemId),
               marker: {
                 color: "rgba(245, 158, 11, 0.95)",
                 symbol: "circle-open",
@@ -237,7 +253,8 @@ export function VectorScatterMap({
 
   useEffect(() => {
     const plot = plotRef.current as PlotElement | null;
-    if (!plot) return;
+    const plotly = plotlyRef.current;
+    if (!plot || !plotlyReady || !plotly) return;
 
     const layout: Partial<Layout> = {
       autosize: true,
@@ -271,7 +288,7 @@ export function VectorScatterMap({
       modeBarButtonsToRemove: ["lasso2d", "select2d"],
     };
 
-    void Plotly.react(plot, traces, layout, config).then(() => {
+    void plotly.react(plot, traces, layout, config).then(() => {
       plot.removeAllListeners?.("plotly_click");
       plot.on?.("plotly_click", (event) => {
         const vectorItemId = event.points?.[0]?.customdata;
@@ -284,16 +301,17 @@ export function VectorScatterMap({
     return () => {
       plot.removeAllListeners?.("plotly_click");
     };
-  }, [onSelectPoint, theme, traces]);
+  }, [onSelectPoint, plotlyReady, theme, traces]);
 
   useEffect(() => {
     const plot = plotRef.current;
-    if (!plot) return;
+    const plotly = plotlyRef.current;
+    if (!plot || !plotlyReady || !plotly) return;
     let frame = 0;
     const resizeObserver = new ResizeObserver(() => {
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
-        void Plotly.Plots.resize(plot);
+        void plotly.Plots.resize(plot);
       });
     });
     resizeObserver.observe(plot);
@@ -301,11 +319,12 @@ export function VectorScatterMap({
       window.cancelAnimationFrame(frame);
       resizeObserver.disconnect();
     };
-  }, []);
+  }, [plotlyReady]);
 
   useEffect(() => () => {
-    if (plotRef.current) {
-      Plotly.purge(plotRef.current);
+    const plotly = plotlyRef.current;
+    if (plotRef.current && plotly) {
+      plotly.purge(plotRef.current);
     }
   }, []);
 
