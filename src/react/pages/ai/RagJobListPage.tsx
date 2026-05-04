@@ -27,12 +27,13 @@ import {
   CancelOutlined,
   CheckCircleOutline,
   ChevronRight,
+  DeleteOutline,
   ErrorOutline,
   HourglassEmptyOutlined,
   HubOutlined,
   WarningAmberOutlined,
 } from "@mui/icons-material";
-import type { ColDef, GridOptions, ICellRendererParams } from "ag-grid-community";
+import type { ColDef, GridOptions, ICellRendererParams, RowClickedEvent, RowDoubleClickedEvent } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { RagChunkSimulationDialog } from "@/react/pages/ai/RagChunkSimulationDialog";
@@ -92,7 +93,9 @@ export function RagJobListPage() {
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [chunkSimulationOpen, setChunkSimulationOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [selectedJob, setSelectedJob] = useState<RagIndexJobDto | null>(null);
   const [objectTypes, setObjectTypes] = useState<ObjectTypeDto[]>([]);
   const [sourceMode, setSourceMode] = useState<SourceMode>("attachment");
@@ -194,14 +197,42 @@ export function RagJobListPage() {
     navigate(`/services/ai/rag/jobs/${encodeURIComponent(jobId)}`);
   }, [navigate]);
 
+  const handleRowClicked = useCallback(
+    (event: RowClickedEvent<RagIndexJobRow>) => {
+      const row = event.data;
+      if (!row) {
+        return;
+      }
+
+      const nextSelected = selectedJobIdRef.current !== row.jobId;
+      event.api.deselectAll();
+      if (nextSelected) {
+        event.node.setSelected(true);
+      }
+      setCurrentSelectedJob(nextSelected ? row : null);
+    },
+    [setCurrentSelectedJob]
+  );
+
+  const handleRowDoubleClicked = useCallback(
+    (event: RowDoubleClickedEvent<RagIndexJobRow>) => {
+      if (event.data) {
+        openDetail(event.data.jobId);
+      }
+    },
+    [openDetail]
+  );
+
   const gridOptions = useMemo<GridOptions<RagIndexJobRow>>(
     () => ({
       getRowId: (params) => params.data.jobId,
+      onRowClicked: handleRowClicked,
+      onRowDoubleClicked: handleRowDoubleClicked,
       rowClassRules: {
         "rag-job-row-selected": (params) => Boolean(params.data?.__selected),
       },
     }),
-    []
+    [handleRowClicked, handleRowDoubleClicked]
   );
 
   function resetCreateForm() {
@@ -242,6 +273,25 @@ export function RagJobListPage() {
       setError(resolveAxiosError(createError));
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleDeleteSelectedRagObject() {
+    const job = selectedJob;
+    if (!job) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await reactAiApi.deleteRagObject(job.objectType, job.objectId);
+      setDeleteOpen(false);
+      setCurrentSelectedJob(null);
+      await loadJobs();
+    } catch (deleteError) {
+      setError(resolveAxiosError(deleteError));
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -386,6 +436,25 @@ export function RagJobListPage() {
                 <HubOutlined fontSize="small" />
               </IconButton>
             </Tooltip>
+            <Tooltip
+              title={
+                selectedJob
+                  ? "선택한 색인 대상의 RAG 데이터와 종료된 색인 이력 삭제를 요청합니다. 삭제 전 확인 절차가 표시됩니다."
+                  : "삭제할 색인 작업을 먼저 선택하세요."
+              }
+            >
+              <span>
+                <IconButton
+                  size="small"
+                  color="error"
+                  aria-label="선택한 RAG 색인 데이터 삭제"
+                  disabled={!selectedJob || selectedJob.status === "PENDING" || selectedJob.status === "RUNNING"}
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <DeleteOutline fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
             <Tooltip title="새 색인 작업을 생성합니다. 생성 후 상세 화면으로 이동합니다.">
               <IconButton
                 size="small"
@@ -489,44 +558,6 @@ export function RagJobListPage() {
             rowData={displayedJobs}
             loading={loading}
             height={560}
-            onRowSelected={(event) => {
-              const row = (event as { data?: RagIndexJobRow; node?: { isSelected?: () => boolean } }).data;
-              const selected = (event as { node?: { isSelected?: () => boolean } }).node?.isSelected?.();
-              if (!row) {
-                return;
-              }
-              if (selected) {
-                setCurrentSelectedJob(row);
-              } else if (selectedJobIdRef.current === row.jobId) {
-                setCurrentSelectedJob(null);
-              }
-            }}
-            events={[
-              {
-                type: "rowClicked",
-                listener: (event) => {
-	                  const typedEvent = event as {
-	                    data?: RagIndexJobRow;
-	                    node?: { setSelected?: (selected: boolean) => void };
-	                  };
-	                  const row = typedEvent.data;
-	                  if (row) {
-	                    const nextSelected = selectedJobIdRef.current !== row.jobId;
-	                    typedEvent.node?.setSelected?.(nextSelected);
-	                    setCurrentSelectedJob(nextSelected ? row : null);
-	                  }
-	                },
-              },
-              {
-                type: "rowDoubleClicked",
-                listener: (event) => {
-                  const row = (event as { data?: RagIndexJobRow }).data;
-                  if (row) {
-                    openDetail(row.jobId);
-                  }
-                },
-              },
-            ]}
           />
         </Box>
       </Box>
@@ -621,6 +652,66 @@ export function RagJobListPage() {
             startIcon={creating ? <CircularProgress size={16} color="inherit" /> : undefined}
           >
             {creating ? "생성 중" : "생성"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={deleteOpen && Boolean(selectedJob)}
+        onClose={() => (deleting ? undefined : setDeleteOpen(false))}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>RAG 색인 데이터 삭제</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+            <Alert severity="warning">
+              이 작업은 선택한 객체의 RAG Chunk, Vector, Metadata와 종료된 색인 이력 삭제를 요청합니다. 삭제 후 해당 문서는 RAG 검색 결과와 이력 목록에서 제외될 수 있습니다.
+            </Alert>
+            <Box
+              component="dl"
+              sx={{
+                m: 0,
+                display: "grid",
+                gridTemplateColumns: "120px 1fr",
+                gap: 1,
+              }}
+            >
+              <Typography component="dt" variant="caption" color="text.secondary">
+                대상
+              </Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: "anywhere" }}>
+                {selectedJob ? sourceDisplayName(selectedJob) : "-"}
+              </Typography>
+              <Typography component="dt" variant="caption" color="text.secondary">
+                objectType
+              </Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0 }}>
+                {selectedJob?.objectType ?? "-"}
+              </Typography>
+              <Typography component="dt" variant="caption" color="text.secondary">
+                objectId
+              </Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0 }}>
+                {selectedJob?.objectId ?? "-"}
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              서버 삭제 API가 준비되어 있지 않으면 요청은 실패합니다. 실패 시 데이터는 변경되지 않습니다.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteOpen(false)} disabled={deleting}>
+            취소
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={!selectedJob || deleting}
+            startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : <DeleteOutline />}
+            onClick={() => void handleDeleteSelectedRagObject()}
+          >
+            삭제
           </Button>
         </DialogActions>
       </Dialog>

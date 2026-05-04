@@ -12,6 +12,10 @@ import {
   CircularProgress,
   Container,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Drawer,
   IconButton,
   Stack,
@@ -26,6 +30,7 @@ import {
   CloseOutlined,
   ContentCopyOutlined,
   DataObjectOutlined,
+  DeleteOutline,
   ExpandMoreOutlined,
   ImageOutlined,
   KeyboardArrowLeftOutlined,
@@ -845,6 +850,7 @@ export function RagJobDetailPage() {
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selectedChunkIndex = useMemo(
     () => chunks.findIndex((chunk) => chunkRowId(chunk) === chunkRowId(selectedChunk)),
@@ -961,6 +967,23 @@ export function RagJobDetailPage() {
       await loadDetail();
     } catch (cancelError) {
       setError(resolveAxiosError(cancelError));
+    } finally {
+      setMutating(false);
+    }
+  }
+
+  async function handleDeleteRagObject() {
+    if (!job) {
+      return;
+    }
+    setMutating(true);
+    setError(null);
+    try {
+      await reactAiApi.deleteRagObject(job.objectType, job.objectId);
+      setDeleteOpen(false);
+      navigate("/services/ai/rag");
+    } catch (deleteError) {
+      setError(resolveAxiosError(deleteError));
     } finally {
       setMutating(false);
     }
@@ -1104,6 +1127,26 @@ export function RagJobDetailPage() {
             >
               취소
             </Button>
+            <Tooltip
+              title={
+                job && job.status !== "PENDING" && job.status !== "RUNNING"
+                  ? "이 작업의 객체 기준 RAG 색인 데이터와 종료된 색인 이력 삭제를 요청합니다. 삭제 전 확인 절차가 표시됩니다."
+                  : "진행 중인 작업은 삭제할 수 없습니다."
+              }
+            >
+              <span>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  startIcon={<DeleteOutline />}
+                  disabled={!job || mutating || job.status === "PENDING" || job.status === "RUNNING"}
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  삭제
+                </Button>
+              </span>
+            </Tooltip>
           </Stack>
         }
       />
@@ -1296,6 +1339,61 @@ export function RagJobDetailPage() {
           </Box>
         </Box>
       ) : null}
+      <Dialog open={deleteOpen} onClose={() => (mutating ? undefined : setDeleteOpen(false))} maxWidth="sm" fullWidth>
+        <DialogTitle>RAG 색인 데이터 삭제</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+            <Alert severity="warning">
+              이 작업은 선택한 객체의 RAG Chunk, Vector, Metadata와 종료된 색인 이력 삭제를 요청합니다. 삭제 후 해당 문서는 RAG 검색 결과와 이력 목록에서 제외될 수 있습니다.
+            </Alert>
+            <Box
+              component="dl"
+              sx={{
+                m: 0,
+                display: "grid",
+                gridTemplateColumns: "120px 1fr",
+                gap: 1,
+              }}
+            >
+              <Typography component="dt" variant="caption" color="text.secondary">
+                대상
+              </Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: "anywhere" }}>
+                {sourceDisplayName(job)}
+              </Typography>
+              <Typography component="dt" variant="caption" color="text.secondary">
+                objectType
+              </Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0 }}>
+                {job?.objectType ?? "-"}
+              </Typography>
+              <Typography component="dt" variant="caption" color="text.secondary">
+                objectId
+              </Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0 }}>
+                {job?.objectId ?? "-"}
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              서버 삭제 API가 준비되어 있지 않으면 요청은 실패합니다. 실패 시 데이터는 변경되지 않습니다.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteOpen(false)} disabled={mutating}>
+            취소
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={!job || mutating}
+            startIcon={mutating ? <CircularProgress size={16} color="inherit" /> : <DeleteOutline />}
+            onClick={() => void handleDeleteRagObject()}
+          >
+            삭제
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
