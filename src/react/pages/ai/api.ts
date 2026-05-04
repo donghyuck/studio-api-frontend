@@ -205,6 +205,13 @@ export const reactAiApi = {
     return apiRequest<RagIndexJobDto>("post", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/cancel`);
   },
 
+  deleteRagObject(objectType: string, objectId: string) {
+    return apiRequest<void>(
+      "delete",
+      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}`
+    );
+  },
+
   getRagJobLogs(jobId: string) {
     return apiRequest<RagIndexJobLogDto[]>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/logs`);
   },

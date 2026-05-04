@@ -1339,7 +1339,12 @@ export function RagJobDetailPage() {
           </Box>
         </Box>
       ) : null}
-      <Dialog open={deleteOpen} onClose={() => (mutating ? undefined : setDeleteOpen(false))} maxWidth="sm" fullWidth>
+      <Dialog
+        open={deleteOpen && Boolean(job)}
+        onClose={() => (mutating ? undefined : setDeleteOpen(false))}
+        maxWidth="sm"
+        fullWidth
+      >
         <DialogTitle>RAG 색인 데이터 삭제</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5} sx={{ pt: 0.5 }}>
@@ -1359,7 +1364,7 @@ export function RagJobDetailPage() {
                 대상
               </Typography>
               <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: "anywhere" }}>
-                {sourceDisplayName(job)}
+                {job ? sourceDisplayName(job) : "-"}
               </Typography>
               <Typography component="dt" variant="caption" color="text.secondary">
                 objectType
