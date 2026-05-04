@@ -11,6 +11,7 @@ import {
 import {
   AccountCircleOutlined,
   ArticleOutlined,
+  BubbleChartOutlined,
   DashboardOutlined,
   ExpandLess,
   ExpandMore,
@@ -126,6 +127,11 @@ export function buildNavSections(): NavSection[] {
           label: "AI RAG",
           path: "/services/ai/rag",
           icon: <TopicOutlined fontSize="small" />,
+        },
+        {
+          label: "Vector Map",
+          path: "/services/ai/vector-visualization",
+          icon: <BubbleChartOutlined fontSize="small" />,
         },
       ],
     },

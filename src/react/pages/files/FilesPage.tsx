@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, Avatar, Box, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { Alert, Avatar, Box, CircularProgress, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -31,7 +31,6 @@ class FilesDataSource extends ReactPageDataSource<AttachmentDto> {
 
 type ThumbnailCacheEntry = {
   url?: string | null;
-  promise?: Promise<string | null>;
   unavailableUntil?: number;
 };
 
@@ -39,6 +38,18 @@ const thumbnailCache = new Map<number, ThumbnailCacheEntry>();
 const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
 const THUMBNAIL_RETRY_LIMIT = 6;
 const THUMBNAIL_MISSING_TTL_MS = 30_000;
+
+function shouldRetryThumbnail(status?: string) {
+  return !status || status === "pending";
+}
+
+function isImageContent(contentType?: string | null) {
+  return Boolean(contentType?.toLowerCase().startsWith("image/"));
+}
+
+function isReadyThumbnail(status?: string) {
+  return status !== "pending" && status !== "unavailable";
+}
 
 function getCachedThumbnailUrl(attachmentId: number) {
   const entry = thumbnailCache.get(attachmentId);
@@ -52,68 +63,22 @@ function getCachedThumbnailUrl(attachmentId: number) {
   return entry.url;
 }
 
-async function requestThumbnail(attachmentId: number) {
-  const cached = getCachedThumbnailUrl(attachmentId);
-  if (cached !== undefined) {
-    return cached;
-  }
-
-  const existing = thumbnailCache.get(attachmentId);
-  if (existing?.promise) {
-    return existing.promise;
-  }
-
-  const promise = new Promise<string | null>((resolve) => {
-    let attempt = 0;
-
-    function markUnavailable() {
-      thumbnailCache.set(attachmentId, {
-        url: null,
-        unavailableUntil: Date.now() + THUMBNAIL_MISSING_TTL_MS,
-      });
-      resolve(null);
-    }
-
-    function load() {
-      reactFilesApi
-        .fetchThumbnail(attachmentId, 128)
-        .then((blob) => {
-          if (blob.size === 0) {
-            if (attempt < THUMBNAIL_RETRY_LIMIT) {
-              attempt += 1;
-              window.setTimeout(load, THUMBNAIL_RETRY_INTERVAL_MS);
-            } else {
-              markUnavailable();
-            }
-            return;
-          }
-          const nextUrl = URL.createObjectURL(blob);
-          thumbnailCache.set(attachmentId, { url: nextUrl });
-          resolve(nextUrl);
-        })
-        .catch(() => {
-          if (attempt < THUMBNAIL_RETRY_LIMIT) {
-            attempt += 1;
-            window.setTimeout(load, THUMBNAIL_RETRY_INTERVAL_MS);
-          } else {
-            markUnavailable();
-          }
-        });
-    }
-
-    load();
-  });
-
-  thumbnailCache.set(attachmentId, { promise });
-  return promise;
-}
-
-const FileThumbnail = memo(function FileThumbnail({ attachmentId, name }: { attachmentId: number; name: string }) {
+const FileThumbnail = memo(function FileThumbnail({
+  attachmentId,
+  name,
+  contentType,
+}: {
+  attachmentId: number;
+  name: string;
+  contentType?: string | null;
+}) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const transientUrlRef = useRef<string | null>(null);
   const [visible, setVisible] = useState(false);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null | undefined>(() =>
     getCachedThumbnailUrl(attachmentId)
   );
+  const [thumbnailLoading, setThumbnailLoading] = useState(false);
 
   useEffect(() => {
     const node = rootRef.current;
@@ -141,27 +106,118 @@ const FileThumbnail = memo(function FileThumbnail({ attachmentId, name }: { atta
 
   useEffect(() => {
     let ignore = false;
+    let timer: number | undefined;
     const cached = getCachedThumbnailUrl(attachmentId);
     setThumbnailUrl(cached);
+    setThumbnailLoading(false);
 
     if (!attachmentId || !visible || cached !== undefined) {
       return;
     }
 
-    requestThumbnail(attachmentId).then((nextUrl) => {
-      if (!ignore) {
-        setThumbnailUrl(nextUrl);
+    function markUnavailable() {
+      thumbnailCache.set(attachmentId, {
+        url: null,
+        unavailableUntil: Date.now() + THUMBNAIL_MISSING_TTL_MS,
+      });
+      setThumbnailUrl(null);
+      setThumbnailLoading(false);
+    }
+
+    function loadOriginalImageFallback() {
+      if (!isImageContent(contentType)) {
+        markUnavailable();
+        return;
       }
-    });
+
+      reactFilesApi
+        .downloadBlob(attachmentId)
+        .then((blob) => {
+          if (ignore) {
+            return;
+          }
+          if (blob.size === 0) {
+            markUnavailable();
+            return;
+          }
+          const nextUrl = URL.createObjectURL(blob);
+          thumbnailCache.set(attachmentId, { url: nextUrl });
+          setThumbnailUrl(nextUrl);
+          setThumbnailLoading(false);
+        })
+        .catch(() => {
+          if (!ignore) {
+            markUnavailable();
+          }
+        });
+    }
+
+    function loadThumbnail(attempt: number) {
+      reactFilesApi
+        .fetchThumbnail(attachmentId, 128)
+        .then(({ blob, status, retryAfterMs }) => {
+          if (ignore) {
+            return;
+          }
+          if (blob.size > 0) {
+            const nextUrl = URL.createObjectURL(blob);
+            if (isReadyThumbnail(status)) {
+              if (transientUrlRef.current) {
+                URL.revokeObjectURL(transientUrlRef.current);
+              }
+              thumbnailCache.set(attachmentId, { url: nextUrl });
+              transientUrlRef.current = null;
+              setThumbnailLoading(false);
+            } else {
+              if (transientUrlRef.current) {
+                URL.revokeObjectURL(transientUrlRef.current);
+              }
+              transientUrlRef.current = nextUrl;
+            }
+            setThumbnailUrl(nextUrl);
+          }
+          if (isReadyThumbnail(status) && blob.size > 0) {
+            return;
+          }
+          if (shouldRetryThumbnail(status) && attempt < THUMBNAIL_RETRY_LIMIT) {
+            setThumbnailLoading(true);
+            timer = window.setTimeout(() => loadThumbnail(attempt + 1), retryAfterMs ?? THUMBNAIL_RETRY_INTERVAL_MS);
+            return;
+          }
+          loadOriginalImageFallback();
+        })
+        .catch(() => {
+          if (ignore) {
+            return;
+          }
+          if (attempt < THUMBNAIL_RETRY_LIMIT) {
+            setThumbnailLoading(true);
+            timer = window.setTimeout(() => loadThumbnail(attempt + 1), THUMBNAIL_RETRY_INTERVAL_MS);
+          } else {
+            loadOriginalImageFallback();
+          }
+        });
+    }
+
+    setThumbnailLoading(true);
+    loadThumbnail(0);
 
     return () => {
       ignore = true;
+      if (timer) {
+        window.clearTimeout(timer);
+      }
+      if (transientUrlRef.current) {
+        URL.revokeObjectURL(transientUrlRef.current);
+        transientUrlRef.current = null;
+      }
     };
-  }, [attachmentId, visible]);
+  }, [attachmentId, contentType, visible]);
 
   useEffect(() => {
     setVisible(false);
     setThumbnailUrl(getCachedThumbnailUrl(attachmentId));
+    setThumbnailLoading(false);
   }, [attachmentId]);
 
   return (
@@ -186,8 +242,10 @@ const FileThumbnail = memo(function FileThumbnail({ attachmentId, name }: { atta
           component="img"
           src={thumbnailUrl}
           alt={`${name} 썸네일`}
-          sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          sx={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
         />
+      ) : thumbnailLoading ? (
+        <CircularProgress size={16} thickness={4} />
       ) : (
         <InsertDriveFileOutlinedIcon sx={{ fontSize: 18, color: "text.secondary" }} />
       )}
@@ -227,7 +285,7 @@ function FileNameCell({
         "&:hover .file-name-text": { textDecoration: "underline" },
       }}
     >
-      <FileThumbnail attachmentId={file.attachmentId} name={file.name} />
+      <FileThumbnail attachmentId={file.attachmentId} name={file.name} contentType={file.contentType} />
       <Typography
         className="file-name-text"
         variant="body2"

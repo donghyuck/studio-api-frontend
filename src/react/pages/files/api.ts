@@ -16,6 +16,12 @@ export interface FileListParams {
   objectId?: number;
 }
 
+export interface ThumbnailResponse {
+  blob: Blob;
+  status?: string;
+  retryAfterMs?: number;
+}
+
 export const reactFilesApi = {
   async getById(attachmentId: number) {
     return apiRequest<AttachmentDto>("get", `/api/mgmt/files/${attachmentId}`);
@@ -62,9 +68,21 @@ export const reactFilesApi = {
       `/api/mgmt/files/${attachmentId}/rag/metadata`
     );
   },
-  async fetchThumbnail(attachmentId: number, size = 256, format = "png") {
-    const response = await apiClient.get<Blob>(`/api/mgmt/files/${attachmentId}/thumbnail`, {
+  async fetchThumbnail(attachmentId: number, size = 256, format = "png"): Promise<ThumbnailResponse> {
+    const response = await apiClient.get<Blob>(`/api/attachments/${attachmentId}/thumbnail`, {
       params: { size, format },
+      responseType: "blob",
+      withCredentials: true,
+    });
+    const retryAfter = Number(response.headers["retry-after"]);
+    return {
+      blob: response.data,
+      status: response.headers["x-thumbnail-status"],
+      retryAfterMs: Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : undefined,
+    };
+  },
+  async downloadBlob(attachmentId: number) {
+    const response = await apiClient.get<Blob>(`/api/attachments/${attachmentId}/download`, {
       responseType: "blob",
       withCredentials: true,
     });

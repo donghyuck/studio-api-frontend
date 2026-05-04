@@ -11,6 +11,7 @@ import { ChatPage } from "@/react/pages/ai/ChatPage";
 import { RagChatPage } from "@/react/pages/ai/RagChatPage";
 import { RagJobDetailPage } from "@/react/pages/ai/RagJobDetailPage";
 import { RagJobListPage } from "@/react/pages/ai/RagJobListPage";
+import { VectorVisualizationPage } from "@/react/pages/ai/VectorVisualizationPage";
 import { DocumentListPage } from "@/react/pages/documents/DocumentListPage";
 import { DocumentEditorPage } from "@/react/pages/documents/DocumentEditorPage";
 import { FilesPage } from "@/react/pages/files/FilesPage";
@@ -81,6 +82,10 @@ export function AppRouter() {
           <Route path="services/ai/rag-chat" element={<RagChatPage />} />
           <Route path="services/ai/rag" element={<RagJobListPage />} />
           <Route path="services/ai/rag/jobs/:jobId" element={<RagJobDetailPage />} />
+          <Route
+            path="services/ai/vector-visualization"
+            element={<VectorVisualizationPage />}
+          />
           {/* Admin and Security Pages */}
           <Route path="admin/*" element={<AdminRoutes />} />
         </Route>
