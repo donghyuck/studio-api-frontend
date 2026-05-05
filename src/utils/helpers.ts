@@ -270,7 +270,15 @@ export function resolveAxiosError(err: unknown): string {
   }
 
   if (axios.isAxiosError(err)) {
-    const detail = err.response?.data?.detail as string | undefined;
+    const responseData = err.response?.data as
+      | { detail?: unknown; message?: unknown; error?: unknown }
+      | undefined;
+    const detail =
+      typeof responseData?.detail === "string" ? responseData.detail : undefined;
+    const responseMessage =
+      typeof responseData?.message === "string" ? responseData.message : undefined;
+    const responseError =
+      typeof responseData?.error === "string" ? responseData.error : undefined;
 
     // 네트워크 계열 (CORS/서버다운/DNS 등, 응답 없음)
     if (!err.response || err.code === "ERR_NETWORK") {
@@ -292,6 +300,12 @@ export function resolveAxiosError(err: unknown): string {
       if (detail == "error.unexpected")
         return "알 수 없는 오류가 발생했습니다.";
       return detail;
+    }
+    if (responseMessage && responseMessage.length > 0) {
+      return responseMessage;
+    }
+    if (responseError && responseError.length > 0) {
+      return responseError;
     }
 
     switch (err.response.status) {

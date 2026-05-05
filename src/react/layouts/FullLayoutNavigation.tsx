@@ -11,6 +11,7 @@ import {
 import {
   AccountCircleOutlined,
   ArticleOutlined,
+  BubbleChartOutlined,
   DashboardOutlined,
   ExpandLess,
   ExpandMore,
@@ -18,6 +19,7 @@ import {
   ForumOutlined,
   GroupOutlined,
   Inventory2Outlined,
+  LinkOutlined,
   MailOutline,
   PsychologyAltOutlined,
   RuleOutlined,
@@ -127,6 +129,11 @@ export function buildNavSections(): NavSection[] {
           path: "/services/ai/rag",
           icon: <TopicOutlined fontSize="small" />,
         },
+        {
+          label: "Vector Map",
+          path: "/services/ai/vector-visualization",
+          icon: <BubbleChartOutlined fontSize="small" />,
+        },
       ],
     },
     {
@@ -139,6 +146,11 @@ export function buildNavSections(): NavSection[] {
           label: "로그인 실패 감사",
           path: "/admin/audit/login-failures",
           icon: <ArticleOutlined fontSize="small" />,
+        },
+        {
+          label: "다운로드 링크 감사",
+          path: "/admin/audit/attachment-download-links",
+          icon: <LinkOutlined fontSize="small" />,
         },
       ],
     },

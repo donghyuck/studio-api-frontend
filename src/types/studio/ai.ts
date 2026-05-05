@@ -224,6 +224,109 @@ export interface QueryRewriteResponseDto {
   rawResponse: string;
 }
 
+export type ProjectionStatus =
+  | "REQUESTED"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "FAILED"
+  | "DELETED";
+
+export type VectorTargetType =
+  | "NCS_UNIT"
+  | "COURSE"
+  | "COURSE_CHUNK"
+  | "DOCUMENT"
+  | "DOCUMENT_CHUNK"
+  | "QUERY"
+  | string;
+
+export interface VectorProjection {
+  projectionId: string;
+  name: string;
+  algorithm: string;
+  status: ProjectionStatus;
+  targetTypes?: VectorTargetType[];
+  filters?: Record<string, unknown>;
+  itemCount: number;
+  errorMessage?: string | null;
+  createdAt?: string;
+  completedAt?: string | null;
+}
+
+export interface ProjectionListResponse {
+  items: VectorProjection[];
+}
+
+export interface ProjectionCreateRequest {
+  name: string;
+  targetTypes?: VectorTargetType[];
+  algorithm?: string;
+  filters?: Record<string, unknown>;
+}
+
+export interface ProjectionCreateResponse {
+  projectionId: string;
+  status: ProjectionStatus;
+  message?: string;
+}
+
+export interface ProjectionPoint {
+  vectorItemId: string;
+  targetType: VectorTargetType;
+  sourceId?: string | null;
+  label?: string | null;
+  x: number;
+  y: number;
+  clusterId?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ProjectionPointsResponse {
+  projectionId: string;
+  algorithm: string;
+  totalCount: number;
+  items: ProjectionPoint[];
+}
+
+export interface VectorItemDetail {
+  vectorItemId: string;
+  targetType: VectorTargetType;
+  sourceId?: string | null;
+  label?: string | null;
+  text?: string | null;
+  embeddingModel?: string | null;
+  dimension?: number | null;
+  metadata?: Record<string, unknown>;
+  createdAt?: string | null;
+}
+
+export interface SearchVisualizationRequest {
+  projectionId: string;
+  query: string;
+  targetTypes?: VectorTargetType[];
+  topK?: number;
+  minScore?: number;
+}
+
+export interface SearchResultPoint {
+  vectorItemId: string;
+  targetType: VectorTargetType;
+  sourceId?: string | null;
+  label?: string | null;
+  x: number;
+  y: number;
+  similarity?: number | null;
+}
+
+export interface SearchVisualizationResponse {
+  query: {
+    label?: string | null;
+    x?: number | null;
+    y?: number | null;
+  };
+  results: SearchResultPoint[];
+}
+
 
 export interface RagIndexRequestDto {
   documentId?: string;
