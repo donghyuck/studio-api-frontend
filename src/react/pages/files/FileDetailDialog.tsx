@@ -112,6 +112,16 @@ function formatMetadataValue(value: unknown) {
   return JSON.stringify(value);
 }
 
+function supportsDownloadUrl(file?: AttachmentDto | null) {
+  const properties = file?.properties ?? {};
+  return (
+    properties["storage.type"] === "objectstorage" &&
+    Boolean(properties["storage.provider"]) &&
+    Boolean(properties["storage.bucket"]) &&
+    Boolean(properties["storage.key"])
+  );
+}
+
 function RagMetadataAccordion({ entries }: { entries: Array<[string, unknown]> }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -207,6 +217,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [downloadLinkExpiresAt, setDownloadLinkExpiresAt] = useState<string | null>(null);
 
   const metadataEntries = Object.entries(ragMetadata ?? {});
+  const downloadUrlSupported = supportsDownloadUrl(file);
   const ragIndexCompleted = ragIndexed || metadataEntries.length > 0;
   const ragIndexDisabled = loading || ragIndexCompleted || ragIndexing || Boolean(ragJobId);
   const ragIndexTooltip = ragIndexCompleted
@@ -563,13 +574,15 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }
 
   function renderDetail(label: string, value?: string | number | null) {
+    const displayValue = value == null || value === "" ? "-" : value;
+
     return (
       <Box>
         <Typography variant="caption" color="text.secondary" display="block">
           {label}
         </Typography>
         <Typography variant="body2" sx={{ mt: 0.25, overflowWrap: "anywhere" }}>
-          {value || "-"}
+          {displayValue}
         </Typography>
       </Box>
     );
@@ -633,13 +646,19 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                   <Typography variant="caption" color="text.secondary">
                     다운로드 링크
                   </Typography>
-                  <Tooltip title="5분 동안 사용할 수 있는 다운로드 링크를 생성하고 복사합니다.">
+                  <Tooltip
+                    title={
+                      downloadUrlSupported
+                        ? "5분 동안 사용할 수 있는 다운로드 링크를 생성하고 복사합니다."
+                        : "Object Storage에 저장된 파일만 다운로드 링크를 생성할 수 있습니다."
+                    }
+                  >
                     <span>
                       <Button
                         size="small"
                         variant="outlined"
                         startIcon={downloadLinkIssuing ? <CircularProgress size={14} /> : <LinkOutlined fontSize="small" />}
-                        disabled={downloadLinkIssuing}
+                        disabled={downloadLinkIssuing || !downloadUrlSupported}
                         onClick={() => void handleIssueDownloadLink()}
                       >
                         링크 생성
