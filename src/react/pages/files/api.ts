@@ -22,6 +22,15 @@ export interface ThumbnailResponse {
   retryAfterMs?: number;
 }
 
+export interface AttachmentDownloadUrlIssueRequest {
+  ttlSeconds?: number | null;
+}
+
+export interface AttachmentDownloadUrlDto {
+  url: string;
+  expiresAt: string;
+}
+
 export const reactFilesApi = {
   async getById(attachmentId: number) {
     return apiRequest<AttachmentDto>("get", `/api/mgmt/files/${attachmentId}`);
@@ -50,6 +59,13 @@ export const reactFilesApi = {
   },
   async deleteById(attachmentId: number) {
     await apiRequest("delete", `/api/mgmt/files/${attachmentId}`);
+  },
+  async issueDownloadUrl(attachmentId: number, request?: AttachmentDownloadUrlIssueRequest) {
+    return apiRequest<AttachmentDownloadUrlDto>(
+      "post",
+      `/api/mgmt/attachments/${attachmentId}/download-url`,
+      { data: request ?? {} }
+    );
   },
   async extractText(attachmentId: number) {
     return apiRequest<string>("get", `/api/mgmt/files/${attachmentId}/text`);

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Alert, Avatar, Box, CircularProgress, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
+import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import type { SelectionChangedEvent } from "ag-grid-community";
@@ -14,13 +15,22 @@ import { reactFilesApi } from "@/react/pages/files/api";
 import { FileDetailDialog } from "@/react/pages/files/FileDetailDialog";
 import { FileUploadDialog } from "@/react/pages/files/FileUploadDialog";
 import { filesQueryKeys } from "@/react/pages/files/queryKeys";
+import { useToast } from "@/react/feedback";
 import type { AttachmentDto } from "@/types/studio/files";
 import { API_BASE_URL } from "@/config/backend";
+import { resolveAxiosError } from "@/utils/helpers";
 
 function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function copyTextToClipboard(value: string) {
+  if (!navigator.clipboard?.writeText) {
+    throw new Error("현재 브라우저에서는 클립보드 복사를 지원하지 않습니다.");
+  }
+  await navigator.clipboard.writeText(value);
 }
 
 class FilesDataSource extends ReactPageDataSource<AttachmentDto> {
@@ -375,6 +385,7 @@ function toggleDisplayedRows(
 }
 
 export function FilesPage() {
+  const toast = useToast();
   const queryClient = useQueryClient();
   const gridRef = useRef<PageableGridContentHandle<AttachmentDto>>(null);
   const dataSource = useMemo(() => new FilesDataSource(), []);
@@ -384,9 +395,28 @@ export function FilesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [detailAttachmentId, setDetailAttachmentId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [issuingDownloadLinkIds, setIssuingDownloadLinkIds] = useState<number[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [displayedCount, setDisplayedCount] = useState(0);
   const selectedCount = selectedIds.length;
+
+  async function handleIssueDownloadLink(attachmentId: number) {
+    setActionError(null);
+    setIssuingDownloadLinkIds((current) =>
+      current.includes(attachmentId) ? current : [...current, attachmentId]
+    );
+    try {
+      const issued = await reactFilesApi.issueDownloadUrl(attachmentId, { ttlSeconds: 300 });
+      await copyTextToClipboard(issued.url);
+      toast.success("다운로드 링크를 생성하고 클립보드에 복사했습니다.");
+    } catch (error) {
+      const message = resolveAxiosError(error);
+      setActionError(message);
+      toast.error(message);
+    } finally {
+      setIssuingDownloadLinkIds((current) => current.filter((id) => id !== attachmentId));
+    }
+  }
 
   function renderHeaderCheckbox(api?: {
     getLastDisplayedRowIndex: () => number;
@@ -514,8 +544,42 @@ export function FilesPage() {
         ),
       },
       { field: "createdAt", headerName: "생성일시", flex: 0.75, sortable: true, type: "datetime", filter: false },
+      {
+        colId: "actions",
+        headerName: "",
+        width: 56,
+        minWidth: 56,
+        maxWidth: 56,
+        sortable: false,
+        filter: false,
+        resizable: false,
+        cellRenderer: (params: ICellRendererParams<AttachmentDto>) => {
+          const attachmentId = Number(params.data?.attachmentId);
+          const issuing = issuingDownloadLinkIds.includes(attachmentId);
+          return (
+            <Box sx={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Tooltip title="다운로드 링크 생성 후 복사">
+                <span>
+                  <IconButton
+                    size="small"
+                    disabled={!attachmentId || issuing}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      if (attachmentId) {
+                        void handleIssueDownloadLink(attachmentId);
+                      }
+                    }}
+                  >
+                    {issuing ? <CircularProgress size={16} /> : <LinkOutlinedIcon fontSize="small" />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+          );
+        },
+      },
     ],
-    [displayedCount, selectedCount]
+    [displayedCount, issuingDownloadLinkIds, selectedCount]
   );
 
   const gridOptions = useMemo(

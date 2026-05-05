@@ -4,6 +4,7 @@ import { AclPage } from "@/react/pages/acl/AclPage";
 import { GroupDetailPage } from "@/react/pages/admin/groups/GroupDetailPage";
 import { RoleDetailPage } from "@/react/pages/admin/roles/RoleDetailPage";
 import { UserDetailPage } from "@/react/pages/admin/users/UserDetailPage";
+import { AttachmentDownloadUrlIssueLogPage } from "@/react/pages/audit/AttachmentDownloadUrlIssueLogPage";
 import { LoginFailureLogPage } from "@/react/pages/audit/LoginFailureLogPage";
 import { ForumAclPage } from "@/react/pages/forums/admin/ForumAclPage";
 import { ForumAuditLogPage } from "@/react/pages/forums/admin/ForumAuditLogPage";
@@ -22,6 +23,10 @@ export function AdminRoutes() {
       <Route path="roles" element={<RolesPage />} />
       <Route path="roles/:roleId" element={<RoleDetailPage />} />
       <Route path="audit/login-failures" element={<LoginFailureLogPage />} />
+      <Route
+        path="audit/attachment-download-links"
+        element={<AttachmentDownloadUrlIssueLogPage />}
+      />
       <Route path="forums" element={<ForumListPage />} />
       <Route
         path="forums/:forumSlug"

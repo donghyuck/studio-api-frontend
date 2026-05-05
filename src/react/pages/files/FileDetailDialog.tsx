@@ -17,6 +17,7 @@ import {
   CloseOutlined,
   ContentCopyOutlined,
   ExpandMoreOutlined,
+  LinkOutlined,
   RefreshOutlined,
   TextSnippetOutlined,
   TimelineOutlined,
@@ -200,6 +201,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [loading, setLoading] = useState(false);
   const [textExtracting, setTextExtracting] = useState(false);
   const [ragIndexing, setRagIndexing] = useState(false);
+  const [downloadLinkIssuing, setDownloadLinkIssuing] = useState(false);
+  const [downloadLinkExpiresAt, setDownloadLinkExpiresAt] = useState<string | null>(null);
 
   const metadataEntries = Object.entries(ragMetadata ?? {});
   const ragIndexCompleted = ragIndexed || metadataEntries.length > 0;
@@ -265,6 +268,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     setExtractedText("");
     setTextExtracted(false);
     setRagJobId(null);
+    setDownloadLinkExpiresAt(null);
     clearThumbnail();
   }
 
@@ -433,6 +437,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     setExtractedText("");
     setTextExtracted(false);
     setRagJobId(null);
+    setDownloadLinkExpiresAt(null);
     setThumbnailReloadKey((current) => current + 1);
     setLoading(true);
     try {
@@ -482,6 +487,26 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       toast.success("클립보드에 복사했습니다.");
     } catch {
       toast.error("클립보드에 복사할 수 없습니다. 브라우저 권한을 확인해 주세요.");
+    }
+  }
+
+  async function handleIssueDownloadLink() {
+    if (!attachmentId || !file) return;
+
+    setDownloadLinkIssuing(true);
+    try {
+      const issued = await reactFilesApi.issueDownloadUrl(attachmentId, { ttlSeconds: 300 });
+      if (!navigator.clipboard?.writeText) {
+        toast.error("현재 브라우저에서는 클립보드 복사를 지원하지 않습니다.");
+        return;
+      }
+      await navigator.clipboard.writeText(issued.url);
+      setDownloadLinkExpiresAt(issued.expiresAt);
+      toast.success("다운로드 링크를 생성하고 클립보드에 복사했습니다.");
+    } catch (error) {
+      toast.error(resolveAxiosError(error));
+    } finally {
+      setDownloadLinkIssuing(false);
     }
   }
 
@@ -577,6 +602,31 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               {renderDetail("Content Type", file.contentType)}
               {renderDetail("크기", formatFileSize(file.size))}
               {renderDetail("생성일시", formatDate(file.createdAt))}
+              <Box>
+                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                  <Typography variant="caption" color="text.secondary">
+                    다운로드 링크
+                  </Typography>
+                  <Tooltip title="5분 동안 사용할 수 있는 다운로드 링크를 생성하고 복사합니다.">
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={downloadLinkIssuing ? <CircularProgress size={14} /> : <LinkOutlined fontSize="small" />}
+                        disabled={downloadLinkIssuing}
+                        onClick={() => void handleIssueDownloadLink()}
+                      >
+                        링크 생성
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Stack>
+                {downloadLinkExpiresAt ? (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                    최근 생성 링크 만료: {formatDate(downloadLinkExpiresAt)}
+                  </Typography>
+                ) : null}
+              </Box>
               {thumbnailAvailable && thumbnailUrl ? (
                 <Box>
                   <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.75 }}>
