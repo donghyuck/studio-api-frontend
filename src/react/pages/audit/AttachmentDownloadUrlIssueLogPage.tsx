@@ -1,15 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   Box,
   Button,
   ButtonGroup,
   CircularProgress,
-  Link,
   MenuItem,
   Stack,
   TextField,
-  Typography,
 } from "@mui/material";
 import { SearchOutlined } from "@mui/icons-material";
 import type { ColDef } from "ag-grid-community";
@@ -42,9 +39,10 @@ export function AttachmentDownloadUrlIssueLogPage() {
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
   const [attachmentId, setAttachmentId] = useState("");
+  const [objectType, setObjectType] = useState("");
+  const [objectId, setObjectId] = useState("");
   const [principalName, setPrincipalName] = useState("");
   const [endpointKind, setEndpointKind] = useState("");
-  const [queryRequested, setQueryRequested] = useState(false);
 
   const validRange = !dateStart || !dateEnd || dateStart <= dateEnd;
 
@@ -97,11 +95,12 @@ export function AttachmentDownloadUrlIssueLogPage() {
     if (dateStart) filter.from = startOfDayLocalToIso(dateStart);
     if (dateEnd) filter.to = endOfDayExclusiveLocalToIso(dateEnd);
     if (attachmentId.trim()) filter.attachmentId = Number(attachmentId);
+    if (objectType.trim()) filter.objectType = Number(objectType);
+    if (objectId.trim()) filter.objectId = Number(objectId);
     if (principalName.trim()) filter.issuedByPrincipalName = principalName.trim();
     if (endpointKind) filter.endpointKind = endpointKind;
     dataSource.applyFilter(filter);
-    setQueryRequested(true);
-    window.setTimeout(() => gridRef.current?.refresh(), 0);
+    gridRef.current?.refresh();
   }
 
   useEffect(() => {
@@ -116,13 +115,6 @@ export function AttachmentDownloadUrlIssueLogPage() {
         onRefresh={() => gridRef.current?.refresh()}
         divider={false}
       />
-
-      <Alert severity="info">
-        다운로드 링크 발급 로그를 조회하려면 서버 감사 로그 조회 API가 필요합니다. 후속 이슈:{" "}
-        <Link href="https://github.com/donghyuck/studio-api/issues/402" target="_blank" rel="noreferrer">
-          studio-api#402
-        </Link>
-      </Alert>
 
       <Stack spacing={1}>
         <Box sx={{ border: 1, borderColor: "rgb(191 191 191)", borderRadius: 2, px: 1.5, py: 1.5 }}>
@@ -155,6 +147,28 @@ export function AttachmentDownloadUrlIssueLogPage() {
                 size="small"
                 value={attachmentId}
                 onChange={(event) => setAttachmentId(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleSearch();
+                }}
+                fullWidth
+              />
+              <TextField
+                label="객체 유형"
+                type="number"
+                size="small"
+                value={objectType}
+                onChange={(event) => setObjectType(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") handleSearch();
+                }}
+                fullWidth
+              />
+              <TextField
+                label="객체 ID"
+                type="number"
+                size="small"
+                value={objectId}
+                onChange={(event) => setObjectId(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") handleSearch();
                 }}
@@ -202,17 +216,11 @@ export function AttachmentDownloadUrlIssueLogPage() {
         </Box>
       </Stack>
 
-      {queryRequested ? (
-        <PageableGridContent<AttachmentDownloadUrlIssueLogEvent>
-          ref={gridRef}
-          datasource={dataSource}
-          columns={columnDefs}
-        />
-      ) : (
-        <Box sx={{ py: 4, textAlign: "center", color: "text.secondary" }}>
-          <Typography variant="body2">조회 조건을 확인한 뒤 다운로드 링크 발급 로그를 조회하세요.</Typography>
-        </Box>
-      )}
+      <PageableGridContent<AttachmentDownloadUrlIssueLogEvent>
+        ref={gridRef}
+        datasource={dataSource}
+        columns={columnDefs}
+      />
     </Stack>
   );
 }
