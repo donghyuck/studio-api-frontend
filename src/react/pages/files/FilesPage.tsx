@@ -26,16 +26,6 @@ function formatFileSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function supportsDownloadUrl(file?: AttachmentDto | null) {
-  const properties = file?.properties ?? {};
-  return (
-    properties["storage.type"] === "objectstorage" &&
-    Boolean(properties["storage.provider"]) &&
-    Boolean(properties["storage.bucket"]) &&
-    Boolean(properties["storage.key"])
-  );
-}
-
 async function copyTextToClipboard(value: string) {
   if (!navigator.clipboard?.writeText) {
     throw new Error("현재 브라우저에서는 클립보드 복사를 지원하지 않습니다.");
@@ -566,20 +556,13 @@ export function FilesPage() {
         cellRenderer: (params: ICellRendererParams<AttachmentDto>) => {
           const attachmentId = Number(params.data?.attachmentId);
           const issuing = issuingDownloadLinkIds.includes(attachmentId);
-          const supported = supportsDownloadUrl(params.data);
           return (
             <Box sx={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Tooltip
-                title={
-                  supported
-                    ? "다운로드 링크 생성 후 복사"
-                    : "Object Storage에 저장된 파일만 다운로드 링크를 생성할 수 있습니다."
-                }
-              >
+              <Tooltip title="다운로드 링크 생성 후 복사">
                 <span>
                   <IconButton
                     size="small"
-                    disabled={!attachmentId || issuing || !supported}
+                    disabled={!attachmentId || issuing}
                     onClick={(event) => {
                       event.stopPropagation();
                       if (attachmentId) {

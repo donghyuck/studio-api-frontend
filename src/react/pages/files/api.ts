@@ -63,7 +63,7 @@ export const reactFilesApi = {
   async issueDownloadUrl(attachmentId: number, request?: AttachmentDownloadUrlIssueRequest) {
     return apiRequest<AttachmentDownloadUrlDto>(
       "post",
-      `/api/mgmt/attachments/${attachmentId}/download-url`,
+      `/api/mgmt/files/${attachmentId}/download-url`,
       { data: request ?? {} }
     );
   },
