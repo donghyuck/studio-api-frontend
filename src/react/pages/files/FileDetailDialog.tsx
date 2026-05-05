@@ -10,6 +10,7 @@ import {
   Drawer,
   IconButton,
   Stack,
+  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -202,6 +203,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [textExtracting, setTextExtracting] = useState(false);
   const [ragIndexing, setRagIndexing] = useState(false);
   const [downloadLinkIssuing, setDownloadLinkIssuing] = useState(false);
+  const [downloadLinkUrl, setDownloadLinkUrl] = useState<string | null>(null);
   const [downloadLinkExpiresAt, setDownloadLinkExpiresAt] = useState<string | null>(null);
 
   const metadataEntries = Object.entries(ragMetadata ?? {});
@@ -268,6 +270,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     setExtractedText("");
     setTextExtracted(false);
     setRagJobId(null);
+    setDownloadLinkUrl(null);
     setDownloadLinkExpiresAt(null);
     clearThumbnail();
   }
@@ -437,6 +440,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     setExtractedText("");
     setTextExtracted(false);
     setRagJobId(null);
+    setDownloadLinkUrl(null);
     setDownloadLinkExpiresAt(null);
     setThumbnailReloadKey((current) => current + 1);
     setLoading(true);
@@ -496,17 +500,39 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     setDownloadLinkIssuing(true);
     try {
       const issued = await reactFilesApi.issueDownloadUrl(attachmentId, { ttlSeconds: 300 });
+      setDownloadLinkUrl(issued.url);
+      setDownloadLinkExpiresAt(issued.expiresAt);
       if (!navigator.clipboard?.writeText) {
-        toast.error("현재 브라우저에서는 클립보드 복사를 지원하지 않습니다.");
+        toast.warning("다운로드 링크를 생성했습니다. 클립보드 복사는 브라우저에서 지원하지 않습니다.");
         return;
       }
-      await navigator.clipboard.writeText(issued.url);
-      setDownloadLinkExpiresAt(issued.expiresAt);
-      toast.success("다운로드 링크를 생성하고 클립보드에 복사했습니다.");
+      try {
+        await navigator.clipboard.writeText(issued.url);
+        toast.success("다운로드 링크를 생성하고 클립보드에 복사했습니다.");
+      } catch {
+        toast.warning("다운로드 링크를 생성했습니다. 아래 링크를 다시 복사해 주세요.");
+      }
     } catch (error) {
       toast.error(resolveAxiosError(error));
     } finally {
       setDownloadLinkIssuing(false);
+    }
+  }
+
+  async function handleCopyDownloadLink() {
+    if (!downloadLinkUrl) {
+      toast.warning("복사할 다운로드 링크가 없습니다.");
+      return;
+    }
+    if (!navigator.clipboard?.writeText) {
+      toast.error("현재 브라우저에서는 클립보드 복사를 지원하지 않습니다.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(downloadLinkUrl);
+      toast.success("다운로드 링크를 클립보드에 복사했습니다.");
+    } catch {
+      toast.error("클립보드에 복사할 수 없습니다. 브라우저 권한을 확인해 주세요.");
     }
   }
 
@@ -625,6 +651,21 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                     최근 생성 링크 만료: {formatDate(downloadLinkExpiresAt)}
                   </Typography>
+                ) : null}
+                {downloadLinkUrl ? (
+                  <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1 }}>
+                    <TextField
+                      size="small"
+                      value={downloadLinkUrl}
+                      InputProps={{ readOnly: true }}
+                      fullWidth
+                    />
+                    <Tooltip title="다운로드 링크 복사">
+                      <IconButton size="small" onClick={() => void handleCopyDownloadLink()}>
+                        <ContentCopyOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
                 ) : null}
               </Box>
               {thumbnailAvailable && thumbnailUrl ? (
