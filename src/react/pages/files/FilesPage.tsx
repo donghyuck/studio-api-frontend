@@ -18,6 +18,7 @@ import { filesQueryKeys } from "@/react/pages/files/queryKeys";
 import { useToast } from "@/react/feedback";
 import type { AttachmentDto } from "@/types/studio/files";
 import { API_BASE_URL } from "@/config/backend";
+import { ObjectTypeSelect } from "@/react/components/objecttype/ObjectTypeSelect";
 import { resolveAxiosError } from "@/utils/helpers";
 
 function formatFileSize(size: number) {
@@ -50,11 +51,7 @@ const THUMBNAIL_RETRY_LIMIT = 6;
 const THUMBNAIL_MISSING_TTL_MS = 30_000;
 
 function shouldRetryThumbnail(status?: string) {
-  return !status || status === "pending";
-}
-
-function isImageContent(contentType?: string | null) {
-  return Boolean(contentType?.toLowerCase().startsWith("image/"));
+  return status === "pending";
 }
 
 function isReadyThumbnail(status?: string) {
@@ -134,34 +131,6 @@ const FileThumbnail = memo(function FileThumbnail({
       setThumbnailLoading(false);
     }
 
-    function loadOriginalImageFallback() {
-      if (!isImageContent(contentType)) {
-        markUnavailable();
-        return;
-      }
-
-      reactFilesApi
-        .downloadBlob(attachmentId)
-        .then((blob) => {
-          if (ignore) {
-            return;
-          }
-          if (blob.size === 0) {
-            markUnavailable();
-            return;
-          }
-          const nextUrl = URL.createObjectURL(blob);
-          thumbnailCache.set(attachmentId, { url: nextUrl });
-          setThumbnailUrl(nextUrl);
-          setThumbnailLoading(false);
-        })
-        .catch(() => {
-          if (!ignore) {
-            markUnavailable();
-          }
-        });
-    }
-
     function loadThumbnail(attempt: number) {
       reactFilesApi
         .fetchThumbnail(attachmentId, 128)
@@ -194,7 +163,7 @@ const FileThumbnail = memo(function FileThumbnail({
             timer = window.setTimeout(() => loadThumbnail(attempt + 1), retryAfterMs ?? THUMBNAIL_RETRY_INTERVAL_MS);
             return;
           }
-          loadOriginalImageFallback();
+          markUnavailable();
         })
         .catch(() => {
           if (ignore) {
@@ -204,7 +173,7 @@ const FileThumbnail = memo(function FileThumbnail({
             setThumbnailLoading(true);
             timer = window.setTimeout(() => loadThumbnail(attempt + 1), THUMBNAIL_RETRY_INTERVAL_MS);
           } else {
-            loadOriginalImageFallback();
+            markUnavailable();
           }
         });
     }
@@ -685,22 +654,16 @@ export function FilesPage() {
           }
         />
 
-        <Alert severity="info">
-          객체 유형은 모듈 식별 아이디 값입니다. 객체 식별자는 해당 모듈에 속하는 객체 아이디
-          값입니다. 예를 들어 객체 유형이 문서(1)라면 각 문서의 고유한 ID 값이 객체 식별자가
-          됩니다.
-        </Alert>
-
         <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ py: 0.5 }}>
-          <TextField
+          <ObjectTypeSelect
             label="객체 유형"
-            type="number"
             value={objectType}
-            onChange={(event) => setObjectType(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") applyFilters();
-            }}
+            onChange={setObjectType}
+            fullWidth
             size="small"
+            includeAll
+            allLabel="전체"
+            helperText="객체 유형 필터는 활성 객체 유형만 조회 대상입니다."
           />
           <TextField
             label="객체 식별자"
