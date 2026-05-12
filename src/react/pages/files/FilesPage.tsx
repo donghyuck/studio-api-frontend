@@ -16,6 +16,7 @@ import { FileUploadDialog } from "@/react/pages/files/FileUploadDialog";
 import { filesQueryKeys } from "@/react/pages/files/queryKeys";
 import type { AttachmentDto } from "@/types/studio/files";
 import { API_BASE_URL } from "@/config/backend";
+import { ObjectTypeSelect } from "@/react/components/objecttype/ObjectTypeSelect";
 
 function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
@@ -563,22 +564,16 @@ export function FilesPage() {
           }
         />
 
-        <Alert severity="info">
-          객체 유형은 모듈 식별 아이디 값입니다. 객체 식별자는 해당 모듈에 속하는 객체 아이디
-          값입니다. 예를 들어 객체 유형이 문서(1)라면 각 문서의 고유한 ID 값이 객체 식별자가
-          됩니다.
-        </Alert>
-
         <Stack direction={{ xs: "column", md: "row" }} spacing={1} sx={{ py: 0.5 }}>
-          <TextField
+          <ObjectTypeSelect
             label="객체 유형"
-            type="number"
             value={objectType}
-            onChange={(event) => setObjectType(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") applyFilters();
-            }}
+            onChange={setObjectType}
+            fullWidth
             size="small"
+            includeAll
+            allLabel="전체"
+            helperText="객체 유형 필터는 활성 객체 유형만 조회 대상입니다."
           />
           <TextField
             label="객체 식별자"
