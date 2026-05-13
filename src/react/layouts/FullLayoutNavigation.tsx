@@ -127,6 +127,11 @@ export function buildNavSections(): NavSection[] {
           path: "/services/ai/rag",
           icon: <TopicOutlined fontSize="small" />,
         },
+        {
+          label: "벡터 시각화",
+          path: "/services/ai/vector-visualization",
+          icon: <TopicOutlined fontSize="small" />,
+        },
       ],
     },
     {

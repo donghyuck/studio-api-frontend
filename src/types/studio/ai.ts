@@ -201,6 +201,106 @@ export interface VectorSearchRequestDto extends SearchRequestDto {
   minScore?: number;
 }
 
+export interface VectorProjectionSummaryDto {
+  projectionId: string;
+  name: string;
+  algorithm: string;
+  status: string;
+  targetTypes: string[];
+  itemCount: number;
+  createdAt?: string;
+  completedAt?: string;
+}
+
+export interface VectorProjectionListResponseDto {
+  items: VectorProjectionSummaryDto[];
+}
+
+export interface VectorProjectionCreateRequestDto {
+  name: string;
+  targetTypes?: string[] | null;
+  algorithm?: string;
+  filters?: Record<string, unknown> | null;
+}
+
+export interface VectorProjectionCreateResponseDto {
+  projectionId: string;
+  status: string;
+  message: string;
+}
+
+export interface VectorProjectionDetailDto {
+  projectionId: string;
+  name: string;
+  algorithm: string;
+  status: string;
+  targetTypes: string[];
+  filters: Record<string, unknown> | null;
+  itemCount: number;
+  errorMessage?: string | null;
+  createdAt?: string;
+  completedAt?: string;
+}
+
+export interface VectorProjectionPointDto {
+  vectorItemId: string;
+  targetType: string;
+  sourceId: string;
+  label: string;
+  x: number;
+  y: number;
+  clusterId?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface VectorProjectionPointsResponseDto {
+  projectionId: string;
+  algorithm: string;
+  totalCount: number;
+  items: VectorProjectionPointDto[];
+}
+
+export interface VectorSearchVisualizationQueryPointDto {
+  label?: string | null;
+  x?: number | null;
+  y?: number | null;
+}
+
+export interface VectorSearchVisualizationResultPointDto {
+  vectorItemId: string;
+  targetType?: string;
+  sourceId?: string;
+  label?: string;
+  x: number;
+  y: number;
+  similarity?: number | null;
+}
+
+export interface VectorSearchVisualizationResponseDto {
+  query: VectorSearchVisualizationQueryPointDto;
+  results: VectorSearchVisualizationResultPointDto[];
+}
+
+export interface VectorSearchVisualizationRequestDto {
+  projectionId: string;
+  query: string;
+  targetTypes?: string[] | null;
+  topK?: number;
+  minScore?: number;
+}
+
+export interface VectorItemDetailDto {
+  vectorItemId: string;
+  targetType: string;
+  sourceId: string;
+  label: string;
+  text: string;
+  embeddingModel?: string | null;
+  dimension?: number | null;
+  metadata?: Record<string, unknown> | null;
+  createdAt?: string;
+}
+
 export interface VectorDocumentDto {
   id: string;
   content: string;

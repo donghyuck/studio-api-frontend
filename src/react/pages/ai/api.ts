@@ -30,6 +30,14 @@ import type {
   RegenerateRequestDto,
   VectorSearchRequestDto,
   VectorSearchResultDto,
+  VectorItemDetailDto,
+  VectorProjectionCreateRequestDto,
+  VectorProjectionCreateResponseDto,
+  VectorProjectionDetailDto,
+  VectorProjectionListResponseDto,
+  VectorProjectionPointsResponseDto,
+  VectorSearchVisualizationRequestDto,
+  VectorSearchVisualizationResponseDto,
 } from "@/types/studio/ai";
 
 const BASE = "/api/ai";
@@ -169,6 +177,57 @@ export const reactAiApi = {
 
   searchVector(req: VectorSearchRequestDto) {
     return apiRequest<VectorSearchResultDto[]>("post", `${MGMT_BASE}/vectors/search`, { data: req });
+  },
+
+  listVectorProjections(params?: { limit?: number; offset?: number }) {
+    return apiRequest<VectorProjectionListResponseDto>("get", `${MGMT_BASE}/vectors/projections`, {
+      params,
+    });
+  },
+
+  createVectorProjection(payload: VectorProjectionCreateRequestDto) {
+    return apiRequest<VectorProjectionCreateResponseDto>(
+      "post",
+      `${MGMT_BASE}/vectors/projections`,
+      { data: payload }
+    );
+  },
+
+  getVectorProjection(projectionId: string) {
+    return apiRequest<VectorProjectionDetailDto>(
+      "get",
+      `${MGMT_BASE}/vectors/projections/${encodeURIComponent(projectionId)}`
+    );
+  },
+
+  getVectorProjectionPoints(
+    projectionId: string,
+    params?: {
+      targetType?: string;
+      clusterId?: string;
+      keyword?: string;
+      limit?: number;
+      offset?: number;
+    }
+  ) {
+    return apiRequest<VectorProjectionPointsResponseDto>(
+      "get",
+      `${MGMT_BASE}/vectors/projections/${encodeURIComponent(projectionId)}/points`,
+      { params }
+    );
+  },
+
+  getVectorItem(vectorItemId: string) {
+    return apiRequest<VectorItemDetailDto>(
+      "get",
+      `${MGMT_BASE}/vectors/items/${encodeURIComponent(vectorItemId)}`
+    );
+  },
+
+  searchVectorVisualization(req: VectorSearchVisualizationRequestDto) {
+    return apiRequest<VectorSearchVisualizationResponseDto>("post", `${MGMT_BASE}/vectors/search-visualization`, {
+      data: req,
+    });
   },
 
   async searchRag(req: SearchRequestDto) {
