@@ -274,6 +274,9 @@ export interface VectorSearchVisualizationResultPointDto {
   x: number;
   y: number;
   similarity?: number | null;
+  tokenCount?: number | null;
+  contextIncluded?: boolean | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface VectorSearchVisualizationResponseDto {
@@ -285,6 +288,8 @@ export interface VectorSearchVisualizationRequestDto {
   projectionId: string;
   query: string;
   targetTypes?: string[] | null;
+  embeddingProvider?: string;
+  embeddingModel?: string;
   topK?: number;
   minScore?: number;
 }
@@ -297,6 +302,8 @@ export interface VectorItemDetailDto {
   text: string;
   embeddingModel?: string | null;
   dimension?: number | null;
+  tokenCount?: number | null;
+  contextIncluded?: boolean | null;
   metadata?: Record<string, unknown> | null;
   createdAt?: string;
 }
@@ -408,10 +415,20 @@ export interface RagIndexChunkDto {
   documentId: string;
   parentChunkId?: string;
   chunkOrder?: number;
+  chunkIndex?: number;
   chunkType?: string;
   content: string;
+  textLength?: number;
+  tokenCount?: number;
+  tokenizerProvider?: string;
+  tokenizerEncoding?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  warningStatus?: string;
+  warnings?: string[];
   score?: number;
   headingPath?: string;
+  section?: string;
   sourceRef?: string;
   page?: number;
   slide?: number;
@@ -447,7 +464,16 @@ export interface RagChunkPreviewItemDto {
   content: string;
   contentLength: number;
   chunkOrder?: number;
+  chunkIndex?: number;
   chunkType?: string;
+  textLength?: number;
+  tokenCount?: number;
+  tokenizerProvider?: string;
+  tokenizerEncoding?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  warningStatus?: string;
+  warnings?: string[];
   parentChunkId?: string;
   previousChunkId?: string;
   nextChunkId?: string;
@@ -506,4 +532,82 @@ export interface RagChunkConfigResponseDto {
     maxInputChars: number;
     maxPreviewChunks: number;
   };
+}
+
+export interface RagTokenizerStatusDto {
+  embeddingProvider?: string | null;
+  embeddingModel?: string | null;
+  tokenizerProvider?: string | null;
+  tokenizerEncoding?: string | null;
+  tokenizerModel?: string | null;
+  selectionSource?: string | null;
+  confidence?: number | string | null;
+  chunkUnit?: string | null;
+  chunkSize?: number | null;
+  chunkOverlap?: number | null;
+  fallbackUsed?: boolean | null;
+  warnings?: string[];
+}
+
+export interface RagChunkingSimulationRequestDto {
+  text: string;
+  objectType?: string;
+  objectId?: string;
+  attachmentId?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  tokenizerAutoDetect?: boolean;
+  chunkUnit?: string;
+  chunkSize?: number;
+  chunkOverlap?: number;
+  maxChunkSize?: number;
+}
+
+export interface RagChunkingSimulationResponseDto {
+  tokenizer?: RagTokenizerStatusDto | null;
+  chunks?: RagChunkPreviewItemDto[];
+  tokenDistribution?: number[];
+  totalChunks?: number;
+  totalChars?: number;
+  totalTokens?: number;
+  warnings?: string[];
+}
+
+export interface RagContextSimulationRequestDto {
+  query: string;
+  objectType?: string;
+  objectId?: string;
+  topK?: number;
+  contextBudgetTokens?: number;
+  includeNeighborChunks?: boolean;
+  includeParentChunk?: boolean;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+}
+
+export interface RagContextSimulationChunkDto extends SearchResultDto {
+  rank?: number;
+  chunkId?: string;
+  chunkIndex?: number;
+  objectType?: string;
+  objectId?: string;
+  tokenCount?: number;
+  included?: boolean;
+  exclusionReason?: string;
+  cumulativeTokenCount?: number;
+  tokenizerProvider?: string;
+  tokenizerEncoding?: string;
+  embeddingModel?: string;
+  warnings?: string[];
+}
+
+export interface RagContextSimulationResponseDto {
+  tokenizer?: RagTokenizerStatusDto | null;
+  chunks?: RagContextSimulationChunkDto[];
+  retrievedChunks?: RagContextSimulationChunkDto[];
+  usedTokens?: number;
+  budgetTokens?: number;
+  contextBudgetTokens?: number;
+  finalContext?: string;
+  warnings?: string[];
 }

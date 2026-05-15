@@ -1,5 +1,14 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   alpha,
   Box,
@@ -25,28 +34,27 @@ import {
   Switch,
   Tab,
   Tabs,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 import {
   AddOutlined,
-  ChevronLeftOutlined,
+  CloseOutlined,
+  ExpandMoreOutlined,
+  InfoOutlined,
   TuneOutlined,
   RefreshOutlined,
   SearchOutlined,
 } from "@mui/icons-material";
+import type { ColDef, GridOptions } from "ag-grid-community";
 import { Link } from "react-router-dom";
+import { GridContent } from "@/react/components/ag-grid";
 import { ObjectTypeSelect } from "@/react/components/objecttype/ObjectTypeSelect";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { reactAiApi } from "@/react/pages/ai/api";
 import type {
+  AiInfoResponse,
   VectorItemDetailDto,
   VectorProjectionCreateRequestDto,
   VectorProjectionDetailDto,
@@ -70,6 +78,22 @@ type ResultTab = "results" | "metrics";
 interface SearchMeta {
   rank: number;
   similarity?: number | null;
+  tokenCount?: number | null;
+  contextIncluded?: boolean | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+interface VectorResultRow {
+  rank: number;
+  vectorItemId: string;
+  similarity?: number | null;
+  distance?: number | null;
+  targetType?: string | null;
+  label?: string | null;
+  sourceId?: string | null;
+  clusterId?: string | null;
+  tokenCount?: number | null;
+  contextIncluded?: boolean | null;
 }
 
 interface SemanticPoint {
@@ -83,6 +107,8 @@ interface SemanticPoint {
   metadata?: Record<string, unknown> | null;
   rank?: number;
   similarity?: number | null;
+  tokenCount?: number | null;
+  contextIncluded?: boolean | null;
   searchResult: boolean;
   px: number;
   py: number;
@@ -106,6 +132,55 @@ function isFiniteNumber(value?: number | null) {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function metadataValue(metadata: Record<string, unknown> | null | undefined, keys: string[]) {
+  if (!metadata) {
+    return undefined;
+  }
+  for (const key of keys) {
+    const value = metadata[key];
+    if (value != null && value !== "") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function numberFromMetadata(metadata: Record<string, unknown> | null | undefined, keys: string[]) {
+  const value = metadataValue(metadata, keys);
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function booleanFromMetadata(metadata: Record<string, unknown> | null | undefined, keys: string[]) {
+  const value = metadataValue(metadata, keys);
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    return value.toLowerCase() === "true";
+  }
+  return undefined;
+}
+
+function contextIncludedBadge(included?: boolean | null) {
+  if (included == null) {
+    return null;
+  }
+  return (
+    <Chip
+      size="small"
+      color={included ? "success" : "default"}
+      label={included ? "CONTEXT INCLUDED" : "CONTEXT EXCLUDED"}
+    />
+  );
+}
+
 function formatDateTime(value?: string) {
   if (!value) {
     return "-";
@@ -119,6 +194,26 @@ function formatNumber(value?: number | null, fixed = 3) {
     return "-";
   }
   return value.toFixed(fixed);
+}
+
+function projectionDistance(
+  query?: { x?: number | null; y?: number | null } | null,
+  point?: { x?: number | null; y?: number | null } | null,
+) {
+  if (
+    !query ||
+    !point ||
+    !isFiniteNumber(query.x) ||
+    !isFiniteNumber(query.y) ||
+    !isFiniteNumber(point.x) ||
+    !isFiniteNumber(point.y)
+  ) {
+    return null;
+  }
+  return Math.hypot(
+    (point.x as number) - (query.x as number),
+    (point.y as number) - (query.y as number),
+  );
 }
 
 function normalizeTextList(value: string) {
@@ -217,7 +312,7 @@ function targetTypeColor(type?: string) {
 
 function projectionPointToSemanticPoint(
   point: VectorProjectionPointDto,
-  searchMeta?: SearchMeta
+  searchMeta?: SearchMeta,
 ): SemanticPoint {
   return {
     vectorItemId: point.vectorItemId,
@@ -230,6 +325,8 @@ function projectionPointToSemanticPoint(
     metadata: point.metadata,
     rank: searchMeta?.rank,
     similarity: searchMeta?.similarity,
+    tokenCount: searchMeta?.tokenCount ?? numberFromMetadata(point.metadata, ["tokenCount"]),
+    contextIncluded: searchMeta?.contextIncluded ?? booleanFromMetadata(point.metadata, ["contextIncluded", "ragContextIncluded"]),
     searchResult: Boolean(searchMeta),
     px: 0,
     py: 0,
@@ -238,7 +335,7 @@ function projectionPointToSemanticPoint(
 
 function searchPointToSemanticPoint(
   point: VectorSearchVisualizationResultPointDto,
-  rank: number
+  rank: number,
 ): SemanticPoint {
   return {
     vectorItemId: point.vectorItemId,
@@ -249,6 +346,9 @@ function searchPointToSemanticPoint(
     y: point.y,
     rank,
     similarity: point.similarity,
+    tokenCount: point.tokenCount ?? numberFromMetadata(point.metadata, ["tokenCount"]),
+    contextIncluded: point.contextIncluded ?? booleanFromMetadata(point.metadata, ["contextIncluded", "ragContextIncluded"]),
+    metadata: point.metadata,
     searchResult: true,
     px: 0,
     py: 0,
@@ -264,10 +364,12 @@ function axisMapper(points: { x: number; y: number }[]) {
   const yRange = yMax - yMin || 1;
 
   return {
-    mapX: (x: number) => CHART_PADDING + ((x - xMin) / xRange) * (CHART_WIDTH - CHART_PADDING * 2),
+    mapX: (x: number) =>
+      CHART_PADDING + ((x - xMin) / xRange) * (CHART_WIDTH - CHART_PADDING * 2),
     mapY: (y: number) =>
       CHART_HEIGHT -
-      (CHART_PADDING + ((y - yMin) / yRange) * (CHART_HEIGHT - CHART_PADDING * 2)),
+      (CHART_PADDING +
+        ((y - yMin) / yRange) * (CHART_HEIGHT - CHART_PADDING * 2)),
     xTicks: Array.from({ length: 5 }, (_, index) => {
       const ratio = index / 4;
       return {
@@ -278,7 +380,9 @@ function axisMapper(points: { x: number; y: number }[]) {
     yTicks: Array.from({ length: 5 }, (_, index) => {
       const ratio = index / 4;
       return {
-        y: CHART_HEIGHT - (CHART_PADDING + ratio * (CHART_HEIGHT - CHART_PADDING * 2)),
+        y:
+          CHART_HEIGHT -
+          (CHART_PADDING + ratio * (CHART_HEIGHT - CHART_PADDING * 2)),
         label: (yMin + yRange * ratio).toFixed(3),
       };
     }),
@@ -290,16 +394,25 @@ function topValue<T>(entries: T[], fallback: T) {
 }
 
 export function VectorVisualizationPage() {
-  const [projections, setProjections] = useState<VectorProjectionSummaryDto[]>([]);
-  const [selectedProjectionId, setSelectedProjectionId] = useState<string | null>(null);
-  const [projectionDetail, setProjectionDetail] = useState<VectorProjectionDetailDto | null>(null);
+  const [projections, setProjections] = useState<VectorProjectionSummaryDto[]>(
+    [],
+  );
+  const [selectedProjectionId, setSelectedProjectionId] = useState<
+    string | null
+  >(null);
+  const [projectionDetail, setProjectionDetail] =
+    useState<VectorProjectionDetailDto | null>(null);
   const [projectionLoading, setProjectionLoading] = useState(false);
   const [projectionDetailLoading, setProjectionDetailLoading] = useState(false);
   const [projectionError, setProjectionError] = useState<string | null>(null);
 
-  const [projectionPoints, setProjectionPoints] = useState<VectorProjectionPointDto[]>([]);
+  const [projectionPoints, setProjectionPoints] = useState<
+    VectorProjectionPointDto[]
+  >([]);
   const [projectionPointLoading, setProjectionPointLoading] = useState(false);
-  const [projectionPointError, setProjectionPointError] = useState<string | null>(null);
+  const [projectionPointError, setProjectionPointError] = useState<
+    string | null
+  >(null);
   const [pointsRequested, setPointsRequested] = useState(false);
 
   const [pointKeyword, setPointKeyword] = useState("");
@@ -311,18 +424,25 @@ export function VectorVisualizationPage() {
   const [topK, setTopK] = useState(String(DEFAULT_TOP_K));
   const [minScore, setMinScore] = useState("0.70");
   const [searchTargetTypes, setSearchTargetTypes] = useState("");
+  const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
+  const [embeddingProvider, setEmbeddingProvider] = useState("");
+  const [embeddingModel, setEmbeddingModel] = useState("");
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchRequested, setSearchRequested] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
-  const [searchResult, setSearchResult] = useState<VectorSearchVisualizationResponseDto | null>(null);
+  const [searchResult, setSearchResult] =
+    useState<VectorSearchVisualizationResponseDto | null>(null);
 
   const [showQueryPoint, setShowQueryPoint] = useState(true);
   const [showNeighborLines, setShowNeighborLines] = useState(true);
   const [showClusterLabels, setShowClusterLabels] = useState(true);
   const [controlsOpen, setControlsOpen] = useState(true);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [resultTab, setResultTab] = useState<ResultTab>("results");
 
-  const [selectedVectorItemId, setSelectedVectorItemId] = useState<string | null>(null);
+  const [selectedVectorItemId, setSelectedVectorItemId] = useState<
+    string | null
+  >(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detail, setDetail] = useState<VectorItemDetailDto | null>(null);
@@ -330,18 +450,33 @@ export function VectorVisualizationPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createName, setCreateName] = useState("");
-  const [createAlgorithm, setCreateAlgorithm] = useState<(typeof ALGORITHM_OPTIONS)[number]>("PCA");
+  const [createAlgorithm, setCreateAlgorithm] =
+    useState<(typeof ALGORITHM_OPTIONS)[number]>("PCA");
   const [createTargetTypes, setCreateTargetTypes] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
 
   const selectedProjection = useMemo(
-    () => projections.find((item) => item.projectionId === selectedProjectionId) ?? null,
-    [projections, selectedProjectionId]
+    () =>
+      projections.find((item) => item.projectionId === selectedProjectionId) ??
+      null,
+    [projections, selectedProjectionId],
   );
   const currentProjection = projectionDetail ?? selectedProjection;
   const selectedProjectionReady = currentProjection?.status === "COMPLETED";
-  const queryReady = selectedProjectionReady && query.trim().length > 0 && isValidTopK(topK) && isValidMinScore(minScore);
+  const queryReady =
+    selectedProjectionReady &&
+    query.trim().length > 0 &&
+    isValidTopK(topK) &&
+    isValidMinScore(minScore);
   const createReady = createName.trim().length > 0;
+  const embeddingProviders = useMemo(
+    () => aiInfo?.providers.filter((provider) => provider.embedding.enabled) ?? [],
+    [aiInfo],
+  );
+  const currentEmbeddingProvider = useMemo(
+    () => embeddingProviders.find((provider) => provider.name === embeddingProvider) ?? null,
+    [embeddingProvider, embeddingProviders],
+  );
 
   const searchMetaById = useMemo(() => {
     const result = new Map<string, SearchMeta>();
@@ -349,6 +484,9 @@ export function VectorVisualizationPage() {
       result.set(point.vectorItemId, {
         rank: index + 1,
         similarity: point.similarity,
+        tokenCount: point.tokenCount ?? numberFromMetadata(point.metadata, ["tokenCount"]),
+        contextIncluded: point.contextIncluded ?? booleanFromMetadata(point.metadata, ["contextIncluded", "ragContextIncluded"]),
+        metadata: point.metadata,
       });
     });
     return result;
@@ -357,7 +495,13 @@ export function VectorVisualizationPage() {
   const semanticPoints = useMemo(() => {
     const byId = new Map<string, SemanticPoint>();
     projectionPoints.forEach((point) => {
-      byId.set(point.vectorItemId, projectionPointToSemanticPoint(point, searchMetaById.get(point.vectorItemId)));
+      byId.set(
+        point.vectorItemId,
+        projectionPointToSemanticPoint(
+          point,
+          searchMetaById.get(point.vectorItemId),
+        ),
+      );
     });
     searchResult?.results.forEach((point, index) => {
       const current = byId.get(point.vectorItemId);
@@ -368,10 +512,16 @@ export function VectorVisualizationPage() {
           y: point.y,
           rank: index + 1,
           similarity: point.similarity,
+          tokenCount: point.tokenCount ?? numberFromMetadata(point.metadata, ["tokenCount"]),
+          contextIncluded: point.contextIncluded ?? booleanFromMetadata(point.metadata, ["contextIncluded", "ragContextIncluded"]),
+          metadata: point.metadata ?? current.metadata,
           searchResult: true,
         });
       } else {
-        byId.set(point.vectorItemId, searchPointToSemanticPoint(point, index + 1));
+        byId.set(
+          point.vectorItemId,
+          searchPointToSemanticPoint(point, index + 1),
+        );
       }
     });
     return Array.from(byId.values());
@@ -381,7 +531,9 @@ export function VectorVisualizationPage() {
   const chartModel = useMemo(() => {
     const axisPoints = [
       ...semanticPoints.map((point) => ({ x: point.x, y: point.y })),
-      ...(queryPoint && isFiniteNumber(queryPoint.x) && isFiniteNumber(queryPoint.y)
+      ...(queryPoint &&
+      isFiniteNumber(queryPoint.x) &&
+      isFiniteNumber(queryPoint.y)
         ? [{ x: queryPoint.x as number, y: queryPoint.y as number }]
         : []),
     ];
@@ -402,7 +554,9 @@ export function VectorVisualizationPage() {
         py: mapper.mapY(point.y),
       })),
       query:
-        queryPoint && isFiniteNumber(queryPoint.x) && isFiniteNumber(queryPoint.y)
+        queryPoint &&
+        isFiniteNumber(queryPoint.x) &&
+        isFiniteNumber(queryPoint.y)
           ? {
               label: queryPoint.label,
               x: queryPoint.x as number,
@@ -420,16 +574,35 @@ export function VectorVisualizationPage() {
     if (!selectedVectorItemId) {
       return null;
     }
-    return chartModel.points.find((point) => point.vectorItemId === selectedVectorItemId) ?? null;
+    return (
+      chartModel.points.find(
+        (point) => point.vectorItemId === selectedVectorItemId,
+      ) ?? null
+    );
   }, [chartModel.points, selectedVectorItemId]);
+  const detailPanelOpen = Boolean(selectedPoint && detailOpen);
+  const sidePanelOpen = detailPanelOpen || controlsOpen;
+  const selectVectorItem = useCallback((vectorItemId?: string | null) => {
+    if (!vectorItemId) {
+      setSelectedVectorItemId(null);
+      setDetailOpen(false);
+      return;
+    }
+    setSelectedVectorItemId(vectorItemId);
+    setDetailOpen(true);
+    setControlsOpen(false);
+  }, []);
 
   const searchRows = useMemo(
     () =>
       searchResult?.results.map((point, index) => ({
         rank: index + 1,
+        distance: projectionDistance(searchResult.query, point),
+        tokenCount: point.tokenCount ?? numberFromMetadata(point.metadata, ["tokenCount"]),
+        contextIncluded: point.contextIncluded ?? booleanFromMetadata(point.metadata, ["contextIncluded", "ragContextIncluded"]),
         ...point,
       })) ?? [],
-    [searchResult]
+    [searchResult],
   );
 
   const pointRows = useMemo(
@@ -438,16 +611,124 @@ export function VectorVisualizationPage() {
         rank: index + 1,
         vectorItemId: point.vectorItemId,
         similarity: point.similarity,
+        distance: chartModel.query
+          ? projectionDistance(chartModel.query, point)
+          : null,
         targetType: point.targetType,
         label: point.label,
         sourceId: point.sourceId,
         clusterId: point.clusterId,
+        tokenCount: point.tokenCount,
+        contextIncluded: point.contextIncluded,
       })),
-    [chartModel.points]
+    [chartModel.points],
   );
 
   const resultRows = searchRows.length > 0 ? searchRows : pointRows;
   const showingSearchRows = searchRows.length > 0;
+  const resultColumnDefs = useMemo<ColDef<VectorResultRow>[]>(
+    () => [
+      {
+        field: "rank",
+        headerName: showingSearchRows ? "Rank" : "No.",
+        width: 82,
+        sortable: true,
+        filter: false,
+      },
+      {
+        field: "similarity",
+        headerName: "Score",
+        width: 110,
+        sortable: true,
+        filter: false,
+        valueFormatter: (params) =>
+          showingSearchRows ? formatNumber(params.value) : "-",
+      },
+      {
+        field: "distance",
+        headerName: "Distance",
+        width: 120,
+        sortable: true,
+        filter: false,
+        valueFormatter: (params) =>
+          showingSearchRows ? formatNumber(params.value) : "-",
+      },
+      {
+        field: "tokenCount",
+        headerName: "Tokens",
+        width: 100,
+        sortable: true,
+        filter: false,
+        type: "numericColumn",
+        valueFormatter: (params) =>
+          typeof params.value === "number" ? params.value.toLocaleString() : "-",
+      },
+      {
+        field: "contextIncluded",
+        headerName: "Context",
+        width: 150,
+        sortable: true,
+        filter: false,
+        cellRenderer: (params: { value?: boolean | null }) => contextIncludedBadge(params.value) ?? "-",
+      },
+      {
+        field: "targetType",
+        headerName: "Object Type",
+        width: 150,
+        sortable: true,
+        filter: false,
+        valueFormatter: (params) => params.value ?? "-",
+      },
+      {
+        field: "label",
+        headerName: "Title",
+        flex: 1,
+        minWidth: 220,
+        sortable: true,
+        filter: false,
+        valueGetter: (params) =>
+          params.data?.label ?? params.data?.vectorItemId ?? "-",
+      },
+      {
+        field: "sourceId",
+        headerName: "Object ID",
+        width: 220,
+        sortable: true,
+        filter: false,
+        valueFormatter: (params) => params.value ?? "-",
+      },
+      {
+        field: "clusterId",
+        headerName: "Cluster",
+        width: 120,
+        sortable: true,
+        filter: false,
+        valueFormatter: (params) => params.value ?? "-",
+      },
+    ],
+    [showingSearchRows],
+  );
+  const resultGridOptions = useMemo<GridOptions<VectorResultRow>>(
+    () => ({
+      getRowId: (params) => params.data.vectorItemId,
+      onRowClicked: (event) => {
+        if (event.data?.vectorItemId) {
+          selectVectorItem(event.data.vectorItemId);
+        }
+      },
+      getRowStyle: (params) =>
+        params.data?.vectorItemId === selectedVectorItemId
+          ? { backgroundColor: alpha("#1976d2", 0.08) }
+          : undefined,
+      overlayNoRowsTemplate: `<span class="ag-overlay-no-rows-center">${
+        selectedProjectionReady
+          ? "전체 맵을 불러오면 Point 목록이 표시됩니다."
+          : "COMPLETED 상태의 프로젝션을 선택하세요."
+      }</span>`,
+      suppressCellFocus: true,
+    }),
+    [selectVectorItem, selectedProjectionReady, selectedVectorItemId],
+  );
 
   const clusterOptions = useMemo(
     () =>
@@ -455,10 +736,10 @@ export function VectorVisualizationPage() {
         new Set(
           projectionPoints
             .map((point) => point.clusterId)
-            .filter((value): value is string => Boolean(value))
-        )
+            .filter((value): value is string => Boolean(value)),
+        ),
       ),
-    [projectionPoints]
+    [projectionPoints],
   );
 
   const typeDistribution = useMemo(() => {
@@ -489,6 +770,15 @@ export function VectorVisualizationPage() {
       color: targetTypeColor(topValue(points, points[0])?.targetType),
     }));
   }, [chartModel.points]);
+  const searchResultPointCount = useMemo(
+    () => chartModel.points.filter((point) => point.searchResult).length,
+    [chartModel.points],
+  );
+  const canShowQueryPoint = Boolean(chartModel.query);
+  const canShowNeighborLines = Boolean(
+    chartModel.query && searchResultPointCount > 0,
+  );
+  const canShowClusterLabels = clusterLabels.length > 0;
 
   const metrics = useMemo(() => {
     const scores = searchRows
@@ -496,9 +786,14 @@ export function VectorVisualizationPage() {
       .filter((value): value is number => isFiniteNumber(value));
     const max = scores.length ? Math.max(...scores) : null;
     const min = scores.length ? Math.min(...scores) : null;
-    const avg = scores.length ? scores.reduce((sum, value) => sum + value, 0) / scores.length : null;
+    const avg = scores.length
+      ? scores.reduce((sum, value) => sum + value, 0) / scores.length
+      : null;
     return {
-      totalPoints: projectionDetail?.itemCount ?? selectedProjection?.itemCount ?? projectionPoints.length,
+      totalPoints:
+        projectionDetail?.itemCount ??
+        selectedProjection?.itemCount ??
+        projectionPoints.length,
       visiblePoints: semanticPoints.length,
       searchCount: searchRows.length,
       max,
@@ -506,21 +801,31 @@ export function VectorVisualizationPage() {
       avg,
       clusterCount: clusterOptions.length,
     };
-  }, [clusterOptions.length, projectionDetail?.itemCount, projectionPoints.length, searchRows, selectedProjection?.itemCount, semanticPoints.length]);
+  }, [
+    clusterOptions.length,
+    projectionDetail?.itemCount,
+    projectionPoints.length,
+    searchRows,
+    selectedProjection?.itemCount,
+    semanticPoints.length,
+  ]);
 
   const neighborRows = useMemo(
     () =>
       searchRows
         .filter((row) => row.vectorItemId !== selectedVectorItemId)
         .slice(0, 5),
-    [searchRows, selectedVectorItemId]
+    [searchRows, selectedVectorItemId],
   );
 
   const loadProjections = useCallback(async () => {
     setProjectionLoading(true);
     setProjectionError(null);
     try {
-      const response = await reactAiApi.listVectorProjections({ limit: DEFAULT_LIMIT, offset: 0 });
+      const response = await reactAiApi.listVectorProjections({
+        limit: DEFAULT_LIMIT,
+        offset: 0,
+      });
       const next = response.items ?? [];
       setProjections(next);
       setSelectedProjectionId((current) => {
@@ -539,6 +844,20 @@ export function VectorVisualizationPage() {
     }
   }, []);
 
+  const loadAiInfo = useCallback(async () => {
+    try {
+      const response = await reactAiApi.fetchProviders();
+      setAiInfo(response);
+      const defaultProvider =
+        response.providers.find((provider) => provider.name === response.defaultProvider && provider.embedding.enabled) ??
+        response.providers.find((provider) => provider.embedding.enabled);
+      setEmbeddingProvider((current) => current || defaultProvider?.name || "");
+      setEmbeddingModel((current) => current || defaultProvider?.embedding.model || "");
+    } catch {
+      setAiInfo(null);
+    }
+  }, []);
+
   const loadProjectionDetail = useCallback(async (projectionId: string) => {
     setProjectionDetailLoading(true);
     setProjectionError(null);
@@ -553,28 +872,41 @@ export function VectorVisualizationPage() {
     }
   }, []);
 
-  const fetchProjectionPoints = useCallback(async (projectionId: string, filters: ProjectionPointFilters = {}) => {
-    setProjectionPointLoading(true);
-    setProjectionPointError(null);
-    setPointsRequested(true);
-    try {
-      const response = await reactAiApi.getVectorProjectionPoints(projectionId, {
-        limit: DEFAULT_POINT_LIMIT,
-        offset: 0,
-        ...(filters.keyword?.trim() ? { keyword: filters.keyword.trim() } : {}),
-        ...(filters.targetType?.trim() ? { targetType: filters.targetType.trim() } : {}),
-        ...(filters.clusterId?.trim() ? { clusterId: filters.clusterId.trim() } : {}),
-      });
-      const next = response.items ?? [];
-      setProjectionPoints(next);
-      setSelectedVectorItemId(null);
-    } catch (error) {
-      setProjectionPoints([]);
-      setProjectionPointError(pointLoadErrorMessage(error));
-    } finally {
-      setProjectionPointLoading(false);
-    }
-  }, []);
+  const fetchProjectionPoints = useCallback(
+    async (projectionId: string, filters: ProjectionPointFilters = {}) => {
+      setProjectionPointLoading(true);
+      setProjectionPointError(null);
+      setPointsRequested(true);
+      try {
+        const response = await reactAiApi.getVectorProjectionPoints(
+          projectionId,
+          {
+            limit: DEFAULT_POINT_LIMIT,
+            offset: 0,
+            ...(filters.keyword?.trim()
+              ? { keyword: filters.keyword.trim() }
+              : {}),
+            ...(filters.targetType?.trim()
+              ? { targetType: filters.targetType.trim() }
+              : {}),
+            ...(filters.clusterId?.trim()
+              ? { clusterId: filters.clusterId.trim() }
+              : {}),
+          },
+        );
+        const next = response.items ?? [];
+        setProjectionPoints(next);
+        setSelectedVectorItemId(null);
+        setDetailOpen(false);
+      } catch (error) {
+        setProjectionPoints([]);
+        setProjectionPointError(pointLoadErrorMessage(error));
+      } finally {
+        setProjectionPointLoading(false);
+      }
+    },
+    [],
+  );
 
   const loadProjectionPoints = useCallback(async () => {
     if (!selectedProjectionId || !selectedProjectionReady) {
@@ -587,17 +919,25 @@ export function VectorVisualizationPage() {
       targetType: pointTargetType,
       clusterId,
     });
-  }, [clusterId, pointKeyword, pointTargetType, selectedProjectionId, selectedProjectionReady]);
+  }, [
+    clusterId,
+    pointKeyword,
+    pointTargetType,
+    selectedProjectionId,
+    selectedProjectionReady,
+  ]);
 
   useEffect(() => {
     void loadProjections();
-  }, [loadProjections]);
+    void loadAiInfo();
+  }, [loadAiInfo, loadProjections]);
 
   useEffect(() => {
     setProjectionDetail(null);
     setSearchResult(null);
     setSearchRequested(false);
     setSelectedVectorItemId(null);
+    setDetailOpen(false);
     setProjectionPoints([]);
     setProjectionPointError(null);
     setPointsRequested(false);
@@ -608,11 +948,22 @@ export function VectorVisualizationPage() {
   }, [loadProjectionDetail, selectedProjectionId]);
 
   useEffect(() => {
-    if (!selectedProjectionId || !selectedProjectionReady || pointsRequested || projectionPointLoading) {
+    if (
+      !selectedProjectionId ||
+      !selectedProjectionReady ||
+      pointsRequested ||
+      projectionPointLoading
+    ) {
       return;
     }
     void fetchProjectionPoints(selectedProjectionId);
-  }, [fetchProjectionPoints, pointsRequested, projectionPointLoading, selectedProjectionId, selectedProjectionReady]);
+  }, [
+    fetchProjectionPoints,
+    pointsRequested,
+    projectionPointLoading,
+    selectedProjectionId,
+    selectedProjectionReady,
+  ]);
 
   useEffect(() => {
     if (!selectedPoint) {
@@ -674,7 +1025,9 @@ export function VectorVisualizationPage() {
       return;
     }
     if (!selectedProjectionReady) {
-      setSearchError("선택한 프로젝션이 COMPLETED 상태여야 분석할 수 있습니다.");
+      setSearchError(
+        "선택한 프로젝션이 COMPLETED 상태여야 분석할 수 있습니다.",
+      );
       return;
     }
     if (!query.trim()) {
@@ -699,11 +1052,15 @@ export function VectorVisualizationPage() {
         projectionId: selectedProjectionId,
         query: query.trim(),
         topK: parseTopK(topK),
-        ...(searchTargetTypes.trim() ? { targetTypes: normalizeTextList(searchTargetTypes) } : {}),
+        ...(searchTargetTypes.trim()
+          ? { targetTypes: normalizeTextList(searchTargetTypes) }
+          : {}),
+        ...(embeddingProvider.trim() ? { embeddingProvider: embeddingProvider.trim() } : {}),
+        ...(embeddingModel.trim() ? { embeddingModel: embeddingModel.trim() } : {}),
         ...(isFiniteNumber(minScoreValue) ? { minScore: minScoreValue } : {}),
       });
       setSearchResult(response);
-      setSelectedVectorItemId(response.results[0]?.vectorItemId ?? null);
+      selectVectorItem(response.results[0]?.vectorItemId);
       setResultTab("results");
     } catch (error) {
       setSearchResult(null);
@@ -728,27 +1085,40 @@ export function VectorVisualizationPage() {
         actions={
           <>
             <Tooltip title="시각화 데이터 생성">
-              <IconButton size="small" color="primary" onClick={() => setCreateOpen(true)}>
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() => setCreateOpen(true)}
+              >
                 <AddOutlined fontSize="small" />
               </IconButton>
             </Tooltip>
-            <Button component={Link} to="/services/ai/rag" size="small" variant="outlined">
+            <Button
+              component={Link}
+              to="/services/ai/rag"
+              size="small"
+              variant="outlined"
+            >
               AI RAG 이동
             </Button>
           </>
         }
       />
 
-      {projectionError ? <Alert severity="error">{projectionError}</Alert> : null}
-      {projectionPointError ? <Alert severity="error">{projectionPointError}</Alert> : null}
+      {projectionError ? (
+        <Alert severity="error">{projectionError}</Alert>
+      ) : null}
+      {projectionPointError ? (
+        <Alert severity="error">{projectionPointError}</Alert>
+      ) : null}
       {searchError ? <Alert severity="error">{searchError}</Alert> : null}
       {createError ? <Alert severity="error">{createError}</Alert> : null}
       {detailError ? <Alert severity="error">{detailError}</Alert> : null}
 
       <Card variant="outlined">
         <Stack spacing={1.3} sx={{ p: 2 }}>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={1.2} alignItems={{ md: "center" }}>
-            <Box sx={{ width: { md: 360 }, flexShrink: 0 }}>
+          <Stack direction="row" spacing={1.2} alignItems="flex-end">
+            <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="caption" color="text.secondary">
                 프로젝션
               </Typography>
@@ -757,28 +1127,72 @@ export function VectorVisualizationPage() {
                 size="small"
                 value={selectedProjectionId ?? ""}
                 displayEmpty
-                onChange={(event) => setSelectedProjectionId(event.target.value || null)}
+                onChange={(event) =>
+                  setSelectedProjectionId(event.target.value || null)
+                }
                 renderValue={(value) => {
-                  const selected = projections.find((item) => item.projectionId === value);
-                  return selected ? selected.name : "프로젝션 선택";
+                  const selected = projections.find(
+                    (item) => item.projectionId === value,
+                  );
+                  return selected ? (
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ minWidth: 0 }}
+                    >
+                      <Typography
+                        variant="body2"
+                        noWrap
+                        sx={{ fontWeight: 600 }}
+                      >
+                        {selected.name}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        color={statusColor(selected.status)}
+                        label={selected.status}
+                        sx={{ height: 20, fontWeight: 700 }}
+                      />
+                    </Stack>
+                  ) : (
+                    "프로젝션 선택"
+                  );
                 }}
               >
                 <MenuItem value="">프로젝션 선택</MenuItem>
                 {projections.map((projection) => (
-                  <MenuItem key={projection.projectionId} value={projection.projectionId}>
-                    {projection.name}
+                  <MenuItem
+                    key={projection.projectionId}
+                    value={projection.projectionId}
+                  >
+                    <Stack
+                      direction="row"
+                      spacing={1}
+                      alignItems="center"
+                      sx={{ width: "100%" }}
+                    >
+                      <Typography
+                        variant="body2"
+                        sx={{ flex: 1, minWidth: 0 }}
+                        noWrap
+                      >
+                        {projection.name}
+                      </Typography>
+                      <Chip
+                        size="small"
+                        color={statusColor(projection.status)}
+                        label={projection.status}
+                        sx={{ height: 20, fontWeight: 700 }}
+                      />
+                    </Stack>
                   </MenuItem>
                 ))}
               </Select>
             </Box>
-            <Box sx={{ flex: 1, minWidth: 0 }} />
-            {projectionLoading || projectionDetailLoading ? <CircularProgress size={20} /> : null}
-            <Chip
-              size="small"
-              color={statusColor(currentProjection?.status)}
-              label={currentProjection?.status ?? "NO SELECTION"}
-              sx={{ fontWeight: 700, minWidth: 112 }}
-            />
+            {projectionLoading || projectionDetailLoading ? (
+              <CircularProgress size={20} />
+            ) : null}
           </Stack>
 
           <Stack
@@ -787,14 +1201,36 @@ export function VectorVisualizationPage() {
             useFlexGap
             flexWrap="wrap"
           >
-            <SummaryMetric label="Algorithm" value={currentProjection?.algorithm ?? "-"} />
-            <SummaryMetric label="Points" value={(currentProjection?.itemCount ?? 0).toLocaleString()} />
-            <SummaryMetric label="Target Types" value={currentProjection?.targetTypes?.length ? currentProjection.targetTypes.join(", ") : "전체"} wide />
-            <SummaryMetric label="Created" value={formatDateTime(currentProjection?.createdAt)} />
-            <SummaryMetric label="Completed" value={formatDateTime(currentProjection?.completedAt)} />
+            <SummaryMetric
+              label="Algorithm"
+              value={currentProjection?.algorithm ?? "-"}
+            />
+            <SummaryMetric
+              label="Points"
+              value={(currentProjection?.itemCount ?? 0).toLocaleString()}
+            />
+            <SummaryMetric
+              label="Target Types"
+              value={
+                currentProjection?.targetTypes?.length
+                  ? currentProjection.targetTypes.join(", ")
+                  : "전체"
+              }
+              wide
+            />
+            <SummaryMetric
+              label="Created"
+              value={formatDateTime(currentProjection?.createdAt)}
+            />
+            <SummaryMetric
+              label="Completed"
+              value={formatDateTime(currentProjection?.completedAt)}
+            />
           </Stack>
 
-          {projectionDetail?.errorMessage ? <Alert severity="error">{projectionDetail.errorMessage}</Alert> : null}
+          {projectionDetail?.errorMessage ? (
+            <Alert severity="error">{projectionDetail.errorMessage}</Alert>
+          ) : null}
           {projections.length === 0 && !projectionLoading ? (
             <Alert severity="info">생성된 시각화 데이터가 없습니다.</Alert>
           ) : null}
@@ -806,179 +1242,322 @@ export function VectorVisualizationPage() {
           display: "grid",
           gridTemplateColumns: {
             xs: "1fr",
-            lg: controlsOpen ? "280px minmax(0, 1fr) 360px" : "minmax(0, 1fr) 360px",
+            lg: sidePanelOpen ? "minmax(0, 1fr) 360px" : "minmax(0, 1fr)",
           },
           gap: 1.2,
           alignItems: "stretch",
         }}
       >
-        {controlsOpen ? (
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Stack spacing={1.4}>
-            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
-              <Stack spacing={0.3}>
-                <Typography variant="subtitle2">Visualization Controls</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Query 분석 조건과 전체 맵 필터를 설정합니다.
+        {!detailPanelOpen && controlsOpen ? (
+          <Paper variant="outlined" sx={{ p: 2, order: { xs: 2, lg: 2 } }}>
+            <Stack spacing={1.4}>
+              <Stack
+                direction="row"
+                alignItems="flex-start"
+                justifyContent="space-between"
+                spacing={1}
+              >
+                <Stack spacing={0.3}>
+                  <Typography variant="subtitle2">
+                    Visualization Controls
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Query 분석 조건과 전체 맵 필터를 설정합니다.
+                  </Typography>
+                </Stack>
+                <Tooltip title="Controls 숨기기">
+                  <IconButton
+                    size="small"
+                    onClick={() => setControlsOpen(false)}
+                  >
+                    <CloseOutlined fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Stack>
+
+              <Divider />
+
+              <Stack spacing={1}>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ fontWeight: 800, textTransform: "uppercase" }}
+                >
+                  Query
                 </Typography>
-              </Stack>
-              <Tooltip title="Controls 숨기기">
-                <IconButton size="small" onClick={() => setControlsOpen(false)}>
-                  <ChevronLeftOutlined fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            </Stack>
-
-            <Divider />
-
-            <ControlSection title="Query 분석">
-              <TextField
-                label="Query"
-                placeholder="검색어를 입력하세요"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                fullWidth
-                size="small"
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" && queryReady) {
-                    void runSearch();
+                <TextField
+                  label="Query"
+                  placeholder="검색어를 입력하세요"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  fullWidth
+                  size="small"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && queryReady) {
+                      void runSearch();
+                    }
+                  }}
+                />
+                <Button
+                  variant="contained"
+                  startIcon={
+                    searchLoading ? (
+                      <CircularProgress size={16} color="inherit" />
+                    ) : (
+                      <SearchOutlined />
+                    )
                   }
-                }}
-              />
-              <Stack direction="row" spacing={1}>
-                <TextField
-                  label="Top K"
-                  value={topK}
-                  onChange={(event) => setTopK(event.target.value)}
-                  size="small"
-                  inputProps={{ inputMode: "numeric" }}
-                  error={!isValidTopK(topK)}
-                  helperText={!isValidTopK(topK) ? "1 이상의 숫자" : " "}
+                  onClick={() => void runSearch()}
+                  disabled={searchLoading || !queryReady}
                   fullWidth
-                />
-                <TextField
-                  label="Min Score"
-                  value={minScore}
-                  onChange={(event) => setMinScore(event.target.value)}
-                  size="small"
-                  inputProps={{ inputMode: "decimal" }}
-                  error={!isValidMinScore(minScore)}
-                  helperText={!isValidMinScore(minScore) ? "0~1 사이 값" : " "}
-                  fullWidth
-                />
+                >
+                  벡터 위치 분석
+                </Button>
               </Stack>
-              <ObjectTypeSelect
-                value={searchTargetTypes}
-                onChange={setSearchTargetTypes}
-                label="검색 Object Type"
-                size="small"
-                placeholder="전체"
-                fullWidth
-              />
-              <Button
-                variant="contained"
-                startIcon={searchLoading ? <CircularProgress size={16} color="inherit" /> : <SearchOutlined />}
-                onClick={() => void runSearch()}
-                disabled={searchLoading || !queryReady}
-                fullWidth
-              >
-                벡터 위치 분석
-              </Button>
-            </ControlSection>
 
-            <ControlSection title="전체 맵 필터">
-              <TextField
-                label="맵 Keyword"
-                value={pointKeyword}
-                onChange={(event) => setPointKeyword(event.target.value)}
-                size="small"
-                fullWidth
-              />
-              <ObjectTypeSelect
-                value={pointTargetType}
-                onChange={setPointTargetType}
-                label="맵 Object Type"
-                size="small"
-                placeholder="전체"
-                fullWidth
-              />
-              <TextField
-                select
-                label="Cluster"
-                value={clusterId}
-                onChange={(event) => setClusterId(event.target.value)}
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="">전체</MenuItem>
-                {clusterOptions.map((item) => (
-                  <MenuItem key={item} value={item}>
-                    {item}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                select
-                label="Color By"
-                value={colorBy}
-                onChange={(event) => setColorBy(event.target.value)}
-                size="small"
-                fullWidth
-              >
-                <MenuItem value="objectType">Object Type</MenuItem>
-              </TextField>
-              <Button
-                variant="outlined"
-                startIcon={projectionPointLoading ? <CircularProgress size={16} /> : <RefreshOutlined />}
-                onClick={() => void loadProjectionPoints()}
-                disabled={!selectedProjectionReady || projectionPointLoading}
-                fullWidth
-              >
-                전체 맵 새로고침
-              </Button>
-            </ControlSection>
+              <BorderlessAccordion title="검색 옵션">
+                <Stack spacing={1}>
+                  <Stack direction="row" spacing={1}>
+                    <TextField
+                      label="Top K"
+                      value={topK}
+                      onChange={(event) => setTopK(event.target.value)}
+                      size="small"
+                      inputProps={{ inputMode: "numeric" }}
+                      error={!isValidTopK(topK)}
+                      helperText={!isValidTopK(topK) ? "1 이상의 숫자" : " "}
+                      fullWidth
+                    />
+                    <TextField
+                      label="Min Score"
+                      value={minScore}
+                      onChange={(event) => setMinScore(event.target.value)}
+                      size="small"
+                      inputProps={{ inputMode: "decimal" }}
+                      error={!isValidMinScore(minScore)}
+                      helperText={
+                        !isValidMinScore(minScore) ? "0~1 사이 값" : " "
+                      }
+                      fullWidth
+                    />
+                  </Stack>
+                  <ObjectTypeSelect
+                    value={searchTargetTypes}
+                    onChange={setSearchTargetTypes}
+                    label="검색 Object Type"
+                    size="small"
+                    placeholder="전체"
+                    fullWidth
+                    helperText="공통 Object Type 목록에서 검색 대상을 제한합니다."
+                  />
+                  <Stack direction="row" spacing={1}>
+                    <TextField
+                      select
+                      label="Embedding Provider"
+                      value={embeddingProvider}
+                      onChange={(event) => {
+                        const nextProvider = event.target.value;
+                        const provider = embeddingProviders.find((item) => item.name === nextProvider);
+                        setEmbeddingProvider(nextProvider);
+                        setEmbeddingModel(provider?.embedding.model ?? "");
+                      }}
+                      size="small"
+                      fullWidth
+                      helperText="검색 쿼리 벡터 생성에 사용할 provider입니다."
+                    >
+                      <MenuItem value="">기본값</MenuItem>
+                      {embeddingProviders.map((provider) => (
+                        <MenuItem key={provider.name} value={provider.name}>
+                          {provider.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    <TextField
+                      select
+                      label="Embedding Model"
+                      value={embeddingModel}
+                      onChange={(event) => setEmbeddingModel(event.target.value)}
+                      size="small"
+                      fullWidth
+                      helperText="선택 provider의 embedding 모델입니다."
+                    >
+                      <MenuItem value="">기본값</MenuItem>
+                      {currentEmbeddingProvider?.embedding.model ? (
+                        <MenuItem value={currentEmbeddingProvider.embedding.model}>
+                          {currentEmbeddingProvider.embedding.model}
+                        </MenuItem>
+                      ) : null}
+                      {embeddingModel && embeddingModel !== currentEmbeddingProvider?.embedding.model ? (
+                        <MenuItem value={embeddingModel}>{embeddingModel}</MenuItem>
+                      ) : null}
+                    </TextField>
+                  </Stack>
+                </Stack>
+              </BorderlessAccordion>
 
-            <ControlSection title="표시 옵션">
-              <FormControlLabel
-                control={<Switch size="small" checked={showQueryPoint} onChange={(event) => setShowQueryPoint(event.target.checked)} />}
-                label={<Typography variant="body2">Query Point</Typography>}
-              />
-              <FormControlLabel
-                control={<Switch size="small" checked={showNeighborLines} onChange={(event) => setShowNeighborLines(event.target.checked)} />}
-                label={<Typography variant="body2">Neighbor Line</Typography>}
-              />
-              <FormControlLabel
-                control={<Switch size="small" checked={showClusterLabels} onChange={(event) => setShowClusterLabels(event.target.checked)} />}
-                label={<Typography variant="body2">Cluster Label</Typography>}
-              />
-            </ControlSection>
-          </Stack>
-        </Paper>
+              <BorderlessAccordion title="Map Filter">
+                <Stack spacing={1}>
+                  <TextField
+                    label="맵 Keyword"
+                    value={pointKeyword}
+                    onChange={(event) => setPointKeyword(event.target.value)}
+                    size="small"
+                    fullWidth
+                  />
+                  <ObjectTypeSelect
+                    value={pointTargetType}
+                    onChange={setPointTargetType}
+                    label="맵 Object Type"
+                    size="small"
+                    placeholder="전체"
+                    fullWidth
+                  />
+                  <TextField
+                    select
+                    label="Cluster"
+                    value={clusterId}
+                    onChange={(event) => setClusterId(event.target.value)}
+                    size="small"
+                    fullWidth
+                  >
+                    <MenuItem value="">전체</MenuItem>
+                    {clusterOptions.map((item) => (
+                      <MenuItem key={item} value={item}>
+                        {item}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  <Button
+                    variant="outlined"
+                    startIcon={
+                      projectionPointLoading ? (
+                        <CircularProgress size={16} />
+                      ) : (
+                        <RefreshOutlined />
+                      )
+                    }
+                    onClick={() => void loadProjectionPoints()}
+                    disabled={
+                      !selectedProjectionReady || projectionPointLoading
+                    }
+                    fullWidth
+                  >
+                    전체 맵 새로고침
+                  </Button>
+                </Stack>
+              </BorderlessAccordion>
+
+              <BorderlessAccordion title="Color & Display">
+                <Stack spacing={1}>
+                  <TextField
+                    select
+                    label="Color By"
+                    value={colorBy}
+                    onChange={(event) => setColorBy(event.target.value)}
+                    size="small"
+                    fullWidth
+                  >
+                    <MenuItem value="objectType">Object Type</MenuItem>
+                  </TextField>
+                  <Stack spacing={0.4}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={canShowQueryPoint && showQueryPoint}
+                          disabled={!canShowQueryPoint}
+                          onChange={(event) =>
+                            setShowQueryPoint(event.target.checked)
+                          }
+                        />
+                      }
+                      label={
+                        <Typography variant="body2">Query Point</Typography>
+                      }
+                    />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={canShowNeighborLines && showNeighborLines}
+                          disabled={!canShowNeighborLines}
+                          onChange={(event) =>
+                            setShowNeighborLines(event.target.checked)
+                          }
+                        />
+                      }
+                      label={
+                        <Typography variant="body2">Neighbor Line</Typography>
+                      }
+                    />
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          size="small"
+                          checked={canShowClusterLabels && showClusterLabels}
+                          disabled={!canShowClusterLabels}
+                          onChange={(event) =>
+                            setShowClusterLabels(event.target.checked)
+                          }
+                        />
+                      }
+                      label={
+                        <Typography variant="body2">Cluster Label</Typography>
+                      }
+                    />
+                  </Stack>
+                </Stack>
+              </BorderlessAccordion>
+            </Stack>
+          </Paper>
         ) : null}
 
-        <Box sx={{ minWidth: 0 }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+        <Box sx={{ minWidth: 0, order: { xs: 1, lg: 1 } }}>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ mb: 1 }}
+          >
             <Stack spacing={0.2}>
               <Typography variant="subtitle2">Semantic Map</Typography>
               <Typography variant="caption" color="text.secondary">
                 {projectionPointLoading
                   ? "전체 벡터 위치를 불러오는 중입니다."
                   : pointsRequested
-                  ? `${semanticPoints.length.toLocaleString()} visible points · ${searchRows.length.toLocaleString()} topK results`
-                  : selectedProjectionReady
-                  ? "프로젝션 선택 후 전체 맵을 자동으로 불러옵니다."
-                  : "COMPLETED 상태의 프로젝션을 선택하세요."}
-                </Typography>
-              </Stack>
+                    ? `${semanticPoints.length.toLocaleString()} visible points · ${searchRows.length.toLocaleString()} topK results`
+                    : selectedProjectionReady
+                      ? "프로젝션 선택 후 전체 맵을 자동으로 불러옵니다."
+                      : "COMPLETED 상태의 프로젝션을 선택하세요."}
+              </Typography>
+            </Stack>
             <Stack direction="row" spacing={0.8} alignItems="center">
-              {!controlsOpen ? (
+              {selectedPoint && !detailOpen ? (
+                <Tooltip title="선택 상세 열기">
+                  <IconButton
+                    size="small"
+                    onClick={() => {
+                      setDetailOpen(true);
+                      setControlsOpen(false);
+                    }}
+                  >
+                    <InfoOutlined fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              ) : null}
+              {!sidePanelOpen ? (
                 <Tooltip title="Controls 열기">
-                  <IconButton size="small" onClick={() => setControlsOpen(true)}>
+                  <IconButton
+                    size="small"
+                    onClick={() => setControlsOpen(true)}
+                  >
                     <TuneOutlined fontSize="small" />
                   </IconButton>
                 </Tooltip>
               ) : null}
-              {projectionPointLoading || searchLoading ? <CircularProgress size={18} /> : null}
+              {projectionPointLoading || searchLoading ? (
+                <CircularProgress size={18} />
+              ) : null}
             </Stack>
           </Stack>
 
@@ -990,7 +1569,11 @@ export function VectorVisualizationPage() {
                 bgcolor: "transparent",
               }}
             >
-              <svg width="100%" viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} style={{ display: "block" }}>
+              <svg
+                width="100%"
+                viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+                style={{ display: "block" }}
+              >
                 <rect
                   x={CHART_PADDING}
                   y={CHART_PADDING}
@@ -1002,40 +1585,87 @@ export function VectorVisualizationPage() {
                 />
                 {chartModel.xTicks.map((tick) => (
                   <g key={`x-${tick.label}`}>
-                    <line x1={tick.x} x2={tick.x} y1={CHART_PADDING} y2={CHART_HEIGHT - CHART_PADDING} stroke="#e2e8f0" />
-                    <text x={tick.x} y={CHART_HEIGHT - CHART_PADDING + 18} textAnchor="middle" fontSize={11} fill="#64748b">
+                    <line
+                      x1={tick.x}
+                      x2={tick.x}
+                      y1={CHART_PADDING}
+                      y2={CHART_HEIGHT - CHART_PADDING}
+                      stroke="#e2e8f0"
+                    />
+                    <text
+                      x={tick.x}
+                      y={CHART_HEIGHT - CHART_PADDING + 18}
+                      textAnchor="middle"
+                      fontSize={11}
+                      fill="#64748b"
+                    >
                       {tick.label}
                     </text>
                   </g>
                 ))}
                 {chartModel.yTicks.map((tick) => (
                   <g key={`y-${tick.label}`}>
-                    <line x1={CHART_PADDING} x2={CHART_WIDTH - CHART_PADDING} y1={tick.y} y2={tick.y} stroke="#e2e8f0" />
-                    <text x={CHART_PADDING - 10} y={tick.y + 4} textAnchor="end" fontSize={11} fill="#64748b">
+                    <line
+                      x1={CHART_PADDING}
+                      x2={CHART_WIDTH - CHART_PADDING}
+                      y1={tick.y}
+                      y2={tick.y}
+                      stroke="#e2e8f0"
+                    />
+                    <text
+                      x={CHART_PADDING - 10}
+                      y={tick.y + 4}
+                      textAnchor="end"
+                      fontSize={11}
+                      fill="#64748b"
+                    >
                       {tick.label}
                     </text>
                   </g>
                 ))}
 
-                {showNeighborLines && chartModel.query
+                {canShowNeighborLines && showNeighborLines
                   ? chartModel.points
                       .filter((point) => point.searchResult)
-                      .map((point) => (
-                        <line
-                          key={`line-${point.vectorItemId}`}
-                          x1={chartModel.query!.px}
-                          y1={chartModel.query!.py}
-                          x2={point.px}
-                          y2={point.py}
-                          stroke="#94a3b8"
-                          strokeDasharray="4 5"
-                          strokeWidth={1.2}
-                          opacity={0.75}
-                        />
-                      ))
+                      .map((point) => {
+                        const distance = projectionDistance(
+                          chartModel.query,
+                          point,
+                        );
+                        const showDistanceLabel =
+                          Boolean(point.rank && point.rank <= 5) ||
+                          selectedPoint?.vectorItemId === point.vectorItemId;
+                        return (
+                          <g key={`line-${point.vectorItemId}`}>
+                            <line
+                              x1={chartModel.query!.px}
+                              y1={chartModel.query!.py}
+                              x2={point.px}
+                              y2={point.py}
+                              stroke="#94a3b8"
+                              strokeDasharray="4 5"
+                              strokeWidth={1.2}
+                              opacity={0.75}
+                            />
+                            <title>{`Query -> ${point.label ?? point.vectorItemId}\ndistance: ${formatNumber(distance)}\nscore: ${formatNumber(point.similarity)}`}</title>
+                            {showDistanceLabel ? (
+                              <text
+                                x={(chartModel.query!.px + point.px) / 2}
+                                y={(chartModel.query!.py + point.py) / 2 - 4}
+                                textAnchor="middle"
+                                fontSize={10}
+                                fill="#475569"
+                                fontWeight={700}
+                              >
+                                {formatNumber(distance, 2)}
+                              </text>
+                            ) : null}
+                          </g>
+                        );
+                      })
                   : null}
 
-                {showClusterLabels
+                {canShowClusterLabels && showClusterLabels
                   ? clusterLabels.map((label) => (
                       <g key={label.id}>
                         <rect
@@ -1048,7 +1678,14 @@ export function VectorVisualizationPage() {
                           stroke={label.color}
                           opacity={0.92}
                         />
-                        <text x={label.x} y={label.y + 4} textAnchor="middle" fontSize={11} fill={label.color} fontWeight={700}>
+                        <text
+                          x={label.x}
+                          y={label.y + 4}
+                          textAnchor="middle"
+                          fontSize={11}
+                          fill={label.color}
+                          fontWeight={700}
+                        >
                           {label.id}
                         </text>
                       </g>
@@ -1056,7 +1693,8 @@ export function VectorVisualizationPage() {
                   : null}
 
                 {chartModel.points.map((point) => {
-                  const selected = selectedPoint?.vectorItemId === point.vectorItemId;
+                  const selected =
+                    selectedPoint?.vectorItemId === point.vectorItemId;
                   const color = targetTypeColor(point.targetType);
                   return (
                     <g key={point.vectorItemId}>
@@ -1065,25 +1703,40 @@ export function VectorVisualizationPage() {
                         cy={point.py}
                         r={selected ? 7.5 : point.searchResult ? 6 : 3.2}
                         fill={point.searchResult ? "#facc15" : color}
-                        stroke={selected ? "#111827" : point.searchResult ? "#ca8a04" : "#ffffff"}
-                        strokeWidth={selected ? 2.4 : point.searchResult ? 1.8 : 0.8}
+                        stroke={
+                          selected
+                            ? "#111827"
+                            : point.searchResult
+                              ? "#ca8a04"
+                              : "#ffffff"
+                        }
+                        strokeWidth={
+                          selected ? 2.4 : point.searchResult ? 1.8 : 0.8
+                        }
                         opacity={point.searchResult ? 1 : 0.74}
                         style={{ cursor: "pointer" }}
-                        onClick={() => setSelectedVectorItemId(point.vectorItemId)}
+                        onClick={() => selectVectorItem(point.vectorItemId)}
                       />
                       {point.searchResult && point.rank ? (
-                        <text x={point.px} y={point.py + 3.8} textAnchor="middle" fontSize={9} fill="#111827" fontWeight={800}>
+                        <text
+                          x={point.px}
+                          y={point.py + 3.8}
+                          textAnchor="middle"
+                          fontSize={9}
+                          fill="#111827"
+                          fontWeight={800}
+                        >
                           {point.rank}
                         </text>
                       ) : null}
                       <title>
-                        {`${point.label ?? point.vectorItemId}\n${point.targetType ?? "-"} / ${point.sourceId ?? "-"}\nscore: ${formatNumber(point.similarity)}\ncluster: ${point.clusterId ?? "-"}\n(${formatNumber(point.x)}, ${formatNumber(point.y)})`}
+                        {`${point.label ?? point.vectorItemId}\n${point.targetType ?? "-"} / ${point.sourceId ?? "-"}\nscore: ${formatNumber(point.similarity)}\ntokens: ${point.tokenCount?.toLocaleString() ?? "-"}\ncontext: ${point.contextIncluded == null ? "-" : point.contextIncluded ? "included" : "excluded"}\ndistance: ${formatNumber(projectionDistance(chartModel.query, point))}\ncluster: ${point.clusterId ?? "-"}\n(${formatNumber(point.x)}, ${formatNumber(point.y)})`}
                       </title>
                     </g>
                   );
                 })}
 
-                {showQueryPoint && chartModel.query ? (
+                {canShowQueryPoint && showQueryPoint && chartModel.query ? (
                   <g>
                     <polygon
                       points={`${chartModel.query.px},${chartModel.query.py - 12} ${chartModel.query.px + 4},${chartModel.query.py - 4} ${chartModel.query.px + 13},${chartModel.query.py - 3} ${chartModel.query.px + 6},${chartModel.query.py + 3} ${chartModel.query.px + 8},${chartModel.query.py + 12} ${chartModel.query.px},${chartModel.query.py + 7} ${chartModel.query.px - 8},${chartModel.query.py + 12} ${chartModel.query.px - 6},${chartModel.query.py + 3} ${chartModel.query.px - 13},${chartModel.query.py - 3} ${chartModel.query.px - 4},${chartModel.query.py - 4}`}
@@ -1100,7 +1753,14 @@ export function VectorVisualizationPage() {
                       fill="#ffffff"
                       stroke="#ef4444"
                     />
-                    <text x={chartModel.query.px} y={chartModel.query.py + 31} textAnchor="middle" fontSize={11} fill="#dc2626" fontWeight={700}>
+                    <text
+                      x={chartModel.query.px}
+                      y={chartModel.query.py + 31}
+                      textAnchor="middle"
+                      fontSize={11}
+                      fill="#dc2626"
+                      fontWeight={700}
+                    >
                       Query
                     </text>
                   </g>
@@ -1123,12 +1783,18 @@ export function VectorVisualizationPage() {
               {projectionPointError
                 ? "전체 맵을 불러오지 못했습니다. Query 분석 결과는 계속 표시할 수 있습니다."
                 : pointsRequested
-                ? "표시할 좌표 데이터가 없습니다."
-                : "프로젝션을 선택하면 전체 맵을 자동으로 불러옵니다."}
+                  ? "표시할 좌표 데이터가 없습니다."
+                  : "프로젝션을 선택하면 전체 맵을 자동으로 불러옵니다."}
             </Box>
           )}
 
-          <Stack direction="row" spacing={1.2} useFlexGap flexWrap="wrap" sx={{ mt: 1.2 }}>
+          <Stack
+            direction="row"
+            spacing={1.2}
+            useFlexGap
+            flexWrap="wrap"
+            sx={{ mt: 1.2 }}
+          >
             {typeDistribution.map(([type, count]) => (
               <Chip
                 key={type}
@@ -1145,36 +1811,128 @@ export function VectorVisualizationPage() {
           </Stack>
         </Box>
 
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Stack spacing={1.2}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
-              <Typography variant="subtitle2">선택 항목 상세 정보</Typography>
-              {detailLoading ? <CircularProgress size={18} /> : null}
-            </Stack>
-            <Divider />
+        {detailPanelOpen && selectedPoint ? (
+          <Paper variant="outlined" sx={{ p: 2, order: { xs: 2, lg: 2 } }}>
+            <Stack spacing={1.2}>
+              <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+              >
+                <Typography variant="subtitle2">선택 항목 상세 정보</Typography>
+                <Stack direction="row" spacing={0.8} alignItems="center">
+                  {detailLoading ? <CircularProgress size={18} /> : null}
+                  <Tooltip title="상세 닫기">
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setDetailOpen(false);
+                        setControlsOpen(false);
+                      }}
+                    >
+                      <CloseOutlined fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+              </Stack>
+              <Divider />
 
-            {selectedPoint ? (
               <Stack spacing={1.1}>
                 <Stack direction="row" spacing={1} alignItems="center">
-                  {selectedPoint.rank ? <Chip size="small" color="warning" label={`Top ${selectedPoint.rank}`} /> : null}
-                  {isFiniteNumber(selectedPoint.similarity) ? (
-                    <Chip size="small" color="primary" label={`Score ${formatNumber(selectedPoint.similarity)}`} />
+                  {selectedPoint.rank ? (
+                    <Chip
+                      size="small"
+                      color="warning"
+                      label={`Top ${selectedPoint.rank}`}
+                    />
                   ) : null}
+                  {isFiniteNumber(selectedPoint.similarity) ? (
+                    <Chip
+                      size="small"
+                      color="primary"
+                      label={`Score ${formatNumber(selectedPoint.similarity)}`}
+                    />
+                  ) : null}
+                  {selectedPoint.tokenCount != null ? (
+                    <Chip
+                      size="small"
+                      color="info"
+                      label={`${selectedPoint.tokenCount.toLocaleString()} tokens`}
+                    />
+                  ) : null}
+                  {contextIncludedBadge(selectedPoint.contextIncluded)}
                 </Stack>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700, wordBreak: "break-word" }}>
+                <Typography
+                  variant="subtitle1"
+                  sx={{ fontWeight: 700, wordBreak: "break-word" }}
+                >
                   {selectedPoint.label ?? selectedPoint.vectorItemId}
                 </Typography>
-                <DetailLine label="Object Type" value={selectedPoint.targetType ?? "-"} />
-                <DetailLine label="Object ID" value={selectedPoint.sourceId ?? "-"} />
-                <DetailLine label="Vector Item" value={selectedPoint.vectorItemId} />
-                <DetailLine label="Cluster" value={selectedPoint.clusterId ?? "-"} />
-                <DetailLine label="Coordinate" value={`(${formatNumber(selectedPoint.x)}, ${formatNumber(selectedPoint.y)})`} />
+                <DetailLine
+                  label="Object Type"
+                  value={selectedPoint.targetType ?? "-"}
+                />
+                <DetailLine
+                  label="Object ID"
+                  value={selectedPoint.sourceId ?? "-"}
+                />
+                <DetailLine
+                  label="Vector Item"
+                  value={selectedPoint.vectorItemId}
+                />
+                <DetailLine
+                  label="Cluster"
+                  value={selectedPoint.clusterId ?? "-"}
+                />
+                <DetailLine
+                  label="Coordinate"
+                  value={`(${formatNumber(selectedPoint.x)}, ${formatNumber(selectedPoint.y)})`}
+                />
+                {chartModel.query ? (
+                  <DetailLine
+                    label="Query Distance"
+                    value={formatNumber(
+                      projectionDistance(chartModel.query, selectedPoint),
+                    )}
+                  />
+                ) : null}
+                <DetailLine
+                  label="Token Count"
+                  value={selectedPoint.tokenCount?.toLocaleString() ?? "-"}
+                />
+                <DetailLine
+                  label="Context"
+                  value={
+                    selectedPoint.contextIncluded == null
+                      ? "-"
+                      : selectedPoint.contextIncluded
+                        ? "CONTEXT INCLUDED"
+                        : "CONTEXT EXCLUDED"
+                  }
+                />
                 <Divider />
                 {detail ? (
                   <>
-                    <DetailLine label="Model" value={detail.embeddingModel ?? "-"} />
-                    <DetailLine label="Dimension" value={detail.dimension?.toLocaleString() ?? "-"} />
-                    <DetailLine label="Created" value={formatDateTime(detail.createdAt)} />
+                    <DetailLine
+                      label="Model"
+                      value={detail.embeddingModel ?? "-"}
+                    />
+                    <DetailLine
+                      label="Dimension"
+                      value={detail.dimension?.toLocaleString() ?? "-"}
+                    />
+                    <DetailLine
+                      label="Detail Tokens"
+                      value={
+                        detail.tokenCount?.toLocaleString() ??
+                        numberFromMetadata(detail.metadata, ["tokenCount"])?.toLocaleString() ??
+                        "-"
+                      }
+                    />
+                    <DetailLine
+                      label="Created"
+                      value={formatDateTime(detail.createdAt)}
+                    />
                     <Typography variant="subtitle2">Chunk Text</Typography>
                     <Box
                       sx={{
@@ -1187,73 +1945,85 @@ export function VectorVisualizationPage() {
                         bgcolor: "action.hover",
                       }}
                     >
-                      <Typography variant="body2" sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+                      >
                         {renderMetadata(detail.text)}
                       </Typography>
                     </Box>
-                    <Typography variant="subtitle2">Metadata</Typography>
-                    <Box
-                      component="pre"
-                      sx={{
-                        maxHeight: 150,
-                        overflow: "auto",
-                        m: 0,
-                        p: 1,
-                        border: 1,
-                        borderColor: "divider",
-                        borderRadius: 1,
-                        fontSize: 12,
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      {renderMetadata(detail.metadata)}
-                    </Box>
+                    <BorderlessAccordion title="Metadata">
+                      <Box
+                        component="pre"
+                        sx={{
+                          maxHeight: 150,
+                          overflow: "auto",
+                          m: 0,
+                          p: 1,
+                          fontSize: 12,
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          bgcolor: "action.hover",
+                          borderRadius: 1,
+                        }}
+                      >
+                        {renderMetadata(detail.metadata)}
+                      </Box>
+                    </BorderlessAccordion>
                   </>
                 ) : null}
                 <Divider />
-                <Typography variant="subtitle2">유사 Chunk (검색 결과 기준)</Typography>
-                <List dense disablePadding>
-                  {neighborRows.length === 0 ? (
-                    <ListItem>
-                      <ListItemText secondary="Query Projection 실행 후 유사 항목이 표시됩니다." />
-                    </ListItem>
-                  ) : (
-                    neighborRows.map((row) => (
-                      <ListItemButton
-                        key={row.vectorItemId}
-                        onClick={() => setSelectedVectorItemId(row.vectorItemId)}
-                        sx={{ borderRadius: 1 }}
-                      >
-                        <ListItemText
-                          primary={`${row.rank}. ${row.label ?? row.sourceId ?? row.vectorItemId}`}
-                          secondary={`${row.targetType ?? "-"} · score ${formatNumber(row.similarity)}`}
-                          primaryTypographyProps={{ noWrap: true }}
-                          secondaryTypographyProps={{ noWrap: true }}
-                        />
-                      </ListItemButton>
-                    ))
-                  )}
-                </List>
+                <BorderlessAccordion
+                  title="유사 Chunk (검색 결과 기준)"
+                  defaultExpanded
+                >
+                  <List dense disablePadding>
+                    {neighborRows.length === 0 ? (
+                      <ListItem>
+                        <ListItemText secondary="Query Projection 실행 후 유사 항목이 표시됩니다." />
+                      </ListItem>
+                    ) : (
+                      neighborRows.map((row) => (
+                        <ListItemButton
+                          key={row.vectorItemId}
+                          onClick={() => selectVectorItem(row.vectorItemId)}
+                          sx={{ borderRadius: 1 }}
+                        >
+                          <ListItemText
+                            primary={`${row.rank}. ${row.label ?? row.sourceId ?? row.vectorItemId}`}
+                            secondary={`${row.targetType ?? "-"} · score ${formatNumber(row.similarity)} · distance ${formatNumber(row.distance)}`}
+                            primaryTypographyProps={{ noWrap: true }}
+                            secondaryTypographyProps={{ noWrap: true }}
+                          />
+                        </ListItemButton>
+                      ))
+                    )}
+                  </List>
+                </BorderlessAccordion>
               </Stack>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                차트나 결과 목록에서 항목을 선택하면 상세 정보가 표시됩니다.
-              </Typography>
-            )}
-          </Stack>
-        </Paper>
+            </Stack>
+          </Paper>
+        ) : null}
       </Box>
 
       {!selectedProjectionReady && currentProjection ? (
-        <Alert severity="info">COMPLETED 상태가 되면 좌표 목록과 2D 차트를 조회할 수 있습니다.</Alert>
+        <Alert severity="info">
+          COMPLETED 상태가 되면 좌표 목록과 2D 차트를 조회할 수 있습니다.
+        </Alert>
       ) : null}
       {searchRequested && searchResult && searchResult.results.length === 0 ? (
-        <Alert severity="info">Query Projection 결과가 없습니다. 전체 좌표 데이터는 계속 표시할 수 있습니다.</Alert>
+        <Alert severity="info">
+          Query Projection 결과가 없습니다. 전체 좌표 데이터는 계속 표시할 수
+          있습니다.
+        </Alert>
       ) : null}
 
       <Box>
-        <Tabs value={resultTab} onChange={(_, value) => setResultTab(value as ResultTab)} sx={{ px: 2, borderBottom: 1, borderColor: "divider" }}>
+        <Tabs
+          value={resultTab}
+          onChange={(_, value) => setResultTab(value as ResultTab)}
+          sx={{ px: 2, borderBottom: 1, borderColor: "divider" }}
+        >
           <Tab
             value="results"
             label={
@@ -1265,71 +2035,70 @@ export function VectorVisualizationPage() {
           <Tab value="metrics" label="분석 지표" />
         </Tabs>
         {resultTab === "results" ? (
-          <TableContainer sx={{ maxHeight: 320 }}>
-            <Table size="small" stickyHeader>
-              <TableHead>
-                <TableRow>
-                  <TableCell width={64}>{showingSearchRows ? "Rank" : "No."}</TableCell>
-                  <TableCell width={100}>Score</TableCell>
-                  <TableCell width={150}>Object Type</TableCell>
-                  <TableCell>Title</TableCell>
-                  <TableCell width={220}>Object ID</TableCell>
-                  <TableCell width={120}>Cluster</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {resultRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      {selectedProjectionReady
-                        ? "전체 맵을 불러오면 Point 목록이 표시됩니다."
-                        : "COMPLETED 상태의 프로젝션을 선택하세요."}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  resultRows.map((row) => (
-                    <TableRow
-                      key={row.vectorItemId}
-                      hover
-                      selected={selectedVectorItemId === row.vectorItemId}
-                      onClick={() => setSelectedVectorItemId(row.vectorItemId)}
-                      sx={{ cursor: "pointer" }}
-                    >
-                      <TableCell>{row.rank}</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: showingSearchRows ? "error.main" : "text.secondary" }}>
-                        {showingSearchRows ? formatNumber(row.similarity) : "-"}
-                      </TableCell>
-                      <TableCell>{row.targetType ?? "-"}</TableCell>
-                      <TableCell>{row.label ?? row.vectorItemId}</TableCell>
-                      <TableCell>{row.sourceId ?? "-"}</TableCell>
-                      <TableCell>{chartModel.points.find((point) => point.vectorItemId === row.vectorItemId)?.clusterId ?? "-"}</TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <GridContent<VectorResultRow>
+            columns={resultColumnDefs}
+            rowData={resultRows}
+            height={320}
+            loading={projectionPointLoading || searchLoading}
+            options={resultGridOptions}
+          />
         ) : (
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.2} useFlexGap flexWrap="wrap" sx={{ p: 2 }}>
-            <MetricCard label="전체 Point" value={metrics.totalPoints.toLocaleString()} />
-            <MetricCard label="표시 Point" value={metrics.visiblePoints.toLocaleString()} />
-            <MetricCard label="검색 결과" value={metrics.searchCount.toLocaleString()} />
-            <MetricCard label="Max Similarity" value={formatNumber(metrics.max)} />
-            <MetricCard label="Avg Similarity" value={formatNumber(metrics.avg)} />
-            <MetricCard label="Min Similarity" value={formatNumber(metrics.min)} />
-            <MetricCard label="Cluster 수" value={metrics.clusterCount.toLocaleString()} />
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1.2}
+            useFlexGap
+            flexWrap="wrap"
+            sx={{ p: 2 }}
+          >
+            <MetricCard
+              label="전체 Point"
+              value={metrics.totalPoints.toLocaleString()}
+            />
+            <MetricCard
+              label="표시 Point"
+              value={metrics.visiblePoints.toLocaleString()}
+            />
+            <MetricCard
+              label="검색 결과"
+              value={metrics.searchCount.toLocaleString()}
+            />
+            <MetricCard
+              label="Max Similarity"
+              value={formatNumber(metrics.max)}
+            />
+            <MetricCard
+              label="Avg Similarity"
+              value={formatNumber(metrics.avg)}
+            />
+            <MetricCard
+              label="Min Similarity"
+              value={formatNumber(metrics.min)}
+            />
+            <MetricCard
+              label="Cluster 수"
+              value={metrics.clusterCount.toLocaleString()}
+            />
             <Card variant="outlined" sx={{ minWidth: 240, p: 1.5 }}>
               <Typography variant="caption" color="text.secondary">
                 Object Type Distribution
               </Typography>
               <Stack spacing={0.6} sx={{ mt: 1 }}>
                 {typeDistribution.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">-</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    -
+                  </Typography>
                 ) : (
                   typeDistribution.map(([type, count]) => (
-                    <Stack key={type} direction="row" justifyContent="space-between" spacing={1}>
+                    <Stack
+                      key={type}
+                      direction="row"
+                      justifyContent="space-between"
+                      spacing={1}
+                    >
                       <Typography variant="body2">{type}</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>{count.toLocaleString()}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {count.toLocaleString()}
+                      </Typography>
                     </Stack>
                   ))
                 )}
@@ -1339,7 +2108,12 @@ export function VectorVisualizationPage() {
         )}
       </Box>
 
-      <Dialog open={createOpen} fullWidth maxWidth="sm" onClose={closeCreateDialog}>
+      <Dialog
+        open={createOpen}
+        fullWidth
+        maxWidth="sm"
+        onClose={closeCreateDialog}
+      >
         <DialogTitle>시각화 데이터 생성</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Stack spacing={1.2}>
@@ -1349,30 +2123,34 @@ export function VectorVisualizationPage() {
               onChange={(event) => setCreateName(event.target.value)}
               fullWidth
               size="small"
-              placeholder="예: attachment-map"
+              autoFocus
             />
             <TextField
               select
               label="알고리즘"
               value={createAlgorithm}
-              onChange={(event) => setCreateAlgorithm(event.target.value as typeof ALGORITHM_OPTIONS[number])}
+              onChange={(event) =>
+                setCreateAlgorithm(
+                  event.target.value as (typeof ALGORITHM_OPTIONS)[number],
+                )
+              }
               fullWidth
               size="small"
             >
-              {ALGORITHM_OPTIONS.map((item) => (
-                <MenuItem key={item} value={item}>
-                  {item}
+              {ALGORITHM_OPTIONS.map((option) => (
+                <MenuItem key={option} value={option}>
+                  {option}
                 </MenuItem>
               ))}
             </TextField>
             <TextField
-              label="targetTypes"
+              label="Object Type"
+              placeholder="예: NCS,COURSE"
               value={createTargetTypes}
               onChange={(event) => setCreateTargetTypes(event.target.value)}
               fullWidth
               size="small"
-              placeholder="attachment, document"
-              helperText="콤마로 구분합니다. 비워 두면 전체 타입을 대상으로 생성합니다."
+              helperText="비워두면 전체 대상에 대해 생성합니다."
             />
           </Stack>
         </DialogContent>
@@ -1380,7 +2158,11 @@ export function VectorVisualizationPage() {
           <Button onClick={closeCreateDialog} disabled={creating}>
             취소
           </Button>
-          <Button variant="contained" onClick={() => void handleCreateProjection()} disabled={creating || !createReady}>
+          <Button
+            variant="contained"
+            onClick={() => void handleCreateProjection()}
+            disabled={creating || !createReady}
+          >
             생성
           </Button>
         </DialogActions>
@@ -1389,48 +2171,99 @@ export function VectorVisualizationPage() {
   );
 }
 
-function SummaryMetric({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+function SummaryMetric({
+  label,
+  value,
+  wide = false,
+}: {
+  label: string;
+  value: string;
+  wide?: boolean;
+}) {
   return (
     <Box
       sx={{
-        minWidth: wide ? 260 : 150,
+        minWidth: wide ? { xs: "100%", md: 220 } : 116,
+        px: 1.4,
+        py: 0.8,
         borderLeft: 1,
         borderColor: "divider",
-        pl: 1.4,
       }}
     >
       <Typography variant="caption" color="text.secondary">
         {label}
       </Typography>
-      <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+      <Typography variant="body2" sx={{ fontWeight: 700 }}>
         {value}
       </Typography>
     </Box>
   );
 }
 
-function ControlSection({ title, children }: { title: string; children: ReactNode }) {
+function BorderlessAccordion({
+  title,
+  children,
+  defaultExpanded = false,
+}: {
+  title: string;
+  children: ReactNode;
+  defaultExpanded?: boolean;
+}) {
   return (
-    <Stack spacing={1} sx={{ pt: 0.2 }}>
-      <Typography
-        variant="caption"
-        color="text.secondary"
-        sx={{ fontWeight: 800, textTransform: "uppercase" }}
-      >
-        {title}
-      </Typography>
-      {children}
-    </Stack>
+    <Accordion
+      disableGutters
+      elevation={0}
+      defaultExpanded={defaultExpanded}
+      sx={{
+        bgcolor: "transparent",
+        "&:before": { display: "none" },
+        "& .MuiAccordionSummary-root": {
+          minHeight: 32,
+          px: 0,
+        },
+        "& .MuiAccordionSummary-content": {
+          my: 0.4,
+        },
+        "& .MuiAccordionDetails-root": {
+          px: 0,
+          pt: 0.4,
+          pb: 0,
+        },
+      }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreOutlined fontSize="small" />}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ fontWeight: 800, textTransform: "uppercase" }}
+        >
+          {title}
+        </Typography>
+      </AccordionSummary>
+      <AccordionDetails>{children}</AccordionDetails>
+    </Accordion>
   );
 }
 
 function DetailLine({ label, value }: { label: string; value: string }) {
   return (
-    <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="flex-start">
-      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 96 }}>
+    <Stack
+      direction="row"
+      spacing={1}
+      justifyContent="space-between"
+      alignItems="flex-start"
+    >
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ minWidth: 96 }}
+      >
         {label}
       </Typography>
-      <Typography variant="body2" sx={{ fontWeight: 600, textAlign: "right", wordBreak: "break-word" }}>
+      <Typography
+        variant="body2"
+        sx={{ fontWeight: 600, textAlign: "right", wordBreak: "break-word" }}
+      >
         {value}
       </Typography>
     </Stack>

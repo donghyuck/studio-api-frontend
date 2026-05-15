@@ -9,6 +9,7 @@ import { ForumTopicListPage } from "@/react/pages/community/ForumTopicListPage";
 import { DashboardPage } from "@/react/pages/DashboardPage";
 import { ChatPage } from "@/react/pages/ai/ChatPage";
 import { RagChatPage } from "@/react/pages/ai/RagChatPage";
+import { RagChunkingSimulatorPage } from "@/react/pages/ai/RagChunkingSimulatorPage";
 import { RagJobDetailPage } from "@/react/pages/ai/RagJobDetailPage";
 import { RagJobListPage } from "@/react/pages/ai/RagJobListPage";
 import { VectorVisualizationPage } from "@/react/pages/ai/VectorVisualizationPage";
@@ -88,6 +89,7 @@ export function AppRouter() {
           <Route path="services/ai/chat" element={<ChatPage />} />
           <Route path="services/ai/rag-chat" element={<RagChatPage />} />
           <Route path="services/ai/rag" element={<RagJobListPage />} />
+          <Route path="services/ai/rag/chunking-simulator" element={<RagChunkingSimulatorPage />} />
           <Route
             path="services/ai/vector-visualization"
             element={<VectorVisualizationPage />}

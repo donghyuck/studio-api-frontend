@@ -29,13 +29,11 @@ import {
   ChevronRight,
   ErrorOutline,
   HourglassEmptyOutlined,
-  HubOutlined,
   WarningAmberOutlined,
 } from "@mui/icons-material";
 import type { ColDef, GridOptions, ICellRendererParams } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
-import { RagChunkSimulationDialog } from "@/react/pages/ai/RagChunkSimulationDialog";
 import { RagSearchValidationPanel } from "@/react/pages/ai/RagSearchValidationPanel";
 import { reactAiApi } from "@/react/pages/ai/api";
 import { reactObjectTypeApi } from "@/react/pages/objecttype/api";
@@ -91,7 +89,6 @@ export function RagJobListPage() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [chunkSimulationOpen, setChunkSimulationOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedJob, setSelectedJob] = useState<RagIndexJobDto | null>(null);
   const [objectTypes, setObjectTypes] = useState<ObjectTypeDto[]>([]);
@@ -375,28 +372,16 @@ export function RagJobListPage() {
         onSearch={setSearch}
         onRefresh={() => void loadJobs()}
         actions={
-          <>
-            <Tooltip title="청킹 시뮬레이션을 실행합니다. 색인 전 텍스트가 어떤 Chunk로 나뉘는지 확인합니다.">
-              <IconButton
-                size="small"
-                color="primary"
-                aria-label="청킹 시뮬레이션"
-                onClick={() => setChunkSimulationOpen(true)}
-              >
-                <HubOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="새 색인 작업을 생성합니다. 생성 후 상세 화면으로 이동합니다.">
-              <IconButton
-                size="small"
-                color="primary"
-                aria-label="새 색인 작업"
-                onClick={() => setCreateOpen(true)}
-              >
-                <AddOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </>
+          <Tooltip title="새 색인 작업을 생성합니다. 생성 후 상세 화면으로 이동합니다.">
+            <IconButton
+              size="small"
+              color="primary"
+              aria-label="새 색인 작업"
+              onClick={() => setCreateOpen(true)}
+            >
+              <AddOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
         }
       />
 
@@ -624,10 +609,6 @@ export function RagJobListPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      <RagChunkSimulationDialog
-        open={chunkSimulationOpen}
-        onClose={() => setChunkSimulationOpen(false)}
-      />
     </Stack>
   );
 }

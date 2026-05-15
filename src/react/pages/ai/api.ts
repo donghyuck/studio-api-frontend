@@ -15,9 +15,13 @@ import type {
   ConversationSummaryDto,
   QueryRewriteRequestDto,
   QueryRewriteResponseDto,
+  RagChunkingSimulationRequestDto,
+  RagChunkingSimulationResponseDto,
   RagChunkConfigResponseDto,
   RagChunkPreviewRequestDto,
   RagChunkPreviewResponseDto,
+  RagContextSimulationRequestDto,
+  RagContextSimulationResponseDto,
   RagIndexChunkDto,
   RagIndexChunkPageResponseDto,
   RagIndexJobCreateRequestDto,
@@ -295,6 +299,18 @@ export const reactAiApi = {
 
   previewRagChunks(req: RagChunkPreviewRequestDto) {
     return apiRequest<RagChunkPreviewResponseDto>("post", `${MGMT_BASE}/rag/chunks/preview`, { data: req });
+  },
+
+  simulateRagChunking(req: RagChunkingSimulationRequestDto) {
+    return apiRequest<RagChunkingSimulationResponseDto>("post", `${MGMT_BASE}/rag/simulations/chunking`, {
+      data: req,
+    });
+  },
+
+  simulateRagContext(req: RagContextSimulationRequestDto) {
+    return apiRequest<RagContextSimulationResponseDto>("post", `${MGMT_BASE}/rag/simulations/context`, {
+      data: req,
+    });
   },
 
   rewriteQuery(req: QueryRewriteRequestDto) {

@@ -19,6 +19,7 @@ import {
   FolderOpenOutlined,
   ForumOutlined,
   GroupOutlined,
+  HubOutlined,
   Inventory2Outlined,
   MailOutline,
   PsychologyAltOutlined,
@@ -133,6 +134,11 @@ export function buildNavSections(): NavSection[] {
           label: "AI RAG",
           path: "/services/ai/rag",
           icon: <TopicOutlined fontSize="small" />,
+        },
+        {
+          label: "RAG 시뮬레이터",
+          path: "/services/ai/rag/chunking-simulator",
+          icon: <HubOutlined fontSize="small" />,
         },
         {
           label: "벡터 시각화",

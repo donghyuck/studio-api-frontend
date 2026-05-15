@@ -189,6 +189,45 @@ function metadataText(chunk: RagIndexChunkDto | null | undefined, keys: string[]
   return formatValue(metadataValue(chunk?.metadata, keys));
 }
 
+function metadataBoolean(metadata: Record<string, unknown> | undefined, keys: string[]) {
+  const value = metadataValue(metadata, keys);
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    return value.toLowerCase() === "true";
+  }
+  return undefined;
+}
+
+function chunkNumber(chunk: RagIndexChunkDto | null | undefined, field: keyof RagIndexChunkDto, keys: string[]) {
+  return numberValue((chunk as unknown as Record<string, unknown> | undefined)?.[field as string]) ?? metadataNumber(chunk, keys);
+}
+
+function chunkString(chunk: RagIndexChunkDto | null | undefined, field: keyof RagIndexChunkDto, keys: string[]) {
+  const direct = (chunk as unknown as Record<string, unknown> | undefined)?.[field as string];
+  if (direct != null && direct !== "") {
+    return formatValue(direct);
+  }
+  return metadataText(chunk, keys);
+}
+
+function chunkWarnings(chunk: RagIndexChunkDto | null | undefined) {
+  const direct = chunk?.warnings;
+  const metadataWarnings = metadataValue(chunk?.metadata, ["warnings", "tokenizerWarnings", "warningMessages"]);
+  if (Array.isArray(direct)) {
+    return direct.filter(Boolean).map(String);
+  }
+  if (Array.isArray(metadataWarnings)) {
+    return metadataWarnings.filter(Boolean).map(String);
+  }
+  if (typeof metadataWarnings === "string" && metadataWarnings.trim()) {
+    return [metadataWarnings];
+  }
+  const warningStatus = chunk?.warningStatus ?? metadataValue(chunk?.metadata, ["warningStatus", "warning_status"]);
+  return warningStatus ? [formatValue(warningStatus)] : [];
+}
+
 function chunkLength(chunk?: RagIndexChunkDto | null) {
   const metadataLength = metadataValue(chunk?.metadata, ["chunkLength", "contentLength", "length"]);
   if (typeof metadataLength === "number") {
@@ -372,6 +411,76 @@ function StatusChip({ status }: { status: RagIndexJobStatus }) {
         },
       }}
     />
+  );
+}
+
+function tokenizerSelectionBadge(selectionSource: unknown, fallbackUsed?: boolean) {
+  const source = formatValue(selectionSource).toLowerCase();
+  if (fallbackUsed || source.includes("fallback")) {
+    return <Chip size="small" color="warning" label="FALLBACK" />;
+  }
+  if (source.includes("explicit")) {
+    return <Chip size="small" color="primary" label="EXPLICIT" />;
+  }
+  if (source.includes("auto") || source.includes("mapping") || source.includes("provider-default")) {
+    return <Chip size="small" color="success" label="AUTO SELECTED" />;
+  }
+  return null;
+}
+
+function TokenizerStatusPanel({ job, chunks }: { job: RagIndexJobDto; chunks: RagIndexChunkDto[] }) {
+  const sampleChunk = chunks.find((chunk) => chunk.metadata || chunk.embeddingModel || chunk.tokenizerProvider);
+  const metadata = sampleChunk?.metadata;
+  const selectionSource = metadataValue(metadata, [
+    "tokenizerSelectionSource",
+    "selectionSource",
+    "tokenizer_selection_source",
+  ]);
+  const fallbackUsed = metadataBoolean(metadata, ["tokenizerFallbackUsed", "fallbackUsed", "tokenizer_fallback_used"]);
+  const warnings = chunkWarnings(sampleChunk);
+
+  const rows: Array<[string, unknown]> = [
+    ["embeddingProvider", sampleChunk?.embeddingProvider ?? metadataValue(metadata, ["embeddingProvider"])],
+    ["embeddingModel", sampleChunk?.embeddingModel ?? metadataValue(metadata, ["embeddingModel"])],
+    ["tokenizerProvider", sampleChunk?.tokenizerProvider ?? metadataValue(metadata, ["tokenizerProvider"])],
+    ["tokenizerEncoding", sampleChunk?.tokenizerEncoding ?? metadataValue(metadata, ["tokenizerEncoding"])],
+    ["selectionSource", selectionSource],
+    ["confidence", metadataValue(metadata, ["tokenizerConfidence", "confidence"])],
+    ["chunkUnit", job.chunkUnit ?? metadataValue(metadata, ["chunkUnit", "unit"])],
+    ["chunkSize", job.chunkMaxSize ?? metadataValue(metadata, ["chunkSize", "chunkMaxSize", "maxSize"])],
+    ["chunkOverlap", job.chunkOverlap ?? metadataValue(metadata, ["chunkOverlap", "overlap"])],
+    ["fallbackUsed", fallbackUsed == null ? undefined : String(fallbackUsed)],
+  ];
+
+  return (
+    <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+      <Stack spacing={1.25}>
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Typography variant="subtitle2">Tokenizer Status</Typography>
+          {tokenizerSelectionBadge(selectionSource, fallbackUsed)}
+          {warnings.length > 0 ? <Chip size="small" color="warning" label="WARNING" /> : null}
+        </Stack>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(5, 1fr)" },
+            gap: 1,
+          }}
+        >
+          {rows.map(([label, value]) => (
+            <Box key={label} sx={{ minWidth: 0 }}>
+              <Typography variant="caption" color="text.secondary">
+                {label}
+              </Typography>
+              <Typography variant="body2" fontWeight={700} noWrap>
+                {formatValue(value)}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+        {warnings.length > 0 ? <Alert severity="warning">{warnings.join(" ")}</Alert> : null}
+      </Stack>
+    </Box>
   );
 }
 
@@ -618,6 +727,10 @@ function ChunkInspector({
               <Chip size="small" label={`#${chunk.chunkOrder ?? "-"}`} />
               <Chip size="small" label={chunk.chunkType ?? "chunk"} />
               <Chip size="small" label={`${chunkLength(chunk).toLocaleString()}자`} />
+              {chunkNumber(chunk, "tokenCount", ["tokenCount"]) != null ? (
+                <Chip size="small" color="primary" label={`${chunkNumber(chunk, "tokenCount", ["tokenCount"])?.toLocaleString()} tokens`} />
+              ) : null}
+              {chunkWarnings(chunk).length > 0 ? <Chip size="small" color="warning" label="WARNING" /> : null}
               {chunk.page != null ? <Chip size="small" label={`page ${chunk.page}`} /> : null}
               {chunk.slide != null ? <Chip size="small" label={`slide ${chunk.slide}`} /> : null}
             </Stack>
@@ -706,6 +819,26 @@ function ChunkInspector({
               </Stack>
 
               <Stack spacing={1.25}>
+                <Stack spacing={0.75}>
+                  <Typography variant="subtitle2">토큰 정보</Typography>
+                  <DetailRow label="textLength" value={formatValue(chunkNumber(chunk, "textLength", ["textLength", "contentLength", "chunkLength", "length"]) ?? chunkLength(chunk))} />
+                  <DetailRow label="tokenCount" value={formatValue(chunkNumber(chunk, "tokenCount", ["tokenCount"]))} />
+                  <DetailRow label="chunkIndex" value={formatValue(chunkNumber(chunk, "chunkIndex", ["chunkIndex", "chunkOrder"]) ?? chunk.chunkOrder)} />
+                </Stack>
+
+                <Stack spacing={0.75}>
+                  <Typography variant="subtitle2">Tokenizer</Typography>
+                  <DetailRow label="provider" value={chunkString(chunk, "tokenizerProvider", ["tokenizerProvider"])} />
+                  <DetailRow label="encoding" value={chunkString(chunk, "tokenizerEncoding", ["tokenizerEncoding"])} />
+                  <DetailRow label="selection" value={formatValue(metadataValue(chunk.metadata, ["tokenizerSelectionSource", "selectionSource"]))} />
+                  <DetailRow label="confidence" value={formatValue(metadataValue(chunk.metadata, ["tokenizerConfidence", "confidence"]))} />
+                  <DetailRow label="fallback" value={formatValue(metadataBoolean(chunk.metadata, ["tokenizerFallbackUsed", "fallbackUsed"]))} />
+                </Stack>
+
+                {chunkWarnings(chunk).length > 0 ? (
+                  <Alert severity="warning">{chunkWarnings(chunk).join(" ")}</Alert>
+                ) : null}
+
                 <Stack spacing={0.75}>
                   <Typography variant="subtitle2">출처</Typography>
                   <DetailRow label="위치" value={chunkPosition(chunk)} />
@@ -1025,6 +1158,61 @@ export function RagJobDetailPage() {
         ),
       },
       {
+        colId: "tokenCount",
+        headerName: "Token",
+        sortable: true,
+        width: 92,
+        minWidth: 84,
+        filter: false,
+        type: "numericColumn",
+        valueGetter: (params) => chunkNumber(params.data, "tokenCount", ["tokenCount"]),
+        tooltipValueGetter: (params) => describeChunk(params.data),
+      },
+      {
+        colId: "tokenizerProvider",
+        headerName: "Tokenizer",
+        sortable: true,
+        width: 132,
+        minWidth: 112,
+        filter: false,
+        valueGetter: (params) => chunkString(params.data, "tokenizerProvider", ["tokenizerProvider"]),
+        tooltipValueGetter: (params) => describeChunk(params.data),
+      },
+      {
+        colId: "tokenizerEncoding",
+        headerName: "Encoding",
+        sortable: true,
+        width: 132,
+        minWidth: 112,
+        filter: false,
+        valueGetter: (params) => chunkString(params.data, "tokenizerEncoding", ["tokenizerEncoding"]),
+        tooltipValueGetter: (params) => describeChunk(params.data),
+      },
+      {
+        colId: "embeddingModel",
+        headerName: "Embedding",
+        sortable: true,
+        width: 150,
+        minWidth: 128,
+        filter: false,
+        valueGetter: (params) => chunkString(params.data, "embeddingModel", ["embeddingModel"]),
+        tooltipValueGetter: (params) => describeChunk(params.data),
+      },
+      {
+        colId: "warningStatus",
+        headerName: "경고",
+        sortable: true,
+        width: 92,
+        minWidth: 84,
+        filter: false,
+        cellRenderer: (params: { data?: RagIndexChunkDto }) =>
+          chunkWarnings(params.data).length > 0 ? (
+            <Chip size="small" color="warning" label="WARNING" />
+          ) : (
+            "-"
+          ),
+      },
+      {
         field: "chunkId",
         headerName: "Chunk ID",
         sortable: true,
@@ -1144,6 +1332,7 @@ export function RagJobDetailPage() {
                   <StatItem label="소요" value={job.durationMs ? `${job.durationMs.toLocaleString()}ms` : "-"} />
                   <StatItem label="청킹 전략" value={chunkingDisplay(job, chunks)} />
                 </Box>
+                <TokenizerStatusPanel job={job} chunks={chunks} />
                 <Box sx={{ mt: 3, overflowX: "auto", pb: 0.5 }}>
                   <Stepper activeStep={activeStepIndex(job)} alternativeLabel sx={{ minWidth: 620 }}>
                     {INDEX_STEPS.map((step, index) => (
