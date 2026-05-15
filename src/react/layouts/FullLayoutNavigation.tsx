@@ -12,6 +12,7 @@ import {
   AccountCircleOutlined,
   ArticleOutlined,
   AccountTreeOutlined,
+  BusinessOutlined,
   DashboardOutlined,
   ExpandLess,
   ExpandMore,
@@ -146,6 +147,11 @@ export function buildNavSections(): NavSection[] {
         { label: "회원", path: "/admin/users", icon: <AccountCircleOutlined fontSize="small" /> },
         { label: "그룹", path: "/admin/groups", icon: <GroupOutlined fontSize="small" /> },
         { label: "역할", path: "/admin/roles", icon: <RuleOutlined fontSize="small" /> },
+        {
+          label: "Company",
+          path: "/admin/companies",
+          icon: <BusinessOutlined fontSize="small" />,
+        },
         {
           label: "로그인 실패 감사",
           path: "/admin/audit/login-failures",
