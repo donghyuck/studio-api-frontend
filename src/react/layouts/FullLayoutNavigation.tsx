@@ -11,6 +11,7 @@ import {
 import {
   AccountCircleOutlined,
   ArticleOutlined,
+  AccountTreeOutlined,
   DashboardOutlined,
   ExpandLess,
   ExpandMore,
@@ -81,6 +82,11 @@ export function buildNavSections(): NavSection[] {
       title: "Resource",
       items: [
         { label: "파일", path: "/application/files", icon: <FolderOpenOutlined fontSize="small" /> },
+        {
+          label: "Workspace",
+          path: "/application/workspaces",
+          icon: <AccountTreeOutlined fontSize="small" />,
+        },
         {
           label: "문서",
           path: "/application/documents",
