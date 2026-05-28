@@ -5413,10 +5413,11 @@ export function SkillGraphCategoriesPage() {
                 </Box>
                 <Button
                   variant="contained"
+                  size="small"
                   disabled={!canGenerateClusterData}
                   startIcon={clusterGenerationJobActive ? <CircularProgress size={16} color="inherit" /> : undefined}
                   onClick={() => generateTaxonomyMutation.mutate()}
-                  sx={{ mt: 0.5 }}
+                  sx={{ mt: 0.5, height: 32 }}
                 >
                   {clusterGenerationJobActive ? "군집 생성 중" : "군집데이터 생성"}
                 </Button>
@@ -5446,17 +5447,21 @@ export function SkillGraphCategoriesPage() {
                 <Stack direction="row" spacing={1.5}>
                   <Button
                     variant="outlined"
+                    size="small"
                     disabled={!canAdmin || !selectedProjectionId || proposeCategoryNamesMutation.isPending}
                     startIcon={proposeCategoryNamesMutation.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}
                     onClick={() => proposeCategoryNamesMutation.mutate()}
+                    sx={{ height: 32 }}
                   >
                     {proposeCategoryNamesMutation.isPending ? "제안 생성 중" : "카테고리명 제안 (3단계)"}
                   </Button>
                   <Button
                     variant="outlined"
+                    size="small"
                     disabled={!canAdmin || reconcileCategoryDraftsMutation.isPending}
                     startIcon={reconcileCategoryDraftsMutation.isPending ? <CircularProgress size={16} color="inherit" /> : undefined}
                     onClick={() => reconcileCategoryDraftsMutation.mutate()}
+                    sx={{ height: 32 }}
                   >
                     {reconcileCategoryDraftsMutation.isPending ? "재조정 중" : "재조정 초안 생성"}
                   </Button>
@@ -5491,10 +5496,11 @@ export function SkillGraphCategoriesPage() {
                   <Button
                     variant="contained"
                     color="success"
+                    size="small"
                     disabled={!canAdmin || !selectedDraftCount || saveDraftsMutation.isPending}
                     startIcon={saveDraftsMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <SaveOutlined />}
                     onClick={() => saveDraftsMutation.mutate()}
-                    sx={{ px: 3, height: 40, flexShrink: 0 }}
+                    sx={{ px: 2, height: 32, flexShrink: 0 }}
                   >
                     {saveDraftsMutation.isPending ? "저장 중" : `선택 카테고리 마스터 저장 (${selectedDraftCount}개)`}
                   </Button>
