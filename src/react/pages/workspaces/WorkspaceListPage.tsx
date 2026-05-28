@@ -393,7 +393,7 @@ export function WorkspaceListPage() {
         onSearch={applyFilters}
         onRefresh={handleRefresh}
         actions={
-          <>
+          <Stack direction="row" spacing={1.25} alignItems="center">
             <Button
               variant="outlined"
               size="small"
@@ -458,7 +458,7 @@ export function WorkspaceListPage() {
             >
               생성
             </Button>
-          </>
+          </Stack>
         }
       />
       <PageableGridContent<WorkspaceRef>
