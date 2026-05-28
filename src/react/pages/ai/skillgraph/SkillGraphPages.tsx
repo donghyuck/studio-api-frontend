@@ -2855,29 +2855,28 @@ export function SkillGraphCandidatesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-      <DetailDrawer
-        open={recommendationOpen}
-        title="스킬 후보 자동 분석"
-        onClose={() => setRecommendationOpen(false)}
-        width={{ xs: "100%", md: 850, lg: 1100 }}
-        actions={
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Tooltip title="분석 설정">
-              <IconButton size="small" color={recommendationMode === "form" ? "primary" : "default"} onClick={() => setRecommendationMode("form")}>
-                <RateReviewOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="분석 이력">
-              <IconButton size="small" color={recommendationMode === "history" ? "primary" : "default"} onClick={() => setRecommendationMode("history")}>
-                <HistoryOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
+      <Dialog open={recommendationOpen} onClose={() => setRecommendationOpen(false)} maxWidth="lg" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+            <Typography variant="h6">스킬 후보 자동 분석</Typography>
+            <Stack direction="row" spacing={0.75} alignItems="center">
+              <Tooltip title="분석 설정">
+                <IconButton size="small" color={recommendationMode === "form" ? "primary" : "default"} onClick={() => setRecommendationMode("form")}>
+                  <RateReviewOutlined fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="분석 이력">
+                <IconButton size="small" color={recommendationMode === "history" ? "primary" : "default"} onClick={() => setRecommendationMode("history")}>
+                  <HistoryOutlined fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Stack>
           </Stack>
-        }
-      >
-        <Stack spacing={2} sx={{ mt: 1, minHeight: 520 }}>
-          {recommendationMode === "form" ? (
-            <>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1, minHeight: 520 }}>
+            {recommendationMode === "form" ? (
+              <>
             <Alert severity="info" sx={{ alignItems: "flex-start" }}>
               <Stack spacing={0.75}>
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
@@ -3087,20 +3086,21 @@ export function SkillGraphCandidatesPage() {
               </Stack>
             ) : null}
           </Stack>
-          <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end", gap: 1.5, pt: 2, borderTop: 1, borderColor: "divider" }}>
-            <Button variant="outlined" size="small" onClick={() => setRecommendationOpen(false)}>닫기</Button>
-            {recommendationMode === "form" ? (
-              <Button
-                variant="contained"
-                size="small"
-                disabled={!recommendationFormValid || recommendationJobActive}
-                onClick={() => void submitRecommendationAnalysis()}
-              >
-                {recommendationJobActive ? "분석 중" : "추천 분석 시작"}
-              </Button>
-            ) : null}
-          </Box>
-      </DetailDrawer>
+        </DialogContent>
+        <DialogActions>
+          <Button size="small" onClick={() => setRecommendationOpen(false)}>닫기</Button>
+          {recommendationMode === "form" ? (
+            <Button
+              variant="contained"
+              size="small"
+              disabled={!recommendationFormValid || recommendationJobActive}
+              onClick={() => void submitRecommendationAnalysis()}
+            >
+              {recommendationJobActive ? "분석 중" : "추천 분석 시작"}
+            </Button>
+          ) : null}
+        </DialogActions>
+      </Dialog>
       <Dialog open={embeddingOpen} onClose={() => setEmbeddingOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>스킬 후보 임베딩 생성</DialogTitle>
         <DialogContent>
