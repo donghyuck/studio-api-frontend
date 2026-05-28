@@ -43,7 +43,7 @@ export function PageToolbar({
   prepend,
   closeable = false,
   previous = false,
-  divider = true,
+  divider = false,
   onPrevious,
   onRefresh,
   onClose,
