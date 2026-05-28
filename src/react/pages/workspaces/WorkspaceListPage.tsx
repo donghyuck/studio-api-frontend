@@ -101,12 +101,12 @@ function WorkspaceCreateDialog({
         slug: form.slug.trim(),
         visibility: form.visibility,
       });
-      toast.success("Workspace가 생성되었습니다.");
+      toast.success("작업공간이 생성되었습니다.");
       setForm({ companyId: "", name: "", slug: "", visibility: "PRIVATE" });
       onCreated();
       onClose();
     } catch (err) {
-      toast.error(resolveAxiosError(err) || "Workspace 생성에 실패했습니다.");
+      toast.error(resolveAxiosError(err) || "작업공간 생성에 실패했습니다.");
     } finally {
       setSaving(false);
     }
@@ -114,7 +114,7 @@ function WorkspaceCreateDialog({
 
   return (
     <Dialog open={open} onClose={saving ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Root Workspace 생성</DialogTitle>
+      <DialogTitle>Root 작업공간 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 1 }}>
           <TextField
@@ -123,7 +123,7 @@ function WorkspaceCreateDialog({
             select
             value={form.companyId}
             onChange={(event) => setForm((current) => ({ ...current, companyId: event.target.value }))}
-            helperText="Root Workspace는 Company를 직접 선택합니다."
+            helperText="Root 작업공간은 Company를 직접 선택합니다."
             fullWidth
           >
             {companies.map((company) => (
@@ -199,6 +199,16 @@ export function WorkspaceListPage() {
     () => [
       { field: "id", headerName: "ID", width: 56, minWidth: 56, flex: 0, filter: false, sortable: true },
       {
+        field: "parentId",
+        headerName: "Parent ID",
+        width: 96,
+        minWidth: 96,
+        flex: 0,
+        filter: false,
+        sortable: true,
+        valueFormatter: (params) => (params.value == null ? "-" : String(params.value)),
+      },
+      {
         field: "companyId",
         headerName: "Company",
         width: 110,
@@ -263,28 +273,51 @@ export function WorkspaceListPage() {
       {
         field: "visibility",
         headerName: "범위",
-        width: 80,
-        filter: false,
-        sortable: true,
-        cellRenderer: (params: ICellRendererParams<WorkspaceRef>) => (
-          <Chip size="small" variant="outlined" label={visibilityLabel(params.value as WorkspaceVisibility)} />
-        ),
-      },
-      {
-        field: "archived",
-        headerName: "상태",
-        width: 82,
+        width: 86,
         filter: false,
         sortable: true,
         cellRenderer: (params: ICellRendererParams<WorkspaceRef>) => (
           <Chip
             size="small"
-            color={params.value ? "default" : "success"}
-            variant={params.value ? "outlined" : "filled"}
-            label={params.value ? "비활성" : "활성"}
-            sx={{ height: 22 }}
+            variant="outlined"
+            label={visibilityLabel(params.value as WorkspaceVisibility)}
+            sx={{
+              fontSize: 11.5,
+              fontWeight: 500,
+              height: 20,
+              borderRadius: "4px",
+              borderColor: "divider",
+              bgcolor: "action.hover",
+              color: "text.secondary",
+            }}
           />
         ),
+      },
+      {
+        field: "archived",
+        headerName: "상태",
+        width: 86,
+        filter: false,
+        sortable: true,
+        cellRenderer: (params: ICellRendererParams<WorkspaceRef>) => {
+          const archived = params.value;
+          return (
+            <Chip
+              size="small"
+              label={archived ? "비활성" : "활성"}
+              sx={{
+                fontSize: 11.5,
+                fontWeight: 600,
+                height: 20,
+                borderRadius: "4px",
+                bgcolor: archived ? "action.hover" : "rgba(46, 125, 50, 0.08)",
+                color: archived ? "text.secondary" : "success.main",
+                border: "1px solid",
+                borderColor: archived ? "divider" : "rgba(46, 125, 50, 0.2)",
+              }}
+            />
+          );
+        },
       },
     ],
     [companies, location.pathname, location.search, navigate]
@@ -352,8 +385,8 @@ export function WorkspaceListPage() {
     <Stack spacing={0.5}>
       <PageToolbar
         divider={false}
-        breadcrumbs={["애플리케이션", "Workspace"]}
-        label="Workspace tree와 멤버 권한을 관리합니다."
+        breadcrumbs={["애플리케이션", "작업공간"]}
+        label="작업공간 tree와 멤버 권한을 관리합니다."
         searchPlaceholder="이름, slug, path 검색"
         searchValue={keywordInput}
         onSearchValueChange={setKeywordInput}
@@ -362,46 +395,69 @@ export function WorkspaceListPage() {
         actions={
           <>
             <Button
-              variant="text"
+              variant="outlined"
               size="small"
               onClick={(event) => setStatusAnchorEl(event.currentTarget)}
               sx={{
-                height: 40,
+                height: 32,
                 minWidth: 86,
-                px: 1.25,
+                px: 1.5,
                 whiteSpace: "nowrap",
                 color: "text.secondary",
-                borderRadius: 1,
+                borderColor: "divider",
+                borderRadius: "6px",
+                textTransform: "none",
+                fontSize: 12.5,
+                fontWeight: 500,
+                bgcolor: "background.paper",
                 "&:hover": {
                   bgcolor: "action.hover",
+                  borderColor: "text.disabled",
                 },
               }}
             >
-              상태 · {statusLabel}
+              상태: {statusLabel}
             </Button>
             <Button
-              variant="text"
+              variant="outlined"
               size="small"
               onClick={(event) => setCompanyAnchorEl(event.currentTarget)}
               sx={{
-                height: 40,
+                height: 32,
                 minWidth: 112,
-                px: 1.25,
+                px: 1.5,
                 whiteSpace: "nowrap",
                 color: "text.secondary",
-                borderRadius: 1,
+                borderColor: "divider",
+                borderRadius: "6px",
+                textTransform: "none",
+                fontSize: 12.5,
+                fontWeight: 500,
+                bgcolor: "background.paper",
                 "&:hover": {
                   bgcolor: "action.hover",
+                  borderColor: "text.disabled",
                 },
               }}
             >
-              Company · {selectedCompanyLabel}
+              Company: {selectedCompanyLabel}
             </Button>
-            <Tooltip title="Root Workspace 생성">
-              <IconButton size="small" onClick={() => setCreateOpen(true)}>
-                <AddOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<AddOutlined fontSize="small" />}
+              onClick={() => setCreateOpen(true)}
+              sx={{
+                height: 32,
+                px: 1.5,
+                borderRadius: "6px",
+                textTransform: "none",
+                fontSize: 12.5,
+                fontWeight: 600,
+              }}
+            >
+              생성
+            </Button>
           </>
         }
       />
