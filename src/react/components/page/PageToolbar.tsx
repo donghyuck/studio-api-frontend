@@ -133,8 +133,10 @@ export function PageToolbar({
                 sx={{
                   width: searchOpen ? { xs: 180, sm: 260, md: 320 } : 0,
                   opacity: searchOpen ? 1 : 0,
+                  ml: searchOpen ? 1.5 : 0,
+                  mr: searchOpen ? 1.5 : 0,
                   overflow: "hidden",
-                  transition: "width 160ms ease, opacity 120ms ease",
+                  transition: "all 160ms ease",
                 }}
               >
                 <TextField
