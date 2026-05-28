@@ -5120,9 +5120,10 @@ export function SkillGraphCategoriesPage() {
         <Card
           variant="outlined"
           sx={{
-            borderRadius: 2,
-            boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
-            background: "linear-gradient(180deg, #ffffff 0%, #fbfbfb 100%)"
+            borderRadius: "8px",
+            boxShadow: "none",
+            bgcolor: "background.paper",
+            borderColor: "divider",
           }}
         >
           <CardContent sx={{ p: 2.5 }}>
@@ -5192,12 +5193,12 @@ export function SkillGraphCategoriesPage() {
                     variant="outlined"
                     sx={{
                       p: 2,
-                      bgcolor: isActive ? "background.paper" : isCompleted ? "rgba(76, 175, 80, 0.02)" : "rgba(0,0,0,0.01)",
+                      bgcolor: isActive ? "background.paper" : isCompleted ? "rgba(46, 125, 50, 0.03)" : "rgba(0,0,0,0.015)",
                       borderColor: isActive ? "primary.main" : isCompleted ? "success.light" : "divider",
-                      borderRadius: 2,
-                      boxShadow: isActive ? "0 4px 20px rgba(21, 101, 192, 0.15)" : "none",
-                      transform: isActive ? "translateY(-4px)" : "none",
-                      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                      borderRadius: "8px",
+                      boxShadow: "none",
+                      transform: "none",
+                      transition: "all 0.2s ease",
                       position: "relative",
                       "&::before": isActive ? {
                         content: '""',
@@ -5271,7 +5272,7 @@ export function SkillGraphCategoriesPage() {
         )}
 
         {/* Redesigned Control Panel */}
-        <Card variant="outlined" sx={{ bgcolor: "background.paper", borderRadius: 2 }}>
+        <Card variant="outlined" sx={{ bgcolor: "background.paper", borderRadius: "8px", boxShadow: "none" }}>
           <CardContent sx={{ p: 2.5 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 2 }}>
               카테고리 초안 생성 및 저장 설정
@@ -5293,34 +5294,34 @@ export function SkillGraphCategoriesPage() {
                 </Typography>
                 <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%" }}>
                   <Select
-                    size="small"
-                    value={selectedProjectionId}
-                    displayEmpty
-                    onChange={(event) => {
-                      setSelectedProjectionId(event.target.value);
-                      setHoveredPoint(null);
-                      setSelectedClusterId("");
-                    }}
-                    fullWidth
-                    renderValue={(value) => {
-                      const selected = projections.find((projection) => projection.projectionId === value);
-                      if (!selected) return "Projection 선택";
-                      
-                      const parts = [
-                        selected.name || selected.projectionId,
-                        `${numberValue(selected.itemCount)} items`,
-                        selected.reductionAlgorithm,
-                        selected.embeddingModel ? `모델: ${selected.embeddingProvider ? `${selected.embeddingProvider}/` : ""}${selected.embeddingModel}${selected.embeddingDimension ? `(${selected.embeddingDimension}d)` : ""}` : null,
-                        selected.status
-                      ].filter(Boolean);
+                     size="small"
+                     value={selectedProjectionId}
+                     displayEmpty
+                     onChange={(event) => {
+                       setSelectedProjectionId(event.target.value);
+                       setHoveredPoint(null);
+                       setSelectedClusterId("");
+                     }}
+                     fullWidth
+                     renderValue={(value) => {
+                       const selected = projections.find((projection) => projection.projectionId === value);
+                       if (!selected) return "Projection 선택";
+                       
+                       const parts = [
+                         selected.name || selected.projectionId,
+                         `${numberValue(selected.itemCount)} items`,
+                         selected.reductionAlgorithm,
+                         selected.embeddingModel ? `모델: ${selected.embeddingProvider ? `${selected.embeddingProvider}/` : ""}${selected.embeddingModel}${selected.embeddingDimension ? `(${selected.embeddingDimension}d)` : ""}` : null,
+                         selected.status
+                       ].filter(Boolean);
 
-                      return (
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {parts.join("  |  ")}
-                        </Typography>
-                      );
-                    }}
-                    sx={{ width: "100%", minHeight: 40 }}
+                       return (
+                         <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                           {parts.join("  |  ")}
+                         </Typography>
+                       );
+                     }}
+                     sx={{ width: "100%", minHeight: 40 }}
                   >
                     <MenuItem value="">Projection 선택</MenuItem>
                     {projections.map((projection) => (
@@ -5344,7 +5345,7 @@ export function SkillGraphCategoriesPage() {
 
             <Stack spacing={2.5}>
               {/* Group 1: 군집 생성 설정 및 버튼 */}
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: "rgba(0, 0, 0, 0.01)", borderRadius: 1.5 }}>
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: "rgba(0, 0, 0, 0.015)", borderRadius: "8px", boxShadow: "none" }}>
                 <Typography variant="body2" sx={{ fontWeight: 700, mb: 1.5, display: "flex", alignItems: "center", gap: 0.5 }}>
                   <Box sx={{ width: 3, height: 12, bgcolor: "primary.main", borderRadius: 0.5 }} />
                   1. 신규 군집데이터 생성 설정
@@ -5422,7 +5423,7 @@ export function SkillGraphCategoriesPage() {
               </Paper>
 
               {/* Group 2: 카테고리명 제안 및 조정 설정 */}
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: "rgba(0, 0, 0, 0.01)", borderRadius: 1.5 }}>
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: "rgba(0, 0, 0, 0.015)", borderRadius: "8px", boxShadow: "none" }}>
                 <Typography variant="body2" sx={{ fontWeight: 700, mb: 1.5, display: "flex", alignItems: "center", gap: 0.5 }}>
                   <Box sx={{ width: 3, height: 12, bgcolor: "info.main", borderRadius: 0.5 }} />
                   2. 카테고리명 제안 및 조정 초안 실행
@@ -5463,7 +5464,7 @@ export function SkillGraphCategoriesPage() {
               </Paper>
 
               {/* Group 3: Taxonomy 마스터 저장 실행 */}
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: "rgba(46, 125, 50, 0.015)", borderColor: "success.light", borderRadius: 1.5 }}>
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: "rgba(46, 125, 50, 0.02)", borderColor: "success.light", borderRadius: "8px", boxShadow: "none" }}>
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="space-between" alignItems={{ sm: "center" }}>
                   <Box>
                     <Typography variant="body2" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -5570,7 +5571,7 @@ export function SkillGraphCategoriesPage() {
 
         {/* Category Drafts Review Table */}
         {categoryDrafts.length ? (
-          <Card variant="outlined" sx={{ borderRadius: 2, boxShadow: "0 4px 12px rgba(0,0,0,0.03)" }}>
+          <Card variant="outlined" sx={{ borderRadius: "8px", boxShadow: "none" }}>
             <CardContent sx={{ p: 2.5, pb: "20px !important" }}>
               <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
                 <Stack direction="row" spacing={1.5} alignItems="center">
