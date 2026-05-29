@@ -562,7 +562,19 @@ export function ChatPage() {
       </Drawer>
 
       <Stack sx={{ height: 'calc(100vh - 170px)', minHeight: 0 }}>
-        <Paper elevation={0} sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Paper
+          elevation={0}
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: "8px",
+          }}
+        >
           <ChatMessageList
             messages={visibleMessages}
             sending={sending}

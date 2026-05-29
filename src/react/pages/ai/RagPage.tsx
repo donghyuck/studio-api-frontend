@@ -1204,7 +1204,20 @@ export function RagPage() {
     }
     setError(null);
     try {
-      const job = await reactAiApi.retryRagJob(selectedJob.jobId);
+      let job: RagIndexJobDto;
+      if (selectedJob.status === "CANCELLED") {
+        job = await reactAiApi.createRagJob({
+          objectType: selectedJob.objectType,
+          objectId: selectedJob.objectId,
+          documentId: selectedJob.documentId || undefined,
+          sourceType: selectedJob.sourceType || undefined,
+          forceReindex: true,
+          useLlmKeywordExtraction: true,
+          ...indexChunkingOptions(),
+        });
+      } else {
+        job = await reactAiApi.retryRagJob(selectedJob.jobId);
+      }
       await loadJobs();
       clearObjectInspectionCache(job.objectType, job.objectId);
       jobLogsCacheRef.current.delete(job.jobId);

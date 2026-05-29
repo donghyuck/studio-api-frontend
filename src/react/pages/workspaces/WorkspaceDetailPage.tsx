@@ -48,6 +48,7 @@ import type { GridContentHandle } from "@/react/components/ag-grid/types";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import { SkeletonPlaceholder } from "@/react/components/common/SkeletonPlaceholder";
 import { useConfirm, useToast } from "@/react/feedback";
 import { UserSearchDialog } from "@/react/pages/admin/UserSearchDialog";
 import { reactUsersApi } from "@/react/pages/admin/users/api";
@@ -525,7 +526,7 @@ function WorkspaceMembersGrid({
       },
       {
         field: "workspaceId",
-        headerName: "Workspace",
+        headerName: "작업공간",
         width: 130,
         filter: false,
         sortable: false,
@@ -670,11 +671,11 @@ function WorkspaceCreateChildDialog({
         slug: form.slug.trim(),
         visibility: form.visibility,
       });
-      toast.success("Child Workspace가 생성되었습니다.");
+      toast.success("Child 작업공간이 생성되었습니다.");
       onCreated();
       onClose();
     } catch (err) {
-      toast.error(resolveAxiosError(err) || "Child Workspace 생성에 실패했습니다.");
+      toast.error(resolveAxiosError(err) || "Child 작업공간 생성에 실패했습니다.");
     } finally {
       setSaving(false);
     }
@@ -682,7 +683,7 @@ function WorkspaceCreateChildDialog({
 
   return (
     <Dialog open={open} onClose={saving ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Child Workspace 생성</DialogTitle>
+      <DialogTitle>Child 작업공간 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 1 }}>
           <TextField label="Parent" value={parent?.path ?? "-"} size="small" disabled fullWidth />
@@ -768,7 +769,7 @@ function WorkspaceParentChangeDialog({
       .list({ page: 0, size: 200, sort: "path,asc" })
       .then((response) => setOptions(response.content ?? []))
       .catch((err) => {
-        toast.error(resolveAxiosError(err) || "Workspace 목록을 불러오지 못했습니다.");
+        toast.error(resolveAxiosError(err) || "작업공간 목록을 불러오지 못했습니다.");
         setOptions([]);
       })
       .finally(() => setLoading(false));
@@ -790,11 +791,11 @@ function WorkspaceParentChangeDialog({
       await reactWorkspaceApi.changeParent(workspace.id, {
         newParentId: selectedParentId === "root" ? null : Number(selectedParentId),
       });
-      toast.success("Workspace Parent가 변경되었습니다.");
+      toast.success("작업공간 Parent가 변경되었습니다.");
       onChanged();
       onClose();
     } catch (err) {
-      toast.error(resolveAxiosError(err) || "Workspace Parent 변경에 실패했습니다.");
+      toast.error(resolveAxiosError(err) || "작업공간 Parent 변경에 실패했습니다.");
     } finally {
       setSaving(false);
     }
@@ -802,10 +803,10 @@ function WorkspaceParentChangeDialog({
 
   return (
     <Dialog open={open} onClose={saving ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Parent Workspace 변경</DialogTitle>
+      <DialogTitle>Parent 작업공간 변경</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 1 }}>
-          <TextField label="현재 Workspace" value={workspace?.path ?? "-"} size="small" disabled fullWidth />
+          <TextField label="현재 작업공간" value={workspace?.path ?? "-"} size="small" disabled fullWidth />
           <TextField
             label="새 Parent"
             size="small"
@@ -814,9 +815,9 @@ function WorkspaceParentChangeDialog({
             onChange={(event) => setSelectedParentId(event.target.value)}
             disabled={loading || saving}
             fullWidth
-            helperText="변경하면 하위 Workspace의 path, depth, root도 함께 갱신됩니다."
+            helperText="변경하면 하위 작업공간의 path, depth, root도 함께 갱신됩니다."
           >
-            <MenuItem value="root">Root Workspace로 이동</MenuItem>
+            <MenuItem value="root">Root 작업공간으로 이동</MenuItem>
             {selectableOptions.map((item) => (
               <MenuItem key={item.id} value={String(item.id)}>
                 {item.path}
@@ -891,7 +892,7 @@ export function WorkspaceDetailPage() {
 
   const loadWorkspace = useCallback(async () => {
     if (!Number.isFinite(workspaceIdNumber) || workspaceIdNumber <= 0) {
-      setError("잘못된 Workspace ID입니다.");
+      setError("잘못된 작업공간 ID입니다.");
       setLoading(false);
       return;
     }
@@ -950,7 +951,7 @@ export function WorkspaceDetailPage() {
       setUsersById(Object.fromEntries(userEntries));
       setError(null);
     } catch (err) {
-      setError(resolveAxiosError(err) || "Workspace를 불러오지 못했습니다.");
+      setError(resolveAxiosError(err) || "작업공간을 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -972,8 +973,8 @@ export function WorkspaceDetailPage() {
   const statusActionLabel = statusAction === "activate" ? "활성화" : "비활성화";
   const statusDialogMessage =
     statusAction === "activate"
-      ? `${workspace?.name ?? ""} Workspace를 활성화하시겠습니까?`
-      : `${workspace?.name ?? ""} Workspace를 비활성화하시겠습니까? 비활성화하면 수정과 멤버 변경이 제한됩니다.`;
+      ? `${workspace?.name ?? ""} 작업공간을 활성화하시겠습니까?`
+      : `${workspace?.name ?? ""} 작업공간을 비활성화하시겠습니까? 비활성화하면 수정과 멤버 변경이 제한됩니다.`;
 
   async function handleSave() {
     if (!workspace) return;
@@ -986,9 +987,9 @@ export function WorkspaceDetailPage() {
       setWorkspace(saved);
       setForm({ name: saved.name, visibility: saved.visibility });
       setTree((current) => replaceWorkspaceInTree(current, saved));
-      toast.success("Workspace가 저장되었습니다.");
+      toast.success("작업공간이 저장되었습니다.");
     } catch (err) {
-      toast.error(resolveAxiosError(err) || "Workspace 저장에 실패했습니다.");
+      toast.error(resolveAxiosError(err) || "작업공간 저장에 실패했습니다.");
     } finally {
       setSaving(false);
     }
@@ -1013,10 +1014,10 @@ export function WorkspaceDetailPage() {
       const payload = { cascade: hasChildWorkspaces ? statusCascade : false };
       if (statusAction === "activate") {
         await reactWorkspaceApi.activate(workspace.id, payload);
-        toast.success("Workspace가 활성화되었습니다.");
+        toast.success("작업공간이 활성화되었습니다.");
       } else {
         await reactWorkspaceApi.archive(workspace.id, payload);
-        toast.success("Workspace가 비활성화되었습니다.");
+        toast.success("작업공간이 비활성화되었습니다.");
       }
       setStatusAction(null);
       setStatusCascade(false);
@@ -1024,7 +1025,7 @@ export function WorkspaceDetailPage() {
     } catch (err) {
       toast.error(
         resolveAxiosError(err) ||
-          (statusAction === "activate" ? "Workspace 활성화에 실패했습니다." : "Workspace 비활성화에 실패했습니다.")
+          (statusAction === "activate" ? "작업공간 활성화에 실패했습니다." : "작업공간 비활성화에 실패했습니다.")
       );
     } finally {
       setStatusSaving(false);
@@ -1090,11 +1091,7 @@ export function WorkspaceDetailPage() {
   }
 
   if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <SkeletonPlaceholder variant="detail" />;
   }
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!workspace) return null;
@@ -1103,21 +1100,21 @@ export function WorkspaceDetailPage() {
     <Stack spacing={2}>
       <PageToolbar
         divider
-        breadcrumbs={["애플리케이션", "Workspace", workspace.name]}
-        label="Workspace tree와 멤버 권한을 관리합니다."
+        breadcrumbs={["애플리케이션", "작업공간", workspace.name]}
+        label="작업공간 tree와 멤버 권한을 관리합니다."
         previous
         onPrevious={() => navigate(previousListPath)}
         onRefresh={loadWorkspace}
         actions={
           <Stack direction="row" spacing={0.5}>
-            <Tooltip title="Child Workspace 생성">
+            <Tooltip title="Child 작업공간 생성">
               <span>
                 <IconButton size="small" disabled={archived || statusSaving} onClick={() => setChildDialogOpen(true)}>
                   <AddOutlined fontSize="small" />
                 </IconButton>
               </span>
             </Tooltip>
-            <Tooltip title="Parent Workspace 변경">
+            <Tooltip title="Parent 작업공간 변경">
               <span>
                 <IconButton size="small" disabled={archived || saving || statusSaving} onClick={() => setParentDialogOpen(true)}>
                   <DriveFileMoveOutlined fontSize="small" />
@@ -1128,7 +1125,7 @@ export function WorkspaceDetailPage() {
         }
       />
 
-      {archived ? <Alert severity="info">비활성화된 Workspace입니다. 수정과 멤버 변경은 제한됩니다.</Alert> : null}
+      {archived ? <Alert severity="info">비활성화된 작업공간입니다. 수정과 멤버 변경은 제한됩니다.</Alert> : null}
 
       <Container maxWidth="lg" disableGutters>
         <Grid container spacing={2}>
@@ -1220,7 +1217,7 @@ export function WorkspaceDetailPage() {
       {tab === "tree" ? (
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-            <Typography variant="subtitle1">Workspace Tree</Typography>
+            <Typography variant="subtitle1">작업공간 Tree</Typography>
             <Tooltip title="새로고침">
               <IconButton size="small" onClick={() => void loadWorkspace()}>
                 <RefreshOutlined fontSize="small" />
@@ -1313,7 +1310,7 @@ export function WorkspaceDetailPage() {
         onConfirmSelection={(users) => void handleAddMembers(users)}
       />
       <Dialog open={Boolean(statusAction)} onClose={closeStatusDialog} maxWidth="xs" fullWidth>
-        <DialogTitle>Workspace {statusActionLabel}</DialogTitle>
+        <DialogTitle>작업공간 {statusActionLabel}</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5}>
             <DialogContentText>{statusDialogMessage}</DialogContentText>
@@ -1326,7 +1323,7 @@ export function WorkspaceDetailPage() {
                     onChange={(event) => setStatusCascade(event.target.checked)}
                   />
                 }
-                label={`하위 Workspace도 함께 ${statusActionLabel}`}
+                label={`하위 작업공간도 함께 ${statusActionLabel}`}
               />
             ) : null}
           </Stack>

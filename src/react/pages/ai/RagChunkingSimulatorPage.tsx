@@ -45,6 +45,7 @@ import { resolveAxiosError } from "@/utils/helpers";
 
 type SimulatorTab = "chunking" | "context";
 type ChunkingMode = "token-aware" | "legacy-preview";
+const TOKEN_DISTRIBUTION_GRID_HEIGHT = 440;
 
 function formatValue(value: unknown) {
   if (value == null || value === "") {
@@ -215,7 +216,7 @@ function TokenizerStatusPanel({ tokenizer }: { tokenizer?: RagTokenizerStatusDto
 function TokenDistribution({ values }: { values: number[] }) {
   const max = Math.max(...values, 1);
   return (
-    <Stack direction="row" spacing={0.5} alignItems="flex-end" sx={{ height: 120, px: 0.5 }}>
+    <Stack direction="row" spacing={0.5} alignItems="flex-end" sx={{ minHeight: 240, px: 0.5 }}>
       {values.slice(0, 80).map((value, index) => (
         <Box
           key={`${index}-${value}`}
@@ -780,7 +781,7 @@ export function RagChunkingSimulatorPage() {
               columns={chunkColumns}
               rowData={chunkRows}
               loading={chunkingLoading}
-              height={420}
+              height={TOKEN_DISTRIBUTION_GRID_HEIGHT}
               events={[
                 {
                   type: "rowClicked",

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Divider, IconButton, Popover, Stack, Tooltip, Typography } from "@mui/material";
+import { alpha, Avatar, Box, Divider, IconButton, Popover, Stack, Tooltip, Typography } from "@mui/material";
 import { ContentCopyOutlined, DescriptionOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
 import type { ChatMessage, ChatResponseMetadataDto } from "@/react/pages/ai/components/chatTypes";
 import type { RagReferenceDto } from "@/types/studio/ai";
@@ -181,26 +181,41 @@ export function AssistantMessageBubble({
 
   return (
     <Stack spacing={0.5} alignItems="flex-start" sx={{ width: "100%" }}>
-      <Box
-        sx={{
-          maxWidth: { xs: "92%", md: "72%" },
-          px: 2,
-          py: 1.5,
-          borderRadius: "18px 18px 18px 4px",
-          bgcolor: "background.paper",
-          color: "text.primary",
-          border: "none",
-        }}
-      >
-        <Typography variant="caption" color="text.secondary">
-          Assistant{message.model ? ` · ${message.model}` : ""}
-        </Typography>
-        <Typography component="div" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 13 }}>
-          {message.content ? renderInlineMarkdown(message.content) : (sending ? "응답 생성 중..." : "")}
-        </Typography>
-        {renderTokenUsage(message.metadata)}
-      </Box>
-      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ pl: 0.25 }}>
+      <Stack direction="row" spacing={1.25} alignItems="flex-start" sx={{ maxWidth: { xs: "100%", md: "82%" } }}>
+        <Avatar
+          sx={{
+            width: 28,
+            height: 28,
+            fontSize: 12,
+            fontWeight: 800,
+            bgcolor: (theme) => alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.32 : 0.12),
+            color: "primary.main",
+          }}
+        >
+          AI
+        </Avatar>
+        <Box
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderRadius: "8px",
+            bgcolor: "background.paper",
+            color: "text.primary",
+            border: "1px solid",
+            borderColor: "divider",
+            boxShadow: (theme) => `0 8px 24px ${alpha(theme.palette.common.black, theme.palette.mode === "dark" ? 0.22 : 0.06)}`,
+          }}
+        >
+          <Typography variant="caption" color="text.secondary">
+            Assistant{message.model ? ` · ${message.model}` : ""}
+          </Typography>
+          <Typography component="div" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14, lineHeight: 1.75 }}>
+            {message.content ? renderInlineMarkdown(message.content) : (sending ? "응답 생성 중..." : "")}
+          </Typography>
+          {renderTokenUsage(message.metadata)}
+        </Box>
+      </Stack>
+      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ pl: 5 }}>
         {message.createdAt ? (
           <Typography variant="caption" color="text.secondary">
             {formatMessageTime(message.createdAt)}

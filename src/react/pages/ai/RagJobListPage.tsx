@@ -525,17 +525,23 @@ export function RagJobListPage() {
             <Alert severity="info">
               색인 작업은 생성 즉시 비동기로 실행됩니다. 생성 후 상세 화면에서 진행 상태, 로그, Chunk를 확인합니다.
             </Alert>
-            <TextField
-              select
-              label="색인 소스"
-              value={sourceMode}
-              onChange={(event) => setSourceMode(event.target.value as SourceMode)}
-              size="small"
-              fullWidth
-            >
-              <MenuItem value="attachment">Attachment 파일</MenuItem>
-              <MenuItem value="text">직접 입력 텍스트</MenuItem>
-            </TextField>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={sourceMode === "text"}
+                  onChange={(event) => setSourceMode(event.target.checked ? "text" : "attachment")}
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body2">직접 입력 텍스트 사용</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    끄면 Attachment 파일 기준으로 색인 작업을 생성합니다.
+                  </Typography>
+                </Box>
+              }
+              sx={{ alignItems: "flex-start", m: 0 }}
+            />
             <Autocomplete
               options={objectTypeOptions}
               value={selectedObjectType}

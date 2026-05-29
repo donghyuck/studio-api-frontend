@@ -20,6 +20,8 @@ import {
   DeleteOutlined,
   EditOutlined,
   HistoryOutlined,
+  MenuOpenOutlined,
+  MenuOutlined,
   RefreshOutlined,
   RestoreOutlined,
   SaveOutlined,
@@ -107,6 +109,7 @@ export function WorkspaceWikiPanel({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [pagesOpen, setPagesOpen] = useState(true);
   const [draft, setDraft] = useState({ slug: "", title: "", markdown: "" });
 
   const selectedSummary = pages.find((item) => item.slug === selectedSlug);
@@ -285,62 +288,77 @@ export function WorkspaceWikiPanel({
 
   return (
     <Grid container spacing={2}>
-      <Grid size={{ xs: 12, md: 3 }}>
-        <Paper variant="outlined" sx={{ p: 1.5 }}>
+      <Grid size={{ xs: 12, md: pagesOpen ? 3 : 0.7 }}>
+        <Paper elevation={0} sx={{ p: 1.5, bgcolor: "transparent" }}>
           <Stack spacing={1}>
             <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-              <Typography variant="subtitle1">Pages</Typography>
               <Stack direction="row" spacing={0.25}>
-                <Tooltip title="새로고침">
-                  <IconButton size="small" onClick={() => void loadPages(selectedSlug)}>
-                    <RefreshOutlined fontSize="small" />
+                <Tooltip title={pagesOpen ? "Pages 숨기기" : "Pages 보이기"}>
+                  <IconButton size="small" onClick={() => setPagesOpen((current) => !current)}>
+                    {pagesOpen ? <MenuOpenOutlined fontSize="small" /> : <MenuOutlined fontSize="small" />}
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Page 생성">
-                  <span>
-                    <IconButton size="small" disabled={archived || saving} onClick={handleNewPage}>
-                      <AddOutlined fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
+                {pagesOpen ? <Typography variant="subtitle1" sx={{ alignSelf: "center", ml: 0.5 }}>Pages</Typography> : null}
+              </Stack>
+              <Stack direction="row" spacing={0.25}>
+                {pagesOpen ? (
+                  <>
+                    <Tooltip title="새로고침">
+                      <IconButton size="small" onClick={() => void loadPages(selectedSlug)}>
+                        <RefreshOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Page 생성">
+                      <span>
+                        <IconButton size="small" disabled={archived || saving} onClick={handleNewPage}>
+                          <AddOutlined fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </>
+                ) : null}
               </Stack>
             </Stack>
-            <Divider />
-            {pages.length === 0 && !creating ? (
-              <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-                표시할 page가 없습니다.
-              </Typography>
+            {pagesOpen ? (
+              <>
+                <Divider />
+                {pages.length === 0 && !creating ? (
+                  <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+                    표시할 page가 없습니다.
+                  </Typography>
+                ) : null}
+                <Stack spacing={0.5}>
+                  {creating ? (
+                    <Button variant="contained" size="small" sx={{ justifyContent: "flex-start" }}>
+                      새 page
+                    </Button>
+                  ) : null}
+                  {pages.map((item) => (
+                    <Button
+                      key={item.slug}
+                      variant={item.slug === selectedSlug ? "contained" : "text"}
+                      size="small"
+                      onClick={() => void loadPage(item.slug)}
+                      sx={{
+                        justifyContent: "space-between",
+                        textTransform: "none",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {item.title || item.slug}
+                      </Box>
+                      {item.archived ? <Chip size="small" variant="outlined" label="보관" sx={{ ml: 1, height: 20 }} /> : null}
+                    </Button>
+                  ))}
+                </Stack>
+              </>
             ) : null}
-            <Stack spacing={0.5}>
-              {creating ? (
-                <Button variant="contained" size="small" sx={{ justifyContent: "flex-start" }}>
-                  새 page
-                </Button>
-              ) : null}
-              {pages.map((item) => (
-                <Button
-                  key={item.slug}
-                  variant={item.slug === selectedSlug ? "contained" : "text"}
-                  size="small"
-                  onClick={() => void loadPage(item.slug)}
-                  sx={{
-                    justifyContent: "space-between",
-                    textTransform: "none",
-                    overflow: "hidden",
-                  }}
-                >
-                  <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {item.title || item.slug}
-                  </Box>
-                  {item.archived ? <Chip size="small" variant="outlined" label="보관" sx={{ ml: 1, height: 20 }} /> : null}
-                </Button>
-              ))}
-            </Stack>
           </Stack>
         </Paper>
       </Grid>
 
-      <Grid size={{ xs: 12, md: 9 }}>
+      <Grid size={{ xs: 12, md: pagesOpen ? 9 : 11.3 }}>
         <Stack spacing={2}>
           {error ? <Alert severity="error">{error}</Alert> : null}
           <Paper variant="outlined" sx={{ p: 2, minHeight: 420 }}>

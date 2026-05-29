@@ -151,7 +151,10 @@ export function FullLayout() {
               flexShrink: 0,
               overflow: "hidden",
               borderRight: "1px solid",
-              borderColor: "divider",
+              borderColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(255, 255, 255, 0.08)"
+                  : "rgba(0, 0, 0, 0.06)",
               transition: "width 160ms ease, border-color 160ms ease",
             }}
           >
@@ -173,12 +176,44 @@ export function FullLayout() {
           sx={{
             flex: 1,
             minWidth: 0,
-            bgcolor: "background.paper",
-            px: { xs: 2, md: 3 },
-            py: 3,
+            bgcolor: "transparent",
+            p: { xs: 2, md: 3 },
+            pt: { xs: 1.5, md: 2 },
+            display: "flex",
+            flexDirection: "column",
           }}
         >
-          <Outlet />
+          {/* Breadcrumbs Portal Destination */}
+          <Box
+            id="layout-breadcrumbs-portal"
+            sx={{
+              px: { xs: 0.5, md: 1 },
+              mb: 1.5,
+              minHeight: 18,
+              display: "flex",
+              alignItems: "center",
+            }}
+          />
+          <Box
+            sx={{
+              flex: 1,
+              bgcolor: "background.paper",
+              borderRadius: 3.5, // 14px
+              border: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "1px solid rgba(255, 255, 255, 0.06)"
+                  : "1px solid rgba(0, 0, 0, 0.05)",
+              boxShadow: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "0 4px 24px rgba(0, 0, 0, 0.3)"
+                  : "0 4px 20px rgba(0, 0, 0, 0.02)",
+              p: { xs: 2.5, md: 4 },
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <Outlet />
+          </Box>
         </Box>
       </Box>
       <PasswordChangeDialog

@@ -330,8 +330,8 @@ export function CompanyListPage() {
   return (
     <Stack spacing={0.5}>
       <PageToolbar
-        divider={false}
-        breadcrumbs={["시스템관리", "Company"]}
+        hasGrid
+        breadcrumbs={["시스템관리", "회사"]}
         label="Company 기본 정보와 멤버 권한을 관리합니다."
         searchPlaceholder="name, 표시 이름, domain 검색"
         searchValue={searchInput}

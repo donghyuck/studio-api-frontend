@@ -82,7 +82,7 @@ function PageableGridContentInner<TData = unknown>(
     () =>
       (columns ?? []).map((column) => ({
         ...column,
-        colId: toSnakeCase(column.field ?? "", colIdToSnakeCase),
+        colId: column.colId ?? toSnakeCase(column.field ?? "", colIdToSnakeCase),
       })),
     [colIdToSnakeCase, columns]
   );
@@ -170,6 +170,11 @@ function PageableGridContentInner<TData = unknown>(
     []
   );
 
+  const reloadInfiniteRows = useCallback(() => {
+    gridApiRef.current?.paginationGoToFirstPage();
+    gridApiRef.current?.purgeInfiniteCache();
+  }, []);
+
   useEffect(() => {
     if (!shouldAutoResize) {
       return;
@@ -187,11 +192,18 @@ function PageableGridContentInner<TData = unknown>(
     ref,
     () => ({
       refresh: () => {
-        gridApiRef.current?.refreshInfiniteCache();
+        gridApiRef.current?.purgeInfiniteCache();
+      },
+      refreshCells: () => {
+        gridApiRef.current?.refreshCells({ force: true });
+      },
+      refreshHeader: () => {
+        gridApiRef.current?.refreshHeader();
       },
       clearFilters: () => {
         gridApiRef.current?.setFilterModel(null);
         gridApiRef.current?.onFilterChanged();
+        gridApiRef.current?.purgeInfiniteCache();
       },
       selectedRows: () => selectedItems,
       selectAll: () => {
@@ -233,6 +245,8 @@ function PageableGridContentInner<TData = unknown>(
         cacheBlockSize={pageSize}
         onPaginationChanged={handlePaginationChanged}
         onSelectionChanged={handleSelectionChanged}
+        onSortChanged={reloadInfiniteRows}
+        onFilterChanged={reloadInfiniteRows}
         onGridReady={handleGridReady}
       />
     </div>

@@ -48,6 +48,8 @@ export interface GridContentHandle<TData = unknown> {
 
 export interface PageableGridContentHandle<TData = unknown> {
   refresh: () => void;
+  refreshCells: () => void;
+  refreshHeader: () => void;
   clearFilters: () => void;
   selectedRows: () => TData[];
   selectAll: () => void;

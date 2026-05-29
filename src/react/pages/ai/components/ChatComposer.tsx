@@ -81,7 +81,7 @@ export function ChatComposer({
   }
 
   return (
-    <Box sx={{ px: { xs: 1, md: 4 }, pb: 2 }}>
+    <Box sx={{ px: { xs: 1.5, md: 5 }, pb: 2 }}>
       <Box
         sx={{
           border: "1px solid",
@@ -95,6 +95,8 @@ export function ChatComposer({
             `0 8px 20px ${alpha(theme.palette.common.black, theme.palette.mode === "dark" ? 0.24 : 0.08)}`,
           px: 1.25,
           py: 1,
+          maxWidth: 920,
+          mx: "auto",
         }}
       >
         <Stack spacing={0.75}>

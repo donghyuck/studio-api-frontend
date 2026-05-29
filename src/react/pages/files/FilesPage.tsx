@@ -273,7 +273,7 @@ function SelectionCheckbox({
         width: 16,
         height: 16,
         margin: 0,
-        accentColor: "#1565c0",
+        accentColor: "#2563eb",
         cursor: "pointer",
         transform: ariaLabel === "행 선택" ? "translateY(2px)" : "none",
       }}
@@ -471,7 +471,7 @@ export function FilesPage() {
       },
       suppressRowClickSelection: true,
       rowMultiSelectWithClick: true,
-      rowHeight: 48,
+      rowHeight: 52,
     }),
     []
   );
@@ -533,7 +533,7 @@ export function FilesPage() {
     <>
       <Stack spacing={0.5}>
         <PageToolbar
-          divider={false}
+          hasGrid
           breadcrumbs={["애플리케이션", "파일"]}
           label="파일을 검색하고 업로드 경로를 관리합니다."
           onRefresh={() => gridRef.current?.refresh()}

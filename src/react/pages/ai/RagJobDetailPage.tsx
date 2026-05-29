@@ -11,6 +11,10 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   Drawer,
   IconButton,
@@ -978,6 +982,7 @@ export function RagJobDetailPage() {
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
   const [loading, setLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
+  const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const selectedChunkIndex = useMemo(
     () => chunks.findIndex((chunk) => chunkRowId(chunk) === chunkRowId(selectedChunk)),
@@ -1069,10 +1074,24 @@ export function RagJobDetailPage() {
     if (!job) {
       return;
     }
+    setRetryConfirmOpen(false);
     setMutating(true);
     setError(null);
     try {
-      const response = await reactAiApi.retryRagJob(job.jobId);
+      let response: RagIndexJobDto;
+      if (job.status === "CANCELLED") {
+        response = await reactAiApi.createRagJob({
+          objectType: job.objectType,
+          objectId: job.objectId,
+          documentId: job.documentId || undefined,
+          sourceType: job.sourceType || undefined,
+          forceReindex: true,
+          useLlmKeywordExtraction: true,
+        });
+        navigate(`/services/ai/rag/jobs/${response.jobId}`, { replace: true });
+      } else {
+        response = await reactAiApi.retryRagJob(job.jobId);
+      }
       setJob(response);
       await loadDetail();
     } catch (retryError) {
@@ -1277,7 +1296,7 @@ export function RagJobDetailPage() {
                   variant="outlined"
                   startIcon={<ReplayOutlined />}
                   disabled={!job || mutating || job.status === "PENDING" || job.status === "RUNNING"}
-                  onClick={() => void handleRetry()}
+                  onClick={() => setRetryConfirmOpen(true)}
                 >
                   재시도
                 </Button>
@@ -1295,6 +1314,48 @@ export function RagJobDetailPage() {
           </Stack>
         }
       />
+      <Dialog
+        open={retryConfirmOpen}
+        onClose={mutating ? undefined : () => setRetryConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>색인 작업 재시도</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1}>
+            <Typography variant="body2">
+              이 RAG 색인 작업을 다시 진행할까요?
+            </Typography>
+            {job ? (
+              <Box sx={{ bgcolor: "action.hover", borderRadius: 1, p: 1.25 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Job ID
+                </Typography>
+                <Typography variant="body2" sx={{ wordBreak: "break-all" }}>
+                  {job.jobId}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                  대상
+                </Typography>
+                <Typography variant="body2" sx={{ wordBreak: "break-all" }}>
+                  {job.objectType} / {job.objectId}
+                </Typography>
+              </Box>
+            ) : null}
+            <Typography variant="caption" color="text.secondary">
+              취소된 작업은 동일 대상으로 새 색인 작업을 생성하고, 그 외 작업은 서버 retry 엔드포인트로 재실행합니다.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRetryConfirmOpen(false)} disabled={mutating}>
+            취소
+          </Button>
+          <Button variant="contained" onClick={() => void handleRetry()} disabled={mutating}>
+            재시도 진행
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {error ? <Alert severity="error">{error}</Alert> : null}
       {loading && !job ? (

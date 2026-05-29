@@ -79,7 +79,7 @@ export function DocumentListPage() {
   return (
     <Stack spacing={0.5}>
       <PageToolbar
-        divider={false}
+        hasGrid
         breadcrumbs={["애플리케이션", "문서"]}
         label="문서를 검색하고 생성합니다."
         onRefresh={() => gridRef.current?.refresh()}

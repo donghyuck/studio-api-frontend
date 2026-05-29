@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -23,6 +24,7 @@ import {
   Divider,
   FormControlLabel,
   IconButton,
+  InputAdornment,
   List,
   ListItem,
   ListItemButton,
@@ -43,6 +45,7 @@ import {
   CloseOutlined,
   ExpandMoreOutlined,
   InfoOutlined,
+  RemoveOutlined,
   TuneOutlined,
   RefreshOutlined,
   SearchOutlined,
@@ -355,38 +358,41 @@ function searchPointToSemanticPoint(
   };
 }
 
-function axisMapper(points: { x: number; y: number }[]) {
-  const xMin = Math.min(...points.map((point) => point.x));
-  const xMax = Math.max(...points.map((point) => point.x));
-  const yMin = Math.min(...points.map((point) => point.y));
-  const yMax = Math.max(...points.map((point) => point.y));
-  const xRange = xMax - xMin || 1;
-  const yRange = yMax - yMin || 1;
+function scoreColor(score?: number | null) {
+  if (score == null) return "text.primary";
+  if (score >= 0.85) return "#16a34a"; // Green
+  if (score >= 0.75) return "#0284c7"; // Blue/Teal
+  if (score >= 0.70) return "#ea580c"; // Orange
+  return "#64748b"; // Slate
+}
 
-  return {
-    mapX: (x: number) =>
-      CHART_PADDING + ((x - xMin) / xRange) * (CHART_WIDTH - CHART_PADDING * 2),
-    mapY: (y: number) =>
-      CHART_HEIGHT -
-      (CHART_PADDING +
-        ((y - yMin) / yRange) * (CHART_HEIGHT - CHART_PADDING * 2)),
-    xTicks: Array.from({ length: 5 }, (_, index) => {
-      const ratio = index / 4;
-      return {
-        x: CHART_PADDING + ratio * (CHART_WIDTH - CHART_PADDING * 2),
-        label: (xMin + xRange * ratio).toFixed(3),
-      };
-    }),
-    yTicks: Array.from({ length: 5 }, (_, index) => {
-      const ratio = index / 4;
-      return {
-        y:
-          CHART_HEIGHT -
-          (CHART_PADDING + ratio * (CHART_HEIGHT - CHART_PADDING * 2)),
-        label: (yMin + yRange * ratio).toFixed(3),
-      };
-    }),
-  };
+function TooltipItem({
+  label,
+  value,
+  highlight = false,
+  color,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  color?: string;
+}) {
+  return (
+    <Stack direction="row" justifyContent="space-between" spacing={1}>
+      <Typography variant="caption" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography
+        variant="caption"
+        sx={{
+          fontWeight: highlight ? 700 : 600,
+          color: color ?? (highlight ? "warning.main" : "text.primary"),
+        }}
+      >
+        {value}
+      </Typography>
+    </Stack>
+  );
 }
 
 function topValue<T>(entries: T[], fallback: T) {
@@ -419,6 +425,15 @@ export function VectorVisualizationPage() {
   const [pointTargetType, setPointTargetType] = useState("");
   const [clusterId, setClusterId] = useState("");
   const [colorBy, setColorBy] = useState("objectType");
+
+  // Zoom & Pan, Hover States & Handlers
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [dragMoved, setDragMoved] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+  const [hoveredPoint, setHoveredPoint] = useState<SemanticPoint | null>(null);
 
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState(String(DEFAULT_TOP_K));
@@ -546,12 +561,33 @@ export function VectorVisualizationPage() {
       };
     }
 
-    const mapper = axisMapper(axisPoints);
+    const xMin = Math.min(...axisPoints.map((point) => point.x));
+    const xMax = Math.max(...axisPoints.map((point) => point.x));
+    const yMin = Math.min(...axisPoints.map((point) => point.y));
+    const yMax = Math.max(...axisPoints.map((point) => point.y));
+    const xRange = xMax - xMin || 1;
+    const yRange = yMax - yMin || 1;
+
+    const mapXBase = (x: number) =>
+      CHART_PADDING + ((x - xMin) / xRange) * (CHART_WIDTH - CHART_PADDING * 2);
+    const mapYBase = (y: number) =>
+      CHART_HEIGHT -
+      (CHART_PADDING + ((y - yMin) / yRange) * (CHART_HEIGHT - CHART_PADDING * 2));
+
+    const mapX = (x: number) => {
+      const base = mapXBase(x);
+      return (base - CHART_WIDTH / 2) * zoom.scale + CHART_WIDTH / 2 + zoom.x;
+    };
+    const mapY = (y: number) => {
+      const base = mapYBase(y);
+      return (base - CHART_HEIGHT / 2) * zoom.scale + CHART_HEIGHT / 2 + zoom.y;
+    };
+
     return {
       points: semanticPoints.map((point) => ({
         ...point,
-        px: mapper.mapX(point.x),
-        py: mapper.mapY(point.y),
+        px: mapX(point.x),
+        py: mapY(point.y),
       })),
       query:
         queryPoint &&
@@ -561,14 +597,28 @@ export function VectorVisualizationPage() {
               label: queryPoint.label,
               x: queryPoint.x as number,
               y: queryPoint.y as number,
-              px: mapper.mapX(queryPoint.x as number),
-              py: mapper.mapY(queryPoint.y as number),
+              px: mapX(queryPoint.x as number),
+              py: mapY(queryPoint.y as number),
             }
           : null,
-      xTicks: mapper.xTicks,
-      yTicks: mapper.yTicks,
+      xTicks: Array.from({ length: 5 }, (_, index) => {
+        const ratio = index / 4;
+        const xVal = xMin + xRange * ratio;
+        return {
+          x: mapX(xVal),
+          label: xVal.toFixed(3),
+        };
+      }),
+      yTicks: Array.from({ length: 5 }, (_, index) => {
+        const ratio = index / 4;
+        const yVal = yMin + yRange * ratio;
+        return {
+          y: mapY(yVal),
+          label: yVal.toFixed(3),
+        };
+      }),
     };
-  }, [queryPoint, semanticPoints]);
+  }, [queryPoint, semanticPoints, zoom]);
 
   const selectedPoint = useMemo(() => {
     if (!selectedVectorItemId) {
@@ -592,6 +642,74 @@ export function VectorVisualizationPage() {
     setDetailOpen(true);
     setControlsOpen(false);
   }, []);
+
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return; // Left click only
+    setIsDragging(true);
+    setDragMoved(false);
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+    setDragStart({ x: e.clientX - zoom.x, y: e.clientY - zoom.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (!isDragging) return;
+    const dx = Math.abs(e.clientX - dragStartPos.current.x);
+    const dy = Math.abs(e.clientY - dragStartPos.current.y);
+    if (dx > 3 || dy > 3) {
+      setDragMoved(true);
+    }
+    setZoom((prev) => ({
+      ...prev,
+      x: e.clientX - dragStart.x,
+      y: e.clientY - dragStart.y,
+    }));
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handlePointClick = (vectorItemId: string) => {
+    if (dragMoved) return;
+    selectVectorItem(vectorItemId);
+  };
+
+  useEffect(() => {
+    const svgEl = svgRef.current;
+    if (!svgEl) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const scaleFactor = 1.15;
+      const nextScale = e.deltaY < 0 ? zoom.scale * scaleFactor : zoom.scale / scaleFactor;
+      const clampedScale = Math.max(0.8, Math.min(25, nextScale));
+
+      const rect = svgEl.getBoundingClientRect();
+      const clientX = e.clientX - rect.left;
+      const clientY = e.clientY - rect.top;
+
+      const mouseX = (clientX / rect.width) * CHART_WIDTH;
+      const mouseY = (clientY / rect.height) * CHART_HEIGHT;
+
+      const cx = CHART_WIDTH / 2;
+      const cy = CHART_HEIGHT / 2;
+
+      const dx = mouseX - cx - zoom.x;
+      const dy = mouseY - cy - zoom.y;
+      const ratio = clampedScale / zoom.scale;
+
+      setZoom({
+        scale: clampedScale,
+        x: mouseX - cx - dx * ratio,
+        y: mouseY - cy - dy * ratio,
+      });
+    };
+
+    svgEl.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      svgEl.removeEventListener("wheel", onWheel);
+    };
+  }, [zoom]);
 
   const searchRows = useMemo(
     () =>
@@ -641,8 +759,44 @@ export function VectorVisualizationPage() {
         width: 110,
         sortable: true,
         filter: false,
-        valueFormatter: (params) =>
-          showingSearchRows ? formatNumber(params.value) : "-",
+        cellRenderer: (params: { value?: number | null }) => {
+          const val = params.value;
+          if (!showingSearchRows || val == null) return "-";
+          
+          let label = "Low";
+          let bg = "rgba(100, 116, 139, 0.1)"; // slate
+          let fg = "#64748b";
+          
+          if (val >= 0.85) {
+            label = "Excellent";
+            bg = "rgba(22, 163, 74, 0.15)";
+            fg = "#16a34a";
+          } else if (val >= 0.75) {
+            label = "Good";
+            bg = "rgba(2, 132, 199, 0.15)";
+            fg = "#0284c7";
+          } else if (val >= 0.70) {
+            label = "Moderate";
+            bg = "rgba(234, 88, 12, 0.15)";
+            fg = "#ea580c";
+          }
+          
+          return (
+            <Chip
+              size="small"
+              label={`${formatNumber(val)} (${label})`}
+              sx={{
+                height: 20,
+                fontSize: "11px",
+                fontWeight: 700,
+                bgcolor: bg,
+                color: fg,
+                border: "1px solid",
+                borderColor: fg,
+              }}
+            />
+          );
+        },
       },
       {
         field: "distance",
@@ -718,7 +872,10 @@ export function VectorVisualizationPage() {
       },
       getRowStyle: (params) =>
         params.data?.vectorItemId === selectedVectorItemId
-          ? { backgroundColor: alpha("#1976d2", 0.08) }
+          ? {
+              backgroundColor: "rgba(25, 118, 210, 0.08)",
+              borderLeft: "4px solid #1976d2",
+            }
           : undefined,
       overlayNoRowsTemplate: `<span class="ag-overlay-no-rows-center">${
         selectedProjectionReady
@@ -762,13 +919,34 @@ export function VectorVisualizationPage() {
       grouped.set(point.clusterId, group);
     });
 
-    return Array.from(grouped.entries()).map(([id, points]) => ({
-      id,
-      count: points.length,
-      x: points.reduce((sum, point) => sum + point.px, 0) / points.length,
-      y: points.reduce((sum, point) => sum + point.py, 0) / points.length,
-      color: targetTypeColor(topValue(points, points[0])?.targetType),
-    }));
+    return Array.from(grouped.entries()).map(([id, points]) => {
+      let name = id;
+      for (const point of points) {
+        const metadata = point.metadata;
+        if (metadata) {
+          const val = metadataValue(metadata, [
+            "clusterName",
+            "clusterLabel",
+            "cluster_name",
+            "clusterTitle",
+            "cluster_title",
+          ]);
+          if (typeof val === "string" && val.trim()) {
+            name = val.trim();
+            break;
+          }
+        }
+      }
+
+      return {
+        id,
+        name,
+        count: points.length,
+        x: points.reduce((sum, point) => sum + point.px, 0) / points.length,
+        y: points.reduce((sum, point) => sum + point.py, 0) / points.length,
+        color: targetTypeColor(topValue(points, points[0])?.targetType),
+      };
+    });
   }, [chartModel.points]);
   const searchResultPointCount = useMemo(
     () => chartModel.points.filter((point) => point.searchResult).length,
@@ -942,6 +1120,7 @@ export function VectorVisualizationPage() {
     setProjectionPointError(null);
     setPointsRequested(false);
     setClusterId("");
+    setZoom({ scale: 1, x: 0, y: 0 });
     if (selectedProjectionId) {
       void loadProjectionDetail(selectedProjectionId);
     }
@@ -1196,10 +1375,23 @@ export function VectorVisualizationPage() {
           </Stack>
 
           <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={1.2}
-            useFlexGap
-            flexWrap="wrap"
+            direction="row"
+            spacing={0.5}
+            sx={{
+              width: "100%",
+              overflowX: "auto",
+              pb: 0.5,
+              "&::-webkit-scrollbar": {
+                height: "4px",
+              },
+              "&::-webkit-scrollbar-track": {
+                bgcolor: "transparent",
+              },
+              "&::-webkit-scrollbar-thumb": {
+                bgcolor: "rgba(0,0,0,0.1)",
+                borderRadius: "2px",
+              },
+            }}
           >
             <SummaryMetric
               label="Algorithm"
@@ -1249,8 +1441,19 @@ export function VectorVisualizationPage() {
         }}
       >
         {!detailPanelOpen && controlsOpen ? (
-          <Paper variant="outlined" sx={{ p: 2, order: { xs: 2, lg: 2 } }}>
-            <Stack spacing={1.4}>
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2,
+              order: { xs: 2, lg: 2 },
+              borderRadius: 3,
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.04)",
+              border: "1px solid",
+              borderColor: "divider",
+              bgcolor: "background.paper",
+            }}
+          >
+            <Stack spacing={1.6}>
               <Stack
                 direction="row"
                 alignItems="flex-start"
@@ -1258,7 +1461,7 @@ export function VectorVisualizationPage() {
                 spacing={1}
               >
                 <Stack spacing={0.3}>
-                  <Typography variant="subtitle2">
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
                     Visualization Controls
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
@@ -1277,11 +1480,11 @@ export function VectorVisualizationPage() {
 
               <Divider />
 
-              <Stack spacing={1}>
+              <Stack spacing={1.2}>
                 <Typography
                   variant="caption"
                   color="text.secondary"
-                  sx={{ fontWeight: 800, textTransform: "uppercase" }}
+                  sx={{ fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px" }}
                 >
                   Query
                 </Typography>
@@ -1297,26 +1500,29 @@ export function VectorVisualizationPage() {
                       void runSearch();
                     }
                   }}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        {searchLoading ? (
+                          <CircularProgress size={20} />
+                        ) : (
+                          <IconButton
+                            size="small"
+                            onClick={() => void runSearch()}
+                            disabled={!queryReady}
+                            edge="end"
+                          >
+                            <SearchOutlined />
+                          </IconButton>
+                        )}
+                      </InputAdornment>
+                    ),
+                  }}
                 />
-                <Button
-                  variant="contained"
-                  startIcon={
-                    searchLoading ? (
-                      <CircularProgress size={16} color="inherit" />
-                    ) : (
-                      <SearchOutlined />
-                    )
-                  }
-                  onClick={() => void runSearch()}
-                  disabled={searchLoading || !queryReady}
-                  fullWidth
-                >
-                  벡터 위치 분석
-                </Button>
               </Stack>
 
-              <BorderlessAccordion title="검색 옵션">
-                <Stack spacing={1}>
+              <PremiumAccordion title="검색 옵션">
+                <Stack spacing={1.5}>
                   <Stack direction="row" spacing={1}>
                     <TextField
                       label="Top K"
@@ -1393,10 +1599,10 @@ export function VectorVisualizationPage() {
                     </TextField>
                   </Stack>
                 </Stack>
-              </BorderlessAccordion>
+              </PremiumAccordion>
 
-              <BorderlessAccordion title="Map Filter">
-                <Stack spacing={1}>
+              <PremiumAccordion title="Map Filter">
+                <Stack spacing={1.5}>
                   <TextField
                     label="맵 Keyword"
                     value={pointKeyword}
@@ -1441,14 +1647,15 @@ export function VectorVisualizationPage() {
                       !selectedProjectionReady || projectionPointLoading
                     }
                     fullWidth
+                    sx={{ borderRadius: 2 }}
                   >
                     전체 맵 새로고침
                   </Button>
                 </Stack>
-              </BorderlessAccordion>
+              </PremiumAccordion>
 
-              <BorderlessAccordion title="Color & Display">
-                <Stack spacing={1}>
+              <PremiumAccordion title="Color & Display">
+                <Stack spacing={1.5}>
                   <TextField
                     select
                     label="Color By"
@@ -1459,7 +1666,7 @@ export function VectorVisualizationPage() {
                   >
                     <MenuItem value="objectType">Object Type</MenuItem>
                   </TextField>
-                  <Stack spacing={0.4}>
+                  <Stack spacing={0.6}>
                     <FormControlLabel
                       control={
                         <Switch
@@ -1472,7 +1679,7 @@ export function VectorVisualizationPage() {
                         />
                       }
                       label={
-                        <Typography variant="body2">Query Point</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>Query Point</Typography>
                       }
                     />
                     <FormControlLabel
@@ -1487,7 +1694,7 @@ export function VectorVisualizationPage() {
                         />
                       }
                       label={
-                        <Typography variant="body2">Neighbor Line</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>Neighbor Line</Typography>
                       }
                     />
                     <FormControlLabel
@@ -1502,12 +1709,12 @@ export function VectorVisualizationPage() {
                         />
                       }
                       label={
-                        <Typography variant="body2">Cluster Label</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>Cluster Label</Typography>
                       }
                     />
                   </Stack>
                 </Stack>
-              </BorderlessAccordion>
+              </PremiumAccordion>
             </Stack>
           </Paper>
         ) : null}
@@ -1567,205 +1774,424 @@ export function VectorVisualizationPage() {
                 width: "100%",
                 overflow: "hidden",
                 bgcolor: "transparent",
+                position: "relative",
+                borderRadius: 3,
+                boxShadow: "0 4px 20px rgba(0,0,0,0.02)",
               }}
             >
+              {/* Floating Zoom & Pan Controls Overlay */}
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: 12,
+                  right: 12,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 0.5,
+                  zIndex: 5,
+                }}
+              >
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setZoom((prev) => {
+                      const nextScale = Math.min(25, prev.scale * 1.3);
+                      return { ...prev, scale: nextScale };
+                    });
+                  }}
+                  sx={{
+                    bgcolor: "rgba(255, 255, 255, 0.75)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid rgba(0, 0, 0, 0.08)",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                    "&:hover": { bgcolor: "rgba(255, 255, 255, 0.9)" },
+                  }}
+                >
+                  <AddOutlined fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setZoom((prev) => {
+                      const nextScale = Math.max(0.8, prev.scale / 1.3);
+                      return { ...prev, scale: nextScale };
+                    });
+                  }}
+                  sx={{
+                    bgcolor: "rgba(255, 255, 255, 0.75)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid rgba(0, 0, 0, 0.08)",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                    "&:hover": { bgcolor: "rgba(255, 255, 255, 0.9)" },
+                  }}
+                >
+                  <RemoveOutlined fontSize="small" />
+                </IconButton>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setZoom({ scale: 1, x: 0, y: 0 })}
+                  sx={{
+                    minWidth: 0,
+                    px: 1.2,
+                    py: 0.6,
+                    fontSize: "10.5px",
+                    fontWeight: 700,
+                    bgcolor: "rgba(255, 255, 255, 0.75)",
+                    backdropFilter: "blur(8px)",
+                    color: "text.primary",
+                    border: "1px solid rgba(0, 0, 0, 0.08)",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                    textTransform: "none",
+                    "&:hover": { bgcolor: "rgba(255, 255, 255, 0.9)" },
+                  }}
+                >
+                  Reset
+                </Button>
+              </Box>
+
               <svg
+                ref={svgRef}
                 width="100%"
                 viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-                style={{ display: "block" }}
+                style={{
+                  display: "block",
+                  cursor: isDragging ? "grabbing" : "grab",
+                  userSelect: "none",
+                  backgroundColor: "#ffffff",
+                }}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
               >
+                <defs>
+                  <clipPath id="chart-area-clip">
+                    <rect
+                      x={CHART_PADDING}
+                      y={CHART_PADDING}
+                      width={CHART_WIDTH - CHART_PADDING * 2}
+                      height={CHART_HEIGHT - CHART_PADDING * 2}
+                      rx={8}
+                    />
+                  </clipPath>
+                </defs>
+
                 <rect
                   x={CHART_PADDING}
                   y={CHART_PADDING}
                   width={CHART_WIDTH - CHART_PADDING * 2}
                   height={CHART_HEIGHT - CHART_PADDING * 2}
                   rx={8}
-                  fill="#f8fafc"
+                  fill="#ffffff"
                   stroke="#e2e8f0"
+                  strokeWidth={1.5}
                 />
-                {chartModel.xTicks.map((tick) => (
-                  <g key={`x-${tick.label}`}>
+
+                {/* Clipped elements (gridlines, points, labels, query marker, neighbor lines) */}
+                <g clipPath="url(#chart-area-clip)">
+                  {/* Gridlines */}
+                  {chartModel.xTicks.map((tick) => (
                     <line
+                      key={`grid-x-${tick.label}`}
                       x1={tick.x}
                       x2={tick.x}
                       y1={CHART_PADDING}
                       y2={CHART_HEIGHT - CHART_PADDING}
-                      stroke="#e2e8f0"
+                      stroke="rgba(0, 0, 0, 0.04)"
+                      strokeWidth={1}
                     />
+                  ))}
+                  {chartModel.yTicks.map((tick) => (
+                    <line
+                      key={`grid-y-${tick.label}`}
+                      x1={CHART_PADDING}
+                      x2={CHART_WIDTH - CHART_PADDING}
+                      y1={tick.y}
+                      y2={tick.y}
+                      stroke="rgba(0, 0, 0, 0.04)"
+                      strokeWidth={1}
+                    />
+                  ))}
+
+                  {/* Neighbor Lines */}
+                  {canShowNeighborLines && showNeighborLines
+                    ? chartModel.points
+                        .filter((point) => point.searchResult)
+                        .map((point) => {
+                          const distance = projectionDistance(
+                            chartModel.query,
+                            point,
+                          );
+                          const showDistanceLabel =
+                            Boolean(point.rank && point.rank <= 5) ||
+                            selectedPoint?.vectorItemId === point.vectorItemId;
+                          return (
+                            <g key={`line-${point.vectorItemId}`}>
+                              <line
+                                x1={chartModel.query!.px}
+                                y1={chartModel.query!.py}
+                                x2={point.px}
+                                y2={point.py}
+                                stroke="#94a3b8"
+                                strokeDasharray="4 4"
+                                strokeWidth={1.5}
+                                opacity={0.7}
+                              />
+                              {showDistanceLabel ? (
+                                <g>
+                                  <rect
+                                    x={(chartModel.query!.px + point.px) / 2 - 16}
+                                    y={(chartModel.query!.py + point.py) / 2 - 10}
+                                    width={32}
+                                    height={14}
+                                    rx={4}
+                                    fill="rgba(255, 255, 255, 0.9)"
+                                    stroke="#cbd5e1"
+                                    strokeWidth={0.5}
+                                  />
+                                  <text
+                                    x={(chartModel.query!.px + point.px) / 2}
+                                    y={(chartModel.query!.py + point.py) / 2 + 3}
+                                    textAnchor="middle"
+                                    fontSize={9}
+                                    fill="#475569"
+                                    fontWeight={700}
+                                  >
+                                    {formatNumber(distance, 2)}
+                                  </text>
+                                </g>
+                              ) : null}
+                            </g>
+                          );
+                        })
+                    : null}
+
+                  {/* Semantic Points */}
+                  {chartModel.points.map((point) => {
+                    const selected =
+                      selectedPoint?.vectorItemId === point.vectorItemId;
+                    const color = targetTypeColor(point.targetType);
+                    const isHovered = hoveredPoint?.vectorItemId === point.vectorItemId;
+                    return (
+                      <g key={point.vectorItemId}>
+                        {(isHovered || selected) && (
+                          <circle
+                            cx={point.px}
+                            cy={point.py}
+                            r={selected ? 12 : 10}
+                            fill={alpha(point.searchResult ? "#facc15" : color, 0.25)}
+                            style={{ pointerEvents: "none", transition: "r 0.15s ease" }}
+                          />
+                        )}
+                        <circle
+                          cx={point.px}
+                          cy={point.py}
+                          r={selected ? 7.5 : isHovered ? 7.0 : point.searchResult ? 5.5 : 3.2}
+                          fill={point.searchResult ? "#facc15" : color}
+                          stroke={
+                            selected
+                              ? "#111827"
+                              : point.searchResult
+                                ? "#ca8a04"
+                                : "#ffffff"
+                          }
+                          strokeWidth={
+                            selected ? 2.4 : point.searchResult ? 1.8 : 0.8
+                          }
+                          opacity={point.searchResult ? 1 : 0.8}
+                          style={{ cursor: "pointer", transition: "r 0.15s ease" }}
+                          onClick={() => handlePointClick(point.vectorItemId)}
+                          onMouseEnter={() => setHoveredPoint(point)}
+                          onMouseLeave={() => setHoveredPoint(null)}
+                        />
+                        {point.searchResult && point.rank ? (
+                          <text
+                            x={point.px}
+                            y={point.py + 3.2}
+                            textAnchor="middle"
+                            fontSize={8.5}
+                            fill="#111827"
+                            fontWeight={800}
+                            style={{ pointerEvents: "none" }}
+                          >
+                            {point.rank}
+                          </text>
+                        ) : null}
+                      </g>
+                    );
+                  })}
+
+                  {/* Query Point */}
+                  {canShowQueryPoint && showQueryPoint && chartModel.query ? (
+                    <g>
+                      <circle
+                        cx={chartModel.query.px}
+                        cy={chartModel.query.py}
+                        r={16}
+                        fill="rgba(239, 68, 68, 0.15)"
+                        stroke="rgba(239, 68, 68, 0.3)"
+                        strokeWidth={1}
+                        style={{ pointerEvents: "none" }}
+                      />
+                      <polygon
+                        points={`${chartModel.query.px},${chartModel.query.py - 12} ${chartModel.query.px + 4},${chartModel.query.py - 4} ${chartModel.query.px + 13},${chartModel.query.py - 3} ${chartModel.query.px + 6},${chartModel.query.py + 3} ${chartModel.query.px + 8},${chartModel.query.py + 12} ${chartModel.query.px},${chartModel.query.py + 7} ${chartModel.query.px - 8},${chartModel.query.py + 12} ${chartModel.query.px - 6},${chartModel.query.py + 3} ${chartModel.query.px - 13},${chartModel.query.py - 3} ${chartModel.query.px - 4},${chartModel.query.py - 4}`}
+                        fill="#ef4444"
+                        stroke="#991b1b"
+                        strokeWidth={1.5}
+                        style={{ filter: "drop-shadow(0px 2px 4px rgba(239, 68, 68, 0.4))" }}
+                      />
+                      <g>
+                        <rect
+                          x={chartModel.query.px - 28}
+                          y={chartModel.query.py + 16}
+                          width={56}
+                          height={20}
+                          rx={10}
+                          fill="#ffffff"
+                          stroke="#ef4444"
+                          strokeWidth={1}
+                          style={{ filter: "drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.05))" }}
+                        />
+                        <text
+                          x={chartModel.query.px}
+                          y={chartModel.query.py + 29}
+                          textAnchor="middle"
+                          fontSize={10}
+                          fill="#dc2626"
+                          fontWeight={800}
+                        >
+                          Query
+                        </text>
+                      </g>
+                    </g>
+                  ) : null}
+
+                  {/* Cluster Labels */}
+                  {canShowClusterLabels && showClusterLabels
+                    ? clusterLabels.map((label) => {
+                        const offset = Math.max(32, label.name.length * 4 + 8);
+                        return (
+                          <g key={label.id}>
+                            <rect
+                              x={label.x - offset}
+                              y={label.y - 13}
+                              width={offset * 2}
+                              height={24}
+                              rx={12}
+                              fill="#ffffff"
+                              stroke={label.color}
+                              strokeWidth={1.5}
+                              opacity={0.92}
+                              style={{ filter: "drop-shadow(0px 2px 6px rgba(0, 0, 0, 0.08))" }}
+                            />
+                            <text
+                              x={label.x}
+                              y={label.y + 4}
+                              textAnchor="middle"
+                              fontSize={10.5}
+                              fill={label.color}
+                              fontWeight={800}
+                            >
+                              {label.name}
+                            </text>
+                          </g>
+                        );
+                      })
+                    : null}
+                </g>
+
+                {/* Tick Labels (drawn outside the clipped group) */}
+                {chartModel.xTicks.map((tick) => {
+                  if (tick.x < CHART_PADDING || tick.x > CHART_WIDTH - CHART_PADDING) return null;
+                  return (
                     <text
+                      key={`label-x-${tick.label}`}
                       x={tick.x}
                       y={CHART_HEIGHT - CHART_PADDING + 18}
                       textAnchor="middle"
                       fontSize={11}
                       fill="#64748b"
+                      fontWeight={600}
                     >
                       {tick.label}
                     </text>
-                  </g>
-                ))}
-                {chartModel.yTicks.map((tick) => (
-                  <g key={`y-${tick.label}`}>
-                    <line
-                      x1={CHART_PADDING}
-                      x2={CHART_WIDTH - CHART_PADDING}
-                      y1={tick.y}
-                      y2={tick.y}
-                      stroke="#e2e8f0"
-                    />
+                  );
+                })}
+                {chartModel.yTicks.map((tick) => {
+                  if (tick.y < CHART_PADDING || tick.y > CHART_HEIGHT - CHART_PADDING) return null;
+                  return (
                     <text
+                      key={`label-y-${tick.label}`}
                       x={CHART_PADDING - 10}
                       y={tick.y + 4}
                       textAnchor="end"
                       fontSize={11}
                       fill="#64748b"
+                      fontWeight={600}
                     >
                       {tick.label}
                     </text>
-                  </g>
-                ))}
-
-                {canShowNeighborLines && showNeighborLines
-                  ? chartModel.points
-                      .filter((point) => point.searchResult)
-                      .map((point) => {
-                        const distance = projectionDistance(
-                          chartModel.query,
-                          point,
-                        );
-                        const showDistanceLabel =
-                          Boolean(point.rank && point.rank <= 5) ||
-                          selectedPoint?.vectorItemId === point.vectorItemId;
-                        return (
-                          <g key={`line-${point.vectorItemId}`}>
-                            <line
-                              x1={chartModel.query!.px}
-                              y1={chartModel.query!.py}
-                              x2={point.px}
-                              y2={point.py}
-                              stroke="#94a3b8"
-                              strokeDasharray="4 5"
-                              strokeWidth={1.2}
-                              opacity={0.75}
-                            />
-                            <title>{`Query -> ${point.label ?? point.vectorItemId}\ndistance: ${formatNumber(distance)}\nscore: ${formatNumber(point.similarity)}`}</title>
-                            {showDistanceLabel ? (
-                              <text
-                                x={(chartModel.query!.px + point.px) / 2}
-                                y={(chartModel.query!.py + point.py) / 2 - 4}
-                                textAnchor="middle"
-                                fontSize={10}
-                                fill="#475569"
-                                fontWeight={700}
-                              >
-                                {formatNumber(distance, 2)}
-                              </text>
-                            ) : null}
-                          </g>
-                        );
-                      })
-                  : null}
-
-                {canShowClusterLabels && showClusterLabels
-                  ? clusterLabels.map((label) => (
-                      <g key={label.id}>
-                        <rect
-                          x={label.x - 28}
-                          y={label.y - 13}
-                          width={56}
-                          height={24}
-                          rx={12}
-                          fill="#ffffff"
-                          stroke={label.color}
-                          opacity={0.92}
-                        />
-                        <text
-                          x={label.x}
-                          y={label.y + 4}
-                          textAnchor="middle"
-                          fontSize={11}
-                          fill={label.color}
-                          fontWeight={700}
-                        >
-                          {label.id}
-                        </text>
-                      </g>
-                    ))
-                  : null}
-
-                {chartModel.points.map((point) => {
-                  const selected =
-                    selectedPoint?.vectorItemId === point.vectorItemId;
-                  const color = targetTypeColor(point.targetType);
-                  return (
-                    <g key={point.vectorItemId}>
-                      <circle
-                        cx={point.px}
-                        cy={point.py}
-                        r={selected ? 7.5 : point.searchResult ? 6 : 3.2}
-                        fill={point.searchResult ? "#facc15" : color}
-                        stroke={
-                          selected
-                            ? "#111827"
-                            : point.searchResult
-                              ? "#ca8a04"
-                              : "#ffffff"
-                        }
-                        strokeWidth={
-                          selected ? 2.4 : point.searchResult ? 1.8 : 0.8
-                        }
-                        opacity={point.searchResult ? 1 : 0.74}
-                        style={{ cursor: "pointer" }}
-                        onClick={() => selectVectorItem(point.vectorItemId)}
-                      />
-                      {point.searchResult && point.rank ? (
-                        <text
-                          x={point.px}
-                          y={point.py + 3.8}
-                          textAnchor="middle"
-                          fontSize={9}
-                          fill="#111827"
-                          fontWeight={800}
-                        >
-                          {point.rank}
-                        </text>
-                      ) : null}
-                      <title>
-                        {`${point.label ?? point.vectorItemId}\n${point.targetType ?? "-"} / ${point.sourceId ?? "-"}\nscore: ${formatNumber(point.similarity)}\ntokens: ${point.tokenCount?.toLocaleString() ?? "-"}\ncontext: ${point.contextIncluded == null ? "-" : point.contextIncluded ? "included" : "excluded"}\ndistance: ${formatNumber(projectionDistance(chartModel.query, point))}\ncluster: ${point.clusterId ?? "-"}\n(${formatNumber(point.x)}, ${formatNumber(point.y)})`}
-                      </title>
-                    </g>
                   );
                 })}
-
-                {canShowQueryPoint && showQueryPoint && chartModel.query ? (
-                  <g>
-                    <polygon
-                      points={`${chartModel.query.px},${chartModel.query.py - 12} ${chartModel.query.px + 4},${chartModel.query.py - 4} ${chartModel.query.px + 13},${chartModel.query.py - 3} ${chartModel.query.px + 6},${chartModel.query.py + 3} ${chartModel.query.px + 8},${chartModel.query.py + 12} ${chartModel.query.px},${chartModel.query.py + 7} ${chartModel.query.px - 8},${chartModel.query.py + 12} ${chartModel.query.px - 6},${chartModel.query.py + 3} ${chartModel.query.px - 13},${chartModel.query.py - 3} ${chartModel.query.px - 4},${chartModel.query.py - 4}`}
-                      fill="#ef4444"
-                      stroke="#991b1b"
-                      strokeWidth={1.5}
-                    />
-                    <rect
-                      x={chartModel.query.px - 28}
-                      y={chartModel.query.py + 15}
-                      width={56}
-                      height={24}
-                      rx={12}
-                      fill="#ffffff"
-                      stroke="#ef4444"
-                    />
-                    <text
-                      x={chartModel.query.px}
-                      y={chartModel.query.py + 31}
-                      textAnchor="middle"
-                      fontSize={11}
-                      fill="#dc2626"
-                      fontWeight={700}
-                    >
-                      Query
-                    </text>
-                  </g>
-                ) : null}
               </svg>
+
+              {/* Dynamic HTML Tooltip */}
+              {hoveredPoint && (
+                <Box
+                  sx={{
+                    position: "absolute",
+                    left: hoveredPoint.px,
+                    top: hoveredPoint.py - 12,
+                    transform: "translate(-50%, -100%)",
+                    bgcolor: "rgba(255, 255, 255, 0.92)",
+                    backdropFilter: "blur(8px)",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 2.5,
+                    p: 1.5,
+                    boxShadow: "0 6px 20px rgba(0,0,0,0.08)",
+                    pointerEvents: "none",
+                    zIndex: 10,
+                    minWidth: 240,
+                  }}
+                >
+                  <Stack spacing={0.8}>
+                    <Typography variant="caption" sx={{ fontWeight: 800, color: "primary.main", display: "block" }}>
+                      {hoveredPoint.label ?? hoveredPoint.vectorItemId}
+                    </Typography>
+                    <Divider />
+                    <TooltipItem label="Type / ID" value={`${hoveredPoint.targetType ?? "-"} / ${hoveredPoint.sourceId ?? "-"}`} />
+                    {hoveredPoint.similarity != null && (
+                      <TooltipItem
+                        label="Score"
+                        value={formatNumber(hoveredPoint.similarity)}
+                        color={scoreColor(hoveredPoint.similarity)}
+                        highlight
+                      />
+                    )}
+                    <TooltipItem label="Tokens" value={hoveredPoint.tokenCount?.toLocaleString() ?? "-"} />
+                    <TooltipItem
+                      label="Context"
+                      value={
+                        hoveredPoint.contextIncluded == null
+                          ? "-"
+                          : hoveredPoint.contextIncluded
+                            ? "Included"
+                            : "Excluded"
+                      }
+                    />
+                    {chartModel.query && (
+                      <TooltipItem
+                        label="Distance"
+                        value={formatNumber(projectionDistance(chartModel.query, hoveredPoint))}
+                      />
+                    )}
+                    <TooltipItem label="Cluster" value={hoveredPoint.clusterId ?? "-"} />
+                    <TooltipItem label="Coords" value={`(${formatNumber(hoveredPoint.x)}, ${formatNumber(hoveredPoint.y)})`} />
+                  </Stack>
+                </Box>
+              )}
             </Box>
           ) : (
             <Box
@@ -1774,10 +2200,11 @@ export function VectorVisualizationPage() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                border: 1,
+                border: "1px solid",
                 borderColor: "divider",
-                borderRadius: 1,
+                borderRadius: 3,
                 color: "text.secondary",
+                bgcolor: "#ffffff",
               }}
             >
               {projectionPointError
@@ -1801,9 +2228,10 @@ export function VectorVisualizationPage() {
                 size="small"
                 label={`${type} ${count.toLocaleString()}`}
                 sx={{
-                  bgcolor: alpha(targetTypeColor(type), 0.1),
+                  bgcolor: alpha(targetTypeColor(type), 0.08),
                   color: targetTypeColor(type),
-                  borderColor: alpha(targetTypeColor(type), 0.35),
+                  borderColor: alpha(targetTypeColor(type), 0.25),
+                  fontWeight: 600,
                 }}
                 variant="outlined"
               />
@@ -1812,14 +2240,26 @@ export function VectorVisualizationPage() {
         </Box>
 
         {detailPanelOpen && selectedPoint ? (
-          <Paper variant="outlined" sx={{ p: 2, order: { xs: 2, lg: 2 } }}>
-            <Stack spacing={1.2}>
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2,
+              order: { xs: 2, lg: 2 },
+              borderRadius: 3,
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.04)",
+              border: "1px solid",
+              borderColor: "divider",
+            }}
+          >
+            <Stack spacing={1.6}>
               <Stack
                 direction="row"
                 alignItems="center"
                 justifyContent="space-between"
               >
-                <Typography variant="subtitle2">선택 항목 상세 정보</Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  선택 항목 상세 정보
+                </Typography>
                 <Stack direction="row" spacing={0.8} alignItems="center">
                   {detailLoading ? <CircularProgress size={18} /> : null}
                   <Tooltip title="상세 닫기">
@@ -1837,37 +2277,84 @@ export function VectorVisualizationPage() {
               </Stack>
               <Divider />
 
-              <Stack spacing={1.1}>
-                <Stack direction="row" spacing={1} alignItems="center">
+              <Stack spacing={1.2}>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, 1fr)",
+                    gap: 1.2,
+                  }}
+                >
                   {selectedPoint.rank ? (
-                    <Chip
-                      size="small"
-                      color="warning"
-                      label={`Top ${selectedPoint.rank}`}
-                    />
+                    <Card
+                      variant="outlined"
+                      sx={{
+                        p: 1.2,
+                        textAlign: "center",
+                        bgcolor: alpha("#ea580c", 0.04),
+                        borderColor: alpha("#ea580c", 0.25),
+                        boxShadow: "0 2px 4px rgba(234, 88, 12, 0.03)",
+                        borderRadius: 2,
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                        Rank
+                      </Typography>
+                      <Typography variant="h6" color="#ea580c" sx={{ fontWeight: 800 }}>
+                        #{selectedPoint.rank}
+                      </Typography>
+                    </Card>
                   ) : null}
                   {isFiniteNumber(selectedPoint.similarity) ? (
-                    <Chip
-                      size="small"
-                      color="primary"
-                      label={`Score ${formatNumber(selectedPoint.similarity)}`}
-                    />
+                    <Card
+                      variant="outlined"
+                      sx={{
+                        p: 1.2,
+                        textAlign: "center",
+                        bgcolor: alpha(scoreColor(selectedPoint.similarity), 0.04),
+                        borderColor: alpha(scoreColor(selectedPoint.similarity), 0.25),
+                        boxShadow: `0 2px 4px ${alpha(scoreColor(selectedPoint.similarity), 0.05)}`,
+                        borderRadius: 2,
+                      }}
+                    >
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                        Score
+                      </Typography>
+                      <Typography
+                        variant="h6"
+                        sx={{ fontWeight: 800, color: scoreColor(selectedPoint.similarity) }}
+                      >
+                        {formatNumber(selectedPoint.similarity)}
+                      </Typography>
+                    </Card>
                   ) : null}
+                </Box>
+
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
                   {selectedPoint.tokenCount != null ? (
                     <Chip
                       size="small"
-                      color="info"
                       label={`${selectedPoint.tokenCount.toLocaleString()} tokens`}
+                      sx={{ fontWeight: 600, bgcolor: "rgba(2, 132, 199, 0.1)", color: "#0284c7" }}
                     />
                   ) : null}
-                  {contextIncludedBadge(selectedPoint.contextIncluded)}
+                  {selectedPoint.contextIncluded != null ? (
+                    <Chip
+                      size="small"
+                      color={selectedPoint.contextIncluded ? "success" : "default"}
+                      label={selectedPoint.contextIncluded ? "Context Included" : "Context Excluded"}
+                      sx={{ fontWeight: 600 }}
+                    />
+                  ) : null}
                 </Stack>
+
                 <Typography
                   variant="subtitle1"
-                  sx={{ fontWeight: 700, wordBreak: "break-word" }}
+                  sx={{ fontWeight: 700, wordBreak: "break-word", mt: 1 }}
                 >
                   {selectedPoint.label ?? selectedPoint.vectorItemId}
                 </Typography>
+                
                 <DetailLine
                   label="Object Type"
                   value={selectedPoint.targetType ?? "-"}
@@ -1896,21 +2383,9 @@ export function VectorVisualizationPage() {
                     )}
                   />
                 ) : null}
-                <DetailLine
-                  label="Token Count"
-                  value={selectedPoint.tokenCount?.toLocaleString() ?? "-"}
-                />
-                <DetailLine
-                  label="Context"
-                  value={
-                    selectedPoint.contextIncluded == null
-                      ? "-"
-                      : selectedPoint.contextIncluded
-                        ? "CONTEXT INCLUDED"
-                        : "CONTEXT EXCLUDED"
-                  }
-                />
-                <Divider />
+
+                <Divider sx={{ my: 1 }} />
+                
                 {detail ? (
                   <>
                     <DetailLine
@@ -1933,47 +2408,90 @@ export function VectorVisualizationPage() {
                       label="Created"
                       value={formatDateTime(detail.createdAt)}
                     />
-                    <Typography variant="subtitle2">Chunk Text</Typography>
+                    
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mt: 1.5, mb: 0.5 }}>Chunk Text</Typography>
                     <Box
                       sx={{
                         maxHeight: 180,
                         overflow: "auto",
-                        border: 1,
+                        border: "1px solid",
                         borderColor: "divider",
-                        borderRadius: 1,
-                        p: 1,
-                        bgcolor: "action.hover",
+                        borderRadius: 2,
+                        p: 1.5,
+                        bgcolor: "#0f172a",
+                        color: "#f8fafc",
+                        fontFamily: "Consolas, Monaco, Courier New, monospace",
+                        fontSize: "12px",
+                        lineHeight: 1.5,
+                        "&::-webkit-scrollbar": {
+                          width: "6px",
+                          height: "6px",
+                        },
+                        "&::-webkit-scrollbar-track": {
+                          bgcolor: "transparent",
+                        },
+                        "&::-webkit-scrollbar-thumb": {
+                          bgcolor: "rgba(255, 255, 255, 0.15)",
+                          borderRadius: "3px",
+                          "&:hover": {
+                            bgcolor: "rgba(255, 255, 255, 0.25)",
+                          },
+                        },
                       }}
                     >
                       <Typography
                         variant="body2"
-                        sx={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+                        sx={{
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          fontFamily: "inherit",
+                          fontSize: "inherit",
+                        }}
                       >
                         {renderMetadata(detail.text)}
                       </Typography>
                     </Box>
-                    <BorderlessAccordion title="Metadata">
+
+                    <PremiumAccordion title="Metadata" defaultExpanded={false}>
                       <Box
                         component="pre"
                         sx={{
                           maxHeight: 150,
                           overflow: "auto",
                           m: 0,
-                          p: 1,
+                          p: 1.5,
                           fontSize: 12,
+                          fontFamily: "Consolas, Monaco, Courier New, monospace",
                           whiteSpace: "pre-wrap",
                           wordBreak: "break-word",
-                          bgcolor: "action.hover",
-                          borderRadius: 1,
+                          bgcolor: "#0f172a",
+                          color: "#f8fafc",
+                          borderRadius: 2,
+                          "&::-webkit-scrollbar": {
+                            width: "6px",
+                            height: "6px",
+                          },
+                          "&::-webkit-scrollbar-track": {
+                            bgcolor: "transparent",
+                          },
+                          "&::-webkit-scrollbar-thumb": {
+                            bgcolor: "rgba(255, 255, 255, 0.15)",
+                            borderRadius: "3px",
+                            "&:hover": {
+                              bgcolor: "rgba(255, 255, 255, 0.25)",
+                            },
+                          },
                         }}
                       >
                         {renderMetadata(detail.metadata)}
                       </Box>
-                    </BorderlessAccordion>
+                    </PremiumAccordion>
                   </>
                 ) : null}
-                <Divider />
-                <BorderlessAccordion
+
+                <Divider sx={{ my: 1 }} />
+                
+                <PremiumAccordion
                   title="유사 Chunk (검색 결과 기준)"
                   defaultExpanded
                 >
@@ -1984,22 +2502,53 @@ export function VectorVisualizationPage() {
                       </ListItem>
                     ) : (
                       neighborRows.map((row) => (
-                        <ListItemButton
+                        <ListItem
                           key={row.vectorItemId}
-                          onClick={() => selectVectorItem(row.vectorItemId)}
-                          sx={{ borderRadius: 1 }}
+                          disablePadding
+                          secondaryAction={
+                            <Chip
+                              size="small"
+                              label={formatNumber(row.similarity)}
+                              sx={{
+                                height: 18,
+                                fontSize: "10px",
+                                fontWeight: 700,
+                                bgcolor: alpha(scoreColor(row.similarity), 0.1),
+                                color: scoreColor(row.similarity),
+                                borderColor: scoreColor(row.similarity),
+                              }}
+                              variant="outlined"
+                            />
+                          }
+                          sx={{ mb: 1 }}
                         >
-                          <ListItemText
-                            primary={`${row.rank}. ${row.label ?? row.sourceId ?? row.vectorItemId}`}
-                            secondary={`${row.targetType ?? "-"} · score ${formatNumber(row.similarity)} · distance ${formatNumber(row.distance)}`}
-                            primaryTypographyProps={{ noWrap: true }}
-                            secondaryTypographyProps={{ noWrap: true }}
-                          />
-                        </ListItemButton>
+                          <ListItemButton
+                            onClick={() => selectVectorItem(row.vectorItemId)}
+                            sx={{
+                              borderRadius: 2,
+                              border: "1px solid",
+                              borderColor: "divider",
+                              pr: 7,
+                              transition: "all 0.2s ease",
+                              "&:hover": {
+                                transform: "translateX(4px)",
+                                bgcolor: "action.hover",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                              },
+                            }}
+                          >
+                            <ListItemText
+                              primary={`${row.rank}. ${row.label ?? row.sourceId ?? row.vectorItemId}`}
+                              secondary={`${row.targetType ?? "-"} · dist ${formatNumber(row.distance)}`}
+                              primaryTypographyProps={{ noWrap: true, variant: "body2", sx: { fontWeight: 600 } }}
+                              secondaryTypographyProps={{ noWrap: true, variant: "caption" }}
+                            />
+                          </ListItemButton>
+                        </ListItem>
                       ))
                     )}
                   </List>
-                </BorderlessAccordion>
+                </PremiumAccordion>
               </Stack>
             </Stack>
           </Paper>
@@ -2183,7 +2732,8 @@ function SummaryMetric({
   return (
     <Box
       sx={{
-        minWidth: wide ? { xs: "100%", md: 220 } : 116,
+        minWidth: wide ? 200 : 110,
+        flexShrink: 0,
         px: 1.4,
         py: 0.8,
         borderLeft: 1,
@@ -2200,7 +2750,7 @@ function SummaryMetric({
   );
 }
 
-function BorderlessAccordion({
+function PremiumAccordion({
   title,
   children,
   defaultExpanded = false,
@@ -2215,27 +2765,47 @@ function BorderlessAccordion({
       elevation={0}
       defaultExpanded={defaultExpanded}
       sx={{
-        bgcolor: "transparent",
+        bgcolor: "background.paper",
+        borderRadius: 2,
+        border: "1px solid",
+        borderColor: "divider",
+        mb: 1.2,
+        overflow: "hidden",
+        transition: "box-shadow 0.2s ease, border-color 0.2s ease",
         "&:before": { display: "none" },
+        "&:hover": {
+          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+          borderColor: "primary.light",
+        },
+        "&.Mui-expanded": {
+          boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+        },
         "& .MuiAccordionSummary-root": {
-          minHeight: 32,
-          px: 0,
+          minHeight: 40,
+          px: 2,
+          bgcolor: "rgba(248, 250, 252, 0.35)",
+          "&:hover": {
+            bgcolor: "rgba(241, 245, 249, 0.6)",
+          },
+          transition: "background-color 0.2s ease",
         },
         "& .MuiAccordionSummary-content": {
-          my: 0.4,
+          my: 1,
         },
         "& .MuiAccordionDetails-root": {
-          px: 0,
-          pt: 0.4,
-          pb: 0,
+          px: 2,
+          pt: 1.5,
+          pb: 2,
+          bgcolor: "transparent",
+          borderTop: "1px solid",
+          borderColor: "divider",
         },
       }}
     >
-      <AccordionSummary expandIcon={<ExpandMoreOutlined fontSize="small" />}>
+      <AccordionSummary expandIcon={<ExpandMoreOutlined fontSize="small" color="primary" />}>
         <Typography
           variant="caption"
-          color="text.secondary"
-          sx={{ fontWeight: 800, textTransform: "uppercase" }}
+          sx={{ fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px", color: "text.primary" }}
         >
           {title}
         </Typography>

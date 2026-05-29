@@ -1,36 +1,42 @@
 .react-grid-host {
   width: 100%;
   height: 100%;
-  --ag-header-column-separator-display: block;
-  --ag-header-column-separator-height: 60%;
-  --ag-header-column-separator-width: 1px;
+  --ag-header-column-separator-display: none;
 }
 
 .react-grid-host .ag-root-wrapper {
-  border-radius: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.01);
+  transition: all 200ms ease;
+}
+
+[data-theme-mode="dark"] .react-grid-host .ag-root-wrapper {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .react-grid-host .ag-header,
 .react-grid-host .ag-header-row {
-  min-height: 44px;
+  min-height: 48px;
 }
 
 .react-grid-host .ag-header-cell,
 .react-grid-host .ag-cell {
   display: flex;
   align-items: center;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
 .react-grid-host .ag-header-cell {
   padding-top: 0;
   padding-bottom: 0;
-  border-right: 1px solid var(--ag-header-column-separator-color);
+  border-right: none;
 }
 
 .react-grid-host .ag-header-cell-label,
 .react-grid-host .ag-header-cell-text {
-  font-weight: 400;
+  font-weight: 600;
 }
 
 .react-grid-host .ag-header-cell:last-child {
@@ -128,6 +134,7 @@
   display: block;
   flex: 0 0 auto;
   vertical-align: middle;
+  accent-color: #2563eb;
 }
 
 .react-grid-host input[type="checkbox"][aria-label="전체 선택"] {
@@ -153,6 +160,12 @@
   align-items: center;
   gap: 8px;
   border-top: 1px solid var(--ag-border-color);
+  font-size: 12.5px;
+  background-color: rgba(0, 0, 0, 0.005);
+}
+
+[data-theme-mode="dark"] .react-grid-host .ag-paging-panel {
+  background-color: rgba(255, 255, 255, 0.01);
 }
 
 .react-grid-host .ag-paging-row-summary-panel,

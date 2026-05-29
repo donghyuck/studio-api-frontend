@@ -16,6 +16,7 @@ import {
   SearchOutlined,
 } from "@mui/icons-material";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface Props {
   breadcrumbs?: string[];
@@ -33,6 +34,7 @@ interface Props {
   searchValue?: string;
   onSearchValueChange?: (value: string) => void;
   onSearch?: (value: string) => void;
+  hasGrid?: boolean;
 }
 
 export function PageToolbar({
@@ -43,7 +45,7 @@ export function PageToolbar({
   prepend,
   closeable = false,
   previous = false,
-  divider = false,
+  divider,
   onPrevious,
   onRefresh,
   onClose,
@@ -51,9 +53,18 @@ export function PageToolbar({
   searchValue = "",
   onSearchValueChange,
   onSearch,
+  hasGrid = false,
 }: Props) {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
+  const showDivider = divider !== undefined ? divider : !hasGrid;
+  const mbValue = hasGrid ? 2 : 3;
+
+  useEffect(() => {
+    setPortalTarget(document.getElementById("layout-breadcrumbs-portal"));
+  }, []);
 
   useEffect(() => {
     if (!searchOpen) {
@@ -67,22 +78,41 @@ export function PageToolbar({
     onSearch?.(searchValue);
   }
 
+  const breadcrumbsContent = breadcrumbs?.length ? (
+    <Breadcrumbs
+      separator="›"
+      sx={{
+        "& .MuiBreadcrumbs-separator": {
+          mx: 0.75,
+          opacity: 0.6,
+        },
+      }}
+    >
+      {breadcrumbs.map((item, index) => (
+        <Typography
+          key={`${item}-${index}`}
+          color={index === breadcrumbs.length - 1 ? "text.primary" : "text.secondary"}
+          sx={{
+            fontSize: 11,
+            fontWeight: index === breadcrumbs.length - 1 ? 600 : 500,
+            letterSpacing: "-0.01em",
+          }}
+        >
+          {item}
+        </Typography>
+      ))}
+    </Breadcrumbs>
+  ) : null;
+
   return (
-    <Stack spacing={0}>
+    <Stack spacing={0} sx={{ mb: mbValue }}>
+      {portalTarget && breadcrumbsContent
+        ? createPortal(breadcrumbsContent, portalTarget)
+        : !portalTarget
+        ? breadcrumbsContent
+        : null}
+
       <Stack spacing={1}>
-        {breadcrumbs?.length ? (
-          <Breadcrumbs separator="›" sx={{ fontSize: 12 }}>
-            {breadcrumbs.map((item, index) => (
-              <Typography
-                key={`${item}-${index}`}
-                color={index === breadcrumbs.length - 1 ? "text.primary" : "text.secondary"}
-                fontSize={12}
-              >
-                {item}
-              </Typography>
-            ))}
-          </Breadcrumbs>
-        ) : null}
 
         <Box
           sx={{
@@ -93,10 +123,20 @@ export function PageToolbar({
             gap: 2,
           }}
         >
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
             {previous ? (
               <Tooltip title="이전">
-                <IconButton size="small" onClick={onPrevious}>
+                <IconButton
+                  size="small"
+                  onClick={onPrevious}
+                  sx={{
+                    transition: "transform 200ms ease",
+                    "&:hover": {
+                      transform: "translateX(-3px) scale(1.08)",
+                      color: "primary.main",
+                    },
+                  }}
+                >
                   <ArrowBackOutlined fontSize="small" />
                 </IconButton>
               </Tooltip>
@@ -104,12 +144,18 @@ export function PageToolbar({
             {prepend}
             <Box sx={{ minWidth: 0 }}>
               {title ? (
-                <Typography variant="h5" noWrap>
+                <Typography variant="h5" noWrap fontWeight={700}>
                   {title}
                 </Typography>
               ) : null}
               {label ? (
-                <Typography variant="caption" color="text.secondary" display="block" noWrap>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  display="block"
+                  noWrap
+                  sx={{ fontSize: 12, mt: 0.25 }}
+                >
                   {label}
                 </Typography>
               ) : null}
@@ -123,7 +169,12 @@ export function PageToolbar({
             flexShrink={0}
             sx={{
               "& .MuiIconButton-root": {
-                ml: 0,
+                ml: 0.5,
+                transition: "all 150ms cubic-bezier(0.4, 0, 0.2, 1)",
+                "&:hover": {
+                  transform: "scale(1.08)",
+                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                },
               },
             }}
           >
@@ -136,7 +187,7 @@ export function PageToolbar({
                   ml: searchOpen ? 1.5 : 0,
                   mr: searchOpen ? 1.5 : 0,
                   overflow: "hidden",
-                  transition: "all 160ms ease",
+                  transition: "all 250ms cubic-bezier(0.4, 0, 0.2, 1)",
                 }}
               >
                 <TextField
@@ -156,6 +207,27 @@ export function PageToolbar({
                   }}
                   onBlur={() => {
                     window.setTimeout(() => setSearchOpen(false), 120);
+                  }}
+                  sx={{
+                    "& .MuiOutlinedInput-root": {
+                      borderRadius: "8px",
+                      bgcolor: (theme) =>
+                        theme.palette.mode === "dark"
+                          ? "rgba(255, 255, 255, 0.03)"
+                          : "rgba(0, 0, 0, 0.02)",
+                      transition: "all 150ms ease",
+                      "&:hover": {
+                        bgcolor: (theme) =>
+                          theme.palette.mode === "dark"
+                            ? "rgba(255, 255, 255, 0.05)"
+                            : "rgba(0, 0, 0, 0.03)",
+                      },
+                      "&.Mui-focused": {
+                        boxShadow: (theme) =>
+                          `0 0 0 3px ${alpha(theme.palette.primary.main, 0.16)}`,
+                        borderColor: "primary.main",
+                      },
+                    },
                   }}
                   InputProps={{
                     endAdornment: (
@@ -192,8 +264,16 @@ export function PageToolbar({
         </Box>
       </Stack>
 
-      {divider ? (
-        <Divider sx={{ mt: "4px", borderColor: (theme) => alpha(theme.palette.divider, 0.9) }} />
+      {showDivider ? (
+        <Divider
+          sx={{
+            mt: 1.5,
+            borderColor: (theme) =>
+              theme.palette.mode === "dark"
+                ? "rgba(255, 255, 255, 0.08)"
+                : "rgba(0, 0, 0, 0.06)",
+          }}
+        />
       ) : null}
     </Stack>
   );

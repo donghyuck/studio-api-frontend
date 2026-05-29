@@ -384,7 +384,7 @@ export function WorkspaceListPage() {
   return (
     <Stack spacing={0.5}>
       <PageToolbar
-        divider={false}
+        hasGrid
         breadcrumbs={["애플리케이션", "작업공간"]}
         label="작업공간 tree와 멤버 권한을 관리합니다."
         searchPlaceholder="이름, slug, path 검색"

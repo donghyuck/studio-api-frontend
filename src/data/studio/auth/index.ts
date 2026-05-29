@@ -1,4 +1,4 @@
-import { useAuthStore } from "@/stores/studio/mgmt/auth.store";
+import { authStore } from "@/react/auth/store";
 import { api } from "@/data/http";
 import type { MeProfileDto, MeProfilePatchRequest, PasswordPolicyDto } from "@/types/studio/user";
 
@@ -37,10 +37,9 @@ export function patchSelfProfile(payload: MeProfilePatchRequest) {
 }
 
 export function authHeader(): Record<string, string> {
-  // return authorization header with jwt token
-  const auth = useAuthStore();
-  if (auth?.token) {
-    return { Authorization: "Bearer " + auth.token };
+  const token = authStore.getState().token;
+  if (token) {
+    return { Authorization: "Bearer " + token };
   } else {
     return {};
   }
