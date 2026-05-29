@@ -24,6 +24,8 @@ interface Props {
   label?: string;
   actions?: React.ReactNode;
   prepend?: React.ReactNode;
+  createButton?: React.ReactNode;
+  filterActions?: React.ReactNode;
   closeable?: boolean;
   previous?: boolean;
   divider?: boolean;
@@ -43,6 +45,8 @@ export function PageToolbar({
   label,
   actions,
   prepend,
+  createButton,
+  filterActions,
   closeable = false,
   previous = false,
   divider,
@@ -160,6 +164,11 @@ export function PageToolbar({
                 </Typography>
               ) : null}
             </Box>
+            {createButton ? (
+              <Box sx={{ ml: 1.5, display: "flex", alignItems: "center", flexShrink: 0 }}>
+                {createButton}
+              </Box>
+            ) : null}
           </Stack>
 
           <Stack
@@ -179,6 +188,11 @@ export function PageToolbar({
             }}
           >
             {actions}
+            {filterActions ? (
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: actions ? 1.5 : 0, flexShrink: 0 }}>
+                {filterActions}
+              </Stack>
+            ) : null}
             {onSearch ? (
               <Box
                 sx={{

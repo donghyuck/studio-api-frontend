@@ -187,7 +187,7 @@ export function RolesPage() {
   return (
     <Stack spacing={0.5}>
       <PageToolbar
-        divider={false}
+        hasGrid
         breadcrumbs={["시스템관리", "보안관리", "역할"]}
         label="역할을 검색하고 사용자/그룹 할당을 관리합니다."
         onRefresh={handleRefresh}
@@ -195,12 +195,23 @@ export function RolesPage() {
         searchValue={searchInput}
         onSearchValueChange={setSearchInput}
         onSearch={handleSearch}
-        actions={
-          <Tooltip title="역할 생성">
-            <IconButton size="small" aria-label="역할 생성" onClick={() => setCreateOpen(true)}>
-              <AddOutlined fontSize="small" />
-            </IconButton>
-          </Tooltip>
+        createButton={
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddOutlined fontSize="small" />}
+            onClick={() => setCreateOpen(true)}
+            sx={{
+              height: 32,
+              px: 1.5,
+              borderRadius: "6px",
+              textTransform: "none",
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            생성
+          </Button>
         }
       />
 

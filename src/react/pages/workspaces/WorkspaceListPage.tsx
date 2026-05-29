@@ -8,12 +8,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  IconButton,
   Menu,
   MenuItem,
   Stack,
   TextField,
-  Tooltip,
 } from "@mui/material";
 import { AddOutlined } from "@mui/icons-material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
@@ -392,8 +390,26 @@ export function WorkspaceListPage() {
         onSearchValueChange={setKeywordInput}
         onSearch={applyFilters}
         onRefresh={handleRefresh}
-        actions={
-          <Stack direction="row" spacing={1.25} alignItems="center">
+        createButton={
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddOutlined fontSize="small" />}
+            onClick={() => setCreateOpen(true)}
+            sx={{
+              height: 32,
+              px: 1.5,
+              borderRadius: "6px",
+              textTransform: "none",
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            생성
+          </Button>
+        }
+        filterActions={
+          <>
             <Button
               variant="outlined"
               size="small"
@@ -442,23 +458,7 @@ export function WorkspaceListPage() {
             >
               Company: {selectedCompanyLabel}
             </Button>
-            <Button
-              variant="contained"
-              size="small"
-              startIcon={<AddOutlined fontSize="small" />}
-              onClick={() => setCreateOpen(true)}
-              sx={{
-                height: 32,
-                px: 1.5,
-                borderRadius: "6px",
-                textTransform: "none",
-                fontSize: 12.5,
-                fontWeight: 600,
-              }}
-            >
-              생성
-            </Button>
-          </Stack>
+          </>
         }
       />
       <PageableGridContent<WorkspaceRef>

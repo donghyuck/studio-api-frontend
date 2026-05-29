@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, Avatar, Box, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { Alert, Avatar, Box, Button, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
@@ -541,26 +541,37 @@ export function FilesPage() {
           searchValue={keyword}
           onSearchValueChange={setKeyword}
           onSearch={applyFilters}
+          createButton={
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<UploadFileIcon fontSize="small" />}
+              onClick={() => setDialogOpen(true)}
+              sx={{
+                height: 32,
+                px: 1.5,
+                borderRadius: "6px",
+                textTransform: "none",
+                fontSize: 12.5,
+                fontWeight: 600,
+              }}
+            >
+              업로드
+            </Button>
+          }
           actions={
-            <>
-              <Tooltip title="새로운 파일 업로드">
-                <IconButton size="small" onClick={() => setDialogOpen(true)}>
-                  <UploadFileIcon fontSize="small" />
+            <Tooltip title={selectedCount > 0 ? "선택 삭제" : "삭제할 파일을 선택하세요"}>
+              <span>
+                <IconButton
+                  size="small"
+                  color="error"
+                  disabled={selectedCount === 0}
+                  onClick={() => void handleDeleteSelected()}
+                >
+                  <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title={selectedCount > 0 ? "선택 삭제" : "삭제할 파일을 선택하세요"}>
-                <span>
-                  <IconButton
-                    size="small"
-                    color="error"
-                    disabled={selectedCount === 0}
-                    onClick={() => void handleDeleteSelected()}
-                  >
-                    <DeleteOutlineIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </>
+              </span>
+            </Tooltip>
           }
         />
 

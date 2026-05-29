@@ -338,12 +338,23 @@ export function CompanyListPage() {
         onSearchValueChange={setSearchInput}
         onSearch={handleSearch}
         onRefresh={handleRefresh}
-        actions={
-          <Tooltip title="Company 생성">
-            <IconButton size="small" onClick={() => setCreateOpen(true)}>
-              <AddOutlined fontSize="small" />
-            </IconButton>
-          </Tooltip>
+        createButton={
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddOutlined fontSize="small" />}
+            onClick={() => setCreateOpen(true)}
+            sx={{
+              height: 32,
+              px: 1.5,
+              borderRadius: "6px",
+              textTransform: "none",
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            생성
+          </Button>
         }
       />
       {loadError ? <Alert severity="error">{loadError}</Alert> : null}
