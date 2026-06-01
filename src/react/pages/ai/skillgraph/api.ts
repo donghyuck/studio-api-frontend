@@ -829,13 +829,31 @@ export const skillGraphApi = {
   async createProjection(data: {
     projectionId?: string;
     limit?: number;
+    skillType?: string;
+    projectionType?: string;
     reductionAlgorithm?: "UMAP" | "PCA" | string;
+    projectionDimension?: number;
     clusteringAlgorithm?: "HDBSCAN" | string;
     embeddingProvider?: string;
     embeddingModel?: string;
     embeddingDimension?: number;
+    parameters?: string;
   }) {
     return apiRequest<SkillGraphBatchJobEvent>("post", `${VISUALIZATION_BASE}/projections`, { data });
+  },
+
+  listClusterItems(projectionId: string) {
+    return apiRequest<SkillCluster[] | SkillGraphPageResponse<SkillCluster>>(
+      "get",
+      `${VISUALIZATION_BASE}/projections/${encodeURIComponent(projectionId)}/clusters`
+    );
+  },
+
+  listClusterMembers(projectionId: string, clusterId: string) {
+    return apiRequest<SkillClusterMember[] | SkillGraphPageResponse<SkillClusterMember>>(
+      "get",
+      `${VISUALIZATION_BASE}/projections/${encodeURIComponent(projectionId)}/clusters/${encodeURIComponent(clusterId)}/members`
+    );
   },
 
   listRelations(params?: SkillGraphListParams & { skillId?: string | number; depth?: number; relationType?: SkillRelationType | "" }) {
@@ -991,6 +1009,31 @@ export const skillGraphApi = {
   },
 };
 
+export interface SkillCluster {
+  clusterId: string;
+  label: string | null;
+  algorithm: string;
+  itemCount: number;
+  skillType: string | null;
+  jobId: string | null;
+  clusterLabel: number | null;
+  representativeSkillIds: string[];
+  centroidProjectionId: string | null;
+  confidence: number | null;
+  metadata: string | null;
+  createdAt: string;
+}
+
+export interface SkillClusterMember {
+  clusterId: string;
+  skillId: string;
+  embeddingId: string | null;
+  projectionId: string;
+  membershipScore: number;
+  distanceToCentroid: number;
+  representative: boolean;
+}
+
 export interface SkillClusterResponse {
   projectionId?: string;
   itemCount?: number;
@@ -1000,13 +1043,7 @@ export interface SkillClusterResponse {
   embeddingProvider?: string;
   embeddingModel?: string;
   embeddingDimension?: number;
-  clusters?: Array<{
-    clusterId: string;
-    label?: string;
-    algorithm?: string;
-    itemCount?: number;
-    createdAt?: string;
-  }>;
+  clusters?: SkillCluster[];
   points?: import("@/types/studio/skillgraph").SkillClusterPoint[];
   content?: import("@/types/studio/skillgraph").SkillClusterPoint[];
   items?: import("@/types/studio/skillgraph").SkillClusterPoint[];
@@ -1024,6 +1061,11 @@ export interface SkillGraphProjectionSummary {
   embeddingDimension?: number;
   itemCount?: number;
   clusterCount?: number;
+  skillType?: string | null;
+  jobId?: string | null;
+  projectionType?: string | null;
+  projectionDimension?: number | null;
+  metadata?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }

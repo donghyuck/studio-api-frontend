@@ -91,6 +91,8 @@ import {
   type SkillDictionaryEmbeddingJobStatus,
   type SkillGraphBatchJobEvent,
   type SkillGraphProjectionSummary,
+  type SkillCluster,
+  type SkillClusterMember,
 } from "@/react/pages/ai/skillgraph/api";
 import {
   DetailDrawer,
@@ -4748,6 +4750,10 @@ interface ClusterSummary {
   label: string;
   itemCount: number;
   noise: boolean;
+  representativeSkillIds?: string[];
+  confidence?: number | null;
+  metadata?: string | null;
+  algorithm?: string;
 }
 
 interface DraftSaveResult {
@@ -4774,6 +4780,11 @@ export function SkillGraphCategoriesPage() {
     embeddingProvider: "kure",
     embeddingModel: "nlpai-lab/KURE-v1",
     embeddingDimension: 1024,
+    skillType: "",
+    projectionType: "CLUSTERING",
+    projectionDimension: 2,
+    limit: 1000,
+    parameters: "",
   });
   const [clusterGenerationJobId, setClusterGenerationJobId] = useState("");
   const [categoryDrafts, setCategoryDrafts] = useState<CategoryDraft[]>([]);
@@ -4811,7 +4822,50 @@ export function SkillGraphCategoriesPage() {
   const projectionPoints = pointsFrom(projectionPointsQuery.data);
   const noisePointCount = projectionPoints.filter(isNoisePoint).length;
   const visibleProjectionPoints = showNoisePoints ? projectionPoints : projectionPoints.filter((point) => !isNoisePoint(point));
-  const clusterSummaries = useMemo(() => clusterSummariesFrom(projectionPoints), [projectionPoints]);
+
+  const clustersQuery = useQuery({
+    queryKey: skillGraphQueryKeys.custom("category-clusters", selectedProjectionId),
+    queryFn: () => skillGraphApi.listClusterItems(selectedProjectionId),
+    enabled: Boolean(selectedProjectionId),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+  const clustersData = useMemo(() => {
+    return listFrom<SkillCluster>(clustersQuery.data);
+  }, [clustersQuery.data]);
+
+  const pointLookupMap = useMemo(() => {
+    const map = new Map<string, string>();
+    projectionPoints.forEach((point) => {
+      const id = String(point.skillId || point.targetId);
+      if (id && point.label) {
+        map.set(id, point.label);
+      }
+    });
+    return map;
+  }, [projectionPoints]);
+
+  const clusterSummaries = useMemo(() => {
+    const summaries = clusterSummariesFrom(projectionPoints);
+    const clustersMap = new Map<string, SkillCluster>();
+    clustersData.forEach((c) => {
+      clustersMap.set(String(c.clusterId), c);
+    });
+
+    return summaries.map((s) => {
+      const detail = clustersMap.get(s.clusterId);
+      if (detail) {
+        return {
+          ...s,
+          representativeSkillIds: detail.representativeSkillIds,
+          confidence: detail.confidence,
+          metadata: detail.metadata,
+          algorithm: detail.algorithm,
+        };
+      }
+      return s;
+    });
+  }, [projectionPoints, clustersData]);
 
   const categoryByClusterId = useMemo(() => {
     const map = new Map<string, SkillCategory>();
@@ -4860,19 +4914,17 @@ export function SkillGraphCategoriesPage() {
   }, [clusterSummaries]);
 
   const selectedCluster = clusterSummaries.find((cluster) => cluster.clusterId === selectedClusterId);
-  const representativeQuery = useQuery({
-    queryKey: skillGraphQueryKeys.custom("cluster-representatives", selectedProjectionId, selectedClusterId),
-    queryFn: () => skillGraphApi.listClusterRepresentatives(selectedProjectionId, selectedClusterId, {
-      page: 0,
-      size: 10,
-      sort: "representativeScore,desc",
-      includeNoise: false,
-    }),
+  const membersQuery = useQuery({
+    queryKey: skillGraphQueryKeys.custom("cluster-members", selectedProjectionId, selectedClusterId),
+    queryFn: () => skillGraphApi.listClusterMembers(selectedProjectionId, selectedClusterId),
     enabled: Boolean(selectedProjectionId && selectedClusterId),
     staleTime: 5 * 60 * 1000,
     gcTime: 15 * 60 * 1000,
   });
-  const representativeRows = listFrom<SkillClusterRepresentative>(representativeQuery.data);
+  const memberRows = useMemo(() => {
+    const rawList = listFrom<SkillClusterMember>(membersQuery.data);
+    return [...rawList].sort((a, b) => (a.distanceToCentroid ?? 0) - (b.distanceToCentroid ?? 0));
+  }, [membersQuery.data]);
   const hoveredPointSkillId = hoveredPoint?.skillId ?? hoveredPoint?.targetId;
   const hoveredPointSkillQuery = useQuery({
     queryKey: skillGraphQueryKeys.custom("projection-point-skill", hoverLookupSkillId),
@@ -4885,13 +4937,28 @@ export function SkillGraphCategoriesPage() {
     ? `${hoveredPointSkillQuery.data.skillName}\n${hoveredPointSkillQuery.data.normalizedName}\n${hoveredPointSkillQuery.data.skillId}`
     : undefined;
   const generateTaxonomyMutation = useMutation({
-    mutationFn: () => skillGraphApi.createProjection({
-      reductionAlgorithm: clusterGenerationForm.reductionAlgorithm,
-      clusteringAlgorithm: "HDBSCAN",
-      embeddingProvider: clusterGenerationForm.embeddingProvider.trim(),
-      embeddingModel: clusterGenerationForm.embeddingModel.trim(),
-      embeddingDimension: Number(clusterGenerationForm.embeddingDimension),
-    }),
+    mutationFn: () => {
+      const paramsText = clusterGenerationForm.parameters.trim();
+      if (paramsText) {
+        try {
+          JSON.parse(paramsText);
+        } catch (e) {
+          throw new Error("파라미터 설정이 올바른 JSON 형식이 아닙니다.", { cause: e });
+        }
+      }
+      return skillGraphApi.createProjection({
+        reductionAlgorithm: clusterGenerationForm.reductionAlgorithm,
+        clusteringAlgorithm: "HDBSCAN",
+        embeddingProvider: clusterGenerationForm.embeddingProvider.trim(),
+        embeddingModel: clusterGenerationForm.embeddingModel.trim(),
+        embeddingDimension: Number(clusterGenerationForm.embeddingDimension),
+        skillType: clusterGenerationForm.skillType || undefined,
+        projectionType: clusterGenerationForm.projectionType.trim() || undefined,
+        projectionDimension: Number(clusterGenerationForm.projectionDimension),
+        limit: Number(clusterGenerationForm.limit),
+        parameters: paramsText || undefined,
+      });
+    },
     onSuccess: (response) => {
       setClusterGenerationJobId(response.jobId ?? "");
       setTaxonomySaved(false);
@@ -5069,12 +5136,26 @@ export function SkillGraphCategoriesPage() {
   const clusterGenerationJob = clusterGenerationJobQuery.data;
   const clusterGenerationJobActive = generateTaxonomyMutation.isPending || isBatchJobActive(clusterGenerationJob?.status);
   const clusterGenerationProgress = batchJobProgress(clusterGenerationJob);
+  const parametersJsonValid = useMemo(() => {
+    const paramsText = clusterGenerationForm.parameters.trim();
+    if (!paramsText) return true;
+    try {
+      JSON.parse(paramsText);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [clusterGenerationForm.parameters]);
+
   const canGenerateClusterData = Boolean(
     canAdmin
     && !clusterGenerationJobActive
     && clusterGenerationForm.embeddingProvider.trim()
     && clusterGenerationForm.embeddingModel.trim()
     && Number(clusterGenerationForm.embeddingDimension) > 0
+    && Number(clusterGenerationForm.projectionDimension) > 0
+    && Number(clusterGenerationForm.limit) > 0
+    && parametersJsonValid
   );
   const workflowStep = (taxonomySaved || isTaxonomyAlreadySaved)
     ? 4
@@ -5308,11 +5389,11 @@ export function SkillGraphCategoriesPage() {
                        const selected = projections.find((projection) => projection.projectionId === value);
                        if (!selected) return "Projection 선택";
                        
+                       const condition = `${selected.skillType || "전체"} / ${selected.embeddingProvider || "-"} / ${selected.embeddingModel || "-"} / ${selected.reductionAlgorithm || "-"} / ${selected.algorithm || "HDBSCAN"}`;
                        const parts = [
                          selected.name || selected.projectionId,
                          `${numberValue(selected.itemCount)} items`,
-                         selected.reductionAlgorithm,
-                         selected.embeddingModel ? `모델: ${selected.embeddingProvider ? `${selected.embeddingProvider}/` : ""}${selected.embeddingModel}${selected.embeddingDimension ? `(${selected.embeddingDimension}d)` : ""}` : null,
+                         condition,
                          selected.status
                        ].filter(Boolean);
 
@@ -5325,19 +5406,23 @@ export function SkillGraphCategoriesPage() {
                      sx={{ width: "100%", minHeight: 40 }}
                   >
                     <MenuItem value="">Projection 선택</MenuItem>
-                    {projections.map((projection) => (
-                      <MenuItem key={projection.projectionId} value={projection.projectionId}>
-                        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%" }}>
-                          <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 120, fontWeight: 600 }}>
-                            {projection.name || projection.projectionId}
-                          </Typography>
-                          <Chip size="small" variant="outlined" label={`${numberValue(projection.itemCount)} items`} sx={{ height: 20 }} />
-                          {projection.reductionAlgorithm ? <Chip size="small" variant="outlined" label={projection.reductionAlgorithm} sx={{ height: 20 }} /> : null}
-                          {projection.embeddingModel ? <Chip size="small" variant="outlined" label={`${projection.embeddingModel}${projection.embeddingDimension ? `/${projection.embeddingDimension}` : ""}`} sx={{ height: 20, maxWidth: 220 }} /> : null}
-                          {projection.status ? <Chip size="small" label={projection.status} sx={{ height: 20 }} /> : null}
-                        </Stack>
-                      </MenuItem>
-                    ))}
+                    {projections.map((projection) => {
+                      const condition = `${projection.skillType || "전체"} / ${projection.embeddingProvider || "-"} / ${projection.embeddingModel || "-"} / ${projection.reductionAlgorithm || "-"} / ${projection.algorithm || "HDBSCAN"}`;
+                      return (
+                        <MenuItem key={projection.projectionId} value={projection.projectionId}>
+                          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%" }}>
+                            <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 120, fontWeight: 600 }}>
+                              {projection.name || projection.projectionId}
+                            </Typography>
+                            <Chip size="small" variant="outlined" label={`${numberValue(projection.itemCount)} items`} sx={{ height: 20 }} />
+                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 400 }}>
+                              {condition}
+                            </Typography>
+                            {projection.status ? <Chip size="small" label={projection.status} sx={{ height: 20 }} /> : null}
+                          </Stack>
+                        </MenuItem>
+                      );
+                    })}
                   </Select>
                   {projectionsQuery.isLoading ? <CircularProgress size={20} sx={{ flexShrink: 0 }} /> : null}
                 </Stack>
@@ -5354,7 +5439,7 @@ export function SkillGraphCategoriesPage() {
                 <Box
                   sx={{
                     display: "grid",
-                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1.2fr 1.2fr 2fr 1fr" },
+                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr", md: "1fr 1fr 1fr 1fr" },
                     gap: 2,
                     mb: 2,
                     alignItems: "end"
@@ -5409,6 +5494,83 @@ export function SkillGraphCategoriesPage() {
                       value={clusterGenerationForm.embeddingDimension}
                       onChange={(event) => setClusterGenerationForm((prev) => ({ ...prev, embeddingDimension: Number(event.target.value) }))}
                       inputProps={{ min: 1 }}
+                    />
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5, fontWeight: 500 }}>
+                      스킬 타입
+                    </Typography>
+                    <Select
+                      size="small"
+                      fullWidth
+                      value={clusterGenerationForm.skillType}
+                      onChange={(event) => setClusterGenerationForm((prev) => ({ ...prev, skillType: event.target.value }))}
+                    >
+                      <MenuItem value="">전체 (미지정)</MenuItem>
+                      <MenuItem value="TASK_SKILL">TASK_SKILL (태스크)</MenuItem>
+                      <MenuItem value="TECH_SKILL">TECH_SKILL (기술)</MenuItem>
+                      <MenuItem value="ROLE_SKILL">ROLE_SKILL (역할)</MenuItem>
+                    </Select>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5, fontWeight: 500 }}>
+                      용도 (Projection Type)
+                    </Typography>
+                    <Select
+                      size="small"
+                      fullWidth
+                      value={clusterGenerationForm.projectionType}
+                      onChange={(event) => setClusterGenerationForm((prev) => ({ ...prev, projectionType: event.target.value }))}
+                    >
+                      <MenuItem value="CLUSTERING">CLUSTERING (군집)</MenuItem>
+                      <MenuItem value="RECOMMENDATION">RECOMMENDATION (추천)</MenuItem>
+                      <MenuItem value="SEARCH">SEARCH (검색)</MenuItem>
+                      <MenuItem value="VISUALIZATION">VISUALIZATION (시각화)</MenuItem>
+                    </Select>
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5, fontWeight: 500 }}>
+                      차원축소 결과 차원
+                    </Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      type="number"
+                      value={clusterGenerationForm.projectionDimension}
+                      onChange={(event) => setClusterGenerationForm((prev) => ({ ...prev, projectionDimension: Number(event.target.value) }))}
+                      inputProps={{ min: 1 }}
+                    />
+                  </Box>
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5, fontWeight: 500 }}>
+                      제한 개수 (Limit)
+                    </Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      type="number"
+                      value={clusterGenerationForm.limit}
+                      onChange={(event) => setClusterGenerationForm((prev) => ({ ...prev, limit: Number(event.target.value) }))}
+                      inputProps={{ min: 1 }}
+                    />
+                  </Box>
+
+                  <Box sx={{ gridColumn: { xs: "span 1", sm: "span 2", md: "span 4" } }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5, fontWeight: 500 }}>
+                      실행 파라미터 (JSON)
+                    </Typography>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      multiline
+                      rows={3}
+                      value={clusterGenerationForm.parameters}
+                      onChange={(event) => setClusterGenerationForm((prev) => ({ ...prev, parameters: event.target.value }))}
+                      placeholder='예: { "n_neighbors": 15, "min_dist": 0.1 }'
+                      error={!parametersJsonValid}
+                      helperText={!parametersJsonValid ? "올바른 JSON 형식이 아닙니다." : ""}
+                      FormHelperTextProps={{ sx: { mx: 0 } }}
                     />
                   </Box>
                 </Box>
@@ -5993,6 +6155,43 @@ export function SkillGraphCategoriesPage() {
                                       />
                                     ) : null}
                                   </Stack>
+                                  {/* Additional cluster fields (confidence, representatives, metadata) */}
+                                  {!cluster.noise && (cluster.confidence != null || cluster.representativeSkillIds?.length || cluster.metadata) ? (
+                                    <Box sx={{ pl: 3.25, mt: 0.5 }}>
+                                      {cluster.representativeSkillIds && cluster.representativeSkillIds.length > 0 ? (
+                                        <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 11, fontStyle: "italic" }}>
+                                          대표 스킬: {(cluster.representativeSkillIds || []).map(id => pointLookupMap.get(String(id)) || id).slice(0, 3).join(", ")}
+                                          {cluster.representativeSkillIds.length > 3 ? " 외..." : ""}
+                                        </Typography>
+                                      ) : null}
+                                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5, flexWrap: "wrap", gap: 0.5 }}>
+                                        {cluster.confidence != null ? (
+                                          <Chip
+                                            size="small"
+                                            variant="outlined"
+                                            color={cluster.confidence > 0.7 ? "primary" : "default"}
+                                            label={`신뢰도: ${Math.round(cluster.confidence * 100)}%`}
+                                            sx={{ height: 16, fontSize: 9, px: 0.25 }}
+                                          />
+                                        ) : null}
+                                        {cluster.algorithm ? (
+                                          <Chip
+                                            size="small"
+                                            variant="outlined"
+                                            label={cluster.algorithm}
+                                            sx={{ height: 16, fontSize: 9, px: 0.25 }}
+                                          />
+                                        ) : null}
+                                        {cluster.metadata ? (
+                                          <Tooltip title={cluster.metadata}>
+                                            <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5, cursor: "help", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 120 }}>
+                                              {cluster.metadata}
+                                            </Typography>
+                                          </Tooltip>
+                                        ) : null}
+                                      </Stack>
+                                    </Box>
+                                  ) : null}
                                   {/* Relative Size Progress Bar */}
                                   {!cluster.noise && (
                                     <Box sx={{ pl: 3.25, pr: 1, width: "100%" }}>
@@ -6136,28 +6335,30 @@ export function SkillGraphCategoriesPage() {
 
                       {!selectedClusterId ? (
                         <EmptyState title="좌측에서 클러스터를 선택하세요." />
-                      ) : representativeQuery.error ? (
+                      ) : membersQuery.error ? (
                         <Alert severity="error">
-                          {resolveAxiosError(representativeQuery.error) || "대표 스킬 후보 조회에 실패했습니다."}
+                          {resolveAxiosError(membersQuery.error) || "클러스터 멤버 조회에 실패했습니다."}
                         </Alert>
-                      ) : representativeQuery.isLoading ? (
+                      ) : membersQuery.isLoading ? (
                         <LoadingState />
-                      ) : representativeRows.length === 0 ? (
-                        <EmptyState title="대표 스킬 후보가 없습니다." />
+                      ) : memberRows.length === 0 ? (
+                        <EmptyState title="클러스터 멤버가 없습니다." />
                       ) : (
                         <Stack spacing={1} sx={{ minHeight: 0, overflowY: "auto", pr: 0.5, flex: 1 }}>
-                          {representativeRows.map((representative, index) => (
+                          {memberRows.map((member, index) => (
                             <Paper
-                              key={representative.skillId}
+                              key={member.skillId}
                               variant="outlined"
                               sx={{
                                 p: 1.5,
                                 borderRadius: 2,
+                                border: member.representative ? "2px solid" : "1px solid",
+                                borderColor: member.representative ? "secondary.main" : "divider",
                                 transition: "all 0.2s ease",
                                 "&:hover": {
                                   transform: "translateY(-2px)",
                                   boxShadow: "0 4px 12px rgba(0,0,0,0.04)",
-                                  borderColor: "primary.light",
+                                  borderColor: member.representative ? "secondary.main" : "primary.light",
                                 }
                               }}
                             >
@@ -6167,8 +6368,8 @@ export function SkillGraphCategoriesPage() {
                                     size="small"
                                     label={`#${index + 1}`}
                                     sx={{
-                                      bgcolor: "primary.light",
-                                      color: "primary.contrastText",
+                                      bgcolor: member.representative ? "secondary.main" : "primary.light",
+                                      color: member.representative ? "secondary.contrastText" : "primary.contrastText",
                                       fontWeight: 700,
                                       width: 36,
                                       height: 20,
@@ -6176,31 +6377,31 @@ export function SkillGraphCategoriesPage() {
                                     }}
                                   />
                                   <Box sx={{ flex: 1, minWidth: 0 }}>
-                                    <Typography variant="body2" noWrap sx={{ fontWeight: 700, fontSize: 13.5 }}>
-                                      {representative.skillName}
+                                    <Typography variant="body2" noWrap sx={{ fontWeight: member.representative ? 800 : 700, fontSize: 13.5 }}>
+                                      {pointLookupMap.get(String(member.skillId)) || member.skillId}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" noWrap sx={{ fontSize: 11.5 }}>
-                                      {representative.normalizedName}
+                                      ID: {member.skillId}
                                     </Typography>
                                   </Box>
-                                  <Stack direction="row" spacing={0.5}>
+                                  <Stack direction="row" spacing={0.5} alignItems="center">
+                                    {member.representative ? (
+                                      <Chip size="small" color="secondary" label="대표" sx={{ height: 18, fontSize: 9.5, fontWeight: 700 }} />
+                                    ) : null}
                                     <Tooltip title="중심점과의 거리 (작을수록 중심에 가까움)">
-                                      <Chip size="small" variant="outlined" label={`dist: ${representative.centroidDistance.toFixed(3)}`} sx={{ height: 18, fontSize: 9.5, px: 0.25, fontWeight: 500 }} />
-                                    </Tooltip>
-                                    <Tooltip title="스킬 출현 빈도">
-                                      <Chip size="small" variant="outlined" label={`occ: ${numberValue(representative.occurrenceCount)}`} sx={{ height: 18, fontSize: 9.5, px: 0.25, fontWeight: 500 }} />
+                                      <Chip size="small" variant="outlined" label={`dist: ${member.distanceToCentroid != null ? member.distanceToCentroid.toFixed(3) : "-"}`} sx={{ height: 18, fontSize: 9.5, px: 0.25, fontWeight: 500 }} />
                                     </Tooltip>
                                   </Stack>
                                 </Stack>
 
-                                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2, pt: 0.5, borderTop: "1px dashed rgba(0,0,0,0.06)" }}>
+                                <Box sx={{ display: "grid", gridTemplateColumns: "1fr", gap: 2, pt: 0.5, borderTop: "1px dashed rgba(0,0,0,0.06)" }}>
                                   <Box>
                                     <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.25 }}>
                                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10.5, fontWeight: 600 }}>
-                                        대표 적합도
+                                        멤버십 스코어 (군집 적합도)
                                       </Typography>
                                       <Typography variant="caption" sx={{ fontWeight: 700, fontSize: 11, color: "primary.main" }}>
-                                        {representative.representativeScore == null ? "-" : `${Math.round(representative.representativeScore * 100)}%`}
+                                        {member.membershipScore == null ? "-" : `${Math.round(member.membershipScore * 100)}%`}
                                       </Typography>
                                     </Stack>
                                     <Box sx={{ height: 6, bgcolor: "rgba(0, 0, 0, 0.04)", borderRadius: 3, overflow: "hidden" }}>
@@ -6209,29 +6410,7 @@ export function SkillGraphCategoriesPage() {
                                           height: "100%",
                                           borderRadius: 3,
                                           bgcolor: "primary.main",
-                                          width: `${Math.min(100, Math.round((representative.representativeScore ?? 0) * 100))}%`,
-                                          transition: "width 0.4s ease-out"
-                                        }}
-                                      />
-                                    </Box>
-                                  </Box>
-
-                                  <Box>
-                                    <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.25 }}>
-                                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10.5, fontWeight: 600 }}>
-                                        신뢰도
-                                      </Typography>
-                                      <Typography variant="caption" sx={{ fontWeight: 700, fontSize: 11, color: "success.main" }}>
-                                        {representative.confidenceScore == null ? "-" : `${Math.round(representative.confidenceScore * 100)}%`}
-                                      </Typography>
-                                    </Stack>
-                                    <Box sx={{ height: 6, bgcolor: "rgba(0, 0, 0, 0.04)", borderRadius: 3, overflow: "hidden" }}>
-                                      <Box
-                                        sx={{
-                                          height: "100%",
-                                          borderRadius: 3,
-                                          bgcolor: "success.main",
-                                          width: `${Math.min(100, Math.round((representative.confidenceScore ?? 0) * 100))}%`,
+                                          width: `${Math.min(100, Math.round((member.membershipScore ?? 0) * 100))}%`,
                                           transition: "width 0.4s ease-out"
                                         }}
                                       />
