@@ -79,7 +79,8 @@ function WorkspaceCreateDialog({
     slug: "",
     visibility: "PRIVATE",
   });
-  const valid = form.companyId && form.name.trim() && form.slug.trim();
+  const slugRegex = /^[a-z0-9][a-z0-9-]*$/;
+  const valid = form.companyId && form.name.trim() && slugRegex.test(form.slug);
 
   useEffect(() => {
     if (!open) return;
@@ -142,6 +143,12 @@ function WorkspaceCreateDialog({
             size="small"
             value={form.slug}
             onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))}
+            error={Boolean(form.slug && !slugRegex.test(form.slug))}
+            helperText={
+              form.slug && !slugRegex.test(form.slug)
+                ? "소문자 영문, 숫자, 하이픈(-)만 사용 가능하며 첫 글자는 영문 또는 숫자여야 합니다."
+                : "영문 소문자, 숫자, 하이픈(-)만 허용 (예: my-workspace)"
+            }
             fullWidth
           />
           <TextField
