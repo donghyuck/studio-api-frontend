@@ -1155,7 +1155,7 @@ export function RagJobDetailPage() {
           if (effProfileId) {
             return o.profileId === effProfileId;
           }
-          return o.provider === effProvider && o.model === effModel && !o.profileId;
+          return o.provider === effProvider && o.model === effModel;
         });
 
         if (matched) {
@@ -1169,6 +1169,12 @@ export function RagJobDetailPage() {
       setSelectedOption(defaultOpt);
     }
   }, [job, chunks, embeddingOptions]);
+
+  useEffect(() => {
+    if (originalOption) {
+      setSelectedOption(originalOption);
+    }
+  }, [originalOption]);
 
   useEffect(() => {
     if (retryConfirmOpen && originalOption) {
