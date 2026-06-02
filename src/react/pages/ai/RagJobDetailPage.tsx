@@ -1289,6 +1289,32 @@ export function RagJobDetailPage() {
         filter: false,
         valueGetter: (params) => chunkPosition(params.data),
         tooltipValueGetter: (params) => describeChunk(params.data),
+        cellRenderer: (params: { data?: RagIndexChunkDto }) => {
+          const value = chunkPosition(params.data);
+          return (
+            <Typography
+              variant="body2"
+              sx={{
+                color: "primary.main",
+                cursor: "pointer",
+                textDecoration: "underline",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+                display: "inline-block",
+                width: "100%",
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (params.data) {
+                  setSelectedChunk(params.data);
+                }
+              }}
+            >
+              {value}
+            </Typography>
+          );
+        },
       },
       {
         field: "page",
