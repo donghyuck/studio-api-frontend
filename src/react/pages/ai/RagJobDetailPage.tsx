@@ -1160,15 +1160,21 @@ export function RagJobDetailPage() {
 
         if (matched) {
           setOriginalOption(matched);
-          setSelectedOption((current) => current || matched);
+          setSelectedOption(matched);
           return;
         }
       }
 
       const defaultOpt = embeddingOptions.find((o) => o.defaultProfile) || embeddingOptions.find((o) => o.defaultProvider) || embeddingOptions[0] || null;
-      setSelectedOption((current) => current || defaultOpt);
+      setSelectedOption(defaultOpt);
     }
   }, [job, chunks, embeddingOptions]);
+
+  useEffect(() => {
+    if (retryConfirmOpen && originalOption) {
+      setSelectedOption(originalOption);
+    }
+  }, [retryConfirmOpen, originalOption]);
 
   async function handleRetry() {
     if (!job) {
