@@ -1007,9 +1007,6 @@ export function RagJobDetailPage() {
       const res = await originalFetch(params);
       if (params.startRow === 0) {
         setChunks(res.rows);
-        if (res.rows.length > 0) {
-          setSelectedChunk((current) => current ?? res.rows[0]);
-        }
       }
       return res;
     };
