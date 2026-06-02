@@ -1669,14 +1669,6 @@ export function RagJobDetailPage() {
                       options={chunkGridOptions}
                       datasource={dataSource}
                       height={640}
-                      events={[
-                        {
-                          type: "rowClicked",
-                          listener: (event) => {
-                            setSelectedChunk((event as { data?: RagIndexChunkDto }).data ?? null);
-                          },
-                        },
-                      ]}
                     />
                   </Box>
                   <Drawer
