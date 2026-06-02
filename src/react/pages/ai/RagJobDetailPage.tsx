@@ -993,7 +993,9 @@ export function RagJobDetailPage() {
   const [logs, setLogs] = useState<RagIndexJobLogDto[]>([]);
   const [chunks, setChunks] = useState<RagIndexChunkDto[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
+  const [chunkPage, setChunkPage] = useState({ page: 0, size: 50, hasNext: false });
   const [loading, setLoading] = useState(false);
+  const [chunksLoading, setChunksLoading] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1075,6 +1077,24 @@ export function RagJobDetailPage() {
     }, 0);
   }
 
+  const loadChunks = useCallback(async (targetJobId: string, page = 0) => {
+    if (!targetJobId) return;
+    setChunksLoading(true);
+    try {
+      const res = await reactAiApi.getRagJobChunks(targetJobId, page, chunkPage.size);
+      setChunks(res.content ?? []);
+      setChunkPage({
+        page: res.page,
+        size: res.size,
+        hasNext: res.hasNext,
+      });
+    } catch (loadError) {
+      setError(resolveAxiosError(loadError));
+    } finally {
+      setChunksLoading(false);
+    }
+  }, [chunkPage.size]);
+
   const loadDetail = useCallback(async () => {
     if (!jobId) {
       return;
@@ -1085,35 +1105,30 @@ export function RagJobDetailPage() {
       const jobResponse = await reactAiApi.getRagJob(jobId);
       setJob(jobResponse);
 
-      const fetchAllChunks = async () => {
-        const allChunks: RagIndexChunkDto[] = [];
-        let page = 0;
-        const size = 200;
-        let hasMore = true;
-        while (hasMore) {
-          const res = await reactAiApi.getRagJobChunks(jobResponse.jobId, page, size);
-          allChunks.push(...(res.content ?? []));
-          if (res.hasNext) {
-            page += 1;
-          } else {
-            hasMore = false;
-          }
-        }
-        return allChunks;
-      };
+      const logsPromise = reactAiApi.getRagJobLogs(jobResponse.jobId);
+      const chunksPromise = reactAiApi.getRagJobChunks(jobResponse.jobId, 0, chunkPage.size);
 
       const [logsResult, chunksResult] = await Promise.allSettled([
-        reactAiApi.getRagJobLogs(jobResponse.jobId),
-        fetchAllChunks(),
+        logsPromise,
+        chunksPromise,
       ]);
       setLogs(logsResult.status === "fulfilled" ? logsResult.value : []);
-      setChunks(chunksResult.status === "fulfilled" ? chunksResult.value : []);
+      if (chunksResult.status === "fulfilled") {
+        const res = chunksResult.value;
+        setChunks(res.content ?? []);
+        setSelectedChunk(res.content?.[0] ?? null);
+        setChunkPage({
+          page: res.page,
+          size: res.size,
+          hasNext: res.hasNext,
+        });
+      }
     } catch (loadError) {
       setError(resolveAxiosError(loadError));
     } finally {
       setLoading(false);
     }
-  }, [jobId]);
+  }, [jobId, chunkPage.size]);
 
   useEffect(() => {
     void loadDetail();
@@ -1602,11 +1617,40 @@ export function RagJobDetailPage() {
                 <Stack spacing={1.25}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <Typography variant="subtitle1">색인 결과</Typography>
-                    <Tooltip title="Chunk 목록 새로고침">
-                      <IconButton size="small" onClick={() => void loadDetail()}>
-                        <RefreshOutlined fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Tooltip title="이전 Chunk 페이지를 조회합니다.">
+                        <span>
+                          <Button
+                            size="small"
+                            variant="text"
+                            disabled={chunkPage.page <= 0 || chunksLoading || loading}
+                            onClick={() => void loadChunks(job?.jobId ?? jobId, Math.max(0, chunkPage.page - 1))}
+                          >
+                            이전
+                          </Button>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="다음 Chunk 페이지를 조회합니다.">
+                        <span>
+                          <Button
+                            size="small"
+                            variant="text"
+                            disabled={!chunkPage.hasNext || chunksLoading || loading}
+                            onClick={() => void loadChunks(job?.jobId ?? jobId, chunkPage.page + 1)}
+                          >
+                            다음
+                          </Button>
+                        </span>
+                      </Tooltip>
+                      <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
+                        page {chunkPage.page} / size {chunkPage.size.toLocaleString()} / hasNext {chunkPage.hasNext ? "true" : "false"}
+                      </Typography>
+                      <Tooltip title="Chunk 목록 새로고침">
+                        <IconButton size="small" onClick={() => void loadDetail()}>
+                          <RefreshOutlined fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
                   </Box>
                   <Box
                     sx={{
@@ -1633,7 +1677,7 @@ export function RagJobDetailPage() {
                       options={chunkGridOptions}
                       rowData={chunks}
                       height={640}
-                      loading={loading}
+                      loading={loading || chunksLoading}
                       events={[
                         {
                           type: "rowClicked",
