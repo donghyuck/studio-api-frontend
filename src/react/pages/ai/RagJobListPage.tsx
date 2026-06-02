@@ -15,6 +15,7 @@ import {
   FormControlLabel,
   IconButton,
   MenuItem,
+  Pagination,
   Select,
   Stack,
   Switch,
@@ -51,6 +52,8 @@ type ObjectTypeOption = {
   name: string;
 };
 
+const RAG_JOB_PAGE_SIZE_OPTIONS = [25, 50, 100];
+
 function statusColor(status?: RagIndexJobStatus) {
   if (status === "SUCCEEDED") return "success";
   if (status === "WARNING") return "warning";
@@ -84,6 +87,8 @@ export function RagJobListPage() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState<RagIndexJobDto[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
   const [status, setStatus] = useState<RagJobStatusFilter>("");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -150,19 +155,20 @@ export function RagJobListPage() {
     try {
       const response = await reactAiApi.listRagJobs({
         status,
-        offset: 0,
-        limit: 100,
+        page,
+        size: pageSize,
         sort: "createdAt",
         direction: "desc",
       });
-      setJobs(response.items ?? []);
-      setTotal(response.total ?? 0);
+      const items = response.content ?? response.items ?? [];
+      setJobs(items);
+      setTotal(response.totalElements ?? response.total ?? 0);
     } catch (loadError) {
       setError(resolveAxiosError(loadError));
     } finally {
       setLoading(false);
     }
-  }, [status]);
+  }, [page, pageSize, status]);
 
   const loadObjectTypes = useCallback(async () => {
     try {
@@ -180,6 +186,10 @@ export function RagJobListPage() {
   useEffect(() => {
     void loadObjectTypes();
   }, [loadObjectTypes]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [status]);
 
   useEffect(() => {
     if (selectedJob && !jobs.some((job) => job.jobId === selectedJob.jobId)) {
@@ -515,6 +525,52 @@ export function RagJobListPage() {
           />
         </Box>
       </Box>
+
+      <Stack
+        direction={{ xs: "column", sm: "row" }}
+        spacing={1}
+        alignItems={{ xs: "stretch", sm: "center" }}
+        justifyContent="space-between"
+      >
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="caption" color="text.secondary">
+            페이지 크기
+          </Typography>
+          <Select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(0);
+            }}
+            size="small"
+            sx={{ width: 92, height: 32, "& .MuiSelect-select": { py: 0.5, fontSize: 13 } }}
+          >
+            {RAG_JOB_PAGE_SIZE_OPTIONS.map((size) => (
+              <MenuItem key={size} value={size}>
+                {size}
+              </MenuItem>
+            ))}
+          </Select>
+          <Typography variant="caption" color="text.secondary">
+            {total > 0
+              ? `${(page * pageSize + 1).toLocaleString()}-${Math.min(
+                  (page + 1) * pageSize,
+                  total
+                ).toLocaleString()} / ${total.toLocaleString()}`
+              : "0 / 0"}
+          </Typography>
+        </Stack>
+        <Pagination
+          page={page + 1}
+          count={Math.max(1, Math.ceil(total / pageSize))}
+          onChange={(_, nextPage) => setPage(nextPage - 1)}
+          size="small"
+          color="primary"
+          showFirstButton
+          showLastButton
+          disabled={loading}
+        />
+      </Stack>
 
       <RagSearchValidationPanel job={selectedJob} />
 

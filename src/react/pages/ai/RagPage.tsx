@@ -669,15 +669,16 @@ export function RagPage() {
     try {
       const response = await reactAiApi.listRagJobs({
         status: jobStatusFilter || undefined,
-        offset: 0,
-        limit: 50,
+        page: 0,
+        size: 50,
         sort: "createdAt",
         direction: "desc",
       });
-      setJobs(response.items ?? []);
-      setJobsTotal(response.total ?? 0);
+      const items = response.content ?? response.items ?? [];
+      setJobs(items);
+      setJobsTotal(response.totalElements ?? response.total ?? 0);
       const selectedJobId = selectedJobIdRef.current;
-      if (selectedJobId && !response.items.some((job) => job.jobId === selectedJobId)) {
+      if (selectedJobId && !items.some((job) => job.jobId === selectedJobId)) {
         setSelectedJob(null);
         setJobLogs([]);
         setChunks([]);
