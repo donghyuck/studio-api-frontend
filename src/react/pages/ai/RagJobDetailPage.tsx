@@ -1087,14 +1087,14 @@ export function RagJobDetailPage() {
 
       const fetchAllChunks = async () => {
         const allChunks: RagIndexChunkDto[] = [];
-        let offset = 0;
-        const limit = 200;
+        let page = 0;
+        const size = 200;
         let hasMore = true;
         while (hasMore) {
-          const res = await reactAiApi.getRagJobChunks(jobResponse.jobId, offset, limit);
-          allChunks.push(...(res.items ?? []));
-          if (res.hasMore && res.returned > 0) {
-            offset += res.returned;
+          const res = await reactAiApi.getRagJobChunks(jobResponse.jobId, page, size);
+          allChunks.push(...(res.content ?? []));
+          if (res.hasNext) {
+            page += 1;
           } else {
             hasMore = false;
           }

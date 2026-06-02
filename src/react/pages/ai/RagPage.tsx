@@ -467,7 +467,7 @@ export function RagPage() {
   const [jobLogs, setJobLogs] = useState<RagIndexJobLogDto[]>([]);
   const [chunks, setChunks] = useState<RagIndexChunkDto[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
-  const [chunkPage, setChunkPage] = useState({ offset: 0, limit: 50, hasMore: false });
+  const [chunkPage, setChunkPage] = useState({ page: 0, size: 50, hasNext: false });
   const [lastMetadata, setLastMetadata] = useState<ChatResponseMetadataDto | null>(null);
   const [lastValidatedAt, setLastValidatedAt] = useState<string | null>(null);
   const [tab, setTab] = useState<ValidationTab>("vector");
@@ -578,8 +578,8 @@ export function RagPage() {
     return `${scopeObjectType ?? ""}:${scopeObjectId ?? ""}`;
   }
 
-  function chunksCacheKey(scopeObjectType?: string, scopeObjectId?: string, offset = 0, limit = chunkPage.limit) {
-    return `${objectCacheKey(scopeObjectType, scopeObjectId)}:${offset}:${limit}`;
+  function chunksCacheKey(scopeObjectType?: string, scopeObjectId?: string, page = 0, size = chunkPage.size) {
+    return `${objectCacheKey(scopeObjectType, scopeObjectId)}:${page}:${size}`;
   }
 
   function clearObjectInspectionCache(scopeObjectType?: string, scopeObjectId?: string) {
@@ -1100,36 +1100,36 @@ export function RagPage() {
     }
   }
 
-  async function loadChunks(scopeObjectType?: string, scopeObjectId?: string, offset = 0, force = false) {
+  async function loadChunks(scopeObjectType?: string, scopeObjectId?: string, page = 0, force = false) {
     if (!scopeObjectType || !scopeObjectId) {
       setChunks([]);
       setSelectedChunk(null);
       return;
     }
-    const cacheKey = chunksCacheKey(scopeObjectType, scopeObjectId, offset, chunkPage.limit);
+    const cacheKey = chunksCacheKey(scopeObjectType, scopeObjectId, page, chunkPage.size);
     if (!force && chunksPageCacheRef.current.has(cacheKey)) {
       const cached = chunksPageCacheRef.current.get(cacheKey);
       if (cached) {
-        setChunks(cached.items ?? []);
-        setSelectedChunk(cached.items?.[0] ?? null);
+        setChunks(cached.content ?? []);
+        setSelectedChunk(cached.content?.[0] ?? null);
         setChunkPage({
-          offset: cached.offset,
-          limit: cached.limit,
-          hasMore: cached.hasMore,
+          page: cached.page,
+          size: cached.size,
+          hasNext: cached.hasNext,
         });
         return;
       }
     }
     setChunksLoading(true);
     try {
-      const response = await reactAiApi.getRagObjectChunksPage(scopeObjectType, scopeObjectId, offset, chunkPage.limit);
+      const response = await reactAiApi.getRagObjectChunksPage(scopeObjectType, scopeObjectId, page, chunkPage.size);
       chunksPageCacheRef.current.set(cacheKey, response);
-      setChunks(response.items ?? []);
-      setSelectedChunk(response.items?.[0] ?? null);
+      setChunks(response.content ?? []);
+      setSelectedChunk(response.content?.[0] ?? null);
       setChunkPage({
-        offset: response.offset,
-        limit: response.limit,
-        hasMore: response.hasMore,
+        page: response.page,
+        size: response.size,
+        hasNext: response.hasNext,
       });
     } finally {
       setChunksLoading(false);
@@ -2922,12 +2922,12 @@ export function RagPage() {
                     <Button
                       size="small"
                       variant="text"
-                      disabled={chunkPage.offset <= 0}
+                      disabled={chunkPage.page <= 0}
                       onClick={() =>
                         void loadChunks(
                           confirmedScope?.objectType,
                           confirmedScope?.objectId,
-                          Math.max(0, chunkPage.offset - chunkPage.limit)
+                          Math.max(0, chunkPage.page - 1)
                         )
                       }
                     >
@@ -2940,9 +2940,9 @@ export function RagPage() {
                     <Button
                       size="small"
                       variant="text"
-                      disabled={!chunkPage.hasMore}
+                      disabled={!chunkPage.hasNext}
                       onClick={() =>
-                        void loadChunks(confirmedScope?.objectType, confirmedScope?.objectId, chunkPage.offset + chunkPage.limit)
+                        void loadChunks(confirmedScope?.objectType, confirmedScope?.objectId, chunkPage.page + 1)
                       }
                     >
                       다음
@@ -2994,8 +2994,8 @@ export function RagPage() {
               />
             </Box>
             <Typography variant="caption" color="text.secondary">
-              offset {chunkPage.offset.toLocaleString()} / returned {chunks.length.toLocaleString()} / hasMore{" "}
-              {chunkPage.hasMore ? "true" : "false"}
+              page {chunkPage.page.toLocaleString()} / size {chunkPage.size.toLocaleString()} / hasNext{" "}
+              {chunkPage.hasNext ? "true" : "false"}
             </Typography>
             <SearchResultDetail
               title={

@@ -446,13 +446,21 @@ export interface RagIndexChunkDto {
   indexedAt?: string;
 }
 
-export interface RagIndexChunkPageResponseDto {
-  items: RagIndexChunkDto[];
-  offset: number;
-  limit: number;
-  returned: number;
-  hasMore: boolean;
+export interface PageDto<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  hasNext: boolean;
+  hasPrevious: boolean;
+  sort?: string;
 }
+
+export type RagIndexChunkPageResponseDto = PageDto<RagIndexChunkDto>;
+
 
 export interface RagChunkPreviewRequestDto {
   text: string;
