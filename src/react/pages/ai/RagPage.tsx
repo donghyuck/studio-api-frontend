@@ -46,7 +46,9 @@ import {
   StorageOutlined,
 } from "@mui/icons-material";
 import type { ColDef, GridOptions, ICellRendererParams } from "ag-grid-community";
-import { GridContent } from "@/react/components/ag-grid";
+import { GridContent, PageableGridContent } from "@/react/components/ag-grid";
+import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
+import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import { reactFilesApi } from "@/react/pages/files/api";
@@ -464,6 +466,32 @@ export function RagPage() {
   const [jobsTotal, setJobsTotal] = useState(0);
   const [jobStatusFilter, setJobStatusFilter] = useState<RagJobStatusFilter>("");
   const [selectedJob, setSelectedJob] = useState<RagIndexJobDto | null>(null);
+
+  const jobsGridRef = useRef<PageableGridContentHandle<RagIndexJobDto>>(null);
+  const jobsDataSource = useMemo(() => {
+    const ds = new ReactPageDataSource<RagIndexJobDto>("/api/mgmt/ai/rag/jobs");
+    ds.setPageSize(15);
+    const originalFetch = ds.fetchForAgGrid.bind(ds);
+    ds.fetchForAgGrid = async (params) => {
+      setJobsLoading(true);
+      try {
+        const res = await originalFetch(params);
+        const items = res.rows;
+        setJobs(items);
+        setJobsTotal(res.total);
+        const selectedJobId = selectedJobIdRef.current;
+        if (selectedJobId && !items.some((job) => job.jobId === selectedJobId)) {
+          setSelectedJob(null);
+          setJobLogs([]);
+          setChunks([]);
+        }
+        return res;
+      } finally {
+        setJobsLoading(false);
+      }
+    };
+    return ds;
+  }, []);
   const [jobLogs, setJobLogs] = useState<RagIndexJobLogDto[]>([]);
   const [chunks, setChunks] = useState<RagIndexChunkDto[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
@@ -663,32 +691,9 @@ export function RagPage() {
     }
   }, []);
 
-  const loadJobs = useCallback(async () => {
-    setError(null);
-    setJobsLoading(true);
-    try {
-      const response = await reactAiApi.listRagJobs({
-        status: jobStatusFilter || undefined,
-        page: 0,
-        size: 50,
-        sort: "createdAt",
-        direction: "desc",
-      });
-      const items = response.content ?? response.items ?? [];
-      setJobs(items);
-      setJobsTotal(response.totalElements ?? response.total ?? 0);
-      const selectedJobId = selectedJobIdRef.current;
-      if (selectedJobId && !items.some((job) => job.jobId === selectedJobId)) {
-        setSelectedJob(null);
-        setJobLogs([]);
-        setChunks([]);
-      }
-    } catch (loadError) {
-      setError(resolveAxiosError(loadError));
-    } finally {
-      setJobsLoading(false);
-    }
-  }, [jobStatusFilter]);
+  const loadJobs = useCallback(() => {
+    jobsGridRef.current?.refresh();
+  }, []);
 
   useEffect(() => {
     void loadProviders();
@@ -697,8 +702,9 @@ export function RagPage() {
   }, [loadObjectTypes, loadProviders, loadEmbeddingOptions]);
 
   useEffect(() => {
-    void loadJobs();
-  }, [loadJobs]);
+    jobsDataSource.applyFilter({ status: jobStatusFilter || undefined });
+    loadJobs();
+  }, [jobStatusFilter, loadJobs, jobsDataSource]);
 
   useEffect(() => {
     selectedJobIdRef.current = selectedJob?.jobId ?? null;
@@ -2371,11 +2377,11 @@ export function RagPage() {
                   },
                 }}
               >
-                <GridContent<RagIndexJobDto>
+                <PageableGridContent<RagIndexJobDto>
+                  ref={jobsGridRef}
+                  datasource={jobsDataSource}
                   columns={jobColumnDefs}
                   options={jobGridOptions}
-                  rowData={jobs}
-                  loading={jobsLoading}
                   height={300}
                   events={[
                     {

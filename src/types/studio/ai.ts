@@ -400,23 +400,7 @@ export interface RagIndexJobDto {
   embeddingProvider?: string;
   embeddingModel?: string;
 }
-
-export interface RagIndexJobListResponseDto {
-  items?: RagIndexJobDto[];
-  total?: number;
-  offset?: number;
-  limit?: number;
-  content?: RagIndexJobDto[];
-  page?: number;
-  size?: number;
-  totalElements?: number;
-  totalPages?: number;
-  first?: boolean;
-  last?: boolean;
-  hasNext?: boolean;
-  hasPrevious?: boolean;
-  sort?: string;
-}
+export type RagIndexJobListResponseDto = PageDto<RagIndexJobDto>;
 
 export interface RagIndexJobLogDto {
   logId: string;

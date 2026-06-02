@@ -246,22 +246,10 @@ export const reactAiApi = {
     documentId?: string;
     page?: number;
     size?: number;
-    offset?: number;
-    limit?: number;
     sort?: string;
     direction?: "asc" | "desc";
   }) {
-    const size = params?.size ?? params?.limit;
-    const page = params?.page;
-    return apiRequest<RagIndexJobListResponseDto>("get", `${MGMT_BASE}/rag/jobs`, {
-      params: {
-        ...params,
-        page,
-        size,
-        offset: params?.offset ?? (page != null && size != null ? page * size : undefined),
-        limit: params?.limit ?? size,
-      },
-    });
+    return apiRequest<RagIndexJobListResponseDto>("get", `${MGMT_BASE}/rag/jobs`, { params });
   },
 
   getRagJob(jobId: string) {

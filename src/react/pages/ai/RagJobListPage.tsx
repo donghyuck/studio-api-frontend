@@ -160,9 +160,9 @@ export function RagJobListPage() {
         sort: "createdAt",
         direction: "desc",
       });
-      const items = response.content ?? response.items ?? [];
+      const items = response.content ?? [];
       setJobs(items);
-      setTotal(response.totalElements ?? response.total ?? 0);
+      setTotal(response.totalElements ?? 0);
     } catch (loadError) {
       setError(resolveAxiosError(loadError));
     } finally {
