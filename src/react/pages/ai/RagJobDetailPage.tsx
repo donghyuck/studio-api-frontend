@@ -972,6 +972,17 @@ function ChunkInspector({
   );
 }
 
+function embeddingDisplay(job: RagIndexJobDto | null) {
+  if (!job) return "-";
+  if (job.embeddingProfileId) {
+    return job.embeddingProfileId;
+  }
+  if (job.embeddingProvider || job.embeddingModel) {
+    return `${job.embeddingProvider} / ${job.embeddingModel}`;
+  }
+  return "기본 임베딩 설정";
+}
+
 export function RagJobDetailPage() {
   const { jobId = "" } = useParams();
   const navigate = useNavigate();
@@ -1074,9 +1085,26 @@ export function RagJobDetailPage() {
       const jobResponse = await reactAiApi.getRagJob(jobId);
       setJob(jobResponse);
 
+      const fetchAllChunks = async () => {
+        const allChunks: RagIndexChunkDto[] = [];
+        let offset = 0;
+        const limit = 200;
+        let hasMore = true;
+        while (hasMore) {
+          const res = await reactAiApi.getRagJobChunks(jobResponse.jobId, offset, limit);
+          allChunks.push(...(res.items ?? []));
+          if (res.hasMore && res.returned > 0) {
+            offset += res.returned;
+          } else {
+            hasMore = false;
+          }
+        }
+        return allChunks;
+      };
+
       const [logsResult, chunksResult] = await Promise.allSettled([
         reactAiApi.getRagJobLogs(jobResponse.jobId),
-        reactAiApi.getRagJobChunks(jobResponse.jobId, 200),
+        fetchAllChunks(),
       ]);
       setLogs(logsResult.status === "fulfilled" ? logsResult.value : []);
       setChunks(chunksResult.status === "fulfilled" ? chunksResult.value : []);
@@ -1108,36 +1136,39 @@ export function RagJobDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (chunks.length > 0 && embeddingOptions.length > 0) {
-      const sampleChunk = chunks.find((chunk) => chunk.metadata || chunk.embeddingModel || chunk.tokenizerProvider);
-      const provider = sampleChunk?.embeddingProvider ?? metadataValue(sampleChunk?.metadata, ["embeddingProvider"]);
-      const model = sampleChunk?.embeddingModel ?? metadataValue(sampleChunk?.metadata, ["embeddingModel"]);
-      const profileId = metadataValue(sampleChunk?.metadata, ["embeddingProfileId"]);
+    if (embeddingOptions.length > 0) {
+      const provider = job?.embeddingProvider;
+      const model = job?.embeddingModel;
+      const profileId = job?.embeddingProfileId;
 
-      if (provider && model) {
+      const sampleChunk = chunks.find((chunk) => chunk.metadata || chunk.embeddingModel || chunk.tokenizerProvider);
+      const chunkProvider = sampleChunk?.embeddingProvider ?? metadataValue(sampleChunk?.metadata, ["embeddingProvider"]);
+      const chunkModel = sampleChunk?.embeddingModel ?? metadataValue(sampleChunk?.metadata, ["embeddingModel"]);
+      const chunkProfileId = metadataValue(sampleChunk?.metadata, ["embeddingProfileId"]);
+
+      const effProfileId = profileId || chunkProfileId;
+      const effProvider = provider || chunkProvider;
+      const effModel = model || chunkModel;
+
+      if (effProfileId || (effProvider && effModel)) {
         const matched = embeddingOptions.find((o) => {
-          if (profileId) {
-            return o.profileId === profileId;
+          if (effProfileId) {
+            return o.profileId === effProfileId;
           }
-          return o.provider === provider && o.model === model && !o.profileId;
+          return o.provider === effProvider && o.model === effModel && !o.profileId;
         });
 
         if (matched) {
           setOriginalOption(matched);
           setSelectedOption((current) => current || matched);
-        } else {
-          const defaultOpt = embeddingOptions.find((o) => o.defaultProfile) || embeddingOptions.find((o) => o.defaultProvider) || embeddingOptions[0] || null;
-          setSelectedOption((current) => current || defaultOpt);
+          return;
         }
-      } else {
-        const defaultOpt = embeddingOptions.find((o) => o.defaultProfile) || embeddingOptions.find((o) => o.defaultProvider) || embeddingOptions[0] || null;
-        setSelectedOption((current) => current || defaultOpt);
       }
-    } else if (embeddingOptions.length > 0) {
+
       const defaultOpt = embeddingOptions.find((o) => o.defaultProfile) || embeddingOptions.find((o) => o.defaultProvider) || embeddingOptions[0] || null;
       setSelectedOption((current) => current || defaultOpt);
     }
-  }, [chunks, embeddingOptions]);
+  }, [job, chunks, embeddingOptions]);
 
   async function handleRetry() {
     if (!job) {
@@ -1438,10 +1469,10 @@ export function RagJobDetailPage() {
                   select
                   label="임베딩 모델 프로필 (재시도 설정)"
                   size="small"
-                  value={selectedOption ? `${selectedOption.provider}:${selectedOption.model}:${selectedOption.profileId || ""}` : ""}
+                  value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
                   onChange={(event) => {
                     const val = event.target.value;
-                    const matched = embeddingOptions.find((o) => `${o.provider}:${o.model}:${o.profileId || ""}` === val);
+                    const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
                     if (matched) {
                       setSelectedOption(matched);
                     }
@@ -1459,7 +1490,7 @@ export function RagJobDetailPage() {
                   }
                 >
                   {embeddingOptions.map((opt) => {
-                    const valueKey = `${opt.provider}:${opt.model}:${opt.profileId || ""}`;
+                    const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
                     const label = opt.profileId
                       ? `${opt.profileId} (${opt.provider} - ${opt.model})`
                       : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
@@ -1479,7 +1510,7 @@ export function RagJobDetailPage() {
             ) : null}
             {hasChanged ? (
               <Alert severity="warning" sx={{ mt: 0.5 }}>
-                모델을 변경하면 기존 임베딩은 재사용하지 않고 다시 생성됩니다.
+                모델을 변경하면 기존 chunk 재사용 없이 새 모델 기준으로 다시 진행됩니다.
               </Alert>
             ) : null}
             <Typography variant="caption" color="text.secondary">
@@ -1531,6 +1562,7 @@ export function RagJobDetailPage() {
                   <StatItem label="객체" value={`${job.objectType} #${job.objectId}`} />
                   <StatItem label="소요" value={job.durationMs ? `${job.durationMs.toLocaleString()}ms` : "-"} />
                   <StatItem label="청킹 전략" value={chunkingDisplay(job, chunks)} />
+                  <StatItem label="임베딩 설정" value={embeddingDisplay(job)} />
                   <StatItem label="전체 chunk 수" value={job.chunkCount.toLocaleString()} />
                   <StatItem label="임베딩 시도/진행 chunk 수" value={job.embeddedCount.toLocaleString()} />
                   <StatItem label="실제 저장 완료 chunk 수" value={job.indexedCount.toLocaleString()} />

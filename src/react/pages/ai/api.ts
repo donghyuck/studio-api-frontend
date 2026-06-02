@@ -272,9 +272,9 @@ export const reactAiApi = {
     return apiRequest<RagIndexJobLogDto[]>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/logs`);
   },
 
-  getRagJobChunks(jobId: string, limit = 200) {
-    return apiRequest<RagIndexChunkDto[]>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/chunks`, {
-      params: { limit },
+  getRagJobChunks(jobId: string, offset = 0, limit = 200) {
+    return apiRequest<RagIndexChunkPageResponseDto>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/chunks`, {
+      params: { offset, limit },
     });
   },
 

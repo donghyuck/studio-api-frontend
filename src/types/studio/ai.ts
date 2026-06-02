@@ -396,6 +396,9 @@ export interface RagIndexJobDto {
   startedAt?: string;
   finishedAt?: string;
   durationMs?: number;
+  embeddingProfileId?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
 }
 
 export interface RagIndexJobListResponseDto {

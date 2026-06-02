@@ -332,10 +332,10 @@ export function RagChatPage() {
                 select
                 label="임베딩 모델 프로필"
                 size="small"
-                value={selectedOption ? `${selectedOption.provider}:${selectedOption.model}:${selectedOption.profileId || ""}` : ""}
+                value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
                 onChange={(event) => {
                   const val = event.target.value;
-                  const matched = embeddingOptions.find((o) => `${o.provider}:${o.model}:${o.profileId || ""}` === val);
+                  const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
                   if (matched) {
                     setSelectedOption(matched);
                   }
@@ -344,7 +344,7 @@ export function RagChatPage() {
                 fullWidth
               >
                 {embeddingOptions.map((opt) => {
-                  const valueKey = `${opt.provider}:${opt.model}:${opt.profileId || ""}`;
+                  const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
                   const label = opt.profileId
                     ? `${opt.profileId} (${opt.provider} - ${opt.model})`
                     : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
