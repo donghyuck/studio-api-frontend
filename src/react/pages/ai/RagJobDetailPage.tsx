@@ -42,7 +42,9 @@ import {
   WarningAmberOutlined,
 } from "@mui/icons-material";
 import type { ColDef, GridOptions } from "ag-grid-community";
-import { GridContent } from "@/react/components/ag-grid";
+import { GridContent, PageableGridContent } from "@/react/components/ag-grid";
+import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
+import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import type {
@@ -993,9 +995,26 @@ export function RagJobDetailPage() {
   const [logs, setLogs] = useState<RagIndexJobLogDto[]>([]);
   const [chunks, setChunks] = useState<RagIndexChunkDto[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
-  const [chunkPage, setChunkPage] = useState({ page: 0, size: 50, hasNext: false });
   const [loading, setLoading] = useState(false);
-  const [chunksLoading, setChunksLoading] = useState(false);
+
+  const gridRef = useRef<PageableGridContentHandle<RagIndexChunkDto>>(null);
+  const dataSource = useMemo(() => {
+    const ds = new ReactPageDataSource<RagIndexChunkDto>(
+      `/api/mgmt/ai/rag/jobs/${encodeURIComponent(jobId)}/chunks`
+    );
+    const originalFetch = ds.fetchForAgGrid.bind(ds);
+    ds.fetchForAgGrid = async (params) => {
+      const res = await originalFetch(params);
+      if (params.startRow === 0) {
+        setChunks(res.rows);
+        if (res.rows.length > 0) {
+          setSelectedChunk((current) => current ?? res.rows[0]);
+        }
+      }
+      return res;
+    };
+    return ds;
+  }, [jobId]);
   const [mutating, setMutating] = useState(false);
   const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1077,23 +1096,7 @@ export function RagJobDetailPage() {
     }, 0);
   }
 
-  const loadChunks = useCallback(async (targetJobId: string, page = 0) => {
-    if (!targetJobId) return;
-    setChunksLoading(true);
-    try {
-      const res = await reactAiApi.getRagJobChunks(targetJobId, page, chunkPage.size);
-      setChunks(res.content ?? []);
-      setChunkPage({
-        page: res.page,
-        size: res.size,
-        hasNext: res.hasNext,
-      });
-    } catch (loadError) {
-      setError(resolveAxiosError(loadError));
-    } finally {
-      setChunksLoading(false);
-    }
-  }, [chunkPage.size]);
+
 
   const loadDetail = useCallback(async () => {
     if (!jobId) {
@@ -1105,30 +1108,18 @@ export function RagJobDetailPage() {
       const jobResponse = await reactAiApi.getRagJob(jobId);
       setJob(jobResponse);
 
-      const logsPromise = reactAiApi.getRagJobLogs(jobResponse.jobId);
-      const chunksPromise = reactAiApi.getRagJobChunks(jobResponse.jobId, 0, chunkPage.size);
-
-      const [logsResult, chunksResult] = await Promise.allSettled([
-        logsPromise,
-        chunksPromise,
-      ]);
-      setLogs(logsResult.status === "fulfilled" ? logsResult.value : []);
-      if (chunksResult.status === "fulfilled") {
-        const res = chunksResult.value;
-        setChunks(res.content ?? []);
-        setSelectedChunk(res.content?.[0] ?? null);
-        setChunkPage({
-          page: res.page,
-          size: res.size,
-          hasNext: res.hasNext,
-        });
+      try {
+        const logsResult = await reactAiApi.getRagJobLogs(jobResponse.jobId);
+        setLogs(logsResult ?? []);
+      } catch {
+        setLogs([]);
       }
     } catch (loadError) {
       setError(resolveAxiosError(loadError));
     } finally {
       setLoading(false);
     }
-  }, [jobId, chunkPage.size]);
+  }, [jobId]);
 
   useEffect(() => {
     void loadDetail();
@@ -1434,7 +1425,10 @@ export function RagJobDetailPage() {
         label="색인 작업의 상태, 로그, Chunk를 확인합니다."
         previous
         onPrevious={() => navigate("/services/ai/rag")}
-        onRefresh={() => void loadDetail()}
+        onRefresh={() => {
+          void loadDetail();
+          gridRef.current?.refresh();
+        }}
         actions={
           <Stack direction="row" spacing={1}>
             <Tooltip title="실패 또는 완료된 작업을 서버 retry 엔드포인트로 다시 실행합니다.">
@@ -1617,40 +1611,14 @@ export function RagJobDetailPage() {
                 <Stack spacing={1.25}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <Typography variant="subtitle1">색인 결과</Typography>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Tooltip title="이전 Chunk 페이지를 조회합니다.">
-                        <span>
-                          <Button
-                            size="small"
-                            variant="text"
-                            disabled={chunkPage.page <= 0 || chunksLoading || loading}
-                            onClick={() => void loadChunks(job?.jobId ?? jobId, Math.max(0, chunkPage.page - 1))}
-                          >
-                            이전
-                          </Button>
-                        </span>
-                      </Tooltip>
-                      <Tooltip title="다음 Chunk 페이지를 조회합니다.">
-                        <span>
-                          <Button
-                            size="small"
-                            variant="text"
-                            disabled={!chunkPage.hasNext || chunksLoading || loading}
-                            onClick={() => void loadChunks(job?.jobId ?? jobId, chunkPage.page + 1)}
-                          >
-                            다음
-                          </Button>
-                        </span>
-                      </Tooltip>
-                      <Typography variant="caption" color="text.secondary" sx={{ mr: 1 }}>
-                        page {chunkPage.page} / size {chunkPage.size.toLocaleString()} / hasNext {chunkPage.hasNext ? "true" : "false"}
-                      </Typography>
-                      <Tooltip title="Chunk 목록 새로고침">
-                        <IconButton size="small" onClick={() => void loadDetail()}>
-                          <RefreshOutlined fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
+                    <Tooltip title="Chunk 목록 새로고침">
+                      <IconButton size="small" onClick={() => {
+                        void loadDetail();
+                        gridRef.current?.refresh();
+                      }}>
+                        <RefreshOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
                   <Box
                     sx={{
@@ -1672,12 +1640,12 @@ export function RagJobDetailPage() {
                       },
                     }}
                   >
-                    <GridContent<RagIndexChunkDto>
+                    <PageableGridContent<RagIndexChunkDto>
+                      ref={gridRef}
                       columns={chunkColumns}
                       options={chunkGridOptions}
-                      rowData={chunks}
+                      datasource={dataSource}
                       height={640}
-                      loading={loading || chunksLoading}
                       events={[
                         {
                           type: "rowClicked",
