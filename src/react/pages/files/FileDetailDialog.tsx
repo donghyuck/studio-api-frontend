@@ -75,9 +75,9 @@ function ragObjectScopes(file: AttachmentDto | null, fallbackAttachmentId: numbe
     }
   };
 
+  append("attachment", attachmentObjectId);
   append(file?.objectType, attachmentObjectId);
   append(file?.objectType, file?.objectId);
-  append("attachment", attachmentObjectId);
 
   return scopes.length > 0 ? scopes : [{ objectType: "attachment", objectId: attachmentObjectId }];
 }
