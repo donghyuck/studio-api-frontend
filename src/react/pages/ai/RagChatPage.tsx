@@ -17,7 +17,7 @@ import {
 } from "@mui/material";
 import { AddCommentOutlined, SettingsOutlined } from "@mui/icons-material";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
-import { reactAiApi } from "@/react/pages/ai/api";
+import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
 import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
 import type { ChatMessage } from "@/react/pages/ai/components/chatTypes";
@@ -42,6 +42,8 @@ export function RagChatPage() {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
   const [provider, setProvider] = useState("");
   const [model, setModel] = useState("");
+  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
   const [systemPrompt, setSystemPrompt] = useState(
     "제공된 RAG 문서 내용에 근거해서만 답변하세요. 문서에서 확인할 수 없는 내용은 확인할 수 없다고 답변하세요."
   );
@@ -90,6 +92,18 @@ export function RagChatPage() {
         setMemoryEnabled(data.chat?.memory?.enabled === true);
       })
       .catch((loadError) => setError(resolveAxiosError(loadError)));
+
+    reactAiApi
+      .getEmbeddingOptions()
+      .then((res) => {
+        const list = res.options ?? [];
+        setEmbeddingOptions(list);
+        const def = list.find((o) => o.defaultProfile) || list.find((o) => o.defaultProvider) || list[0] || null;
+        setSelectedOption(def);
+      })
+      .catch(() => {
+        // ignore
+      });
   }, []);
 
   useEffect(() => {
@@ -136,7 +150,7 @@ export function RagChatPage() {
     setInput("");
 
     try {
-      const response = await reactAiApi.sendRagChat({
+      const payload: any = {
         chat: {
           provider: provider || undefined,
           model: model || undefined,
@@ -149,7 +163,16 @@ export function RagChatPage() {
         topK: numericTopK,
         minScore: numericMinScore,
         debug,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const response = await reactAiApi.sendRagChat(payload);
       if (activeRequestIdRef.current !== requestId) return;
 
       const assistant = [...(response.messages ?? [])].reverse().find((item) => item.role === "assistant");
@@ -304,6 +327,35 @@ export function RagChatPage() {
               </TextField>
               <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth size="small" />
             </Stack>
+            {embeddingOptions.length > 0 ? (
+              <TextField
+                select
+                label="임베딩 모델 프로필"
+                size="small"
+                value={selectedOption ? `${selectedOption.provider}:${selectedOption.model}:${selectedOption.profileId || ""}` : ""}
+                onChange={(event) => {
+                  const val = event.target.value;
+                  const matched = embeddingOptions.find((o) => `${o.provider}:${o.model}:${o.profileId || ""}` === val);
+                  if (matched) {
+                    setSelectedOption(matched);
+                  }
+                }}
+                disabled={sending}
+                fullWidth
+              >
+                {embeddingOptions.map((opt) => {
+                  const valueKey = `${opt.provider}:${opt.model}:${opt.profileId || ""}`;
+                  const label = opt.profileId
+                    ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                    : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                  return (
+                    <MenuItem key={valueKey} value={valueKey}>
+                      {label}
+                    </MenuItem>
+                  );
+                })}
+              </TextField>
+            ) : null}
             {selectedProvider ? (
               <Typography variant="caption" color="text.secondary">
                 Embedding: {selectedProvider.embedding.enabled ? selectedProvider.embedding.model : "disabled"}

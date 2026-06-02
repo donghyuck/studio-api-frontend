@@ -180,6 +180,9 @@ export interface SearchRequestDto {
   objectType?: string;
   objectId?: string;
   minScore?: number;
+  embeddingProfileId?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
 }
 
 export interface SearchResultDto {
@@ -338,6 +341,9 @@ export interface RagIndexRequestDto {
   objectId?: string;
   metadata?: Record<string, any>;
   keywords?: string[];
+  embeddingProfileId?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
   useLlmKeywordExtraction?: boolean;
 }
 

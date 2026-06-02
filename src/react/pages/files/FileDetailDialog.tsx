@@ -6,6 +6,7 @@ import {
   Divider,
   Drawer,
   IconButton,
+  MenuItem,
   Stack,
   Table,
   TableBody,
@@ -13,6 +14,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
@@ -25,7 +27,7 @@ import {
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import { useToast } from "@/react/feedback";
-import { reactAiApi } from "@/react/pages/ai/api";
+import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import { reactFilesApi } from "@/react/pages/files/api";
 import type { AttachmentDto } from "@/types/studio/files";
 import { resolveAxiosError } from "@/utils/helpers";
@@ -104,6 +106,26 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [loading, setLoading] = useState(false);
   const [textExtracting, setTextExtracting] = useState(false);
   const [ragIndexing, setRagIndexing] = useState(false);
+  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      reactAiApi.getEmbeddingOptions()
+        .then((res) => {
+          const list = res.options ?? [];
+          setEmbeddingOptions(list);
+          const def = list.find((o) => o.defaultProfile) || list.find((o) => o.defaultProvider) || list[0] || null;
+          setSelectedOption(def);
+        })
+        .catch(() => {
+          // Ignore
+        });
+    } else {
+      setEmbeddingOptions([]);
+      setSelectedOption(null);
+    }
+  }, [open]);
 
   const metadataEntries = Object.entries(ragMetadata ?? {});
   const ragIndexCompleted = ragIndexed || metadataEntries.length > 0;
@@ -323,20 +345,25 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
     setRagIndexing(true);
     try {
-      const [scope] = ragObjectScopes(file, attachmentId);
-      const job = await reactAiApi.createRagJob({
-        objectType: scope.objectType,
-        objectId: scope.objectId,
-        documentId: String(attachmentId),
-        sourceType: "attachment",
-        metadata: {
-          attachmentId: String(attachmentId),
-        },
-        forceReindex: true,
+      const payload: any = {
         useLlmKeywordExtraction: true,
-      });
-      setRagJobId(job.jobId);
-      toast.success(`${file.name} 파일의 RAG 색인 작업이 생성되었습니다.`);
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const jobId = await reactFilesApi.ragIndex(attachmentId, payload);
+      if (jobId) {
+        setRagJobId(jobId);
+        toast.success(`${file.name} 파일의 RAG 색인 작업이 시작되었습니다.`);
+      } else {
+        toast.success(`${file.name} 파일의 RAG 색인 작업이 완료되었습니다.`);
+      }
+      await refreshDetail();
     } catch (error) {
       toast.error(resolveAxiosError(error));
     } finally {
@@ -484,10 +511,54 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               </Box>
 
               <Box>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                  RAG
+                </Typography>
+
+                {!ragIndexCompleted && embeddingOptions.length > 0 ? (
+                  <Box sx={{ mb: 1.5 }}>
+                    <TextField
+                      select
+                      label="임베딩 모델 프로필"
+                      size="small"
+                      value={selectedOption ? `${selectedOption.provider}:${selectedOption.model}:${selectedOption.profileId || ""}` : ""}
+                      onChange={(event) => {
+                        const val = event.target.value;
+                        const matched = embeddingOptions.find((o) => `${o.provider}:${o.model}:${o.profileId || ""}` === val);
+                        if (matched) {
+                          setSelectedOption(matched);
+                        }
+                      }}
+                      disabled={ragIndexing}
+                      fullWidth
+                    >
+                      {embeddingOptions.map((opt) => {
+                        const valueKey = `${opt.provider}:${opt.model}:${opt.profileId || ""}`;
+                        const label = opt.profileId
+                          ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                          : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                        return (
+                          <MenuItem key={valueKey} value={valueKey}>
+                            {label}
+                          </MenuItem>
+                        );
+                      })}
+                    </TextField>
+                  </Box>
+                ) : null}
+
                 <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                  <Typography variant="caption" color="text.secondary">
-                    RAG
-                  </Typography>
+                  <Box>
+                    {ragIndexCompleted ? (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        이 파일은 RAG 인덱싱이 완료되었습니다.
+                      </Typography>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary" display="block">
+                        선택한 임베딩 프로필로 이 파일을 RAG 검색 대상으로 색인합니다.
+                      </Typography>
+                    )}
+                  </Box>
                   <Tooltip title={ragIndexTooltip}>
                     <span>
                       <Button
@@ -503,11 +574,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     </span>
                   </Tooltip>
                 </Stack>
-                {ragIndexCompleted ? (
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                    이 파일은 RAG 인덱싱이 완료되었습니다.
-                  </Typography>
-                ) : null}
                 {ragJobId ? (
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
                     RAG 색인 작업 ID: {ragJobId}

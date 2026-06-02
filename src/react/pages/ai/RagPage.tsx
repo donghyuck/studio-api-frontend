@@ -48,7 +48,7 @@ import {
 import type { ColDef, GridOptions, ICellRendererParams } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
-import { reactAiApi } from "@/react/pages/ai/api";
+import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import { reactFilesApi } from "@/react/pages/files/api";
 import { reactObjectTypeApi } from "@/react/pages/objecttype/api";
 import type {
@@ -429,6 +429,8 @@ export function RagPage() {
   const [provider, setProvider] = useState("");
   const [objectTypes, setObjectTypes] = useState<ObjectTypeDto[]>([]);
   const [model, setModel] = useState("");
+  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState("5");
   const [minScore, setMinScore] = useState("");
@@ -641,6 +643,18 @@ export function RagPage() {
     }
   }, []);
 
+  const loadEmbeddingOptions = useCallback(async () => {
+    try {
+      const res = await reactAiApi.getEmbeddingOptions();
+      const list = res.options ?? [];
+      setEmbeddingOptions(list);
+      const def = list.find((o) => o.defaultProfile) || list.find((o) => o.defaultProvider) || list[0] || null;
+      setSelectedOption(def);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const loadObjectTypes = useCallback(async () => {
     try {
       setObjectTypes(await reactObjectTypeApi.list({ status: "ACTIVE" }));
@@ -678,7 +692,8 @@ export function RagPage() {
   useEffect(() => {
     void loadProviders();
     void loadObjectTypes();
-  }, [loadObjectTypes, loadProviders]);
+    void loadEmbeddingOptions();
+  }, [loadObjectTypes, loadProviders, loadEmbeddingOptions]);
 
   useEffect(() => {
     void loadJobs();
@@ -744,7 +759,7 @@ export function RagPage() {
   }, [chunkConfig, chunkPreviewOpen]);
 
   async function handleRefresh() {
-    await Promise.all([loadProviders(), loadJobs()]);
+    await Promise.all([loadProviders(), loadJobs(), loadEmbeddingOptions()]);
     if (selectedJob) {
       await handleSelectJob(selectedJob, true);
     }
@@ -1178,7 +1193,7 @@ export function RagPage() {
     }
 
     try {
-      const job = await reactAiApi.createRagJob({
+      const payload: any = {
         objectType: scope.objectType,
         objectId: scope.objectId,
         documentId: documentId.trim() || undefined,
@@ -1187,7 +1202,16 @@ export function RagPage() {
         text: indexText.trim() || undefined,
         useLlmKeywordExtraction: true,
         ...indexChunkingOptions(),
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const job = await reactAiApi.createRagJob(payload);
       setSelectedJob(job);
       await loadJobs();
       clearObjectInspectionCache(job.objectType, job.objectId);
@@ -1206,7 +1230,7 @@ export function RagPage() {
     try {
       let job: RagIndexJobDto;
       if (selectedJob.status === "CANCELLED") {
-        job = await reactAiApi.createRagJob({
+        const payload: any = {
           objectType: selectedJob.objectType,
           objectId: selectedJob.objectId,
           documentId: selectedJob.documentId || undefined,
@@ -1214,7 +1238,16 @@ export function RagPage() {
           forceReindex: true,
           useLlmKeywordExtraction: true,
           ...indexChunkingOptions(),
-        });
+        };
+        if (selectedOption) {
+          if (selectedOption.profileId) {
+            payload.embeddingProfileId = selectedOption.profileId;
+          } else {
+            payload.embeddingProvider = selectedOption.provider;
+            payload.embeddingModel = selectedOption.model;
+          }
+        }
+        job = await reactAiApi.createRagJob(payload);
       } else {
         job = await reactAiApi.retryRagJob(selectedJob.jobId);
       }
@@ -1304,7 +1337,7 @@ export function RagPage() {
     }
 
     try {
-      const job = await reactAiApi.createRagJob({
+      const payload: any = {
         objectType: confirmedScope.objectType,
         objectId: confirmedScope.objectId,
         documentId: documentId.trim() || confirmedScope.attachmentId,
@@ -1315,7 +1348,16 @@ export function RagPage() {
         },
         useLlmKeywordExtraction: true,
         ...indexChunkingOptions(),
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const job = await reactAiApi.createRagJob(payload);
       setSelectedJob(job);
       await loadJobs();
       clearObjectInspectionCache(job.objectType, job.objectId);
@@ -1336,7 +1378,7 @@ export function RagPage() {
     }
 
     try {
-      const job = await reactAiApi.createRagJob({
+      const payload: any = {
         objectType: resolveObjectTypeValue(confirmedScope.objectType),
         objectId: confirmedScope.objectId,
         documentId: documentId.trim() || attachmentIdForIndexing,
@@ -1347,7 +1389,16 @@ export function RagPage() {
         },
         useLlmKeywordExtraction: true,
         ...indexChunkingOptions(),
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const job = await reactAiApi.createRagJob(payload);
       setSelectedJob(job);
       await loadJobs();
       clearObjectInspectionCache(job.objectType, job.objectId);
@@ -1410,12 +1461,21 @@ export function RagPage() {
     setLastRagSearchQuery("");
     setRagLoading(true);
     try {
-      const data = await reactAiApi.searchRag({
+      const payload: any = {
         query: searchQuery,
         topK: Number(topK) || 5,
         objectType: scope.objectType,
         objectId: scope.objectId,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const data = await reactAiApi.searchRag(payload);
       setRagRows(data);
       setLastRagSearchQuery(searchQuery);
       setSelectedRagResult(data[0] ?? null);
@@ -1500,7 +1560,7 @@ export function RagPage() {
 
     setChatLoading(true);
     try {
-      const response = await reactAiApi.sendRagChat({
+      const payload: any = {
         chat: {
           provider: provider || undefined,
           model: model || undefined,
@@ -1518,7 +1578,16 @@ export function RagPage() {
         objectType: scope.objectType,
         objectId: scope.objectId,
         debug,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const response = await reactAiApi.sendRagChat(payload);
 
       const assistant = [...response.messages]
         .reverse()
@@ -1913,6 +1982,37 @@ export function RagPage() {
                         확정된 대상에 대해 attachment source 또는 직접 입력 텍스트 기반 색인 Job을 생성합니다.
                       </Typography>
                     </Box>
+                    {embeddingOptions.length > 0 ? (
+                      <Box sx={{ mt: 0.5, mb: 0.5 }}>
+                        <TextField
+                          select
+                          label="임베딩 모델 프로필"
+                          size="small"
+                          value={selectedOption ? `${selectedOption.provider}:${selectedOption.model}:${selectedOption.profileId || ""}` : ""}
+                          onChange={(event) => {
+                            const val = event.target.value;
+                            const matched = embeddingOptions.find((o) => `${o.provider}:${o.model}:${o.profileId || ""}` === val);
+                            if (matched) {
+                              setSelectedOption(matched);
+                            }
+                          }}
+                          disabled={jobsLoading}
+                          fullWidth
+                        >
+                          {embeddingOptions.map((opt) => {
+                            const valueKey = `${opt.provider}:${opt.model}:${opt.profileId || ""}`;
+                            const label = opt.profileId
+                              ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                              : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                            return (
+                              <MenuItem key={valueKey} value={valueKey}>
+                                {label}
+                              </MenuItem>
+                            );
+                          })}
+                        </TextField>
+                      </Box>
+                    ) : null}
                     <Accordion variant="outlined" sx={{ borderRadius: 1.5, "&:before": { display: "none" } }}>
                       <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
                         <Stack spacing={0.25}>
@@ -2397,6 +2497,35 @@ export function RagPage() {
               </Typography>
             </Alert>
             <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} alignItems={{ lg: "flex-start" }}>
+              {embeddingOptions.length > 0 ? (
+                <TextField
+                  select
+                  label="임베딩 모델 프로필"
+                  size="small"
+                  value={selectedOption ? `${selectedOption.provider}:${selectedOption.model}:${selectedOption.profileId || ""}` : ""}
+                  onChange={(event) => {
+                    const val = event.target.value;
+                    const matched = embeddingOptions.find((o) => `${o.provider}:${o.model}:${o.profileId || ""}` === val);
+                    if (matched) {
+                      setSelectedOption(matched);
+                    }
+                  }}
+                  disabled={ragLoading || chatLoading}
+                  sx={{ minWidth: 260 }}
+                >
+                  {embeddingOptions.map((opt) => {
+                    const valueKey = `${opt.provider}:${opt.model}:${opt.profileId || ""}`;
+                    const label = opt.profileId
+                      ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                      : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                    return (
+                      <MenuItem key={valueKey} value={valueKey}>
+                        {label}
+                      </MenuItem>
+                    );
+                  })}
+                </TextField>
+              ) : null}
               <TextField
                 select
                 label="Provider"

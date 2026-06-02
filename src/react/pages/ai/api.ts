@@ -235,7 +235,7 @@ export const reactAiApi = {
   },
 
   async searchRag(req: SearchRequestDto) {
-    const response = await apiRequest<SearchResponseDto>("post", `${MGMT_BASE}/rag/search`, { data: req });
+    const response = await apiRequest<SearchResponseDto>("post", `/api/mgmt/files/rag/search`, { data: req });
     return response.results ?? [];
   },
 
@@ -316,4 +316,21 @@ export const reactAiApi = {
   rewriteQuery(req: QueryRewriteRequestDto) {
     return apiRequest<QueryRewriteResponseDto>("post", `${BASE}/query-rewrite`, { data: req });
   },
+
+  getEmbeddingOptions() {
+    return apiRequest<{ options: EmbeddingOption[] }>("get", `${BASE}/embedding-options`);
+  },
 };
+
+export interface EmbeddingOption {
+  profileId: string | null;
+  provider: string;
+  providerType: string | null;
+  model: string;
+  dimension: number;
+  supportedInputTypes: string[] | null;
+  defaultProvider: boolean;
+  defaultProfile: boolean;
+  profile: boolean;
+  source: string | null;
+}

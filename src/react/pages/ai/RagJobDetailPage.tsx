@@ -24,6 +24,8 @@ import {
   Stepper,
   Tooltip,
   Typography,
+  TextField,
+  MenuItem,
 } from "@mui/material";
 import {
   AccountTreeOutlined,
@@ -42,7 +44,7 @@ import {
 import type { ColDef, GridOptions } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
-import { reactAiApi } from "@/react/pages/ai/api";
+import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import type {
   RagIndexChunkDto,
   RagIndexJobDto,
@@ -984,9 +986,28 @@ export function RagJobDetailPage() {
   const [mutating, setMutating] = useState(false);
   const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
+  const [originalOption, setOriginalOption] = useState<EmbeddingOption | null>(null);
   const selectedChunkIndex = useMemo(
     () => chunks.findIndex((chunk) => chunkRowId(chunk) === chunkRowId(selectedChunk)),
     [chunks, selectedChunk]
+  );
+
+  const isPartialEmbedding = Boolean(
+    (job?.status === "FAILED" || job?.status === "CANCELLED") &&
+    job?.currentStep === "EMBEDDING" &&
+    job?.indexedCount &&
+    job.indexedCount > 0
+  );
+  const retryButtonText = isPartialEmbedding ? "이어가기" : "재시도";
+
+  const hasChanged = Boolean(
+    originalOption && selectedOption && (
+      selectedOption.profileId !== originalOption.profileId ||
+      selectedOption.provider !== originalOption.provider ||
+      selectedOption.model !== originalOption.model
+    )
   );
 
   const selectChunkByOffset = useCallback(
@@ -1070,24 +1091,93 @@ export function RagJobDetailPage() {
     void loadDetail();
   }, [loadDetail]);
 
+  useEffect(() => {
+    let alive = true;
+    reactAiApi.getEmbeddingOptions()
+      .then((res) => {
+        if (alive) {
+          setEmbeddingOptions(res.options ?? []);
+        }
+      })
+      .catch(() => {
+        // ignore
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (chunks.length > 0 && embeddingOptions.length > 0) {
+      const sampleChunk = chunks.find((chunk) => chunk.metadata || chunk.embeddingModel || chunk.tokenizerProvider);
+      const provider = sampleChunk?.embeddingProvider ?? metadataValue(sampleChunk?.metadata, ["embeddingProvider"]);
+      const model = sampleChunk?.embeddingModel ?? metadataValue(sampleChunk?.metadata, ["embeddingModel"]);
+      const profileId = metadataValue(sampleChunk?.metadata, ["embeddingProfileId"]);
+
+      if (provider && model) {
+        const matched = embeddingOptions.find((o) => {
+          if (profileId) {
+            return o.profileId === profileId;
+          }
+          return o.provider === provider && o.model === model && !o.profileId;
+        });
+
+        if (matched) {
+          setOriginalOption(matched);
+          setSelectedOption((current) => current || matched);
+        } else {
+          const defaultOpt = embeddingOptions.find((o) => o.defaultProfile) || embeddingOptions.find((o) => o.defaultProvider) || embeddingOptions[0] || null;
+          setSelectedOption((current) => current || defaultOpt);
+        }
+      } else {
+        const defaultOpt = embeddingOptions.find((o) => o.defaultProfile) || embeddingOptions.find((o) => o.defaultProvider) || embeddingOptions[0] || null;
+        setSelectedOption((current) => current || defaultOpt);
+      }
+    } else if (embeddingOptions.length > 0) {
+      const defaultOpt = embeddingOptions.find((o) => o.defaultProfile) || embeddingOptions.find((o) => o.defaultProvider) || embeddingOptions[0] || null;
+      setSelectedOption((current) => current || defaultOpt);
+    }
+  }, [chunks, embeddingOptions]);
+
   async function handleRetry() {
     if (!job) {
       return;
     }
-    setRetryConfirmOpen(false);
     setMutating(true);
     setError(null);
     try {
       let response: RagIndexJobDto;
-      if (job.status === "CANCELLED") {
-        response = await reactAiApi.createRagJob({
+      const hasChanged = Boolean(
+        originalOption && selectedOption && (
+          selectedOption.profileId !== originalOption.profileId ||
+          selectedOption.provider !== originalOption.provider ||
+          selectedOption.model !== originalOption.model
+        )
+      );
+
+      if (job.status === "CANCELLED" || hasChanged) {
+        const payload: any = {
           objectType: job.objectType,
           objectId: job.objectId,
           documentId: job.documentId || undefined,
           sourceType: job.sourceType || undefined,
           forceReindex: true,
           useLlmKeywordExtraction: true,
-        });
+        };
+        if (job.chunkingStrategy) payload.chunkingStrategy = job.chunkingStrategy;
+        if (job.chunkMaxSize) payload.chunkMaxSize = job.chunkMaxSize;
+        if (job.chunkOverlap) payload.chunkOverlap = job.chunkOverlap;
+        if (job.chunkUnit) payload.chunkUnit = job.chunkUnit;
+
+        if (selectedOption) {
+          if (selectedOption.profileId) {
+            payload.embeddingProfileId = selectedOption.profileId;
+          } else {
+            payload.embeddingProvider = selectedOption.provider;
+            payload.embeddingModel = selectedOption.model;
+          }
+        }
+        response = await reactAiApi.createRagJob(payload);
         navigate(`/services/ai/rag/jobs/${response.jobId}`, { replace: true });
       } else {
         response = await reactAiApi.retryRagJob(job.jobId);
@@ -1298,7 +1388,7 @@ export function RagJobDetailPage() {
                   disabled={!job || mutating || job.status === "PENDING" || job.status === "RUNNING"}
                   onClick={() => setRetryConfirmOpen(true)}
                 >
-                  재시도
+                  {retryButtonText}
                 </Button>
               </span>
             </Tooltip>
@@ -1320,11 +1410,11 @@ export function RagJobDetailPage() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>색인 작업 재시도</DialogTitle>
+        <DialogTitle>{retryButtonText}</DialogTitle>
         <DialogContent>
-          <Stack spacing={1}>
+          <Stack spacing={1.5}>
             <Typography variant="body2">
-              이 RAG 색인 작업을 다시 진행할까요?
+              이 RAG 색인 작업을 {retryButtonText}할까요?
             </Typography>
             {job ? (
               <Box sx={{ bgcolor: "action.hover", borderRadius: 1, p: 1.25 }}>
@@ -1342,6 +1432,56 @@ export function RagJobDetailPage() {
                 </Typography>
               </Box>
             ) : null}
+            {embeddingOptions.length > 0 ? (
+              <Box sx={{ mt: 0.5 }}>
+                <TextField
+                  select
+                  label="임베딩 모델 프로필 (재시도 설정)"
+                  size="small"
+                  value={selectedOption ? `${selectedOption.provider}:${selectedOption.model}:${selectedOption.profileId || ""}` : ""}
+                  onChange={(event) => {
+                    const val = event.target.value;
+                    const matched = embeddingOptions.find((o) => `${o.provider}:${o.model}:${o.profileId || ""}` === val);
+                    if (matched) {
+                      setSelectedOption(matched);
+                    }
+                  }}
+                  disabled={mutating}
+                  fullWidth
+                  helperText={
+                    originalOption && selectedOption && (
+                      selectedOption.profileId !== originalOption.profileId ||
+                      selectedOption.provider !== originalOption.provider ||
+                      selectedOption.model !== originalOption.model
+                    )
+                      ? "임베딩 모델이 변경되어 기존 작업을 재시도하는 대신 새로운 강제 재색인 Job이 생성됩니다."
+                      : "설정을 변경하지 않으면 기존 색인 구성 그대로 재시도를 요청합니다."
+                  }
+                >
+                  {embeddingOptions.map((opt) => {
+                    const valueKey = `${opt.provider}:${opt.model}:${opt.profileId || ""}`;
+                    const label = opt.profileId
+                      ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                      : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                    return (
+                      <MenuItem key={valueKey} value={valueKey}>
+                        {label}
+                      </MenuItem>
+                    );
+                  })}
+                </TextField>
+              </Box>
+            ) : null}
+            {isPartialEmbedding && !hasChanged ? (
+              <Alert severity="info" sx={{ mt: 0.5 }}>
+                이미 색인된 chunk는 건너뛰고 나머지부터 진행합니다.
+              </Alert>
+            ) : null}
+            {hasChanged ? (
+              <Alert severity="warning" sx={{ mt: 0.5 }}>
+                모델을 변경하면 기존 임베딩은 재사용하지 않고 다시 생성됩니다.
+              </Alert>
+            ) : null}
             <Typography variant="caption" color="text.secondary">
               취소된 작업은 동일 대상으로 새 색인 작업을 생성하고, 그 외 작업은 서버 retry 엔드포인트로 재실행합니다.
             </Typography>
@@ -1352,7 +1492,7 @@ export function RagJobDetailPage() {
             취소
           </Button>
           <Button variant="contained" onClick={() => void handleRetry()} disabled={mutating}>
-            재시도 진행
+            {retryButtonText} 진행
           </Button>
         </DialogActions>
       </Dialog>
@@ -1389,9 +1529,11 @@ export function RagJobDetailPage() {
                   <StatItem label="상태" value={<StatusChip status={job.status} />} />
                   <StatItem label="단계" value={job.currentStep ?? "-"} />
                   <StatItem label="객체" value={`${job.objectType} #${job.objectId}`} />
-                  <StatItem label="Chunk" value={job.chunkCount.toLocaleString()} />
                   <StatItem label="소요" value={job.durationMs ? `${job.durationMs.toLocaleString()}ms` : "-"} />
                   <StatItem label="청킹 전략" value={chunkingDisplay(job, chunks)} />
+                  <StatItem label="전체 chunk 수" value={job.chunkCount.toLocaleString()} />
+                  <StatItem label="임베딩 시도/진행 chunk 수" value={job.embeddedCount.toLocaleString()} />
+                  <StatItem label="실제 저장 완료 chunk 수" value={job.indexedCount.toLocaleString()} />
                 </Box>
                 <TokenizerStatusPanel job={job} chunks={chunks} />
                 <Box sx={{ mt: 3, overflowX: "auto", pb: 0.5 }}>

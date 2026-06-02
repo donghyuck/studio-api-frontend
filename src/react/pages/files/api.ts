@@ -51,10 +51,15 @@ export const reactFilesApi = {
   async hasEmbedding(attachmentId: number) {
     return apiRequest<boolean>("get", `/api/mgmt/files/${attachmentId}/embedding/exists`);
   },
-  async ragIndex(attachmentId: number, options?: Partial<RagIndexRequestDto>) {
-    await apiRequest("post", `/api/mgmt/files/${attachmentId}/rag/index`, {
-      data: options ?? {},
+  async ragIndex(attachmentId: number, options?: Partial<RagIndexRequestDto>): Promise<string | null> {
+    const response = await apiClient.post<void>(`/api/mgmt/files/${attachmentId}/rag/index`, options ?? {}, {
+      withCredentials: true,
     });
+    return (
+      (response.headers["x-rag-job-id"] as string) ||
+      (response.headers["X-RAG-Job-Id"] as string) ||
+      null
+    );
   },
   async ragMetadata(attachmentId: number) {
     return apiRequest<Record<string, unknown>>(

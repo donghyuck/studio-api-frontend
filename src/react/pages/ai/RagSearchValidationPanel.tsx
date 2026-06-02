@@ -10,6 +10,7 @@ import {
   ButtonGroup,
   Chip,
   CircularProgress,
+  MenuItem,
   Stack,
   Switch,
   TextField,
@@ -23,7 +24,7 @@ import SpeedOutlined from "@mui/icons-material/SpeedOutlined";
 import TagOutlined from "@mui/icons-material/TagOutlined";
 import type { ColDef } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
-import { reactAiApi } from "@/react/pages/ai/api";
+import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import type {
   AiInfoResponse,
   ChatMessageDto,
@@ -1003,6 +1004,8 @@ function ContentPreview({
 
 export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }) {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
+  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState("2");
   const [minScore, setMinScore] = useState("0.7");
@@ -1065,6 +1068,20 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
         if (alive) {
           setError(resolveAxiosError(providerError));
         }
+      });
+
+    reactAiApi
+      .getEmbeddingOptions()
+      .then((res) => {
+        if (alive) {
+          const list = res.options ?? [];
+          setEmbeddingOptions(list);
+          const def = list.find((o) => o.defaultProfile) || list.find((o) => o.defaultProvider) || list[0] || null;
+          setSelectedOption(def);
+        }
+      })
+      .catch(() => {
+        // ignore
       });
 
     return () => {
@@ -1152,12 +1169,21 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
     setVectorRows([]);
     setSelectedVector(null);
     try {
-      const response = await reactAiApi.searchVector({
+      const payload: any = {
         query: query.trim(),
         topK: topKNumber,
         ...searchScope,
         minScore: Number.isFinite(minScoreNumber) ? minScoreNumber : undefined,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const response = await reactAiApi.searchVector(payload);
       setVectorRows(response);
       setLastVectorKey(currentSearchKey);
     } catch (searchError) {
@@ -1188,12 +1214,21 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
     setLastAnswerKey(null);
     setActiveReferenceIndex(null);
     try {
-      const response = await reactAiApi.searchRag({
+      const payload: any = {
         query: query.trim(),
         topK: topKNumber,
         hybrid: true,
         ...searchScope,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const response = await reactAiApi.searchRag(payload);
       setRagRows(response);
       setLastRagKey(currentRagKey);
     } catch (searchError) {
@@ -1222,7 +1257,7 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
     setActiveReferenceIndex(null);
     const visibleRagContext = buildVisibleRagContext(ragRows, topKNumber);
     try {
-      const response = await reactAiApi.sendRagChat({
+      const payload: any = {
         chat: {
           provider: provider || undefined,
           model: model || undefined,
@@ -1243,7 +1278,16 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
         ...searchScope,
         minScore: Number.isFinite(minScoreNumber) ? minScoreNumber : undefined,
         debug,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const response = await reactAiApi.sendRagChat(payload);
       setMessages(response.messages ?? []);
       setLastMetadata(response.metadata ?? null);
       const ragDiagnostics = response.metadata?.ragDiagnostics;
@@ -1278,6 +1322,38 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
       </Stack>
 
       {error ? <Alert severity="error">{error}</Alert> : null}
+
+      {embeddingOptions.length > 0 ? (
+        <Box sx={{ maxWidth: 400, mb: 0.5 }}>
+          <TextField
+            select
+            label="임베딩 모델 프로필"
+            size="small"
+            value={selectedOption ? `${selectedOption.provider}:${selectedOption.model}:${selectedOption.profileId || ""}` : ""}
+            onChange={(event) => {
+              const val = event.target.value;
+              const matched = embeddingOptions.find((o) => `${o.provider}:${o.model}:${o.profileId || ""}` === val);
+              if (matched) {
+                setSelectedOption(matched);
+              }
+            }}
+            disabled={isRunning}
+            fullWidth
+          >
+            {embeddingOptions.map((opt) => {
+              const valueKey = `${opt.provider}:${opt.model}:${opt.profileId || ""}`;
+              const label = opt.profileId
+                ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+              return (
+                <MenuItem key={valueKey} value={valueKey}>
+                  {label}
+                </MenuItem>
+              );
+            })}
+          </TextField>
+        </Box>
+      ) : null}
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
         <TextField
