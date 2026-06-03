@@ -1310,50 +1310,72 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
 
   return (
     <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-      <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle1">검색 검증</Typography>
-          <Typography variant="caption" color="text.secondary" noWrap>
+      <Typography variant="subtitle1">검색 검증</Typography>
+
+      {error ? <Alert severity="error">{error}</Alert> : null}
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: embeddingOptions.length > 0
+            ? { xs: "1fr", md: "1fr 1fr" }
+            : "1fr",
+          gap: 2,
+          alignItems: "center",
+          mb: 0.5,
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+            선택 파일 정보
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: 500,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
             {job
               ? `${sourceDisplayName(job)} / ${job.objectType} #${job.objectId}`
               : "색인 작업을 선택하지 않으면 전체 RAG 범위에서 검색합니다."}
           </Typography>
         </Box>
-      </Stack>
 
-      {error ? <Alert severity="error">{error}</Alert> : null}
-
-      {embeddingOptions.length > 0 ? (
-        <Box sx={{ maxWidth: 400, mb: 0.5 }}>
-          <TextField
-            select
-            label="임베딩 모델 프로필"
-            size="small"
-            value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
-            onChange={(event) => {
-              const val = event.target.value;
-              const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
-              if (matched) {
-                setSelectedOption(matched);
-              }
-            }}
-            disabled={isRunning}
-            fullWidth
-          >
-            {embeddingOptions.map((opt) => {
-              const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
-              const label = opt.profileId
-                ? `${opt.profileId} (${opt.provider} - ${opt.model})`
-                : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
-              return (
-                <MenuItem key={valueKey} value={valueKey}>
-                  {label}
-                </MenuItem>
-              );
-            })}
-          </TextField>
+        <Box sx={{ minWidth: 0 }}>
+          {embeddingOptions.length > 0 ? (
+            <TextField
+              select
+              label="임베딩 모델 프로필"
+              size="small"
+              value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
+              onChange={(event) => {
+                const val = event.target.value;
+                const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
+                if (matched) {
+                  setSelectedOption(matched);
+                }
+              }}
+              disabled={isRunning}
+              fullWidth
+            >
+              {embeddingOptions.map((opt) => {
+                const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
+                const label = opt.profileId
+                  ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                  : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                return (
+                  <MenuItem key={valueKey} value={valueKey}>
+                    {label}
+                  </MenuItem>
+                );
+              })}
+            </TextField>
+          ) : null}
         </Box>
-      ) : null}
+      </Box>
 
       <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
         <TextField
