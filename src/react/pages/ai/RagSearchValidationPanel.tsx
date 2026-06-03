@@ -1002,6 +1002,28 @@ function ContentPreview({
   );
 }
 
+function isPositiveIntegerText(value?: string | null) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return false;
+  }
+  const numberValue = Number(trimmed);
+  return Number.isInteger(numberValue) && numberValue > 0;
+}
+
+function inferAttachmentIdFromJob(job: RagIndexJobDto) {
+  if (job.sourceType !== "attachment") {
+    return undefined;
+  }
+  if (isPositiveIntegerText(job.documentId)) {
+    return job.documentId;
+  }
+  if (job.objectType === "attachment" && isPositiveIntegerText(job.objectId)) {
+    return job.objectId;
+  }
+  return undefined;
+}
+
 export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }) {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
   const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
@@ -1030,7 +1052,12 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
   const model = aiInfo?.providers.find((item) => item.name === provider)?.chat.model ?? "";
   const topKNumber = Math.max(1, Number(topK) || 5);
   const minScoreNumber = minScore.trim() === "" ? undefined : Number(minScore);
-  const searchScope = job ? { objectType: job.objectType, objectId: job.objectId } : {};
+  const jobAttachmentId = job ? inferAttachmentIdFromJob(job) : undefined;
+  const searchScope = job
+    ? jobAttachmentId
+      ? { objectType: "attachment", objectId: jobAttachmentId }
+      : { objectType: job.objectType, objectId: job.objectId }
+    : {};
   const isRunning = runningAction != null;
   const currentSearchKey = buildRequestKey({
     query: query.trim(),

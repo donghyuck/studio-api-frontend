@@ -61,36 +61,7 @@ function normalizeExtractedText(value: string) {
     .trim();
 }
 
-function ragObjectScopes(file: AttachmentDto | null, fallbackAttachmentId: number) {
-  const attachmentObjectId = String(fallbackAttachmentId);
-  const scopes: Array<{ objectType: string; objectId: string }> = [];
-  const append = (objectType?: string | number | null, objectId?: string | number | null) => {
-    const type = objectType == null ? "" : String(objectType).trim();
-    const id = objectId == null ? "" : String(objectId).trim();
-    if (!type || !id) {
-      return;
-    }
-    if (!scopes.some((scope) => scope.objectType === type && scope.objectId === id)) {
-      scopes.push({ objectType: type, objectId: id });
-    }
-  };
 
-  append("attachment", attachmentObjectId);
-  append(file?.objectType, attachmentObjectId);
-  append(file?.objectType, file?.objectId);
-
-  return scopes.length > 0 ? scopes : [{ objectType: "attachment", objectId: attachmentObjectId }];
-}
-
-function metadataMatchesAttachment(metadata: Record<string, unknown>, attachmentId: number) {
-  const expected = String(attachmentId);
-  const candidates = [
-    metadata.attachmentId,
-    metadata.sourceDocumentId,
-    metadata.documentId,
-  ];
-  return candidates.some((value) => value != null && String(value) === expected);
-}
 
 export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const toast = useToast();
@@ -147,18 +118,16 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }
 
   async function loadRagState(nextFile: AttachmentDto) {
-    for (const scope of ragObjectScopes(nextFile, nextFile.attachmentId)) {
-      try {
-        const metadata = await reactAiApi.getRagObjectMetadata(scope.objectType, scope.objectId);
-        if (Object.keys(metadata ?? {}).length > 0 && metadataMatchesAttachment(metadata, nextFile.attachmentId)) {
-          return {
-            indexed: true,
-            metadata,
-          };
-        }
-      } catch {
-        // Continue with the next possible object scope before using the attachment fallback.
+    try {
+      const metadata = await reactAiApi.getRagObjectMetadata("attachment", String(nextFile.attachmentId));
+      if (Object.keys(metadata ?? {}).length > 0) {
+        return {
+          indexed: true,
+          metadata,
+        };
       }
+    } catch {
+      // Ignore and fallback
     }
 
     const indexed = await reactFilesApi.hasEmbedding(nextFile.attachmentId);

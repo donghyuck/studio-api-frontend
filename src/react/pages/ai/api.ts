@@ -293,6 +293,13 @@ export const reactAiApi = {
     );
   },
 
+  deleteRagObject(objectType: string, objectId: string) {
+    return apiRequest<void>(
+      "delete",
+      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}`
+    );
+  },
+
   getRagChunkConfig() {
     return apiRequest<RagChunkConfigResponseDto>("get", `${MGMT_BASE}/rag/chunks/config`);
   },

@@ -1160,6 +1160,10 @@ export function RagPage() {
     setTargetMetadata(null);
     setError(null);
 
+    const isAttachment = Boolean(jobAttachmentId);
+    const ragObjectType = isAttachment ? "attachment" : job.objectType;
+    const ragObjectId = isAttachment ? jobAttachmentId! : job.objectId;
+
     if (job.embeddingProfileId) {
       const matched = embeddingOptions.find((o) => o.profileId === job.embeddingProfileId);
       if (matched) {
@@ -1176,8 +1180,8 @@ export function RagPage() {
     if (!force && alreadySelected && jobLogsCacheRef.current.has(job.jobId)) {
       setJobLogs(jobLogsCacheRef.current.get(job.jobId) ?? []);
       await Promise.all([
-        loadChunks(job.objectType, job.objectId, 0),
-        loadObjectMetadata(job.objectType, job.objectId),
+        loadChunks(ragObjectType, ragObjectId, 0),
+        loadObjectMetadata(ragObjectType, ragObjectId),
       ]);
       return;
     }
@@ -1188,8 +1192,8 @@ export function RagPage() {
         : reactAiApi.getRagJobLogs(job.jobId);
       const [logs] = await Promise.all([
         logsPromise,
-        loadChunks(job.objectType, job.objectId, 0, force),
-        loadObjectMetadata(job.objectType, job.objectId, force),
+        loadChunks(ragObjectType, ragObjectId, 0, force),
+        loadObjectMetadata(ragObjectType, ragObjectId, force),
       ]);
       jobLogsCacheRef.current.set(job.jobId, logs ?? []);
       setJobLogs(logs ?? []);
@@ -1331,7 +1335,7 @@ export function RagPage() {
         setDocumentId((current) => current || String(numericAttachmentId));
         setConfirmedScope(nextScope);
         setTargetMetadata(indexed ? await reactFilesApi.ragMetadata(numericAttachmentId) : null);
-        await loadChunks(nextScope.objectType, nextScope.objectId, 0);
+        await loadChunks("attachment", nextScope.attachmentId, 0);
       } else {
         const nextScope = {
           objectType: scopedObjectType,
