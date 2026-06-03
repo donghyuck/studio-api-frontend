@@ -1169,12 +1169,16 @@ export function RagPage() {
       if (matched) {
         setSelectedOption(matched);
       }
-    } else if (job.embeddingProvider && job.embeddingModel) {
-      const matched = embeddingOptions.find(
-        (o) => o.provider === job.embeddingProvider && o.model === job.embeddingModel
-      );
-      if (matched) {
-        setSelectedOption(matched);
+    }
+    
+    if (!selectedOption || (job.embeddingProfileId && selectedOption.profileId !== job.embeddingProfileId)) {
+      if (job.embeddingProvider && job.embeddingModel) {
+        const matched = embeddingOptions.find(
+          (o) => o.provider === job.embeddingProvider && o.model === job.embeddingModel
+        );
+        if (matched) {
+          setSelectedOption(matched);
+        }
       }
     }
     if (!force && alreadySelected && jobLogsCacheRef.current.has(job.jobId)) {

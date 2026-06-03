@@ -1132,6 +1132,27 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
     setActiveReferenceIndex(null);
   }, [job?.jobId]);
 
+  useEffect(() => {
+    if (!job || embeddingOptions.length === 0) return;
+
+    if (job.embeddingProfileId) {
+      const matched = embeddingOptions.find((o) => o.profileId === job.embeddingProfileId);
+      if (matched) {
+        setSelectedOption(matched);
+        return;
+      }
+    }
+
+    if (job.embeddingProvider && job.embeddingModel) {
+      const matched = embeddingOptions.find(
+        (o) => o.provider === job.embeddingProvider && o.model === job.embeddingModel
+      );
+      if (matched) {
+        setSelectedOption(matched);
+      }
+    }
+  }, [job, embeddingOptions]);
+
   const vectorColumns = useMemo<ColDef<VectorSearchResultDto>[]>(
     () => [
       { field: "id", headerName: "ID", width: 70, filter: false, cellClass: "ag-center-cell" },
