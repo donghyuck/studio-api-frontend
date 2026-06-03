@@ -25,6 +25,78 @@ import { resolveAxiosError } from "@/utils/helpers";
 
 const WORKSPACE_OBJECT_TYPE = 2103;
 
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  ariaLabel,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  ariaLabel: string;
+  onChange: (checked: boolean) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.indeterminate = indeterminate;
+    }
+  }, [indeterminate]);
+
+  return (
+    <input
+      ref={inputRef}
+      type="checkbox"
+      aria-label={ariaLabel}
+      checked={checked}
+      onChange={(event) => onChange(event.target.checked)}
+      onClick={(event) => event.stopPropagation()}
+      style={{
+        width: 16,
+        height: 16,
+        margin: 0,
+        accentColor: "#1565c0",
+        cursor: "pointer",
+        transform: ariaLabel === "행 선택" ? "translateY(2px)" : "none",
+      }}
+    />
+  );
+}
+
+function getDisplayedSelectionState(api: {
+  getLastDisplayedRowIndex: () => number;
+  getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+}) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  if (lastIndex < 0) {
+    return { displayedCount: 0, selectedCount: 0 };
+  }
+
+  let displayedCount = 0;
+  let selectedCount = 0;
+  for (let index = 0; index <= lastIndex; index += 1) {
+    const row = api.getDisplayedRowAtIndex(index);
+    if (!row) continue;
+    displayedCount += 1;
+    if (row.isSelected()) selectedCount += 1;
+  }
+  return { displayedCount, selectedCount };
+}
+
+function toggleDisplayedRows(
+  api: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  },
+  selected: boolean
+) {
+  const lastIndex = api.getLastDisplayedRowIndex();
+  for (let index = 0; index <= lastIndex; index += 1) {
+    api.getDisplayedRowAtIndex(index)?.setSelected(selected);
+  }
+}
+
 interface Props {
   workspaceId: number;
   archived?: boolean;
@@ -40,6 +112,7 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
   const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
   const [selectedCount, setSelectedCount] = useState(0);
   const [selectedRows, setSelectedRows] = useState<AttachmentDto[]>([]);
+  const [displayedCount, setDisplayedCount] = useState(0);
 
   const loadFiles = useCallback(async () => {
     if (!workspaceId) return;
@@ -87,8 +160,69 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
     }
   };
 
+  function renderHeaderCheckbox(api?: {
+    getLastDisplayedRowIndex: () => number;
+    getDisplayedRowAtIndex: (index: number) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+  }) {
+    const currentState = api
+      ? getDisplayedSelectionState(api)
+      : { displayedCount, selectedCount };
+    const allDisplayedSelected =
+      currentState.displayedCount > 0 &&
+      currentState.selectedCount === currentState.displayedCount;
+    const partiallySelected =
+      currentState.selectedCount > 0 &&
+      currentState.selectedCount < currentState.displayedCount;
+
+    return (
+      <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <SelectionCheckbox
+          ariaLabel="전체 선택"
+          checked={allDisplayedSelected}
+          indeterminate={partiallySelected}
+          onChange={() => {
+            if (api) {
+              toggleDisplayedRows(api, !allDisplayedSelected);
+            }
+          }}
+        />
+      </Box>
+    );
+  }
+
   const columns = useMemo<ColDef<AttachmentDto>[]>(
     () => [
+      {
+        colId: "rowSelect",
+        headerName: "",
+        width: 40,
+        minWidth: 40,
+        maxWidth: 40,
+        pinned: "left" as const,
+        sortable: false,
+        resizable: false,
+        suppressMovable: true,
+        lockPosition: true,
+        cellClass: "selection-column-centered",
+        headerClass: "selection-column-centered",
+        headerComponent: (props: {
+          api: {
+            getLastDisplayedRowIndex: () => number;
+            getDisplayedRowAtIndex: (
+              index: number
+            ) => { isSelected: () => boolean; setSelected: (selected: boolean) => void } | undefined;
+          };
+        }) => renderHeaderCheckbox(props.api),
+        cellRenderer: (params: { node: { isSelected: () => boolean; setSelected: (selected: boolean) => void } }) => (
+          <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <SelectionCheckbox
+              ariaLabel="행 선택"
+              checked={params.node.isSelected()}
+              onChange={(nextChecked) => params.node.setSelected(nextChecked)}
+            />
+          </Box>
+        ),
+      } satisfies ColDef<AttachmentDto>,
       {
         headerName: "파일명",
         field: "name",
@@ -147,7 +281,7 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
         valueFormatter: (params) => (params.value ? new Date(params.value).toLocaleString() : "-"),
       },
     ],
-    []
+    [displayedCount, selectedCount]
   );
 
   return (
@@ -192,8 +326,8 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
           rowSelection={{
             mode: "multiRow",
             enableClickSelection: false,
-            checkboxes: true,
-            headerCheckbox: true,
+            checkboxes: false,
+            headerCheckbox: false,
           }}
           events={[
             {
@@ -202,6 +336,17 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
                 const rows = event.api.getSelectedRows();
                 setSelectedCount(rows.length);
                 setSelectedRows(rows);
+                setDisplayedCount(event.api.getDisplayedRowCount());
+                event.api.refreshHeader?.();
+              },
+            },
+            {
+              type: "modelUpdated",
+              listener: (event: {
+                api: { getDisplayedRowCount: () => number; refreshHeader?: () => void };
+              }) => {
+                setDisplayedCount(event.api.getDisplayedRowCount());
+                event.api.refreshHeader?.();
               },
             },
           ]}
