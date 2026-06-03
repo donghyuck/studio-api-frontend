@@ -23,6 +23,8 @@ type ObjectTypeSelectProps = {
   size?: "small" | "medium";
   helperText?: string;
   sx?: SxProps<Theme>;
+  freeSolo?: boolean;
+  includeAttachment?: boolean;
 };
 
 export function ObjectTypeSelect({
@@ -37,6 +39,8 @@ export function ObjectTypeSelect({
   size = "small",
   helperText,
   sx,
+  freeSolo = false,
+  includeAttachment = false,
 }: ObjectTypeSelectProps) {
   const [objectTypes, setObjectTypes] = useState<ObjectTypeDto[]>([]);
   const [loading, setLoading] = useState(false);
@@ -66,37 +70,71 @@ export function ObjectTypeSelect({
       label: `${item.code} #${item.objectType}`,
       name: item.name,
     }));
+    if (includeAttachment) {
+      base.push({
+        value: "attachment",
+        label: "attachment (첨부파일)",
+        name: "시스템 첨부파일 자체 RAG",
+      });
+    }
     return includeAll
       ? [{ value: "", label: allLabel, name: "모든 객체유형" }, ...base]
       : base;
-  }, [allLabel, includeAll, objectTypes]);
+  }, [allLabel, includeAll, objectTypes, includeAttachment]);
 
-  const selectedOption = options.find((option) => option.value === value) ?? options[0];
+  const selectedOption = useMemo(() => {
+    const opt = options.find((option) => option.value === value);
+    if (opt) return opt;
+    if (freeSolo) return value;
+    return options[0] || null;
+  }, [options, value, freeSolo]);
 
   return (
-    <Autocomplete<ObjectTypeSelectOption, false, false, false>
+    <Autocomplete<ObjectTypeSelectOption | string, false, false, boolean>
+      freeSolo={freeSolo}
       options={options}
       value={selectedOption}
-      onChange={(_, option) => onChange(option?.value ?? "")}
-      getOptionLabel={(option) => option.label}
-      isOptionEqualToValue={(option, selected) => option.value === selected.value}
+      onChange={(_, option) => {
+        if (typeof option === "string") {
+          onChange(option);
+        } else if (option && typeof option === "object" && "value" in option) {
+          onChange(option.value);
+        } else {
+          onChange("");
+        }
+      }}
+      onInputChange={freeSolo ? (_, newInputValue) => {
+        onChange(newInputValue);
+      } : undefined}
+      getOptionLabel={(option) => {
+        if (typeof option === "string") return option;
+        return option.label;
+      }}
+      isOptionEqualToValue={(option, selectedVal) => {
+        const val1 = typeof option === "string" ? option : option.value;
+        const val2 = typeof selectedVal === "string" ? selectedVal : selectedVal.value;
+        return val1 === val2;
+      }}
       loading={loading}
       disabled={disabled}
       fullWidth={fullWidth}
       size={size}
       sx={sx}
-      renderOption={(optionProps, option) => (
-        <li {...optionProps} key={option.value || "__all__"}>
-          <Stack spacing={0}>
-            <Typography variant="body2">{option.label}</Typography>
-            {option.name ? (
-              <Typography variant="caption" color="text.secondary">
-                {option.name}
-              </Typography>
-            ) : null}
-          </Stack>
-        </li>
-      )}
+      renderOption={(optionProps, option) => {
+        const optionObj = typeof option === "string" ? { value: option, label: option, name: "" } : option;
+        return (
+          <li {...optionProps} key={optionObj.value || "__all__"}>
+            <Stack spacing={0}>
+              <Typography variant="body2">{optionObj.label}</Typography>
+              {optionObj.name ? (
+                <Typography variant="caption" color="text.secondary">
+                  {optionObj.name}
+                </Typography>
+              ) : null}
+            </Stack>
+          </li>
+        );
+      }}
       renderInput={(params) => (
         <TextField
           {...params}

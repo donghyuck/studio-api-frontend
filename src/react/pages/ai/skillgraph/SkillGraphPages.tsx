@@ -1122,6 +1122,8 @@ function RagExtractionDialog({
               label="objectType"
               placeholder="객체유형 선택"
               includeAll={false}
+              freeSolo
+              includeAttachment
               sx={{ minWidth: 240 }}
             />
             <TextField
