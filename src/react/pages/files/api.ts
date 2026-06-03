@@ -52,7 +52,7 @@ export const reactFilesApi = {
     return apiRequest<boolean>("get", `/api/mgmt/files/${attachmentId}/embedding/exists`);
   },
   async ragIndex(attachmentId: number, options?: Partial<RagIndexRequestDto>): Promise<string | null> {
-    const response = await apiClient.post<void>(`/api/mgmt/attachments/${attachmentId}/rag/index`, options ?? {}, {
+    const response = await apiClient.post<void>(`/api/mgmt/files/${attachmentId}/rag/index`, options ?? {}, {
       withCredentials: true,
     });
     return (
