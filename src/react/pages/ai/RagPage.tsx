@@ -1159,6 +1159,20 @@ export function RagPage() {
     setTargetIndexed(job.status === "SUCCEEDED" || job.status === "WARNING");
     setTargetMetadata(null);
     setError(null);
+
+    if (job.embeddingProfileId) {
+      const matched = embeddingOptions.find((o) => o.profileId === job.embeddingProfileId);
+      if (matched) {
+        setSelectedOption(matched);
+      }
+    } else if (job.embeddingProvider && job.embeddingModel) {
+      const matched = embeddingOptions.find(
+        (o) => o.provider === job.embeddingProvider && o.model === job.embeddingModel
+      );
+      if (matched) {
+        setSelectedOption(matched);
+      }
+    }
     if (!force && alreadySelected && jobLogsCacheRef.current.has(job.jobId)) {
       setJobLogs(jobLogsCacheRef.current.get(job.jobId) ?? []);
       await Promise.all([
