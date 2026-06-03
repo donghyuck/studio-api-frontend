@@ -1600,6 +1600,36 @@ export function RagJobDetailPage() {
                     gap: 1.25,
                   }}
                 >
+                  <StatItem
+                    label="Job ID"
+                    value={
+                      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0, width: "100%" }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 700,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {job.jobId}
+                        </Typography>
+                        <Tooltip title="Job ID 복사">
+                          <IconButton
+                            size="small"
+                            sx={{ p: 0.25 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void navigator.clipboard.writeText(job.jobId);
+                            }}
+                          >
+                            <ContentCopyOutlined sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    }
+                  />
                   <StatItem label="문서/파일명" value={sourceDisplayName(job)} />
                   <StatItem label="상태" value={<StatusChip status={job.status} />} />
                   <StatItem label="단계" value={job.currentStep ?? "-"} />
