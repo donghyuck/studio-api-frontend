@@ -1033,12 +1033,13 @@ function RagExtractionDialog({
         offset: Math.max(0, nextOffset),
         limit: RAG_CHUNK_PAGE_SIZE,
       });
-      const pageChunks = page.items ?? [];
+      const pageChunks = page.content ?? [];
       setChunks(pageChunks);
-      setChunkOffset(page.offset ?? Math.max(0, nextOffset));
-      setChunkReturned(page.returned ?? pageChunks.length);
-      setChunkTotal(page.total);
-      setChunkHasMore(Boolean(page.hasMore));
+      const computedOffset = (page.page != null && page.size != null) ? page.page * page.size : Math.max(0, nextOffset);
+      setChunkOffset(computedOffset);
+      setChunkReturned(pageChunks.length);
+      setChunkTotal(page.totalElements);
+      setChunkHasMore(Boolean(page.hasNext));
       if (!pageChunks.length) {
         setError("조회된 RAG chunk가 없습니다.");
       }

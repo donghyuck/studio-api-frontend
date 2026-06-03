@@ -373,12 +373,16 @@ export interface SkillRagChunkPreview {
 }
 
 export interface SkillRagChunkPageResponse {
-  items: SkillRagChunkPreview[];
-  offset: number;
-  limit: number;
-  returned: number;
-  total?: number;
-  hasMore: boolean;
+  content: SkillRagChunkPreview[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  hasNext: boolean;
+  hasPrevious: boolean;
+  sort?: string;
 }
 
 export type SkillRagExtractionMode = "ALL_CHUNKS" | "SELECTED_CHUNKS";
