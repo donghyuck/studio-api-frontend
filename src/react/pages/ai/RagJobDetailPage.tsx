@@ -1014,6 +1014,7 @@ export function RagJobDetailPage() {
   }, [jobId]);
   const [mutating, setMutating] = useState(false);
   const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
+  const [selectedChunkingStrategy, setSelectedChunkingStrategy] = useState<string>("recursive");
   const [error, setError] = useState<string | null>(null);
   const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
   const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
@@ -1180,10 +1181,13 @@ export function RagJobDetailPage() {
   }, [originalOption]);
 
   useEffect(() => {
-    if (retryConfirmOpen && originalOption) {
-      setSelectedOption(originalOption);
+    if (retryConfirmOpen) {
+      if (originalOption) {
+        setSelectedOption(originalOption);
+      }
+      setSelectedChunkingStrategy(job?.chunkingStrategy || "recursive");
     }
-  }, [retryConfirmOpen, originalOption]);
+  }, [retryConfirmOpen, originalOption, job]);
 
   async function handleRetry() {
     if (!job) {
@@ -1194,11 +1198,12 @@ export function RagJobDetailPage() {
     try {
       let response: RagIndexJobDto;
       const hasChanged = Boolean(
-        originalOption && selectedOption && (
+        (originalOption && selectedOption && (
           selectedOption.profileId !== originalOption.profileId ||
           selectedOption.provider !== originalOption.provider ||
           selectedOption.model !== originalOption.model
-        )
+        )) ||
+        selectedChunkingStrategy !== (job.chunkingStrategy || "recursive")
       );
 
       if (job.status === "CANCELLED" || hasChanged) {
@@ -1209,8 +1214,8 @@ export function RagJobDetailPage() {
           sourceType: job.sourceType || undefined,
           forceReindex: true,
           useLlmKeywordExtraction: true,
+          chunkingStrategy: selectedChunkingStrategy,
         };
-        if (job.chunkingStrategy) payload.chunkingStrategy = job.chunkingStrategy;
         if (job.chunkMaxSize) payload.chunkMaxSize = job.chunkMaxSize;
         if (job.chunkOverlap) payload.chunkOverlap = job.chunkOverlap;
         if (job.chunkUnit) payload.chunkUnit = job.chunkUnit;
@@ -1555,6 +1560,28 @@ export function RagJobDetailPage() {
                 </TextField>
               </Box>
             ) : null}
+            <Box sx={{ mt: 1.5 }}>
+              <TextField
+                select
+                label="청킹 전략 (재시도 설정)"
+                size="small"
+                value={selectedChunkingStrategy}
+                onChange={(event) => setSelectedChunkingStrategy(event.target.value)}
+                disabled={mutating}
+                fullWidth
+                helperText={
+                  job && selectedChunkingStrategy !== (job.chunkingStrategy || "recursive")
+                    ? "청킹 전략이 변경되어 기존 작업을 재시도하는 대신 새로운 강제 재색인 Job이 생성됩니다."
+                    : "설정을 변경하지 않으면 기존 색인 구성 그대로 재시도를 요청합니다."
+                }
+              >
+                <MenuItem value="recursive">재귀적 청킹 (Recursive)</MenuItem>
+                <MenuItem value="fixed-size">고정 크기 청킹 (Fixed Size)</MenuItem>
+                <MenuItem value="structure-based">구조 기반 청킹 (Structure Based)</MenuItem>
+                <MenuItem value="semantic">의미론적 청킹 (Semantic)</MenuItem>
+                <MenuItem value="llm-based">LLM 기반 청킹 (LLM Based)</MenuItem>
+              </TextField>
+            </Box>
             {isPartialEmbedding && !hasChanged ? (
               <Alert severity="info" sx={{ mt: 0.5 }}>
                 이미 색인된 chunk는 건너뛰고 나머지부터 진행합니다.
