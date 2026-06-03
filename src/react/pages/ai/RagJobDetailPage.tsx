@@ -1226,9 +1226,16 @@ export function RagJobDetailPage() {
         response = await reactAiApi.createRagJob(payload);
         navigate(`/services/ai/rag/jobs/${response.jobId}`, { replace: true });
       } else {
-        response = await reactAiApi.retryRagJob(job.jobId);
+        const res = await reactAiApi.retryRagJob(job.jobId);
+        response = {
+          ...res,
+          status: "PENDING",
+          currentStep: undefined,
+          errorMessage: undefined,
+        };
       }
       setJob(response);
+      await new Promise((resolve) => setTimeout(resolve, 300));
       await loadDetail();
     } catch (retryError) {
       setError(resolveAxiosError(retryError));

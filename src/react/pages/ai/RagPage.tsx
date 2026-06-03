@@ -1278,8 +1278,15 @@ export function RagPage() {
         }
         job = await reactAiApi.createRagJob(payload);
       } else {
-        job = await reactAiApi.retryRagJob(selectedJob.jobId);
+        const res = await reactAiApi.retryRagJob(selectedJob.jobId);
+        job = {
+          ...res,
+          status: "PENDING",
+          currentStep: undefined,
+          errorMessage: undefined,
+        };
       }
+      await new Promise((resolve) => setTimeout(resolve, 300));
       await loadJobs();
       clearObjectInspectionCache(job.objectType, job.objectId);
       jobLogsCacheRef.current.delete(job.jobId);
