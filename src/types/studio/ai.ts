@@ -345,6 +345,7 @@ export interface RagIndexRequestDto {
   embeddingProvider?: string;
   embeddingModel?: string;
   useLlmKeywordExtraction?: boolean;
+  chunkingStrategy?: string;
 }
 
 export type RagIndexJobStatus =
@@ -368,7 +369,6 @@ export interface RagIndexJobCreateRequestDto extends RagIndexRequestDto {
   text?: string;
   sourceType?: string;
   forceReindex?: boolean;
-  chunkingStrategy?: string;
   chunkMaxSize?: number;
   chunkOverlap?: number;
   chunkUnit?: string;

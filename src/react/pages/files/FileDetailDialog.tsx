@@ -79,6 +79,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [ragIndexing, setRagIndexing] = useState(false);
   const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
   const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
+  const [chunkingStrategy, setChunkingStrategy] = useState<string>("recursive");
 
   useEffect(() => {
     if (open) {
@@ -95,6 +96,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     } else {
       setEmbeddingOptions([]);
       setSelectedOption(null);
+      setChunkingStrategy("recursive");
     }
   }, [open]);
 
@@ -318,6 +320,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     try {
       const payload: any = {
         useLlmKeywordExtraction: true,
+        chunkingStrategy,
       };
       if (selectedOption) {
         if (selectedOption.profileId) {
@@ -514,6 +517,26 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           </MenuItem>
                         );
                       })}
+                    </TextField>
+                  </Box>
+                ) : null}
+
+                {!ragIndexCompleted ? (
+                  <Box sx={{ mb: 1.5 }}>
+                    <TextField
+                      select
+                      label="청킹 전략"
+                      size="small"
+                      value={chunkingStrategy}
+                      onChange={(event) => setChunkingStrategy(event.target.value)}
+                      disabled={ragIndexing}
+                      fullWidth
+                    >
+                      <MenuItem value="recursive">재귀적 청킹 (Recursive)</MenuItem>
+                      <MenuItem value="fixed-size">고정 크기 청킹 (Fixed Size)</MenuItem>
+                      <MenuItem value="structure-based">구조 기반 청킹 (Structure Based)</MenuItem>
+                      <MenuItem value="semantic">의미론적 청킹 (Semantic)</MenuItem>
+                      <MenuItem value="llm-based">LLM 기반 청킹 (LLM Based)</MenuItem>
                     </TextField>
                   </Box>
                 ) : null}
