@@ -8,6 +8,8 @@ import {
   Box,
   Button,
   ButtonGroup,
+  Card,
+  CardContent,
   Chip,
   CircularProgress,
   MenuItem,
@@ -1362,313 +1364,325 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
 
       {error ? <Alert severity="error">{error}</Alert> : null}
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: embeddingOptions.length > 0
-            ? { xs: "1fr", md: "1fr 1fr" }
-            : "1fr",
-          gap: 2,
-          alignItems: "center",
-          mb: 0.5,
-        }}
-      >
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-            선택 파일 정보
-          </Typography>
-          <Typography
-            variant="body2"
-            sx={{
-              fontWeight: 500,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {job
-              ? `${sourceDisplayName(job)} / ${job.objectType} #${job.objectId}`
-              : "색인 작업을 선택하지 않으면 전체 RAG 범위에서 검색합니다."}
-          </Typography>
-        </Box>
-
-        <Box sx={{ minWidth: 0 }}>
-          {embeddingOptions.length > 0 ? (
-            <TextField
-              select
-              label="임베딩 모델 프로필"
-              size="small"
-              value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
-              onChange={(event) => {
-                const val = event.target.value;
-                const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
-                if (matched) {
-                  setSelectedOption(matched);
-                }
-              }}
-              disabled={isRunning}
-              fullWidth
-            >
-              {embeddingOptions.map((opt) => {
-                const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
-                const label = opt.profileId
-                  ? `${opt.profileId} (${opt.provider} - ${opt.model})`
-                  : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
-                return (
-                  <MenuItem key={valueKey} value={valueKey}>
-                    {label}
-                  </MenuItem>
-                );
-              })}
-            </TextField>
-          ) : null}
-        </Box>
-      </Box>
-
-      <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-        <TextField
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setVectorRows([]);
-            setRagRows([]);
-            setMessages([]);
-            setAnswerError(false);
-            setSelectedVector(null);
-            setSelectedRag(null);
-            setLastVectorKey(null);
-            setLastRagKey(null);
-            setLastAnswerKey(null);
-            setActiveReferenceIndex(null);
-          }}
-          placeholder="검증 쿼리 입력"
-          size="small"
-          fullWidth
-          inputProps={{ "aria-label": "검증 쿼리" }}
-        />
-        <TextField
-          label="Top K"
-          value={topK}
-          onChange={(event) => setTopK(event.target.value)}
-          size="small"
-          sx={{ width: { xs: "100%", md: 110 } }}
-        />
-        <TextField
-          label="Min Score"
-          value={minScore}
-          onChange={(event) => setMinScore(event.target.value)}
-          size="small"
-          sx={{ width: { xs: "100%", md: 130 } }}
-        />
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="caption" color="text.secondary">
-            Debug
-          </Typography>
-          <Switch checked={debug} onChange={(event) => setDebug(event.target.checked)} />
-        </Stack>
-      </Stack>
-
-      <Stack spacing={0.5} alignItems="flex-start">
-        <ButtonGroup
-          variant="outlined"
-          size="small"
-          sx={{
-            flexWrap: "wrap",
-            "& .MuiButton-root": {
-              minWidth: { xs: 150, md: 180 },
-              px: 2,
-            },
-          }}
-        >
-          <Button
-            variant={tab === "vector" ? "contained" : "outlined"}
-            onClick={() => void handleVectorSearch()}
-            disabled={isRunning || !query.trim()}
-            startIcon={
-              runningAction === "vector" ? <CircularProgress size={16} color="inherit" /> : undefined
-            }
-          >
-            <Tooltip describeChild title={vectorLoaded ? "배지를 클릭하면 같은 조건으로 다시 조회합니다." : ""}>
-              <Badge
-                badgeContent={vectorLoaded ? vectorRows.length : null}
-                color={vectorRows.length === 0 ? "default" : "primary"}
-                invisible={!vectorLoaded}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (!isRunning && query.trim()) {
-                    void handleVectorSearch(true);
-                  }
-                }}
-                sx={{
-                  cursor: vectorLoaded ? "pointer" : "inherit",
-                  "& .MuiBadge-badge": { right: -14 },
-                }}
-              >
-                <Box component="span">벡터 검색</Box>
-              </Badge>
-            </Tooltip>
-          </Button>
-          <Button
-            variant={tab === "rag" ? "contained" : "outlined"}
-            onClick={() => void handleRagSearch()}
-            disabled={isRunning || !query.trim()}
-            startIcon={runningAction === "rag" ? <CircularProgress size={16} color="inherit" /> : undefined}
-          >
-            <Tooltip describeChild title={ragLoaded ? "배지를 클릭하면 같은 조건으로 다시 조회합니다." : ""}>
-              <Badge
-                badgeContent={ragLoaded ? ragRows.length : null}
-                color={ragRows.length === 0 ? "default" : "primary"}
-                invisible={!ragLoaded}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (!isRunning && query.trim()) {
-                    void handleRagSearch(true);
-                  }
-                }}
-                sx={{
-                  cursor: ragLoaded ? "pointer" : "inherit",
-                  "& .MuiBadge-badge": { right: -14 },
-                }}
-              >
-                <Box component="span">RAG 결과 조회</Box>
-              </Badge>
-            </Tooltip>
-          </Button>
-          <Button
-            variant={tab === "answer" ? "contained" : "outlined"}
-            onClick={() => void handleAnswer()}
-            disabled={isRunning || !query.trim()}
-            startIcon={
-              runningAction === "answer" ? <CircularProgress size={16} color="inherit" /> : undefined
-            }
-          >
-            <Tooltip describeChild title={answerLoaded ? "배지를 클릭하면 같은 조건으로 다시 생성합니다." : ""}>
-              <Badge
-                badgeContent={
-                  answerLoaded
-                    ? answerError
-                      ? <BugReportOutlined sx={{ fontSize: 12 }} />
-                      : "완료"
-                    : null
-                }
-                color={answerError ? "error" : "success"}
-                invisible={!answerLoaded}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (!isRunning && query.trim()) {
-                    void handleAnswer(true);
-                  }
-                }}
-                sx={{
-                  cursor: answerLoaded ? "pointer" : "inherit",
-                  "& .MuiBadge-badge": {
-                    minWidth: answerError ? 18 : undefined,
-                    right: answerError ? -12 : -18,
-                  },
-                }}
-              >
-                <Box component="span">문맥 기반 답변 생성</Box>
-              </Badge>
-            </Tooltip>
-          </Button>
-        </ButtonGroup>
-      </Stack>
-
-      {tab === "vector" ? (
-        <Stack spacing={1}>
-          <GridContent<VectorSearchResultDto>
-            columns={vectorColumns}
-            rowData={vectorRows}
-            loading={runningAction === "vector"}
-            height={280}
-            events={[
-              {
-                type: "rowClicked",
-                listener: (event) =>
-                  setSelectedVector((event as { data?: VectorSearchResultDto }).data ?? null),
-              },
-            ]}
-          />
-          <ContentPreview
-            title="선택한 벡터 결과"
-            content={selectedVector?.content}
-            metadata={selectedVector?.metadata}
-          />
-        </Stack>
-      ) : null}
-
-      {tab === "rag" ? (
-        <Stack spacing={1}>
-          <GridContent<SearchResultDto>
-            columns={ragColumns}
-            rowData={ragRows}
-            loading={runningAction === "rag"}
-            height={280}
-            events={[
-              {
-                type: "rowClicked",
-                listener: (event) => setSelectedRag((event as { data?: SearchResultDto }).data ?? null),
-              },
-            ]}
-          />
-          <ContentPreview
-            title="선택한 RAG 결과"
-            content={selectedRag?.content}
-            metadata={selectedRag?.metadata}
-          />
-        </Stack>
-      ) : null}
-
-      {tab === "answer" ? (
-        <Stack spacing={1}>
-          {runningAction === "answer" ? (
-            <LoadingPanel />
-          ) : messages.length ? (
+      <Card variant="outlined" sx={{ borderRadius: 2 }}>
+        <CardContent>
+          <Stack spacing={1.5}>
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: {
-                  xs: "minmax(0, 1fr)",
-                  lg: "minmax(0, 1fr) minmax(0, 1fr)",
-                },
-                gap: 1.25,
-                alignItems: "stretch",
+                gridTemplateColumns: embeddingOptions.length > 0
+                  ? { xs: "1fr", md: "1fr 1fr" }
+                  : "1fr",
+                gap: 2,
+                alignItems: "center",
+                mb: 0.5,
               }}
             >
-              <AnswerPanel
-                messages={messages}
-                referencesCount={Math.min(ragRows.length, topKNumber)}
-                onReferenceHover={setActiveReferenceIndex}
-              />
-              <ReferenceDocuments
-                rows={ragRows}
-                topK={topKNumber}
-                query={query}
-                activeReferenceIndex={activeReferenceIndex}
-              />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                  선택 파일 정보
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 500,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {job
+                    ? `${sourceDisplayName(job)} / ${job.objectType} #${job.objectId}`
+                    : "색인 작업을 선택하지 않으면 전체 RAG 범위에서 검색합니다."}
+                </Typography>
+              </Box>
+
+              <Box sx={{ minWidth: 0 }}>
+                {embeddingOptions.length > 0 ? (
+                  <TextField
+                    select
+                    label="임베딩 모델 프로필"
+                    size="small"
+                    value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
+                    onChange={(event) => {
+                      const val = event.target.value;
+                      const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
+                      if (matched) {
+                        setSelectedOption(matched);
+                      }
+                    }}
+                    disabled={isRunning}
+                    fullWidth
+                  >
+                    {embeddingOptions.map((opt) => {
+                      const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
+                      const label = opt.profileId
+                        ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                        : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                      return (
+                        <MenuItem key={valueKey} value={valueKey}>
+                          {label}
+                        </MenuItem>
+                      );
+                    })}
+                  </TextField>
+                ) : null}
+              </Box>
             </Box>
-          ) : (
-            <EmptyAnswerPanel />
-          )}
-          <MetadataPanel metadata={lastMetadata} provider={provider} model={model} />
-          {diagnostics ? (
-            <Box
-              component="pre"
-              sx={{
-                m: 0,
-                p: 1,
-                maxHeight: 220,
-                overflow: "auto",
-                bgcolor: "action.hover",
-                borderRadius: 2,
-                fontSize: 12,
-              }}
-            >
-              {JSON.stringify(diagnostics, null, 2)}
-            </Box>
-          ) : null}
-        </Stack>
-      ) : null}
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
+              <TextField
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setVectorRows([]);
+                  setRagRows([]);
+                  setMessages([]);
+                  setAnswerError(false);
+                  setSelectedVector(null);
+                  setSelectedRag(null);
+                  setLastVectorKey(null);
+                  setLastRagKey(null);
+                  setLastAnswerKey(null);
+                  setActiveReferenceIndex(null);
+                }}
+                placeholder="검증 쿼리 입력"
+                size="small"
+                fullWidth
+                inputProps={{ "aria-label": "검증 쿼리" }}
+              />
+              <TextField
+                label="Top K"
+                value={topK}
+                onChange={(event) => setTopK(event.target.value)}
+                size="small"
+                sx={{ width: { xs: "100%", md: 110 } }}
+              />
+              <TextField
+                label="Min Score"
+                value={minScore}
+                onChange={(event) => setMinScore(event.target.value)}
+                size="small"
+                sx={{ width: { xs: "100%", md: 130 } }}
+              />
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="caption" color="text.secondary">
+                  Debug
+                </Typography>
+                <Switch checked={debug} onChange={(event) => setDebug(event.target.checked)} />
+              </Stack>
+            </Stack>
+
+            <Stack spacing={0.5} alignItems="flex-start">
+              <ButtonGroup
+                variant="outlined"
+                size="small"
+                sx={{
+                  flexWrap: "wrap",
+                  "& .MuiButton-root": {
+                    minWidth: { xs: 150, md: 180 },
+                    px: 2,
+                  },
+                }}
+              >
+                <Button
+                  variant={tab === "vector" ? "contained" : "outlined"}
+                  onClick={() => void handleVectorSearch()}
+                  disabled={isRunning || !query.trim()}
+                  startIcon={
+                    runningAction === "vector" ? <CircularProgress size={16} color="inherit" /> : undefined
+                  }
+                >
+                  <Tooltip describeChild title={vectorLoaded ? "배지를 클릭하면 같은 조건으로 다시 조회합니다." : ""}>
+                    <Badge
+                      badgeContent={vectorLoaded ? vectorRows.length : null}
+                      color={vectorRows.length === 0 ? "default" : "primary"}
+                      invisible={!vectorLoaded}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!isRunning && query.trim()) {
+                          void handleVectorSearch(true);
+                        }
+                      }}
+                      sx={{
+                        cursor: vectorLoaded ? "pointer" : "inherit",
+                        "& .MuiBadge-badge": { right: -14 },
+                      }}
+                    >
+                      <Box component="span">벡터 검색</Box>
+                    </Badge>
+                  </Tooltip>
+                </Button>
+                <Button
+                  variant={tab === "rag" ? "contained" : "outlined"}
+                  onClick={() => void handleRagSearch()}
+                  disabled={isRunning || !query.trim()}
+                  startIcon={runningAction === "rag" ? <CircularProgress size={16} color="inherit" /> : undefined}
+                >
+                  <Tooltip describeChild title={ragLoaded ? "배지를 클릭하면 같은 조건으로 다시 조회합니다." : ""}>
+                    <Badge
+                      badgeContent={ragLoaded ? ragRows.length : null}
+                      color={ragRows.length === 0 ? "default" : "primary"}
+                      invisible={!ragLoaded}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!isRunning && query.trim()) {
+                          void handleRagSearch(true);
+                        }
+                      }}
+                      sx={{
+                        cursor: ragLoaded ? "pointer" : "inherit",
+                        "& .MuiBadge-badge": { right: -14 },
+                      }}
+                    >
+                      <Box component="span">RAG 결과 조회</Box>
+                    </Badge>
+                  </Tooltip>
+                </Button>
+                <Button
+                  variant={tab === "answer" ? "contained" : "outlined"}
+                  onClick={() => void handleAnswer()}
+                  disabled={isRunning || !query.trim()}
+                  startIcon={
+                    runningAction === "answer" ? <CircularProgress size={16} color="inherit" /> : undefined
+                  }
+                >
+                  <Tooltip describeChild title={answerLoaded ? "배지를 클릭하면 같은 조건으로 다시 생성합니다." : ""}>
+                    <Badge
+                      badgeContent={
+                        answerLoaded
+                          ? answerError
+                            ? <BugReportOutlined sx={{ fontSize: 12 }} />
+                            : "완료"
+                          : null
+                      }
+                      color={answerError ? "error" : "success"}
+                      invisible={!answerLoaded}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!isRunning && query.trim()) {
+                          void handleAnswer(true);
+                        }
+                      }}
+                      sx={{
+                        cursor: answerLoaded ? "pointer" : "inherit",
+                        "& .MuiBadge-badge": {
+                          minWidth: answerError ? 18 : undefined,
+                          right: answerError ? -12 : -18,
+                        },
+                      }}
+                    >
+                      <Box component="span">문맥 기반 답변 생성</Box>
+                    </Badge>
+                  </Tooltip>
+                </Button>
+              </ButtonGroup>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined" sx={{ borderRadius: 2 }}>
+        <CardContent>
+          <Stack spacing={1.5}>
+            {tab === "vector" ? (
+              <Stack spacing={1}>
+                <GridContent<VectorSearchResultDto>
+                  columns={vectorColumns}
+                  rowData={vectorRows}
+                  loading={runningAction === "vector"}
+                  height={280}
+                  events={[
+                    {
+                      type: "rowClicked",
+                      listener: (event) =>
+                        setSelectedVector((event as { data?: VectorSearchResultDto }).data ?? null),
+                    },
+                  ]}
+                />
+                <ContentPreview
+                  title="선택한 벡터 결과"
+                  content={selectedVector?.content}
+                  metadata={selectedVector?.metadata}
+                />
+              </Stack>
+            ) : null}
+
+            {tab === "rag" ? (
+              <Stack spacing={1}>
+                <GridContent<SearchResultDto>
+                  columns={ragColumns}
+                  rowData={ragRows}
+                  loading={runningAction === "rag"}
+                  height={280}
+                  events={[
+                    {
+                      type: "rowClicked",
+                      listener: (event) => setSelectedRag((event as { data?: SearchResultDto }).data ?? null),
+                    },
+                  ]}
+                />
+                <ContentPreview
+                  title="선택한 RAG 결과"
+                  content={selectedRag?.content}
+                  metadata={selectedRag?.metadata}
+                />
+              </Stack>
+            ) : null}
+
+            {tab === "answer" ? (
+              <Stack spacing={1}>
+                {runningAction === "answer" ? (
+                  <LoadingPanel />
+                ) : messages.length ? (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "minmax(0, 1fr)",
+                        lg: "minmax(0, 1fr) minmax(0, 1fr)",
+                      },
+                      gap: 1.25,
+                      alignItems: "stretch",
+                    }}
+                  >
+                    <AnswerPanel
+                      messages={messages}
+                      referencesCount={Math.min(ragRows.length, topKNumber)}
+                      onReferenceHover={setActiveReferenceIndex}
+                    />
+                    <ReferenceDocuments
+                      rows={ragRows}
+                      topK={topKNumber}
+                      query={query}
+                      activeReferenceIndex={activeReferenceIndex}
+                    />
+                  </Box>
+                ) : (
+                  <EmptyAnswerPanel />
+                )}
+                <MetadataPanel metadata={lastMetadata} provider={provider} model={model} />
+                {diagnostics ? (
+                  <Box
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      p: 1,
+                      maxHeight: 220,
+                      overflow: "auto",
+                      bgcolor: "action.hover",
+                      borderRadius: 2,
+                      fontSize: 12,
+                    }}
+                  >
+                    {JSON.stringify(diagnostics, null, 2)}
+                  </Box>
+                ) : null}
+              </Stack>
+            ) : null}
+          </Stack>
+        </CardContent>
+      </Card>
     </Stack>
   );
 }

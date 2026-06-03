@@ -2738,6 +2738,13 @@ export function RagPage() {
                 </AccordionDetails>
               </Accordion>
             </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined" sx={{ borderRadius: 2 }}>
+        <CardContent>
+          <Stack spacing={1.5}>
             <Tabs value={tab} onChange={(_, value: ValidationTab) => void handleValidationTabChange(value)}>
               <Tab
                 value="vector"
