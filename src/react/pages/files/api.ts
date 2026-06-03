@@ -64,7 +64,7 @@ export const reactFilesApi = {
   async ragMetadata(attachmentId: number) {
     return apiRequest<Record<string, unknown>>(
       "get",
-      `/api/mgmt/ai/rag/objects/attachment/${attachmentId}/metadata`
+      `/api/mgmt/files/${attachmentId}/rag/metadata`
     );
   },
   async fetchThumbnail(attachmentId: number, size = 256, format = "png") {

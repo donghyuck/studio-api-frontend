@@ -1647,7 +1647,7 @@ export function SkillGraphJobsPage() {
     { headerName: "액션", width: 110, cellRenderer: ({ data }: { data?: SkillGraphJob }) => (
       <Button
         size="small"
-        disabled={!canOperate || !data || retryMutation.isPending || !data.failedCount}
+        disabled={!canOperate || !data || retryMutation.isPending || (data.status !== "FAILED" && !data.failedCount)}
         onClick={() => data && retryMutation.mutate(data.jobId)}
       >
         실패 재시도
@@ -1742,7 +1742,7 @@ export function SkillGraphJobsPage() {
           <Button
             size="small"
             variant="outlined"
-            disabled={!canOperate || !selectedJob?.failedCount || retryMutation.isPending}
+            disabled={!canOperate || (selectedJob?.status !== "FAILED" && !selectedJob?.failedCount) || retryMutation.isPending}
             onClick={() => selectedJob && retryMutation.mutate(selectedJob.jobId)}
           >
             실패 chunk 재시도

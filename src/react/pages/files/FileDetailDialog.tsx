@@ -120,7 +120,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   async function loadRagState(nextFile: AttachmentDto) {
     try {
       const metadata = await reactAiApi.getRagObjectMetadata("attachment", String(nextFile.attachmentId));
-      if (Object.keys(metadata ?? {}).length > 0) {
+      if (metadata && metadata.indexed !== false && Object.keys(metadata).length > 0) {
         return {
           indexed: true,
           metadata,
@@ -131,9 +131,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
 
     const indexed = await reactFilesApi.hasEmbedding(nextFile.attachmentId);
+    const metadata = indexed ? await reactFilesApi.ragMetadata(nextFile.attachmentId) : null;
+    const hasValidMeta = metadata && metadata.indexed !== false;
     return {
-      indexed,
-      metadata: indexed ? await reactFilesApi.ragMetadata(nextFile.attachmentId) : null,
+      indexed: indexed && Boolean(hasValidMeta),
+      metadata: hasValidMeta ? metadata : null,
     };
   }
 
