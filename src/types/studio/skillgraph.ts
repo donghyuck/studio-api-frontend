@@ -81,6 +81,12 @@ export interface SkillGraphJob {
   updatedAt?: string;
   startedAt?: string;
   completedAt?: string;
+  generateEmbeddings?: boolean;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  embeddingDimension?: number;
+  embeddingJobId?: string;
+  embeddingStatus?: string;
 }
 
 export interface SkillCandidate {
@@ -363,6 +369,7 @@ export interface SkillGraphPageResponse<T> {
 export interface SkillRagChunkPreview {
   chunkId: string;
   documentId?: string;
+  objectId?: string;
   chunkOrder?: number;
   page?: number;
   section?: string;
@@ -371,6 +378,20 @@ export interface SkillRagChunkPreview {
   textLength: number;
   warningStatus?: string;
 }
+
+export interface RagDocumentExtractionRequest {
+  objectType: string;
+  objectId?: string | null;
+  documentId?: string | null;
+  mode: string;
+  limit?: number;
+  excludeExtracted: boolean;
+  generateEmbeddings: boolean;
+  embeddingProvider?: string | null;
+  embeddingModel?: string | null;
+  embeddingDimension?: number | null;
+}
+
 
 export interface SkillRagChunkPageResponse {
   content: SkillRagChunkPreview[];
@@ -394,6 +415,11 @@ export interface SkillRagExtractionRequest {
   mode?: SkillRagExtractionMode;
   chunkIds?: string[];
   limit?: number;
+  excludeExtracted?: boolean;
+  generateEmbeddings?: boolean;
+  embeddingProvider?: string | null;
+  embeddingModel?: string | null;
+  embeddingDimension?: number | null;
 }
 
 export interface SkillRagChunkExtractionItem {

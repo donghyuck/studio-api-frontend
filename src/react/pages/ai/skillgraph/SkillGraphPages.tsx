@@ -1116,6 +1116,11 @@ function RagExtractionDialog({
           documentId: documentId.trim() || undefined,
           mode: "SELECTED_CHUNKS",
           chunkIds,
+          excludeExtracted,
+          generateEmbeddings,
+          embeddingProvider: generateEmbeddings ? selectedProvider || null : null,
+          embeddingModel: generateEmbeddings ? selectedModel || null : null,
+          embeddingDimension: generateEmbeddings ? (Number(selectedDimension) || null) : null,
         });
       }
       onSubmitted("jobId" in lastResponse ? lastResponse : undefined);
@@ -1938,29 +1943,67 @@ export function SkillGraphJobsPage() {
       }} />
       <DetailDrawer open={Boolean(selected)} title="Job 상세" onClose={() => setSelected(null)}>
         {selectedJobQuery.error ? <ErrorState error={selectedJobQuery.error} /> : null}
-        <DetailRows rows={[
-          ["Job ID", selectedJob?.jobId],
-          ["상태", <StatusBadge value={selectedJob?.status} />],
-          ["Object", `${selectedJob?.objectType ?? "-"} / ${selectedJob?.objectId ?? "-"}`],
-          ["Document", selectedJob?.documentId ?? "-"],
-          ["처리", `${numberValue(selectedJob?.processedCount)}/${numberValue(selectedJob?.totalCount)}`],
-          ["진행률", (() => {
-            const detailTotal = selectedJob?.totalChunks ?? selectedJob?.totalCount ?? 0;
-            const detailProcessed = selectedJob?.processedChunks ?? selectedJob?.processedCount ?? 0;
-            const detailProgress = detailTotal > 0 ? Math.min(100, Math.round((detailProcessed / detailTotal) * 100)) : 0;
-            return (
-              <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1 }}>
-                <LinearProgress variant="determinate" value={detailProgress} sx={{ flex: 1, height: 6, borderRadius: 3 }} />
-                <Typography variant="body2" sx={{ minWidth: 40, textAlign: "right" }}>{`${detailProgress}%`}</Typography>
-              </Box>
+        <DetailRows rows={(() => {
+          const detailRows: [string, React.ReactNode][] = [
+            ["Job ID", selectedJob?.jobId],
+            ["상태", <StatusBadge value={selectedJob?.status} />],
+            ["Object", `${selectedJob?.objectType ?? "-"} / ${selectedJob?.objectId ?? "-"}`],
+            ["Document", selectedJob?.documentId ?? "-"],
+            ["처리", `${numberValue(selectedJob?.processedCount)}/${numberValue(selectedJob?.totalCount)}`],
+            ["진행률", (() => {
+              const detailTotal = selectedJob?.totalChunks ?? selectedJob?.totalCount ?? 0;
+              const detailProcessed = selectedJob?.processedChunks ?? selectedJob?.processedCount ?? 0;
+              const detailProgress = detailTotal > 0 ? Math.min(100, Math.round((detailProcessed / detailTotal) * 100)) : 0;
+              return (
+                <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1 }}>
+                  <LinearProgress variant="determinate" value={detailProgress} sx={{ flex: 1, height: 6, borderRadius: 3 }} />
+                  <Typography variant="body2" sx={{ minWidth: 40, textAlign: "right" }}>{`${detailProgress}%`}</Typography>
+                </Box>
+              );
+            })()],
+            ["성공/실패", `${numberValue(selectedJob?.succeededChunks)} / ${numberValue(selectedJob?.failedCount)}`],
+            ["추출 후보", numberValue(selectedJob?.extractedCount)],
+            ["실패 사유", selectedJob?.failureReason ?? "-"],
+            ["생성일", formatDate(selectedJob?.createdAt)],
+            ["갱신일", formatDate(selectedJob?.updatedAt)],
+          ];
+
+          if (selectedJob?.generateEmbeddings) {
+            let embeddingStatusDisplay: React.ReactNode = "-";
+            if (selectedJob.embeddingStatus) {
+              let label = selectedJob.embeddingStatus;
+              if (selectedJob.embeddingStatus === "READY") label = "대기";
+              else if (selectedJob.embeddingStatus === "RUNNING") label = "임베딩 중";
+              else if (selectedJob.embeddingStatus === "COMPLETED") label = "임베딩 완료";
+              else if (selectedJob.embeddingStatus === "PARTIAL") label = "일부 실패";
+              else if (selectedJob.embeddingStatus === "FAILED") label = "실패";
+
+              const color =
+                selectedJob.embeddingStatus === "COMPLETED"
+                  ? "success"
+                  : selectedJob.embeddingStatus === "FAILED"
+                    ? "error"
+                    : selectedJob.embeddingStatus === "RUNNING"
+                      ? "info"
+                      : "warning";
+              embeddingStatusDisplay = <Chip size="small" label={label} color={color} />;
+            }
+
+            let embeddingJobIdDisplay: React.ReactNode = "-";
+            if (selectedJob.embeddingJobId) {
+              embeddingJobIdDisplay = selectedJob.embeddingJobId;
+            } else if (selectedJob.status === "RUNNING") {
+              embeddingJobIdDisplay = <Typography variant="caption" color="text.secondary">추출 완료 후 임베딩 예정</Typography>;
+            }
+
+            detailRows.push(
+              ["후보 임베딩 설정", `${selectedJob.embeddingProvider ?? "-"} / ${selectedJob.embeddingModel ?? "-"} (${selectedJob.embeddingDimension ?? "-"}d)`],
+              ["임베딩 Job ID", embeddingJobIdDisplay],
+              ["임베딩 상태", embeddingStatusDisplay]
             );
-          })()],
-          ["성공/실패", `${numberValue(selectedJob?.succeededChunks)} / ${numberValue(selectedJob?.failedCount)}`],
-          ["추출 후보", numberValue(selectedJob?.extractedCount)],
-          ["실패 사유", selectedJob?.failureReason ?? "-"],
-          ["생성일", formatDate(selectedJob?.createdAt)],
-          ["갱신일", formatDate(selectedJob?.updatedAt)],
-        ]} />
+          }
+          return detailRows;
+        })()} />
         <Stack direction="row" spacing={1} sx={{ my: 1 }}>
           <Button
             size="small"
