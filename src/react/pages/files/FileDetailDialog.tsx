@@ -252,15 +252,19 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     };
   }, [open, attachmentId, thumbnailReloadKey]);
 
-  async function refreshDetail() {
+  async function refreshDetail(keepJobId = false) {
     if (!attachmentId) return;
-    setFile(null);
-    setRagIndexed(false);
-    setRagMetadata(null);
-    setExtractedText("");
-    setTextExtracted(false);
-    setRagJobId(null);
-    clearThumbnail();
+    if (!file) {
+      setFile(null);
+      setRagIndexed(false);
+      setRagMetadata(null);
+      setExtractedText("");
+      setTextExtracted(false);
+      clearThumbnail();
+    }
+    if (!keepJobId) {
+      setRagJobId(null);
+    }
     setThumbnailReloadKey((current) => current + 1);
     setLoading(true);
     try {
@@ -337,7 +341,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       } else {
         toast.success(`${file.name} 파일의 RAG 색인 작업이 완료되었습니다.`);
       }
-      await refreshDetail();
+      await refreshDetail(true);
     } catch (error) {
       toast.error(resolveAxiosError(error));
     } finally {
