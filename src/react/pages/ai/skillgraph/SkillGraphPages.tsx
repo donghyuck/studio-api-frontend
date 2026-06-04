@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColDef, ICellRendererParams, RowSelectedEvent, SelectionChangedEvent, SortModelItem } from "ag-grid-community";
@@ -2095,9 +2095,16 @@ export function SkillGraphJobsPage() {
 function useCandidateAction() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, action }: { id: string | number; action: "approve" | "reject" | "noise" }) => {
+    mutationFn: ({ id, action, matchedSkillId, reviewerNote }: { id: string | number; action: "approve" | "reject" | "noise" | "alias"; matchedSkillId?: string; reviewerNote?: string }) => {
       if (action === "approve") return skillGraphApi.approveCandidate(id);
       if (action === "noise") return skillGraphApi.markNoise(id);
+      if (action === "alias") {
+        return skillGraphApi.reviewCandidateSingle(id, {
+          status: "ALIAS_CANDIDATE",
+          matchedSkillId,
+          reviewerNote,
+        });
+      }
       return skillGraphApi.rejectCandidate(id);
     },
     onSuccess: () => {
@@ -2153,6 +2160,7 @@ export function SkillGraphCandidatesPage() {
   const [gridFilterActive, setGridFilterActive] = useState(false);
   const [statusAnchorEl, setStatusAnchorEl] = useState<HTMLElement | null>(null);
   const [selected, setSelected] = useState<SkillCandidate | null>(null);
+  const [aliasTargetCandidate, setAliasTargetCandidate] = useState<SkillCandidate | null>(null);
   const [autoApproveOpen, setAutoApproveOpen] = useState(false);
   const [autoApproveConfidenceInput, setAutoApproveConfidenceInput] = useState(String(DEFAULT_AUTO_APPROVE_CONFIDENCE_THRESHOLD));
   const [autoApproveSimilarityInput, setAutoApproveSimilarityInput] = useState(String(DEFAULT_AUTO_APPROVE_SIMILARITY_THRESHOLD));
@@ -2475,6 +2483,26 @@ export function SkillGraphCandidatesPage() {
     );
   }
 
+  const handleAliasSuccess = async (matchedSkillId: string, reviewerNote: string) => {
+    if (!aliasTargetCandidate) return;
+    try {
+      await actionMutation.mutateAsync({
+        id: aliasTargetCandidate.candidateId,
+        action: "alias",
+        matchedSkillId,
+        reviewerNote
+      });
+      toast.success("Alias로 등록되었습니다.");
+      setAliasTargetCandidate(null);
+      if (selected && String(selected.candidateId) === String(aliasTargetCandidate.candidateId)) {
+        const updated = await skillGraphApi.getCandidate(selected.candidateId);
+        setSelected(updated);
+      }
+    } catch (err) {
+      toast.error(resolveAxiosError(err) || "Alias 등록에 실패했습니다.");
+    }
+  };
+
   const columns = useMemo<ColDef<SkillCandidate>[]>(() => [
     {
       colId: "rowSelect",
@@ -2595,12 +2623,32 @@ export function SkillGraphCandidatesPage() {
       ),
     },
     { headerName: "상태", field: "status", width: 150, sortable: true, filter: "agTextColumnFilter", cellRenderer: ({ value }: { value?: string }) => <StatusBadge value={value} /> },
+    {
+      headerName: "액션",
+      width: 120,
+      sortable: false,
+      filter: false,
+      cellRenderer: (params: ICellRendererParams<SkillCandidate>) => (
+        <Button
+          size="small"
+          disabled={!canReview || !params.data}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (params.data) {
+              setAliasTargetCandidate(params.data);
+            }
+          }}
+        >
+          Alias 등록
+        </Button>
+      ),
+    },
     { headerName: "유사 스킬", field: "matchedSkillName", minWidth: 160, flex: 1, sortable: true, filter: "agTextColumnFilter" },
     { headerName: "유사도", field: "similarityScore", width: 80, sortable: true, filter: false, cellRenderer: ({ value }: { value?: number }) => <ScoreBadge value={value} /> },
     // { headerName: "출현", field: "occurrenceCount", width: 90 },
     { headerName: "신뢰도", field: "confidenceScore", width: 80, sortable: true, filter: false, cellRenderer: ({ value }: { value?: number }) => <ScoreBadge value={value} /> },
     { headerName: "생성일", colId: "createdAt", valueGetter: ({ data }) => formatDate(data?.createdAt), width: 170, sortable: true, filter: false },
-  ], [allCurrentPageSelected, partiallyCurrentPageSelected, selectedIdSet]);
+  ], [allCurrentPageSelected, partiallyCurrentPageSelected, selectedIdSet, canReview]);
 
   const recommendationColumns = useMemo<ColDef<SkillRecommendationResult>[]>(() => [
     { headerName: "후보", field: "sourceText", minWidth: 220, flex: 1.4 },
@@ -3061,6 +3109,13 @@ export function SkillGraphCandidatesPage() {
             <Button
               size="small"
               disabled={!canReview || !selected || actionMutation.isPending}
+              onClick={() => selected && setAliasTargetCandidate(selected)}
+            >
+              Alias 등록
+            </Button>
+            <Button
+              size="small"
+              disabled={!canReview || !selected || actionMutation.isPending}
               startIcon={<NoiseControlOffOutlined />}
               onClick={() => selected && actionMutation.mutate({ id: selected.candidateId, action: "noise" })}
             >
@@ -3456,7 +3511,150 @@ export function SkillGraphCandidatesPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      <CandidateAliasDialog
+        open={Boolean(aliasTargetCandidate)}
+        candidate={aliasTargetCandidate}
+        onClose={() => setAliasTargetCandidate(null)}
+        onSuccess={handleAliasSuccess}
+        submitting={actionMutation.isPending}
+      />
     </PageFrame>
+  );
+}
+
+interface CandidateAliasDialogProps {
+  open: boolean;
+  candidate: SkillCandidate | null;
+  onClose: () => void;
+  onSuccess: (matchedSkillId: string, reviewerNote: string) => Promise<void>;
+  submitting: boolean;
+}
+
+function CandidateAliasDialog({ open, candidate, onClose, onSuccess, submitting }: CandidateAliasDialogProps) {
+  const [searchText, setSearchText] = useState("");
+  const [skills, setSkills] = useState<SkillDictionaryItem[]>([]);
+  const [selectedSkill, setSelectedSkill] = useState<SkillDictionaryItem | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const handleSearch = useCallback(async (query: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await skillGraphApi.listDictionary({ keyword: query, limit: 50 });
+      const items = skillGraphApi.pageItems(res);
+      setSkills(items);
+      if (items.length > 0) {
+        const exact = items.find(item => (item.skillName || "").toLowerCase() === query.toLowerCase());
+        if (exact) {
+          setSelectedSkill(exact);
+        }
+      }
+    } catch (err) {
+      setError(resolveAxiosError(err) || "스킬 사전을 검색하는 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open && candidate) {
+      const initialQuery = candidate.rawText || candidate.term || "";
+      setSearchText(initialQuery);
+      setSelectedSkill(null);
+      setSkills([]);
+      setError("");
+      void handleSearch(initialQuery);
+    }
+  }, [open, candidate, handleSearch]);
+
+  const handleConfirm = () => {
+    if (!candidate || !selectedSkill) return;
+    const term = candidate.rawText || candidate.term || "";
+    const skillName = selectedSkill.skillName || selectedSkill.name || "";
+    const reviewerNote = `Alias 등록: ${term} -> ${skillName}`;
+    void onSuccess(String(selectedSkill.skillId), reviewerNote);
+  };
+
+  return (
+    <Dialog open={open} onClose={submitting ? undefined : onClose} maxWidth="sm" fullWidth>
+      <DialogTitle sx={{ pb: 1 }}>Alias 등록</DialogTitle>
+      <DialogContent dividers sx={{ p: 2 }}>
+        <Stack spacing={2.5} sx={{ mt: 1 }}>
+          <Box sx={{ bgcolor: "action.hover", p: 1.5, borderRadius: 1 }}>
+            <Typography variant="caption" color="text.secondary">
+              대상 후보 스킬명
+            </Typography>
+            <Typography variant="subtitle1" fontWeight="bold" sx={{ mt: 0.5 }}>
+              {candidate?.rawText || candidate?.term || "-"}
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1} alignItems="flex-start">
+            <TextField
+              label="기존 스킬 검색"
+              placeholder="예: Spring"
+              size="small"
+              fullWidth
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void handleSearch(searchText);
+                }
+              }}
+            />
+            <Button variant="contained" size="medium" sx={{ height: 40 }} onClick={() => void handleSearch(searchText)} disabled={loading}>
+              검색
+            </Button>
+          </Stack>
+
+          {error && <Alert severity="error">{error}</Alert>}
+
+          <Box>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+              기존 스킬 목록 (선택 필수)
+            </Typography>
+            {loading ? (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : skills.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: "center" }}>
+                검색 결과가 없습니다.
+              </Typography>
+            ) : (
+              <List sx={{ maxHeight: 200, overflow: "auto", border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+                {skills.map((skill) => (
+                  <ListItemButton
+                    key={skill.skillId}
+                    selected={selectedSkill?.skillId === skill.skillId}
+                    onClick={() => setSelectedSkill(skill)}
+                  >
+                    <ListItemText
+                      primary={skill.skillName || skill.name}
+                      secondary={skill.categoryId ? `카테고리: ${skill.categoryName || skill.categoryId}` : undefined}
+                    />
+                  </ListItemButton>
+                ))}
+              </List>
+            )}
+          </Box>
+        </Stack>
+      </DialogContent>
+      <DialogActions sx={{ p: 2 }}>
+        <Button onClick={onClose} disabled={submitting}>
+          취소
+        </Button>
+        <Button
+          onClick={handleConfirm}
+          variant="contained"
+          disabled={!selectedSkill || submitting || loading}
+        >
+          {submitting ? "등록 중..." : "등록"}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
 

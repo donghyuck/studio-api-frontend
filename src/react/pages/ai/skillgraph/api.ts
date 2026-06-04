@@ -18,6 +18,7 @@ import type {
   SkillRagChunkPageResponse,
   SkillRagExtractionJobItemPageResponse,
   SkillRagExtractionRequest,
+  RagDocumentExtractionRequest,
   SkillGraphSimulationRequest,
   SkillGraphSimulationResponse,
   SkillMapping,
@@ -238,11 +239,11 @@ export const skillGraphApi = {
 
   listRagChunks(params: {
     objectType: string;
-    objectId: string;
+    objectId?: string | number;
     documentId?: string;
     q?: string;
-    offset?: number;
-    limit?: number;
+    page?: number;
+    size?: number;
     sort?: string;
   }) {
     return apiRequest<SkillRagChunkPageResponse>("get", `${EXTRACTION_SOURCE_BASE}/rag/chunks`, {
@@ -252,6 +253,14 @@ export const skillGraphApi = {
 
   async extractRag(data: SkillRagExtractionRequest) {
     const response = await apiRequest<SkillRagBatchExtractionResponse | SkillGraphJob>("post", `${EXTRACTION_BASE}/rag`, { data });
+    if (response && "jobId" in response) {
+      return normalizeJob(response as SkillGraphJob);
+    }
+    return response;
+  },
+
+  async extractRagDocuments(data: RagDocumentExtractionRequest) {
+    const response = await apiRequest<SkillRagBatchExtractionResponse | SkillGraphJob>("post", `${EXTRACTION_BASE}/rag-documents`, { data });
     if (response && "jobId" in response) {
       return normalizeJob(response as SkillGraphJob);
     }
@@ -322,6 +331,19 @@ export const skillGraphApi = {
       "patch",
       `${CANDIDATE_BASE}/${encodeURIComponent(String(candidateId))}`,
       { data: { ...data, status: "NOISE" } }
+    );
+    return normalizeCandidate(response);
+  },
+
+  async reviewCandidateSingle(candidateId: string | number, data: {
+    status: "ALIAS_CANDIDATE" | "APPROVED" | "REJECTED" | "NOISE";
+    matchedSkillId?: string;
+    reviewerNote?: string;
+  }) {
+    const response = await apiRequest<SkillCandidate>(
+      "patch",
+      `${CANDIDATE_BASE}/${encodeURIComponent(String(candidateId))}/review`,
+      { data }
     );
     return normalizeCandidate(response);
   },
