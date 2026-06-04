@@ -2492,14 +2492,14 @@ export function SkillGraphCandidatesPage() {
         matchedSkillId,
         reviewerNote
       });
-      toast.success("Alias로 등록되었습니다.");
+      toast.success("기존 스킬의 별칭으로 등록되었습니다.");
       setAliasTargetCandidate(null);
       if (selected && String(selected.candidateId) === String(aliasTargetCandidate.candidateId)) {
         const updated = await skillGraphApi.getCandidate(selected.candidateId);
         setSelected(updated);
       }
     } catch (err) {
-      toast.error(resolveAxiosError(err) || "Alias 등록에 실패했습니다.");
+      toast.error(resolveAxiosError(err) || "별칭 등록에 실패했습니다.");
     }
   };
 
@@ -2629,18 +2629,22 @@ export function SkillGraphCandidatesPage() {
       sortable: false,
       filter: false,
       cellRenderer: (params: ICellRendererParams<SkillCandidate>) => (
-        <Button
-          size="small"
-          disabled={!canReview || !params.data}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (params.data) {
-              setAliasTargetCandidate(params.data);
-            }
-          }}
-        >
-          Alias 등록
-        </Button>
+        <Tooltip title="기존 스킬의 별칭으로 등록">
+          <span>
+            <Button
+              size="small"
+              disabled={!canReview || !params.data}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (params.data) {
+                  setAliasTargetCandidate(params.data);
+                }
+              }}
+            >
+              별칭 등록
+            </Button>
+          </span>
+        </Tooltip>
       ),
     },
     { headerName: "유사 스킬", field: "matchedSkillName", minWidth: 160, flex: 1, sortable: true, filter: "agTextColumnFilter" },
@@ -3106,13 +3110,17 @@ export function SkillGraphCandidatesPage() {
             >
               Approve
             </Button>
-            <Button
-              size="small"
-              disabled={!canReview || !selected || actionMutation.isPending}
-              onClick={() => selected && setAliasTargetCandidate(selected)}
-            >
-              Alias 등록
-            </Button>
+            <Tooltip title="기존 스킬의 별칭으로 등록">
+              <span>
+                <Button
+                  size="small"
+                  disabled={!canReview || !selected || actionMutation.isPending}
+                  onClick={() => selected && setAliasTargetCandidate(selected)}
+                >
+                  별칭 등록
+                </Button>
+              </span>
+            </Tooltip>
             <Button
               size="small"
               disabled={!canReview || !selected || actionMutation.isPending}
@@ -3572,13 +3580,13 @@ function CandidateAliasDialog({ open, candidate, onClose, onSuccess, submitting 
     if (!candidate || !selectedSkill) return;
     const term = candidate.rawText || candidate.term || "";
     const skillName = selectedSkill.skillName || selectedSkill.name || "";
-    const reviewerNote = `Alias 등록: ${term} -> ${skillName}`;
+    const reviewerNote = `기존 스킬의 별칭으로 등록: ${term} -> ${skillName}`;
     void onSuccess(String(selectedSkill.skillId), reviewerNote);
   };
 
   return (
     <Dialog open={open} onClose={submitting ? undefined : onClose} maxWidth="sm" fullWidth>
-      <DialogTitle sx={{ pb: 1 }}>Alias 등록</DialogTitle>
+      <DialogTitle sx={{ pb: 1 }}>기존 스킬의 별칭으로 등록</DialogTitle>
       <DialogContent dividers sx={{ p: 2 }}>
         <Stack spacing={2.5} sx={{ mt: 1 }}>
           <Box sx={{ bgcolor: "action.hover", p: 1.5, borderRadius: 1 }}>
