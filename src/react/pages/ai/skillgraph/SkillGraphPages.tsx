@@ -10,6 +10,7 @@ import {
   Card,
   CardActions,
   CardContent,
+  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -17,8 +18,10 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControl,
   FormControlLabel,
   IconButton,
+  InputLabel,
   LinearProgress,
   List,
   ListItem,
@@ -83,6 +86,7 @@ import { useThemeMode } from "@/react/theme/AppThemeProvider";
 import { useConfirm, useToast } from "@/react/feedback";
 import { resolveAxiosError } from "@/utils/helpers";
 import { StompRealtimeClient } from "@/data/studio/mgmt/realtime";
+import { reactAiApi } from "@/react/pages/ai/api";
 import {
   skillGraphApi,
   type SkillClusterRepresentative,
@@ -910,13 +914,22 @@ function RagExtractionDialog({
   const [documentId, setDocumentId] = useState("");
   const [chunkQuery, setChunkQuery] = useState("");
   const [chunks, setChunks] = useState<SkillRagChunkPreview[]>([]);
-  const [chunkOffset, setChunkOffset] = useState(0);
+  const [chunkPage, setChunkPage] = useState(0);
   const [chunkReturned, setChunkReturned] = useState(0);
   const [chunkTotal, setChunkTotal] = useState<number | undefined>(undefined);
   const [chunkHasMore, setChunkHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Options UI states
+  const [excludeExtracted, setExcludeExtracted] = useState(true);
+  const [generateEmbeddings, setGenerateEmbeddings] = useState(true);
+  const [embeddingOptions, setEmbeddingOptions] = useState<any[]>([]);
+  const [selectedProvider, setSelectedProvider] = useState("");
+  const [selectedModel, setSelectedModel] = useState("");
+  const [selectedDimension, setSelectedDimension] = useState<number | "">("");
+
   const chunkColumns = useMemo<ColDef<SkillRagChunkPreview>[]>(
     () => [
       {
@@ -999,47 +1012,69 @@ function RagExtractionDialog({
     () => ({
       getRowId: (params: { data?: SkillRagChunkPreview }) => params.data?.chunkId ?? "",
       suppressCellFocus: true,
+      pagination: true,
+      paginationPageSize: 10,
+      paginationPageSizeSelector: [5, 10, 20, 50],
     }),
     []
   );
 
   useEffect(() => {
-    if (!open) {
+    if (open) {
+      reactAiApi.getEmbeddingOptions()
+        .then((res) => {
+          const options = res.options || [];
+          setEmbeddingOptions(options);
+          const defaultOpt = options.find((o: any) => o.defaultProvider) || options[0];
+          if (defaultOpt) {
+            setSelectedProvider(defaultOpt.provider);
+            setSelectedModel(defaultOpt.model);
+            setSelectedDimension(defaultOpt.dimension);
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to load embedding options", err);
+        });
+    } else {
       setChunks([]);
-      setChunkOffset(0);
+      setChunkPage(0);
       setChunkReturned(0);
       setChunkTotal(undefined);
       setChunkHasMore(false);
       setError("");
       setLoading(false);
       setSubmitting(false);
+      setExcludeExtracted(true);
+      setGenerateEmbeddings(true);
+      setSelectedProvider("");
+      setSelectedModel("");
+      setSelectedDimension("");
     }
   }, [open]);
 
-  async function loadChunks(nextOffset = 0) {
-    if (!objectType.trim() || !objectId.trim()) {
-      setError("objectType과 objectId를 입력하세요.");
+  async function loadChunks(nextPage = 0) {
+    if (!objectType.trim()) {
+      setError("objectType을 입력하세요.");
       return;
     }
 
     setLoading(true);
     setError("");
     try {
-      const page = await skillGraphApi.listRagChunks({
+      const pageData = await skillGraphApi.listRagChunks({
         objectType: objectType.trim(),
-        objectId: objectId.trim(),
+        objectId: objectId.trim() || undefined,
         documentId: documentId.trim() || undefined,
         q: chunkQuery.trim() || undefined,
-        offset: Math.max(0, nextOffset),
-        limit: RAG_CHUNK_PAGE_SIZE,
+        page: nextPage,
+        size: RAG_CHUNK_PAGE_SIZE,
       });
-      const pageChunks = page.content ?? [];
+      const pageChunks = pageData.content ?? [];
       setChunks(pageChunks);
-      const computedOffset = (page.page != null && page.size != null) ? page.page * page.size : Math.max(0, nextOffset);
-      setChunkOffset(computedOffset);
+      setChunkPage(pageData.page ?? nextPage);
       setChunkReturned(pageChunks.length);
-      setChunkTotal(page.totalElements);
-      setChunkHasMore(Boolean(page.hasNext));
+      setChunkTotal(pageData.totalElements);
+      setChunkHasMore(Boolean(pageData.hasNext));
       if (!pageChunks.length) {
         setError("조회된 RAG chunk가 없습니다.");
       }
@@ -1059,14 +1094,31 @@ function RagExtractionDialog({
     setSubmitting(true);
     setError("");
     try {
-      const response = await skillGraphApi.extractRag({
-        objectType: objectType.trim(),
-        objectId: objectId.trim(),
-        documentId: documentId.trim() || undefined,
-        mode: "SELECTED_CHUNKS",
-        chunkIds: chunks.map((chunk) => chunk.chunkId),
+      const groups = new Map<string, string[]>();
+      chunks.forEach((chunk) => {
+        const id = chunk.objectId || objectId.trim();
+        if (id) {
+          const arr = groups.get(id) || [];
+          arr.push(chunk.chunkId);
+          groups.set(id, arr);
+        }
       });
-      onSubmitted("jobId" in response ? response : undefined);
+
+      if (groups.size === 0) {
+        throw new Error("chunk에 objectId가 존재하지 않습니다.");
+      }
+
+      let lastResponse: any = undefined;
+      for (const [grpId, chunkIds] of groups.entries()) {
+        lastResponse = await skillGraphApi.extractRag({
+          objectType: objectType.trim(),
+          objectId: grpId,
+          documentId: documentId.trim() || undefined,
+          mode: "SELECTED_CHUNKS",
+          chunkIds,
+        });
+      }
+      onSubmitted("jobId" in lastResponse ? lastResponse : undefined);
       onClose();
     } catch (err) {
       setError(resolveAxiosError(err) || "SkillGraph 추출 작업 등록에 실패했습니다.");
@@ -1076,20 +1128,24 @@ function RagExtractionDialog({
   }
 
   async function submitAllExtraction() {
-    if (!objectType.trim() || !objectId.trim()) {
-      setError("objectType과 objectId를 입력하세요.");
+    if (!objectType.trim()) {
+      setError("objectType을 입력하세요.");
       return;
     }
 
     setSubmitting(true);
     setError("");
     try {
-      const response = await skillGraphApi.extractRag({
+      const response = await skillGraphApi.extractRagDocuments({
         objectType: objectType.trim(),
-        objectId: objectId.trim(),
-        documentId: documentId.trim() || undefined,
+        objectId: objectId.trim() || null,
+        documentId: documentId.trim() || null,
         mode: "ALL_CHUNKS",
-        limit: 5000,
+        excludeExtracted,
+        generateEmbeddings,
+        embeddingProvider: generateEmbeddings ? selectedProvider || null : null,
+        embeddingModel: generateEmbeddings ? selectedModel || null : null,
+        embeddingDimension: generateEmbeddings ? (Number(selectedDimension) || null) : null,
       });
       onSubmitted("jobId" in response ? response : undefined);
       onClose();
@@ -1101,21 +1157,54 @@ function RagExtractionDialog({
   }
 
   return (
-    <Dialog open={open} onClose={loading || submitting ? undefined : onClose} fullWidth maxWidth="md">
-      <DialogTitle>RAG에서 추출</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ pt: 1 }}>
-          <Alert severity="info">
-            서버의 SkillGraph RAG API로 chunk preview를 page 단위 조회하고, 선택한 현재 페이지 chunk ID 또는 전체 문서
-            기준으로 추출 작업을 등록합니다.
-          </Alert>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+    <Dialog
+      open={open}
+      onClose={loading || submitting ? undefined : onClose}
+      fullWidth
+      maxWidth="md"
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+          backgroundImage: "none",
+        }
+      }}
+    >
+      <DialogTitle sx={{ p: 2.5, pb: 1, display: "flex", flexDirection: "column", gap: 0.5 }}>
+        <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>
+          RAG에서 추출
+        </Typography>
+        <Typography variant="caption" color="text.secondary">
+          RAG 데이터 소스로부터 스킬 후보 키워드를 자동으로 추출하는 백그라운드 작업을 실행합니다.
+        </Typography>
+      </DialogTitle>
+      <DialogContent sx={{ px: 2.5, pb: 2 }}>
+        <Stack spacing={2.5} sx={{ pt: 1 }}>
+          <Box
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              bgcolor: (theme) => alpha(theme.palette.info.main, 0.05),
+              border: "1px solid",
+              borderColor: (theme) => alpha(theme.palette.info.main, 0.15),
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 1.5
+            }}
+          >
+            <TravelExploreOutlined color="info" sx={{ mt: 0.25, flexShrink: 0 }} />
+            <Typography variant="body2" color="info.main" sx={{ fontWeight: 500, lineHeight: 1.5 }}>
+              서버의 SkillGraph RAG API로 chunk preview를 page 단위 조회하고, 선택한 현재 페이지 chunk ID 또는 전체 문서 기준으로 추출 작업을 등록합니다.
+            </Typography>
+          </Box>
+
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
             <ObjectTypeSelect
               value={objectType}
               onChange={(value) => {
                 setObjectType(value);
                 setChunks([]);
-                setChunkOffset(0);
+                setChunkPage(0);
                 setChunkReturned(0);
                 setChunkTotal(undefined);
                 setChunkHasMore(false);
@@ -1134,7 +1223,7 @@ function RagExtractionDialog({
               onChange={(event) => {
                 setObjectId(event.target.value);
                 setChunks([]);
-                setChunkOffset(0);
+                setChunkPage(0);
                 setChunkReturned(0);
                 setChunkTotal(undefined);
                 setChunkHasMore(false);
@@ -1142,16 +1231,16 @@ function RagExtractionDialog({
               fullWidth
             />
             <Button
-              variant="outlined"
+              variant="contained"
               startIcon={<TravelExploreOutlined />}
               onClick={() => void loadChunks(0)}
               disabled={loading || submitting}
-              sx={{ minWidth: 118, whiteSpace: "nowrap", flexShrink: 0 }}
+              sx={{ minWidth: 118, whiteSpace: "nowrap", flexShrink: 0, boxShadow: "none" }}
             >
               Chunk 조회
             </Button>
           </Stack>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
             <TextField
               label="documentId"
               size="small"
@@ -1159,7 +1248,7 @@ function RagExtractionDialog({
               onChange={(event) => {
                 setDocumentId(event.target.value);
                 setChunks([]);
-                setChunkOffset(0);
+                setChunkPage(0);
                 setChunkReturned(0);
                 setChunkTotal(undefined);
                 setChunkHasMore(false);
@@ -1173,7 +1262,7 @@ function RagExtractionDialog({
               onChange={(event) => {
                 setChunkQuery(event.target.value);
                 setChunks([]);
-                setChunkOffset(0);
+                setChunkPage(0);
                 setChunkReturned(0);
                 setChunkTotal(undefined);
                 setChunkHasMore(false);
@@ -1181,44 +1270,149 @@ function RagExtractionDialog({
               fullWidth
             />
           </Stack>
+
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.01)",
+              borderColor: "divider",
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
+              <Box sx={{ width: 4, height: 16, bgcolor: "primary.main", borderRadius: 1 }} />
+              추출 옵션 설정
+            </Typography>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={3} sx={{ mb: 1 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={excludeExtracted}
+                    onChange={(e) => setExcludeExtracted(e.target.checked)}
+                    size="small"
+                    color="primary"
+                  />
+                }
+                label={<Typography variant="body2" sx={{ fontWeight: 500 }}>이미 추출된 chunk 제외</Typography>}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={generateEmbeddings}
+                    onChange={(e) => setGenerateEmbeddings(e.target.checked)}
+                    size="small"
+                    color="primary"
+                  />
+                }
+                label={<Typography variant="body2" sx={{ fontWeight: 500 }}>추출 후 임베딩 생성</Typography>}
+              />
+            </Stack>
+
+            {generateEmbeddings && (
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 1.5,
+                  bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(0, 0, 0, 0.2)" : "rgba(255, 255, 255, 0.8)",
+                  border: "1px dashed",
+                  borderColor: "divider",
+                  mt: 1.5
+                }}
+              >
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5, fontWeight: 600 }}>
+                  임베딩 생성 스펙 설정 (KURE 모델 권장)
+                </Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                  <FormControl size="small" fullWidth>
+                    <InputLabel id="provider-select-label">Embedding Provider</InputLabel>
+                    <Select
+                      labelId="provider-select-label"
+                      value={selectedProvider}
+                      label="Embedding Provider"
+                      onChange={(e) => {
+                        const prov = e.target.value as string;
+                        setSelectedProvider(prov);
+                        const firstModel = embeddingOptions.find((o) => o.provider === prov);
+                        if (firstModel) {
+                          setSelectedModel(firstModel.model);
+                          setSelectedDimension(firstModel.dimension);
+                        } else {
+                          setSelectedModel("");
+                          setSelectedDimension("");
+                        }
+                      }}
+                    >
+                      {Array.from(new Set(embeddingOptions.map((o) => o.provider))).map((prov) => (
+                        <MenuItem key={prov} value={prov}>
+                          {prov}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+
+                  <FormControl size="small" fullWidth>
+                    <InputLabel id="model-select-label">Embedding Model</InputLabel>
+                    <Select
+                      labelId="model-select-label"
+                      value={selectedModel}
+                      label="Embedding Model"
+                      onChange={(e) => {
+                        const model = e.target.value as string;
+                        setSelectedModel(model);
+                        const opt = embeddingOptions.find(
+                          (o) => o.provider === selectedProvider && o.model === model
+                        );
+                        if (opt) {
+                          setSelectedDimension(opt.dimension);
+                        }
+                      }}
+                    >
+                      {embeddingOptions
+                        .filter((o) => o.provider === selectedProvider)
+                        .map((o) => (
+                          <MenuItem key={o.model} value={o.model}>
+                            {o.model}
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+
+                  <TextField
+                    label="Dimension"
+                    size="small"
+                    type="number"
+                    value={selectedDimension}
+                    onChange={(e) => setSelectedDimension(e.target.value === "" ? "" : Number(e.target.value))}
+                    fullWidth
+                  />
+                </Stack>
+              </Box>
+            )}
+          </Paper>
+
           {error ? <Alert severity="error">{error}</Alert> : null}
-          <Paper variant="outlined" sx={{ p: 1.5 }}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="subtitle2" sx={{ flex: 1 }}>
-                현재 페이지 chunk
+
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1, display: "flex", alignItems: "center", gap: 1 }}>
+                <Box sx={{ width: 4, height: 16, bgcolor: "success.main", borderRadius: 1 }} />
+                조회된 RAG 청크 목록
               </Typography>
-              <Chip size="small" label={`${chunks.length.toLocaleString()}개`} />
+              <Chip size="small" label={`${chunks.length.toLocaleString()}개`} color="success" variant="outlined" sx={{ fontWeight: 600 }} />
             </Stack>
             <Stack
               direction={{ xs: "column", sm: "row" }}
               spacing={1}
               alignItems={{ xs: "stretch", sm: "center" }}
               justifyContent="space-between"
-              sx={{ mt: 1 }}
+              sx={{ mb: 1.5 }}
             >
-              <Typography variant="caption" color="text.secondary">
-                offset {chunkOffset.toLocaleString()} · returned {chunkReturned.toLocaleString()} · page size{" "}
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                페이지: {(chunkPage + 1).toLocaleString()} · 조회수: {chunkReturned.toLocaleString()} · 페이지 크기:{" "}
                 {RAG_CHUNK_PAGE_SIZE.toLocaleString()}
-                {chunkTotal == null ? "" : ` · total ${chunkTotal.toLocaleString()}`}
+                {chunkTotal == null ? "" : ` · 전체 개수: ${chunkTotal.toLocaleString()}`}
               </Typography>
-              <Stack direction="row" spacing={1} justifyContent="flex-end">
-                <Button
-                  size="small"
-                  variant="outlined"
-                  disabled={loading || submitting || chunkOffset <= 0}
-                  onClick={() => void loadChunks(Math.max(0, chunkOffset - RAG_CHUNK_PAGE_SIZE))}
-                >
-                  이전
-                </Button>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  disabled={loading || submitting || !chunkHasMore}
-                  onClick={() => void loadChunks(chunkOffset + RAG_CHUNK_PAGE_SIZE)}
-                >
-                  다음
-                </Button>
-              </Stack>
             </Stack>
             <Box sx={{ mt: 1 }}>
               {chunks.length || loading ? (
@@ -1227,23 +1421,29 @@ function RagExtractionDialog({
                   options={chunkGridOptions}
                   rowData={chunks}
                   loading={loading}
-                  height={260}
+                  height={360}
                 />
               ) : (
                 <Box
                   sx={{
-                    minHeight: 160,
+                    minHeight: 180,
                     display: "flex",
+                    flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
                     bgcolor: "action.hover",
-                    borderRadius: 1,
-                    px: 2,
+                    borderRadius: 1.5,
+                    border: "1px dashed",
+                    borderColor: "divider",
+                    px: 3,
+                    py: 4,
                     textAlign: "center",
+                    gap: 1.5
                   }}
                 >
-                  <Typography variant="body2" color="text.secondary">
-                    objectType/objectId를 입력하고 chunk를 조회하세요.
+                  <TravelExploreOutlined sx={{ fontSize: 40, color: "text.disabled" }} />
+                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                    조회할 objectType과 objectId(선택)를 입력한 후, [Chunk 조회] 버튼을 눌러 청크 목록을 로드하세요.
                   </Typography>
                 </Box>
               )}
@@ -1251,14 +1451,15 @@ function RagExtractionDialog({
           </Paper>
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={loading || submitting}>
+      <DialogActions sx={{ p: 2.5, pt: 1.5, borderTop: "1px solid", borderColor: "divider", gap: 1 }}>
+        <Button onClick={onClose} disabled={loading || submitting} sx={{ px: 2 }}>
           취소
         </Button>
         <Button
           variant="outlined"
           onClick={() => void submitAllExtraction()}
-          disabled={!objectType.trim() || !objectId.trim() || loading || submitting}
+          disabled={!objectType.trim() || loading || submitting}
+          sx={{ px: 2.5, borderRadius: 2 }}
         >
           전체 문서 작업 등록
         </Button>
@@ -1266,6 +1467,7 @@ function RagExtractionDialog({
           variant="contained"
           onClick={() => void submitExtraction()}
           disabled={!chunks.length || loading || submitting}
+          sx={{ px: 2.5, borderRadius: 2, boxShadow: "none" }}
         >
           현재 페이지 작업 등록
         </Button>
@@ -1639,7 +1841,25 @@ export function SkillGraphJobsPage() {
     /*{ headerName: "Object Type", field: "objectType", flex: 1 },
     { headerName: "Object ID", field: "objectId", flex: 1 },*/
     { headerName: "단계", field: "currentStep", width: 100  },
-    { headerName: "처리", valueGetter: ({ data }) => `${numberValue(data?.processedCount)}/${numberValue(data?.totalCount)}`, width: 100 },
+    {
+      headerName: "처리",
+      width: 155,
+      cellRenderer: ({ data }: { data?: SkillGraphJob }) => {
+        if (!data) return "-";
+        const total = data.totalChunks ?? data.totalCount ?? 0;
+        const processed = data.processedChunks ?? data.processedCount ?? 0;
+        const progress = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+        return (
+          <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", height: "100%", py: 0.5 }}>
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+              <Typography variant="body2">{`${numberValue(processed)}/${numberValue(total)}`}</Typography>
+              <Typography variant="caption" color="text.secondary">{`${progress}%`}</Typography>
+            </Box>
+            <LinearProgress variant="determinate" value={progress} sx={{ height: 4, borderRadius: 2, mt: 0.5 }} />
+          </Box>
+        );
+      }
+    },
     // { headerName: "성공", field: "succeededChunks", width: 92 },
     // { headerName: "실패", valueGetter: ({ data }) => numberValue(data?.failedCount), width: 92 },
     { headerName: "추출 스킬", valueGetter: ({ data }) => numberValue(data?.extractedCount), width: 100 },
@@ -1724,6 +1944,17 @@ export function SkillGraphJobsPage() {
           ["Object", `${selectedJob?.objectType ?? "-"} / ${selectedJob?.objectId ?? "-"}`],
           ["Document", selectedJob?.documentId ?? "-"],
           ["처리", `${numberValue(selectedJob?.processedCount)}/${numberValue(selectedJob?.totalCount)}`],
+          ["진행률", (() => {
+            const detailTotal = selectedJob?.totalChunks ?? selectedJob?.totalCount ?? 0;
+            const detailProcessed = selectedJob?.processedChunks ?? selectedJob?.processedCount ?? 0;
+            const detailProgress = detailTotal > 0 ? Math.min(100, Math.round((detailProcessed / detailTotal) * 100)) : 0;
+            return (
+              <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1 }}>
+                <LinearProgress variant="determinate" value={detailProgress} sx={{ flex: 1, height: 6, borderRadius: 3 }} />
+                <Typography variant="body2" sx={{ minWidth: 40, textAlign: "right" }}>{`${detailProgress}%`}</Typography>
+              </Box>
+            );
+          })()],
           ["성공/실패", `${numberValue(selectedJob?.succeededChunks)} / ${numberValue(selectedJob?.failedCount)}`],
           ["추출 후보", numberValue(selectedJob?.extractedCount)],
           ["실패 사유", selectedJob?.failureReason ?? "-"],
@@ -1895,6 +2126,15 @@ export function SkillGraphCandidatesPage() {
   const [recommendationMode, setRecommendationMode] = useState<"form" | "history" | "results">("form");
   const [recommendationJob, setRecommendationJob] = useState<SkillRecommendationJob | null>(null);
   const [recommendationResultStats, setRecommendationResultStats] = useState<SkillRecommendationResult[]>([]);
+  const dictionaryQuery = useQuery({
+    queryKey: skillGraphQueryKeys.custom("dictionary-all-lookup"),
+    queryFn: () => skillGraphApi.listDictionary({ limit: 10000 }),
+    enabled: recommendationOpen,
+  });
+  const dictionaryNames = useMemo(() => {
+    const items = skillGraphApi.pageItems(dictionaryQuery.data as any);
+    return new Set(items.map((item: any) => (item.skillName || "").trim().toLowerCase()));
+  }, [dictionaryQuery.data]);
   const [recommendationApplyResult, setRecommendationApplyResult] = useState<SkillRecommendationApplyResult | null>(null);
   const [recommendationForm, setRecommendationForm] = useState({
     targetScope: "SELECTED" as "ALL" | "SELECTED" | "CURRENT_FILTER",
@@ -2326,9 +2566,21 @@ export function SkillGraphCandidatesPage() {
       field: "recommendationType",
       minWidth: 160,
       flex: 1,
-      cellRenderer: ({ value }: { value?: string }) => (
-        <Chip size="small" variant="outlined" label={recommendationTypeLabel(value)} />
-      ),
+      cellRenderer: (params: { value?: string; data?: SkillRecommendationResult }) => {
+        const isNewSkill = params.value === "NEW_SKILL_CANDIDATE";
+        const sourceLower = (params.data?.sourceText || "").trim().toLowerCase();
+        const alreadyInDict = isNewSkill && dictionaryNames.has(sourceLower);
+
+        if (alreadyInDict) {
+          return (
+            <Chip size="small" variant="outlined" color="warning" label="사전 등록됨 (중복)" />
+          );
+        }
+
+        return (
+          <Chip size="small" variant="outlined" label={recommendationTypeLabel(params.value)} />
+        );
+      },
     },
     { headerName: "추천 대상", field: "targetText", minWidth: 200, flex: 1.2 },
     { headerName: "유사도", field: "similarityScore", width: 100, cellRenderer: ({ value }: { value?: number }) => <ScoreBadge value={value} /> },
@@ -2348,7 +2600,7 @@ export function SkillGraphCandidatesPage() {
     },
     { headerName: "상태", field: "status", width: 120, cellRenderer: ({ value }: { value?: string }) => <StatusBadge value={value} /> },
     { headerName: "생성일", valueGetter: ({ data }) => formatDate(data?.createdAt), width: 170 },
-  ], []);
+  ], [dictionaryNames]);
 
   const gridOptions = useMemo(
     () => ({
@@ -2414,19 +2666,33 @@ export function SkillGraphCandidatesPage() {
   const embeddingFormValid = embeddingForm.embeddingProvider.trim() !== ""
     && embeddingForm.embeddingModel.trim() !== ""
     && Number(embeddingForm.embeddingDim) > 0;
-  const recommendationEligibleResults = recommendationResultStats.filter((result) => (
-    result.status === "CANDIDATE"
-      && (result.recommendationType === "NEW_SKILL_CANDIDATE" || result.recommendationType === "EXISTING_SKILL_MATCH")
-      && result.confidence >= Number(recommendationForm.newSkillMinConfidence)
-      && (result.recommendationType !== "EXISTING_SKILL_MATCH"
-        || result.similarityScore >= Number(recommendationForm.existingSkillMinScore))
-  ));
-  const recommendationReviewResults = recommendationResultStats.filter((result) => (
-    result.recommendationType === "REVIEW_REQUIRED"
-      || result.recommendationType === "SIMILAR_CANDIDATE"
-      || result.recommendationType === "NCS_MAPPING_CANDIDATE"
-      || result.recommendationType === "DUPLICATE_CANDIDATE"
-  ));
+  const recommendationEligibleResults = recommendationResultStats.filter((result) => {
+    const isNewSkill = result.recommendationType === "NEW_SKILL_CANDIDATE";
+    const sourceLower = (result.sourceText || "").trim().toLowerCase();
+    if (isNewSkill && dictionaryNames.has(sourceLower)) {
+      return false;
+    }
+    return (
+      result.status === "CANDIDATE"
+        && (result.recommendationType === "NEW_SKILL_CANDIDATE" || result.recommendationType === "EXISTING_SKILL_MATCH")
+        && result.confidence >= Number(recommendationForm.newSkillMinConfidence)
+        && (result.recommendationType !== "EXISTING_SKILL_MATCH"
+          || result.similarityScore >= Number(recommendationForm.existingSkillMinScore))
+    );
+  });
+  const recommendationReviewResults = recommendationResultStats.filter((result) => {
+    const isNewSkill = result.recommendationType === "NEW_SKILL_CANDIDATE";
+    const sourceLower = (result.sourceText || "").trim().toLowerCase();
+    const alreadyInDict = isNewSkill && dictionaryNames.has(sourceLower);
+
+    return (
+      alreadyInDict
+        || result.recommendationType === "REVIEW_REQUIRED"
+        || result.recommendationType === "SIMILAR_CANDIDATE"
+        || result.recommendationType === "NCS_MAPPING_CANDIDATE"
+        || result.recommendationType === "DUPLICATE_CANDIDATE"
+    );
+  });
   const recommendationExcludedResults = recommendationResultStats.filter((result) => (
     result.recommendationType === "LOW_CONFIDENCE" || result.status === "SKIPPED" || result.status === "FAILED"
   ));
