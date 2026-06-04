@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Box,
   Button,
+  Chip,
   CircularProgress,
   Divider,
   Drawer,
@@ -30,6 +31,7 @@ import { useToast } from "@/react/feedback";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import { reactFilesApi } from "@/react/pages/files/api";
 import type { AttachmentDto } from "@/types/studio/files";
+import type { RagIndexJobStatus, RagIndexJobStep } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 
 const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
@@ -80,6 +82,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
   const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
   const [chunkingStrategy, setChunkingStrategy] = useState<string>("recursive");
+  const [ragJobStatus, setRagJobStatus] = useState<RagIndexJobStatus | null>(null);
+  const [ragJobStep, setRagJobStep] = useState<RagIndexJobStep | null>(null);
+  const [ragJobError, setRagJobError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -97,8 +102,89 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setEmbeddingOptions([]);
       setSelectedOption(null);
       setChunkingStrategy("recursive");
+      setRagJobStatus(null);
+      setRagJobStep(null);
+      setRagJobError(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !attachmentId) {
+      return;
+    }
+
+    let ignored = false;
+    async function checkActiveJob() {
+      try {
+        const res = await reactAiApi.listRagJobs({
+          objectType: "attachment",
+          objectId: String(attachmentId),
+          page: 0,
+          size: 1,
+        });
+        if (ignored) return;
+
+        const latestJob = res.content?.[0];
+        if (latestJob && (latestJob.status === "PENDING" || latestJob.status === "RUNNING")) {
+          setRagJobId(latestJob.jobId);
+          setRagJobStatus(latestJob.status);
+          setRagJobStep(latestJob.currentStep);
+          setRagJobError(latestJob.errorMessage);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    void checkActiveJob();
+
+    return () => {
+      ignored = true;
+    };
+  }, [open, attachmentId]);
+
+  useEffect(() => {
+    if (!open || !ragJobId) {
+      setRagJobStatus(null);
+      setRagJobStep(null);
+      setRagJobError(null);
+      return;
+    }
+
+    let timer: number | undefined;
+
+    async function pollStatus() {
+      try {
+        const job = await reactAiApi.getRagJob(ragJobId);
+        setRagJobStatus(job.status);
+        setRagJobStep(job.currentStep);
+        setRagJobError(job.errorMessage);
+
+        if (
+          job.status === "SUCCEEDED" ||
+          job.status === "WARNING" ||
+          job.status === "FAILED" ||
+          job.status === "CANCELLED"
+        ) {
+          if (timer) window.clearInterval(timer);
+          await refreshDetail(true);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    void pollStatus();
+    timer = window.setInterval(() => {
+      void pollStatus();
+    }, 3000);
+
+    return () => {
+      if (timer) {
+        window.clearInterval(timer);
+      }
+    };
+  }, [open, ragJobId]);
 
   const metadataEntries = Object.entries(ragMetadata ?? {});
   const ragIndexCompleted = ragIndexed || metadataEntries.length > 0;
@@ -573,9 +659,39 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                   </Tooltip>
                 </Stack>
                 {ragJobId ? (
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
-                    RAG 색인 작업 ID: {ragJobId}
-                  </Typography>
+                  <Box sx={{ mt: 1.5, bgcolor: "action.hover", p: 1.25, borderRadius: 1 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      RAG 색인 작업 ID
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
+                      {ragJobId}
+                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        진행 상태:
+                      </Typography>
+                      {ragJobStatus ? (
+                        <Chip
+                          label={`${ragJobStatus}${ragJobStep ? ` (${ragJobStep})` : ""}`}
+                          size="small"
+                          color={
+                            ragJobStatus === "SUCCEEDED" ? "success" :
+                            ragJobStatus === "RUNNING" ? "primary" :
+                            ragJobStatus === "FAILED" ? "error" :
+                            "default"
+                          }
+                          sx={{ height: 20, fontSize: 11 }}
+                        />
+                      ) : (
+                        <CircularProgress size={12} />
+                      )}
+                    </Stack>
+                    {ragJobError ? (
+                      <Typography variant="caption" color="error.main" display="block" sx={{ mt: 0.5, whiteSpace: "pre-wrap" }}>
+                        오류: {ragJobError}
+                      </Typography>
+                    ) : null}
+                  </Box>
                 ) : null}
               </Box>
 
