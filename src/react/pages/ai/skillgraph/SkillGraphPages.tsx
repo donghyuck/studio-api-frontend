@@ -1013,6 +1013,7 @@ function RagExtractionDialog({
   const [selectedCount, setSelectedCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const chunkDataSource = useMemo(() => new SkillRagChunkDataSource(), []);
   const chunkGridRef = useRef<PageableGridContentHandle<SkillRagChunkPreview>>(null);
@@ -1148,6 +1149,7 @@ function RagExtractionDialog({
       setSelectedModel("");
       setSelectedDimension("");
       setSelectedCount(0);
+      setRefreshKey(0);
       chunkDataSource.updateFilter({ objectType: "" });
     }
   }, [open, chunkDataSource]);
@@ -1165,7 +1167,7 @@ function RagExtractionDialog({
       documentId: documentId.trim() || undefined,
       q: chunkQuery.trim() || undefined,
     });
-    chunkGridRef.current?.refresh();
+    setRefreshKey((prev) => prev + 1);
   }
 
   async function submitExtraction() {
@@ -1473,6 +1475,7 @@ function RagExtractionDialog({
             </Stack>
             <Box sx={{ mt: 1 }}>
               <PageableGridContent<SkillRagChunkPreview>
+                key={refreshKey}
                 ref={chunkGridRef}
                 columns={chunkColumns}
                 datasource={chunkDataSource}

@@ -169,7 +169,7 @@ function normalizeClusterResponse(response: SkillClusterResponse | SkillClusterP
   };
 }
 
-function normalizeJob(job: SkillGraphJob): SkillGraphJob {
+function normalizeJob(job: SkillGraphJob & { options?: any }): SkillGraphJob {
   return {
     ...job,
     totalCount: job.totalCount ?? job.totalChunks,
@@ -177,6 +177,7 @@ function normalizeJob(job: SkillGraphJob): SkillGraphJob {
     failedCount: job.failedCount ?? job.failedChunks,
     failureReason: job.failureReason ?? job.error,
     currentStep: job.currentStep ?? (job.status === "RUNNING" ? "RAG_CHUNK_EXTRACTION" : undefined),
+    chunkingStrategy: job.chunkingStrategy ?? job.options?.chunkingStrategy ?? job.options?.chunking_strategy ?? undefined,
   };
 }
 
@@ -222,15 +223,13 @@ export const skillGraphApi = {
           objectType: params?.objectType,
           objectId: params?.objectId,
           documentId: params?.keyword,
-          offset: params?.offset,
-          limit: params?.limit,
+          page: params?.page ?? 0,
+          size: params?.size ?? 100,
+          sort: params?.sort ?? "updatedAt,desc",
         }),
       }
     );
-    return {
-      ...response,
-      items: pageItems(response).map(normalizeJob),
-    };
+    return response;
   },
 
   createExtractionJob(data: { sourceType: string; sourceId: string; chunkId?: string; text?: string }) {
@@ -289,6 +288,15 @@ export const skillGraphApi = {
       `${EXTRACTION_BASE}/${encodeURIComponent(String(jobId))}/items`,
       { params: { offset, limit } }
     );
+  },
+
+  async listJobCandidates(jobId: string | number, offset = 0, limit = 1000) {
+    const response = await apiRequest<SkillGraphPageResponse<SkillCandidate> | SkillCandidate[]>(
+      "get",
+      `${EXTRACTION_BASE}/${encodeURIComponent(String(jobId))}/candidates`,
+      { params: { offset, limit } }
+    );
+    return normalizeCandidateResponse(response);
   },
 
   async listCandidates(params?: SkillGraphListParams) {
