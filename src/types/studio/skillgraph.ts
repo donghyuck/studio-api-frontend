@@ -386,6 +386,7 @@ export interface RagDocumentExtractionRequest {
   documentId?: string | null;
   mode: string;
   limit?: number;
+  q?: string | null;
   excludeExtracted: boolean;
   generateEmbeddings: boolean;
   embeddingProvider?: string | null;
@@ -416,6 +417,7 @@ export interface SkillRagExtractionRequest {
   mode?: SkillRagExtractionMode;
   chunkIds?: string[];
   limit?: number;
+  q?: string | null;
   excludeExtracted?: boolean;
   generateEmbeddings?: boolean;
   embeddingProvider?: string | null;

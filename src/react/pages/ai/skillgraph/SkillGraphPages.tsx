@@ -1193,19 +1193,12 @@ function RagExtractionDialog({
     setError("");
     try {
       const chunkIds = chunksToExtract.map((c) => c.chunkId);
-      
-      // Use the input objectId if specified; otherwise fall back to the first chunk's objectId
-      const requestObjectId = objectId.trim() || chunksToExtract[0]?.objectId || "";
-      
-      // Use the input documentId if specified; otherwise use the common documentId if all chunks share it
-      const firstDocId = chunksToExtract[0]?.documentId;
-      const allSameDocId = chunksToExtract.every((c) => c.documentId === firstDocId);
-      const requestDocumentId = allSameDocId ? firstDocId : (documentId.trim() || undefined);
 
       const payload = {
         objectType: objectType.trim(),
-        objectId: requestObjectId,
-        documentId: requestDocumentId,
+        objectId: objectId.trim(),
+        documentId: documentId.trim() || undefined,
+        q: chunkQuery.trim() || undefined,
         mode: "SELECTED_CHUNKS" as const,
         chunkIds,
         excludeExtracted,
@@ -1239,6 +1232,7 @@ function RagExtractionDialog({
         objectType: objectType.trim(),
         objectId: objectId.trim() || null,
         documentId: documentId.trim() || null,
+        q: chunkQuery.trim() || null,
         mode: "ALL_CHUNKS",
         excludeExtracted,
         generateEmbeddings,
