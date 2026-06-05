@@ -1191,13 +1191,24 @@ function RagExtractionDialog({
     setSubmitting(true);
     setError("");
     try {
-      const groups = new Map<string, string[]>();
+      // Group by both objectId and documentId from the chunk itself, falling back to input fields
+      const groups = new Map<string, { objectId: string; documentId?: string; chunkIds: string[] }>();
+      
       chunksToExtract.forEach((chunk) => {
-        const id = chunk.objectId || objectId.trim();
-        if (id) {
-          const arr = groups.get(id) || [];
-          arr.push(chunk.chunkId);
-          groups.set(id, arr);
+        const objId = chunk.objectId || objectId.trim();
+        const docId = chunk.documentId || documentId.trim() || undefined;
+        if (objId) {
+          const groupKey = `${objId}::${docId || ""}`;
+          const existing = groups.get(groupKey);
+          if (existing) {
+            existing.chunkIds.push(chunk.chunkId);
+          } else {
+            groups.set(groupKey, {
+              objectId: objId,
+              documentId: docId,
+              chunkIds: [chunk.chunkId],
+            });
+          }
         }
       });
 
@@ -1206,13 +1217,13 @@ function RagExtractionDialog({
       }
 
       let lastResponse: any = undefined;
-      for (const [grpId, chunkIds] of groups.entries()) {
+      for (const group of groups.values()) {
         lastResponse = await skillGraphApi.extractRag({
           objectType: objectType.trim(),
-          objectId: grpId,
-          documentId: documentId.trim() || undefined,
+          objectId: group.objectId,
+          documentId: group.documentId,
           mode: "SELECTED_CHUNKS",
-          chunkIds,
+          chunkIds: group.chunkIds,
           excludeExtracted,
           generateEmbeddings,
           embeddingProvider: generateEmbeddings ? selectedProvider || null : null,
