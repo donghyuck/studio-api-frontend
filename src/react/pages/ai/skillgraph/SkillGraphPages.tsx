@@ -1107,10 +1107,19 @@ function RagExtractionDialog({
     () => ({
       getRowId: (params: { data?: SkillRagChunkPreview }) => params.data?.chunkId ?? "",
       suppressCellFocus: true,
-      onSelectionChanged: (event: SelectionChangedEvent<SkillRagChunkPreview>) => {
-        setSelectedCount(event.api.getSelectedRows().length);
-      },
     }),
+    []
+  );
+
+  const chunkGridEvents = useMemo(
+    () => [
+      {
+        type: "selectionChanged",
+        listener: (event: any) => {
+          setSelectedCount(event.api.getSelectedRows().length);
+        },
+      },
+    ],
     []
   );
 
@@ -1468,6 +1477,7 @@ function RagExtractionDialog({
                 columns={chunkColumns}
                 datasource={chunkDataSource}
                 options={chunkGridOptions}
+                events={chunkGridEvents}
                 rowSelection="multiple"
                 height={360}
               />
