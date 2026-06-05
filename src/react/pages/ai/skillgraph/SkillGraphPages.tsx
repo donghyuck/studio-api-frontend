@@ -1028,16 +1028,6 @@ function RagExtractionDialog({
   const chunkColumns = useMemo<ColDef<SkillRagChunkPreview>[]>(
     () => [
       {
-        headerCheckboxSelection: true,
-        checkboxSelection: true,
-        width: 50,
-        minWidth: 50,
-        maxWidth: 50,
-        pinned: "left",
-        filter: false,
-        sortable: false,
-      },
-      {
         field: "chunkOrder",
         headerName: "순서",
         width: 76,
