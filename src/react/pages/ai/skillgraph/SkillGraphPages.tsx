@@ -1183,6 +1183,7 @@ function RagExtractionDialog({
 
   async function submitExtraction() {
     const chunksToExtract = chunkGridRef.current?.selectedRows() ?? [];
+    console.log("RAG submitExtraction - selected rows:", chunksToExtract);
     if (!chunksToExtract.length) {
       setError("작업을 등록할 청크를 선택하세요.");
       return;
@@ -1212,24 +1213,28 @@ function RagExtractionDialog({
         }
       });
 
+      console.log("RAG submitExtraction - grouped requests:", Array.from(groups.entries()));
+
       if (groups.size === 0) {
         throw new Error("chunk에 objectId가 존재하지 않습니다.");
       }
 
       let lastResponse: any = undefined;
       for (const group of groups.values()) {
-        lastResponse = await skillGraphApi.extractRag({
+        const payload = {
           objectType: objectType.trim(),
           objectId: group.objectId,
           documentId: group.documentId,
-          mode: "SELECTED_CHUNKS",
+          mode: "SELECTED_CHUNKS" as const,
           chunkIds: group.chunkIds,
           excludeExtracted,
           generateEmbeddings,
           embeddingProvider: generateEmbeddings ? selectedProvider || null : null,
           embeddingModel: generateEmbeddings ? selectedModel || null : null,
           embeddingDimension: generateEmbeddings ? (Number(selectedDimension) || null) : null,
-        });
+        };
+        console.log("RAG submitExtraction - sending payload:", payload);
+        lastResponse = await skillGraphApi.extractRag(payload);
       }
       onSubmitted("jobId" in lastResponse ? lastResponse : undefined);
       onClose();
