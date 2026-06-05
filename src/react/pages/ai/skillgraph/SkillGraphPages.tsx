@@ -1010,6 +1010,7 @@ function RagExtractionDialog({
   const [objectId, setObjectId] = useState("");
   const [documentId, setDocumentId] = useState("");
   const [chunkQuery, setChunkQuery] = useState("");
+  const [selectedCount, setSelectedCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -1026,6 +1027,16 @@ function RagExtractionDialog({
 
   const chunkColumns = useMemo<ColDef<SkillRagChunkPreview>[]>(
     () => [
+      {
+        headerCheckboxSelection: true,
+        checkboxSelection: true,
+        width: 50,
+        minWidth: 50,
+        maxWidth: 50,
+        pinned: "left",
+        filter: false,
+        sortable: false,
+      },
       {
         field: "chunkOrder",
         headerName: "순서",
@@ -1102,10 +1113,13 @@ function RagExtractionDialog({
     ],
     []
   );
-  const chunkGridOptions = useMemo(
+  const chunkGridOptions = useMemo<any>(
     () => ({
       getRowId: (params: { data?: SkillRagChunkPreview }) => params.data?.chunkId ?? "",
       suppressCellFocus: true,
+      onSelectionChanged: (event: SelectionChangedEvent<SkillRagChunkPreview>) => {
+        setSelectedCount(event.api.getSelectedRows().length);
+      },
     }),
     []
   );
@@ -1134,6 +1148,7 @@ function RagExtractionDialog({
       setSelectedProvider("");
       setSelectedModel("");
       setSelectedDimension("");
+      setSelectedCount(0);
       chunkDataSource.updateFilter({ objectType: "" });
     }
   }, [open, chunkDataSource]);
@@ -1144,6 +1159,7 @@ function RagExtractionDialog({
       return;
     }
     setError("");
+    setSelectedCount(0);
     chunkDataSource.updateFilter({
       objectType: objectType.trim(),
       objectId: objectId.trim() || undefined,
@@ -1154,9 +1170,9 @@ function RagExtractionDialog({
   }
 
   async function submitExtraction() {
-    const chunksToExtract = chunkDataSource.dataItems;
-    if (!chunksToExtract || !chunksToExtract.length) {
-      setError("먼저 RAG chunk를 조회하세요.");
+    const chunksToExtract = chunkGridRef.current?.selectedRows() ?? [];
+    if (!chunksToExtract.length) {
+      setError("작업을 등록할 청크를 선택하세요.");
       return;
     }
 
@@ -1462,6 +1478,7 @@ function RagExtractionDialog({
                 columns={chunkColumns}
                 datasource={chunkDataSource}
                 options={chunkGridOptions}
+                rowSelection="multiple"
                 height={360}
               />
             </Box>
@@ -1483,10 +1500,10 @@ function RagExtractionDialog({
         <Button
           variant="contained"
           onClick={() => void submitExtraction()}
-          disabled={!chunkDataSource.dataItems.length || submitting}
+          disabled={selectedCount === 0 || submitting}
           sx={{ px: 2.5, borderRadius: 2, boxShadow: "none" }}
         >
-          현재 페이지 작업 등록
+          선택 청크 작업 등록
         </Button>
       </DialogActions>
     </Dialog>
