@@ -2346,6 +2346,7 @@ function useCandidateAction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dashboard") });
+      queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dictionary-all-lookup") });
     },
   });
 }
@@ -2365,6 +2366,7 @@ function useCandidateBulkAction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dashboard") });
+      queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dictionary-all-lookup") });
     },
   });
 }
@@ -2376,6 +2378,7 @@ function useCandidateAutoApproveAction() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dashboard") });
+      queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dictionary-all-lookup") });
     },
   });
 }
@@ -2634,6 +2637,7 @@ export function SkillGraphCandidatesPage() {
       gridRef.current?.refresh();
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dashboard") });
+      queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dictionary-all-lookup") });
       toast.success(`일괄 승인 완료: 적용 ${result.appliedCount.toLocaleString()}건, 제외 ${result.skippedCount.toLocaleString()}건`);
     },
     onError: (error) => {
