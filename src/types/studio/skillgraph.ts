@@ -87,6 +87,7 @@ export interface SkillGraphJob {
   embeddingDimension?: number;
   embeddingJobId?: string;
   embeddingStatus?: string;
+  chunkingStrategy?: string;
 }
 
 export interface SkillCandidate {
@@ -395,15 +396,15 @@ export interface RagDocumentExtractionRequest {
 
 export interface SkillRagChunkPageResponse {
   content: SkillRagChunkPreview[];
-  page: number;
+  number: number;
   size: number;
   totalElements: number;
   totalPages: number;
   first: boolean;
   last: boolean;
-  hasNext: boolean;
-  hasPrevious: boolean;
-  sort?: string;
+  numberOfElements: number;
+  empty: boolean;
+  sort?: any;
 }
 
 export type SkillRagExtractionMode = "ALL_CHUNKS" | "SELECTED_CHUNKS";

@@ -1073,14 +1073,15 @@ function RagExtractionDialog({
         documentId: documentId.trim() || undefined,
         q: chunkQuery.trim() || undefined,
         page: nextPage,
-        size: RAG_CHUNK_PAGE_SIZE,
+        size: Math.min(Math.max(RAG_CHUNK_PAGE_SIZE, 50), 200),
+        sort: "objectId,asc",
       });
       const pageChunks = pageData.content ?? [];
       setChunks(pageChunks);
-      setChunkPage(pageData.page ?? nextPage);
+      setChunkPage(pageData.number ?? nextPage);
       setChunkReturned(pageChunks.length);
       setChunkTotal(pageData.totalElements);
-      setChunkHasMore(Boolean(pageData.hasNext));
+      setChunkHasMore(!pageData.last);
       if (!pageChunks.length) {
         setError("조회된 RAG chunk가 없습니다.");
       }
@@ -1416,7 +1417,7 @@ function RagExtractionDialog({
             </Stack>
             <Stack
               direction={{ xs: "column", sm: "row" }}
-              spacing={1}
+              spacing={1.5}
               alignItems={{ xs: "stretch", sm: "center" }}
               justifyContent="space-between"
               sx={{ mb: 1.5 }}
@@ -1426,6 +1427,20 @@ function RagExtractionDialog({
                 {RAG_CHUNK_PAGE_SIZE.toLocaleString()}
                 {chunkTotal == null ? "" : ` · 전체 개수: ${chunkTotal.toLocaleString()}`}
               </Typography>
+              <ButtonGroup size="small" variant="outlined" disabled={loading}>
+                <Button
+                  onClick={() => void loadChunks(chunkPage - 1)}
+                  disabled={chunkPage <= 0}
+                >
+                  이전 페이지
+                </Button>
+                <Button
+                  onClick={() => void loadChunks(chunkPage + 1)}
+                  disabled={!chunkHasMore}
+                >
+                  다음 페이지
+                </Button>
+              </ButtonGroup>
             </Stack>
             <Box sx={{ mt: 1 }}>
               {chunks.length || loading ? (
