@@ -323,6 +323,97 @@ function textFilterValue(filter: unknown) {
   return undefined;
 }
 
+class SkillRagChunkDataSource implements AgGridCompatibleDataSource<SkillRagChunkPreview> {
+  isLoaded = false;
+  loading = false;
+  error: unknown = null;
+  dataItems: SkillRagChunkPreview[] = [];
+  total = 0;
+  pageSize = 50;
+  page = 0;
+
+  private filter: {
+    objectType: string;
+    objectId?: string;
+    documentId?: string;
+    q?: string;
+  } = { objectType: "" };
+
+  setPage(page: number) {
+    this.page = page;
+  }
+
+  setPageSize(pageSize: number) {
+    this.pageSize = Math.min(Math.max(pageSize, 50), 200);
+  }
+
+  setSort(sortModel?: SortModelItem[]) {
+  }
+
+  setSearch(keyword?: string) {
+    this.filter.q = keyword;
+  }
+
+  setFilter(q?: string) {
+    this.filter.q = q;
+  }
+
+  updateFilter(filter: { objectType: string; objectId?: string; documentId?: string; q?: string }) {
+    this.filter = filter;
+  }
+
+  async fetch() {
+    const offset = this.page * this.pageSize;
+    const result = await this.fetchForAgGrid({
+      startRow: offset,
+      endRow: offset + this.pageSize,
+    });
+    this.dataItems = result.rows;
+    this.total = result.total;
+    this.isLoaded = true;
+  }
+
+  async fetchForAgGrid({
+    startRow,
+    endRow,
+  }: {
+    startRow: number;
+    endRow: number;
+    sortModel?: SortModelItem[];
+    filterModel?: Record<string, unknown>;
+  }) {
+    if (!this.filter.objectType.trim()) {
+      return { rows: [], total: 0 };
+    }
+    const limit = endRow - startRow || this.pageSize;
+    const page = Math.floor(startRow / Math.max(1, limit));
+    this.loading = true;
+    try {
+      const response = await skillGraphApi.listRagChunks({
+        objectType: this.filter.objectType.trim(),
+        objectId: this.filter.objectId?.trim() || undefined,
+        documentId: this.filter.documentId?.trim() || undefined,
+        q: this.filter.q?.trim() || undefined,
+        page,
+        size: limit,
+        sort: "objectId,asc",
+      });
+      const rows = response.content ?? [];
+      const total = response.totalElements ?? 0;
+      this.dataItems = rows;
+      this.total = total;
+      this.isLoaded = true;
+      return { rows, total };
+    } catch (error) {
+      this.error = error;
+      throw error;
+    } finally {
+      this.loading = false;
+    }
+  }
+}
+
+
 class SkillGraphCandidateDataSource implements AgGridCompatibleDataSource<SkillCandidate> {
   isLoaded = false;
   loading = false;
@@ -919,14 +1010,11 @@ function RagExtractionDialog({
   const [objectId, setObjectId] = useState("");
   const [documentId, setDocumentId] = useState("");
   const [chunkQuery, setChunkQuery] = useState("");
-  const [chunks, setChunks] = useState<SkillRagChunkPreview[]>([]);
-  const [chunkPage, setChunkPage] = useState(0);
-  const [chunkReturned, setChunkReturned] = useState(0);
-  const [chunkTotal, setChunkTotal] = useState<number | undefined>(undefined);
-  const [chunkHasMore, setChunkHasMore] = useState(false);
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const chunkDataSource = useMemo(() => new SkillRagChunkDataSource(), []);
+  const chunkGridRef = useRef<PageableGridContentHandle<SkillRagChunkPreview>>(null);
 
   // Options UI states
   const [excludeExtracted, setExcludeExtracted] = useState(true);
@@ -1018,9 +1106,6 @@ function RagExtractionDialog({
     () => ({
       getRowId: (params: { data?: SkillRagChunkPreview }) => params.data?.chunkId ?? "",
       suppressCellFocus: true,
-      pagination: true,
-      paginationPageSize: 10,
-      paginationPageSizeSelector: [5, 10, 20, 50],
     }),
     []
   );
@@ -1042,58 +1127,35 @@ function RagExtractionDialog({
           console.error("Failed to load embedding options", err);
         });
     } else {
-      setChunks([]);
-      setChunkPage(0);
-      setChunkReturned(0);
-      setChunkTotal(undefined);
-      setChunkHasMore(false);
       setError("");
-      setLoading(false);
       setSubmitting(false);
       setExcludeExtracted(true);
       setGenerateEmbeddings(true);
       setSelectedProvider("");
       setSelectedModel("");
       setSelectedDimension("");
+      chunkDataSource.updateFilter({ objectType: "" });
     }
-  }, [open]);
+  }, [open, chunkDataSource]);
 
-  async function loadChunks(nextPage = 0) {
+  function loadChunks() {
     if (!objectType.trim()) {
       setError("objectType을 입력하세요.");
       return;
     }
-
-    setLoading(true);
     setError("");
-    try {
-      const pageData = await skillGraphApi.listRagChunks({
-        objectType: objectType.trim(),
-        objectId: objectId.trim() || undefined,
-        documentId: documentId.trim() || undefined,
-        q: chunkQuery.trim() || undefined,
-        page: nextPage,
-        size: Math.min(Math.max(RAG_CHUNK_PAGE_SIZE, 50), 200),
-        sort: "objectId,asc",
-      });
-      const pageChunks = pageData.content ?? [];
-      setChunks(pageChunks);
-      setChunkPage(pageData.number ?? nextPage);
-      setChunkReturned(pageChunks.length);
-      setChunkTotal(pageData.totalElements);
-      setChunkHasMore(!pageData.last);
-      if (!pageChunks.length) {
-        setError("조회된 RAG chunk가 없습니다.");
-      }
-    } catch (err) {
-      setError(resolveAxiosError(err) || "RAG chunk 조회에 실패했습니다.");
-    } finally {
-      setLoading(false);
-    }
+    chunkDataSource.updateFilter({
+      objectType: objectType.trim(),
+      objectId: objectId.trim() || undefined,
+      documentId: documentId.trim() || undefined,
+      q: chunkQuery.trim() || undefined,
+    });
+    chunkGridRef.current?.refresh();
   }
 
   async function submitExtraction() {
-    if (!chunks.length) {
+    const chunksToExtract = chunkDataSource.dataItems;
+    if (!chunksToExtract || !chunksToExtract.length) {
       setError("먼저 RAG chunk를 조회하세요.");
       return;
     }
@@ -1102,7 +1164,7 @@ function RagExtractionDialog({
     setError("");
     try {
       const groups = new Map<string, string[]>();
-      chunks.forEach((chunk) => {
+      chunksToExtract.forEach((chunk) => {
         const id = chunk.objectId || objectId.trim();
         if (id) {
           const arr = groups.get(id) || [];
@@ -1171,7 +1233,7 @@ function RagExtractionDialog({
   return (
     <Dialog
       open={open}
-      onClose={loading || submitting ? undefined : onClose}
+      onClose={submitting ? undefined : onClose}
       fullWidth
       maxWidth="md"
       PaperProps={{
@@ -1215,11 +1277,6 @@ function RagExtractionDialog({
               value={objectType}
               onChange={(value) => {
                 setObjectType(value);
-                setChunks([]);
-                setChunkPage(0);
-                setChunkReturned(0);
-                setChunkTotal(undefined);
-                setChunkHasMore(false);
               }}
               label="objectType"
               placeholder="객체유형 선택"
@@ -1234,19 +1291,14 @@ function RagExtractionDialog({
               value={objectId}
               onChange={(event) => {
                 setObjectId(event.target.value);
-                setChunks([]);
-                setChunkPage(0);
-                setChunkReturned(0);
-                setChunkTotal(undefined);
-                setChunkHasMore(false);
               }}
               fullWidth
             />
             <Button
               variant="contained"
               startIcon={<TravelExploreOutlined />}
-              onClick={() => void loadChunks(0)}
-              disabled={loading || submitting}
+              onClick={loadChunks}
+              disabled={submitting}
               sx={{ minWidth: 118, whiteSpace: "nowrap", flexShrink: 0, boxShadow: "none" }}
             >
               Chunk 조회
@@ -1259,11 +1311,6 @@ function RagExtractionDialog({
               value={documentId}
               onChange={(event) => {
                 setDocumentId(event.target.value);
-                setChunks([]);
-                setChunkPage(0);
-                setChunkReturned(0);
-                setChunkTotal(undefined);
-                setChunkHasMore(false);
               }}
               fullWidth
             />
@@ -1273,11 +1320,6 @@ function RagExtractionDialog({
               value={chunkQuery}
               onChange={(event) => {
                 setChunkQuery(event.target.value);
-                setChunks([]);
-                setChunkPage(0);
-                setChunkReturned(0);
-                setChunkTotal(undefined);
-                setChunkHasMore(false);
               }}
               fullWidth
             />
@@ -1413,80 +1455,27 @@ function RagExtractionDialog({
                 <Box sx={{ width: 4, height: 16, bgcolor: "success.main", borderRadius: 1 }} />
                 조회된 RAG 청크 목록
               </Typography>
-              <Chip size="small" label={`${chunks.length.toLocaleString()}개`} color="success" variant="outlined" sx={{ fontWeight: 600 }} />
-            </Stack>
-            <Stack
-              direction={{ xs: "column", sm: "row" }}
-              spacing={1.5}
-              alignItems={{ xs: "stretch", sm: "center" }}
-              justifyContent="space-between"
-              sx={{ mb: 1.5 }}
-            >
-              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                페이지: {(chunkPage + 1).toLocaleString()} · 조회수: {chunkReturned.toLocaleString()} · 페이지 크기:{" "}
-                {RAG_CHUNK_PAGE_SIZE.toLocaleString()}
-                {chunkTotal == null ? "" : ` · 전체 개수: ${chunkTotal.toLocaleString()}`}
-              </Typography>
-              <ButtonGroup size="small" variant="outlined" disabled={loading}>
-                <Button
-                  onClick={() => void loadChunks(chunkPage - 1)}
-                  disabled={chunkPage <= 0}
-                >
-                  이전 페이지
-                </Button>
-                <Button
-                  onClick={() => void loadChunks(chunkPage + 1)}
-                  disabled={!chunkHasMore}
-                >
-                  다음 페이지
-                </Button>
-              </ButtonGroup>
             </Stack>
             <Box sx={{ mt: 1 }}>
-              {chunks.length || loading ? (
-                <GridContent<SkillRagChunkPreview>
-                  columns={chunkColumns}
-                  options={chunkGridOptions}
-                  rowData={chunks}
-                  loading={loading}
-                  height={360}
-                />
-              ) : (
-                <Box
-                  sx={{
-                    minHeight: 180,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    bgcolor: "action.hover",
-                    borderRadius: 1.5,
-                    border: "1px dashed",
-                    borderColor: "divider",
-                    px: 3,
-                    py: 4,
-                    textAlign: "center",
-                    gap: 1.5
-                  }}
-                >
-                  <TravelExploreOutlined sx={{ fontSize: 40, color: "text.disabled" }} />
-                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                    조회할 objectType과 objectId(선택)를 입력한 후, [Chunk 조회] 버튼을 눌러 청크 목록을 로드하세요.
-                  </Typography>
-                </Box>
-              )}
+              <PageableGridContent<SkillRagChunkPreview>
+                ref={chunkGridRef}
+                columns={chunkColumns}
+                datasource={chunkDataSource}
+                options={chunkGridOptions}
+                height={360}
+              />
             </Box>
           </Paper>
         </Stack>
       </DialogContent>
       <DialogActions sx={{ p: 2.5, pt: 1.5, borderTop: "1px solid", borderColor: "divider", gap: 1 }}>
-        <Button onClick={onClose} disabled={loading || submitting} sx={{ px: 2 }}>
+        <Button onClick={onClose} disabled={submitting} sx={{ px: 2 }}>
           취소
         </Button>
         <Button
           variant="outlined"
           onClick={() => void submitAllExtraction()}
-          disabled={!objectType.trim() || loading || submitting}
+          disabled={!objectType.trim() || submitting}
           sx={{ px: 2.5, borderRadius: 2 }}
         >
           전체 문서 작업 등록
@@ -1494,7 +1483,7 @@ function RagExtractionDialog({
         <Button
           variant="contained"
           onClick={() => void submitExtraction()}
-          disabled={!chunks.length || loading || submitting}
+          disabled={!chunkDataSource.dataItems.length || submitting}
           sx={{ px: 2.5, borderRadius: 2, boxShadow: "none" }}
         >
           현재 페이지 작업 등록
