@@ -331,6 +331,11 @@ class SkillRagChunkDataSource implements AgGridCompatibleDataSource<SkillRagChun
   total = 0;
   pageSize = 50;
   page = 0;
+  onLoadingChange?: (loading: boolean) => void;
+
+  constructor(onLoadingChange?: (loading: boolean) => void) {
+    this.onLoadingChange = onLoadingChange;
+  }
 
   private filter: {
     objectType: string;
@@ -388,6 +393,7 @@ class SkillRagChunkDataSource implements AgGridCompatibleDataSource<SkillRagChun
     const limit = endRow - startRow || this.pageSize;
     const page = Math.floor(startRow / Math.max(1, limit));
     this.loading = true;
+    this.onLoadingChange?.(true);
     try {
       const response = await skillGraphApi.listRagChunks({
         objectType: this.filter.objectType.trim(),
@@ -409,6 +415,7 @@ class SkillRagChunkDataSource implements AgGridCompatibleDataSource<SkillRagChun
       throw error;
     } finally {
       this.loading = false;
+      this.onLoadingChange?.(false);
     }
   }
 }
@@ -1014,8 +1021,11 @@ function RagExtractionDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [loadingChunks, setLoadingChunks] = useState(false);
 
-  const chunkDataSource = useMemo(() => new SkillRagChunkDataSource(), []);
+  const chunkDataSource = useMemo(() => new SkillRagChunkDataSource((loading) => {
+    setLoadingChunks(loading);
+  }), []);
   const chunkGridRef = useRef<PageableGridContentHandle<SkillRagChunkPreview>>(null);
 
   // Options UI states
@@ -1150,6 +1160,7 @@ function RagExtractionDialog({
       setSelectedDimension("");
       setSelectedCount(0);
       setRefreshKey(0);
+      setLoadingChunks(false);
       chunkDataSource.updateFilter({ objectType: "" });
     }
   }, [open, chunkDataSource]);
@@ -1313,12 +1324,12 @@ function RagExtractionDialog({
             />
             <Button
               variant="contained"
-              startIcon={<TravelExploreOutlined />}
+              startIcon={loadingChunks ? <CircularProgress size={16} color="inherit" /> : <TravelExploreOutlined />}
               onClick={loadChunks}
-              disabled={submitting}
+              disabled={submitting || loadingChunks}
               sx={{ minWidth: 118, whiteSpace: "nowrap", flexShrink: 0, boxShadow: "none" }}
             >
-              Chunk 조회
+              {loadingChunks ? "조회 중..." : "Chunk 조회"}
             </Button>
           </Stack>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
@@ -1466,7 +1477,19 @@ function RagExtractionDialog({
 
           {error ? <Alert severity="error">{error}</Alert> : null}
 
-          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, position: "relative" }}>
+            {loadingChunks && (
+              <LinearProgress
+                sx={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  borderTopLeftRadius: 8,
+                  borderTopRightRadius: 8,
+                }}
+              />
+            )}
             <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1, display: "flex", alignItems: "center", gap: 1 }}>
                 <Box sx={{ width: 4, height: 16, bgcolor: "success.main", borderRadius: 1 }} />
