@@ -44,6 +44,12 @@ import {
   Typography,
   ButtonGroup,
   useTheme,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from "@mui/material";
 import {
   AddOutlined,
@@ -78,7 +84,7 @@ import {
   DragHandleOutlined,
 } from "@mui/icons-material";
 import { GridContent, PageableGridContent } from "@/react/components/ag-grid";
-import type { AgGridCompatibleDataSource, PageableGridContentHandle } from "@/react/components/ag-grid/types";
+import type { AgGridCompatibleDataSource, GridContentHandle, PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ObjectTypeSelect } from "@/react/components/objecttype/ObjectTypeSelect";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { useAuthStore } from "@/react/auth/store";
@@ -1290,17 +1296,19 @@ function RagExtractionDialog({
               추출 옵션 설정
             </Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={3} sx={{ mb: 1 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={excludeExtracted}
-                    onChange={(e) => setExcludeExtracted(e.target.checked)}
-                    size="small"
-                    color="primary"
-                  />
-                }
-                label={<Typography variant="body2" sx={{ fontWeight: 500 }}>이미 추출된 chunk 제외</Typography>}
-              />
+              <Tooltip title="이전에 스킬 후보 추출이 성공한 청크를 제외합니다. RAG 임베딩 여부와는 무관합니다.">
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={excludeExtracted}
+                      onChange={(e) => setExcludeExtracted(e.target.checked)}
+                      size="small"
+                      color="primary"
+                    />
+                  }
+                  label={<Typography variant="body2" sx={{ fontWeight: 500 }}>이미 스킬 추출이 완료된 청크 제외</Typography>}
+                />
+              </Tooltip>
               <FormControlLabel
                 control={
                   <Checkbox
@@ -1740,27 +1748,172 @@ export function SkillGraphJobsPage() {
   const [recentJobIds, setRecentJobIds] = useState<string[]>(() => readRecentRagExtractionJobIds());
   const [recentJobs, setRecentJobs] = useState<SkillGraphJob[]>([]);
   const [submittedJobs, setSubmittedJobs] = useState<SkillGraphJob[]>([]);
-  const params = useMemo<SkillGraphListParams>(() => ({ status, objectId: keyword, limit: PAGE_SIZE }), [keyword, status]);
+  const [skillsDialogJobId, setSkillsDialogJobId] = useState<string | number | null>(null);
+  const candidatesQuery = useQuery({
+    queryKey: skillGraphQueryKeys.custom("job-extracted-skills", skillsDialogJobId ?? ""),
+    queryFn: () => skillGraphApi.listJobCandidates(skillsDialogJobId!),
+    enabled: Boolean(skillsDialogJobId),
+  });
+  const extractedSkills = useMemo(() => {
+    const items = skillGraphApi.pageItems(candidatesQuery.data as any) as SkillCandidate[];
+    const countsMap = new Map<string, number>();
+    items.forEach((c) => {
+      const name = (c.rawText || c.term || "").trim();
+      if (!name) return;
+      countsMap.set(name, (countsMap.get(name) || 0) + 1);
+    });
+    return Array.from(countsMap.entries())
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [candidatesQuery.data]);
+
+  // WebSocket / STOMP state
+  const [stompConnected, setStompConnected] = useState(false);
+  const [stompClient, setStompClient] = useState<StompRealtimeClient | null>(null);
+
+  // We maintain dynamic rows populated via REST query and updated by STOMP events.
+  const [liveJobs, setLiveJobs] = useState<SkillGraphJob[]>([]);
+  const [liveSelectedJob, setLiveSelectedJob] = useState<SkillGraphJob | null>(null);
+
+  const params = useMemo<SkillGraphListParams>(() => ({
+    status,
+    objectId: keyword,
+    page: 0,
+    size: 100,
+    sort: "updatedAt,desc",
+  }), [keyword, status]);
+
+  // 1. Initial REST API load of the list
   const query = useQuery({
     queryKey: listQueryKey("jobs", params),
-    queryFn: () => skillGraphApi.listJobs(params),
-    refetchInterval: (query) => {
-      const jobs = [...listFrom<SkillGraphJob>(query.state.data), ...recentJobs, ...submittedJobs];
-      return jobs.some(isActiveJob) ? 3000 : false;
+    queryFn: async () => {
+      const res = await skillGraphApi.listJobs(params);
+      const items = (res?.content ?? []) as SkillGraphJob[];
+      setLiveJobs(items);
+      return res;
     },
   });
+
+  // 2. Initial REST API load of the detail
   const selectedJobQuery = useQuery({
     queryKey: skillGraphQueryKeys.detail(selected?.jobId ?? ""),
-    queryFn: () => skillGraphApi.getJob(selected?.jobId ?? ""),
+    queryFn: async () => {
+      const job = await skillGraphApi.getJob(selected!.jobId);
+      setLiveSelectedJob(job);
+      return job;
+    },
     enabled: Boolean(selected?.jobId),
-    refetchInterval: (query) => isActiveJob(query.state.data) ? 3000 : false,
   });
-  const selectedJob = selectedJobQuery.data ?? selected;
+
+  // Keep liveSelectedJob in sync if selected changes
+  useEffect(() => {
+    if (selected) {
+      setLiveSelectedJob(selected);
+    } else {
+      setLiveSelectedJob(null);
+    }
+  }, [selected]);
+
+  // STOMP Connection and Fallback Polling (30s)
+  const isSelectedActive = liveSelectedJob && (liveSelectedJob.status === "RUNNING" || liveSelectedJob.status === "READY");
+  const isAnyActive = liveJobs.some((j) => j.status === "RUNNING" || j.status === "READY");
+
+  // STOMP subscriptions
+  useEffect(() => {
+    const client = new StompRealtimeClient();
+    setStompClient(client);
+
+    // List topic subscription
+    client.subscribe("/topic/skillgraph/extraction-jobs", (event: any) => {
+      if (!event || event.jobId == null) return;
+      setLiveJobs((prev) => {
+        const index = prev.findIndex((j) => String(j.jobId) === String(event.jobId));
+        let next = [...prev];
+        if (index > -1) {
+          next[index] = { ...next[index], ...event };
+        } else {
+          // If not found, add it to first or we can reload
+          next = [event, ...next];
+        }
+        // If sorting is updatedAt DESC (which is our standard), sort them
+        return next.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
+      });
+
+      // If this event matches selected job ID, update details as well
+      if (selected && String(event.jobId) === String(selected.jobId)) {
+        setLiveSelectedJob((current) => {
+          const updated = { ...current, ...event } as SkillGraphJob;
+          // Trigger reload of candidate lists and detailed drawer details once complete
+          if (["COMPLETED", "PARTIAL", "FAILED"].includes(event.status)) {
+            queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
+            queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.detail(event.jobId) });
+          }
+          return updated;
+        });
+      }
+    });
+
+    // Detail topic subscription (if selected)
+    if (selected?.jobId) {
+      client.subscribe(`/topic/skillgraph/extraction-jobs/${selected.jobId}`, (event: any) => {
+        if (!event || String(event.jobId) !== String(selected.jobId)) return;
+        setLiveSelectedJob((current) => {
+          const updated = { ...current, ...event } as SkillGraphJob;
+          if (["COMPLETED", "PARTIAL", "FAILED"].includes(event.status)) {
+            queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
+            queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.detail(event.jobId) });
+          }
+          return updated;
+        });
+      });
+    }
+
+    // Connect stomp
+    try {
+      client.connect();
+      // STOMP clients usually don't have onConnect exposed directly easily, but we can set connected status
+      setStompConnected(true);
+    } catch (e) {
+      setStompConnected(false);
+    }
+
+    return () => {
+      client.disconnect();
+    };
+  }, [selected?.jobId, queryClient]);
+
+  // Fallback Polling (Interval: 30 seconds when STOMP is NOT connected, or if active job exists)
+  useEffect(() => {
+    if (stompConnected) return undefined;
+
+    // Fallback interval if STOMP fails to connect
+    const interval = setInterval(() => {
+      if (isAnyActive) {
+        void query.refetch();
+      }
+      if (selected?.jobId && isSelectedActive) {
+        void selectedJobQuery.refetch();
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [stompConnected, isAnyActive, isSelectedActive, selected?.jobId, query, selectedJobQuery]);
+
+  // On STOMP reconnection or initial connection recovery, refetch detailed REST API once
+  useEffect(() => {
+    if (stompConnected) {
+      if (selected?.jobId) {
+        void selectedJobQuery.refetch();
+      }
+      void query.refetch();
+    }
+  }, [stompConnected, selected?.jobId]);
+
+  const selectedJob = liveSelectedJob;
   const selectedJobItemsQuery = useQuery({
     queryKey: skillGraphQueryKeys.custom("job-items", selectedJob?.jobId ?? ""),
     queryFn: () => skillGraphApi.listJobItems(selectedJob?.jobId ?? "", 0, 100),
     enabled: Boolean(selectedJob?.jobId),
-    refetchInterval: isActiveJob(selectedJob) ? 3000 : false,
   });
   const retryMutation = useMutation({
     mutationFn: (jobId: string | number) => skillGraphApi.retryJob(jobId),
@@ -1798,14 +1951,14 @@ export function SkillGraphJobsPage() {
     setRecentJobs((prev) => [job, ...prev.filter((row) => row.jobId !== job.jobId)]);
   }, [selectedJobQuery.data]);
   useEffect(() => {
-    const serverJobIds = new Set(listFrom<SkillGraphJob>(query.data).map((job) => String(job.jobId)));
+    const content = (query.data?.content ?? []) as SkillGraphJob[];
+    const serverJobIds = new Set(content.map((job) => String(job.jobId)));
     if (!serverJobIds.size) return;
     setSubmittedJobs((prev) => prev.filter((job) => !serverJobIds.has(String(job.jobId))));
     setRecentJobs((prev) => prev.filter((job) => !serverJobIds.has(String(job.jobId))));
   }, [query.data]);
   const rows = useMemo(() => {
-    const serverRows = listFrom<SkillGraphJob>(query.data);
-    const merged = [...serverRows, ...recentJobs, ...submittedJobs];
+    const merged = [...liveJobs, ...recentJobs, ...submittedJobs];
     const seen = new Set<string>();
     return merged.filter((job) => {
       const id = String(job.jobId);
@@ -1813,7 +1966,7 @@ export function SkillGraphJobsPage() {
       seen.add(id);
       return true;
     });
-  }, [query.data, recentJobs, submittedJobs]);
+  }, [liveJobs, recentJobs, submittedJobs]);
   const columns = useMemo<ColDef<SkillGraphJob>[]>(() => [
     {
       headerName: "Job ID",
@@ -1851,8 +2004,10 @@ export function SkillGraphJobsPage() {
       width: 155,
       cellRenderer: ({ data }: { data?: SkillGraphJob }) => {
         if (!data) return "-";
-        const total = data.totalChunks ?? data.totalCount ?? 0;
-        const processed = data.processedChunks ?? data.processedCount ?? 0;
+        const total = data.totalChunks ?? 0;
+        const processed = data.processedChunks ?? 0;
+        const succeeded = data.succeededChunks ?? 0;
+        const failed = data.failedChunks ?? 0;
         const progress = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
         return (
           <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", height: "100%", py: 0.5 }}>
@@ -1861,13 +2016,37 @@ export function SkillGraphJobsPage() {
               <Typography variant="caption" color="text.secondary">{`${progress}%`}</Typography>
             </Box>
             <LinearProgress variant="determinate" value={progress} sx={{ height: 4, borderRadius: 2, mt: 0.5 }} />
+            <Box sx={{ display: "flex", justifyContent: "space-between", mt: 0.5 }}>
+              <Typography variant="caption" color="success.main">{`성공: ${numberValue(succeeded)}`}</Typography>
+              <Typography variant="caption" color="error.main">{`실패: ${numberValue(failed)}`}</Typography>
+            </Box>
           </Box>
         );
       }
     },
     // { headerName: "성공", field: "succeededChunks", width: 92 },
     // { headerName: "실패", valueGetter: ({ data }) => numberValue(data?.failedCount), width: 92 },
-    { headerName: "추출 스킬", valueGetter: ({ data }) => numberValue(data?.extractedCount), width: 100 },
+    {
+      headerName: "추출 스킬",
+      width: 100,
+      cellRenderer: ({ data }: { data?: SkillGraphJob }) => {
+        const count = data?.extractedCount ?? 0;
+        if (count === 0) return "0";
+        return (
+          <Button
+            size="small"
+            variant="text"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (data) setSkillsDialogJobId(data.jobId);
+            }}
+            sx={{ minWidth: 0, p: 0, textTransform: "none", textDecoration: "underline" }}
+          >
+            {count.toLocaleString()}
+          </Button>
+        );
+      }
+    },
     { headerName: "생성일", valueGetter: ({ data }) => formatDate(data?.createdAt), width: 180 },
     { headerName: "액션", width: 110, cellRenderer: ({ data }: { data?: SkillGraphJob }) => (
       <Button
@@ -1949,10 +2128,11 @@ export function SkillGraphJobsPage() {
             ["상태", <StatusBadge value={selectedJob?.status} />],
             ["Object", `${selectedJob?.objectType ?? "-"} / ${selectedJob?.objectId ?? "-"}`],
             ["Document", selectedJob?.documentId ?? "-"],
-            ["처리", `${numberValue(selectedJob?.processedCount)}/${numberValue(selectedJob?.totalCount)}`],
+            ["청킹 전략", selectedJob?.chunkingStrategy ?? "-"],
+            ["처리", `${numberValue(selectedJob?.processedChunks)}/${numberValue(selectedJob?.totalChunks)}`],
             ["진행률", (() => {
-              const detailTotal = selectedJob?.totalChunks ?? selectedJob?.totalCount ?? 0;
-              const detailProcessed = selectedJob?.processedChunks ?? selectedJob?.processedCount ?? 0;
+              const detailTotal = selectedJob?.totalChunks ?? 0;
+              const detailProcessed = selectedJob?.processedChunks ?? 0;
               const detailProgress = detailTotal > 0 ? Math.min(100, Math.round((detailProcessed / detailTotal) * 100)) : 0;
               return (
                 <Box sx={{ display: "flex", alignItems: "center", width: "100%", gap: 1 }}>
@@ -1961,8 +2141,23 @@ export function SkillGraphJobsPage() {
                 </Box>
               );
             })()],
-            ["성공/실패", `${numberValue(selectedJob?.succeededChunks)} / ${numberValue(selectedJob?.failedCount)}`],
-            ["추출 후보", numberValue(selectedJob?.extractedCount)],
+            ["성공/실패", `${numberValue(selectedJob?.succeededChunks)} / ${numberValue(selectedJob?.failedChunks ?? selectedJob?.failedCount)}`],
+            ["추출 후보", (() => {
+              const count = selectedJob?.extractedCount ?? 0;
+              if (count === 0) return "0";
+              return (
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => {
+                    if (selectedJob) setSkillsDialogJobId(selectedJob.jobId);
+                  }}
+                  sx={{ minWidth: 0, p: 0, textTransform: "none", textDecoration: "underline", justifyContent: "flex-start" }}
+                >
+                  {count.toLocaleString()}
+                </Button>
+              );
+            })()],
             ["실패 사유", selectedJob?.failureReason ?? "-"],
             ["생성일", formatDate(selectedJob?.createdAt)],
             ["갱신일", formatDate(selectedJob?.updatedAt)],
@@ -2088,6 +2283,47 @@ export function SkillGraphJobsPage() {
           queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
         }}
       />
+      <Dialog
+        open={skillsDialogJobId !== null}
+        onClose={() => setSkillsDialogJobId(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>추출된 스킬 목록</Typography>
+        </DialogTitle>
+        <DialogContent dividers>
+          {candidatesQuery.isLoading ? (
+            <LoadingState label="스킬 목록을 조회 중입니다..." />
+          ) : candidatesQuery.error ? (
+            <ErrorState error={candidatesQuery.error} />
+          ) : extractedSkills.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" align="center">추출된 스킬이 없습니다.</Typography>
+          ) : (
+            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 350 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 700, backgroundColor: "background.paper" }}>스킬</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 700, width: 100, backgroundColor: "background.paper" }}>추출 건수</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {extractedSkills.map((item, index) => (
+                    <TableRow key={`${item.name}-${index}`} hover>
+                      <TableCell sx={{ py: 1 }}>{item.name}</TableCell>
+                      <TableCell align="right" sx={{ py: 1 }}>{item.count.toLocaleString()}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button size="small" onClick={() => setSkillsDialogJobId(null)}>닫기</Button>
+        </DialogActions>
+      </Dialog>
     </PageFrame>
   );
 }
@@ -2151,7 +2387,7 @@ export function SkillGraphCandidatesPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const gridRef = useRef<PageableGridContentHandle<SkillCandidate>>(null);
-  const recommendationGridRef = useRef<PageableGridContentHandle<SkillRecommendationResult>>(null);
+  const recommendationGridRef = useRef<GridContentHandle<SkillRecommendationResult>>(null);
   const dataSource = useMemo(() => new SkillGraphCandidateDataSource(), []);
   const recommendationDataSource = useMemo(() => new SkillRecommendationResultDataSource(), []);
   const [status, setStatus] = useState("");
@@ -2183,8 +2419,16 @@ export function SkillGraphCandidatesPage() {
     enabled: recommendationOpen,
   });
   const dictionaryNames = useMemo(() => {
-    const items = skillGraphApi.pageItems(dictionaryQuery.data as any);
-    return new Set(items.map((item: any) => (item.skillName || "").trim().toLowerCase()));
+    const items = skillGraphApi.pageItems(dictionaryQuery.data as any) as SkillDictionaryItem[];
+    const namesSet = new Set<string>();
+    items.forEach((item) => {
+      if (item.skillName) namesSet.add(item.skillName.trim().toLowerCase());
+      if (item.name) namesSet.add(item.name.trim().toLowerCase());
+      item.aliases?.forEach((aliasObj) => {
+        if (aliasObj.alias) namesSet.add(aliasObj.alias.trim().toLowerCase());
+      });
+    });
+    return namesSet;
   }, [dictionaryQuery.data]);
   const [recommendationApplyResult, setRecommendationApplyResult] = useState<SkillRecommendationApplyResult | null>(null);
   const [recommendationForm, setRecommendationForm] = useState({
@@ -2761,36 +3005,59 @@ export function SkillGraphCandidatesPage() {
   const embeddingFormValid = embeddingForm.embeddingProvider.trim() !== ""
     && embeddingForm.embeddingModel.trim() !== ""
     && Number(embeddingForm.embeddingDim) > 0;
-  const recommendationEligibleResults = recommendationResultStats.filter((result) => {
-    const isNewSkill = result.recommendationType === "NEW_SKILL_CANDIDATE";
-    const sourceLower = (result.sourceText || "").trim().toLowerCase();
-    if (isNewSkill && dictionaryNames.has(sourceLower)) {
-      return false;
-    }
-    return (
-      result.status === "CANDIDATE"
-        && (result.recommendationType === "NEW_SKILL_CANDIDATE" || result.recommendationType === "EXISTING_SKILL_MATCH")
-        && result.confidence >= Number(recommendationForm.newSkillMinConfidence)
-        && (result.recommendationType !== "EXISTING_SKILL_MATCH"
-          || result.similarityScore >= Number(recommendationForm.existingSkillMinScore))
-    );
-  });
-  const recommendationReviewResults = recommendationResultStats.filter((result) => {
-    const isNewSkill = result.recommendationType === "NEW_SKILL_CANDIDATE";
-    const sourceLower = (result.sourceText || "").trim().toLowerCase();
-    const alreadyInDict = isNewSkill && dictionaryNames.has(sourceLower);
+  const filteredRecommendationResults = useMemo(() => {
+    // 1. Deduplicate by sourceText (keeping entry with highest confidence or similarityScore)
+    const map = new Map<string, SkillRecommendationResult>();
+    recommendationResultStats.forEach((result) => {
+      const text = (result.sourceText || "").trim().toLowerCase();
+      if (!text) return;
+      const score = result.recommendationType === "EXISTING_SKILL_MATCH" ? result.similarityScore : result.confidence;
+      const existing = map.get(text);
+      if (!existing) {
+        map.set(text, result);
+      } else {
+        const existingScore = existing.recommendationType === "EXISTING_SKILL_MATCH" ? existing.similarityScore : existing.confidence;
+        if (score > existingScore) {
+          map.set(text, result);
+        }
+      }
+    });
 
-    return (
-      alreadyInDict
-        || result.recommendationType === "REVIEW_REQUIRED"
-        || result.recommendationType === "SIMILAR_CANDIDATE"
-        || result.recommendationType === "NCS_MAPPING_CANDIDATE"
-        || result.recommendationType === "DUPLICATE_CANDIDATE"
-    );
-  });
-  const recommendationExcludedResults = recommendationResultStats.filter((result) => (
-    result.recommendationType === "LOW_CONFIDENCE" || result.status === "SKIPPED" || result.status === "FAILED"
-  ));
+    // 2. Filter out candidates already in the dictionary
+    return Array.from(map.values()).filter((result) => {
+      const sourceLower = (result.sourceText || "").trim().toLowerCase();
+      return !dictionaryNames.has(sourceLower);
+    });
+  }, [recommendationResultStats, dictionaryNames]);
+
+  const recommendationEligibleResults = useMemo(() => {
+    return filteredRecommendationResults.filter((result) => {
+      return (
+        result.status === "CANDIDATE"
+          && (result.recommendationType === "NEW_SKILL_CANDIDATE" || result.recommendationType === "EXISTING_SKILL_MATCH")
+          && result.confidence >= Number(recommendationForm.newSkillMinConfidence)
+          && (result.recommendationType !== "EXISTING_SKILL_MATCH"
+            || result.similarityScore >= Number(recommendationForm.existingSkillMinScore))
+      );
+    });
+  }, [filteredRecommendationResults, recommendationForm.newSkillMinConfidence, recommendationForm.existingSkillMinScore]);
+
+  const recommendationReviewResults = useMemo(() => {
+    return filteredRecommendationResults.filter((result) => {
+      return (
+        result.recommendationType === "REVIEW_REQUIRED"
+          || result.recommendationType === "SIMILAR_CANDIDATE"
+          || result.recommendationType === "NCS_MAPPING_CANDIDATE"
+          || result.recommendationType === "DUPLICATE_CANDIDATE"
+      );
+    });
+  }, [filteredRecommendationResults]);
+
+  const recommendationExcludedResults = useMemo(() => {
+    return filteredRecommendationResults.filter((result) => (
+      result.recommendationType === "LOW_CONFIDENCE" || result.status === "SKIPPED" || result.status === "FAILED"
+    ));
+  }, [filteredRecommendationResults]);
   const recommendationJobActive = recommendationMutation.isPending
     || (recommendationJob != null && recommendationJob.status !== "COMPLETED" && recommendationJob.status !== "FAILED");
   const recommendationFormValid = recommendationForm.embeddingProvider.trim() !== ""
@@ -3455,10 +3722,10 @@ export function SkillGraphCandidatesPage() {
                     적용 {recommendationApplyResult.appliedCount.toLocaleString()}건 · 제외 {recommendationApplyResult.skippedCount.toLocaleString()}건 · 실패 {recommendationApplyResult.failedCount.toLocaleString()}건
                   </Alert>
                 ) : null}
-                <PageableGridContent<SkillRecommendationResult>
+                 <GridContent<SkillRecommendationResult>
                   ref={recommendationGridRef}
                   columns={recommendationColumns}
-                  datasource={recommendationDataSource}
+                  rowData={filteredRecommendationResults}
                 />
               </Stack>
             ) : null}
