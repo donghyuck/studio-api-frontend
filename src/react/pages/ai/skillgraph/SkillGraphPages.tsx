@@ -1192,59 +1192,32 @@ function RagExtractionDialog({
     setSubmitting(true);
     setError("");
     try {
-      // Group only by objectId from the chunk itself, falling back to input field
-      const groups = new Map<string, { objectId: string; documentIds: Set<string>; chunkIds: string[] }>();
+      const chunkIds = chunksToExtract.map((c) => c.chunkId);
       
-      chunksToExtract.forEach((chunk) => {
-        const objId = chunk.objectId || objectId.trim();
-        const docId = chunk.documentId || "";
-        if (objId) {
-          const existing = groups.get(objId);
-          if (existing) {
-            existing.chunkIds.push(chunk.chunkId);
-            if (docId) existing.documentIds.add(docId);
-          } else {
-            const documentIds = new Set<string>();
-            if (docId) documentIds.add(docId);
-            groups.set(objId, {
-              objectId: objId,
-              documentIds,
-              chunkIds: [chunk.chunkId],
-            });
-          }
-        }
-      });
+      // Use the input objectId if specified; otherwise fall back to the first chunk's objectId
+      const requestObjectId = objectId.trim() || chunksToExtract[0]?.objectId || "";
+      
+      // Use the input documentId if specified; otherwise use the common documentId if all chunks share it
+      const firstDocId = chunksToExtract[0]?.documentId;
+      const allSameDocId = chunksToExtract.every((c) => c.documentId === firstDocId);
+      const requestDocumentId = allSameDocId ? firstDocId : (documentId.trim() || undefined);
 
-      console.log("RAG submitExtraction - grouped requests:", Array.from(groups.entries()));
+      const payload = {
+        objectType: objectType.trim(),
+        objectId: requestObjectId,
+        documentId: requestDocumentId,
+        mode: "SELECTED_CHUNKS" as const,
+        chunkIds,
+        excludeExtracted,
+        generateEmbeddings,
+        embeddingProvider: generateEmbeddings ? selectedProvider || null : null,
+        embeddingModel: generateEmbeddings ? selectedModel || null : null,
+        embeddingDimension: generateEmbeddings ? (Number(selectedDimension) || null) : null,
+      };
 
-      if (groups.size === 0) {
-        throw new Error("chunk에 objectId가 존재하지 않습니다.");
-      }
-
-      let lastResponse: any = undefined;
-      for (const group of groups.values()) {
-        // If all chunks in this group belong to the same document, use that documentId.
-        // Otherwise, fall back to the dialog's documentId input field, or undefined.
-        const groupDocId = group.documentIds.size === 1 
-          ? Array.from(group.documentIds)[0] 
-          : (documentId.trim() || undefined);
-
-        const payload = {
-          objectType: objectType.trim(),
-          objectId: group.objectId,
-          documentId: groupDocId,
-          mode: "SELECTED_CHUNKS" as const,
-          chunkIds: group.chunkIds,
-          excludeExtracted,
-          generateEmbeddings,
-          embeddingProvider: generateEmbeddings ? selectedProvider || null : null,
-          embeddingModel: generateEmbeddings ? selectedModel || null : null,
-          embeddingDimension: generateEmbeddings ? (Number(selectedDimension) || null) : null,
-        };
-        console.log("RAG submitExtraction - sending payload:", payload);
-        lastResponse = await skillGraphApi.extractRag(payload);
-      }
-      onSubmitted("jobId" in lastResponse ? lastResponse : undefined);
+      console.log("RAG submitExtraction - sending payload:", payload);
+      const response = await skillGraphApi.extractRag(payload);
+      onSubmitted("jobId" in response ? response : undefined);
       onClose();
     } catch (err) {
       setError(resolveAxiosError(err) || "SkillGraph 추출 작업 등록에 실패했습니다.");
