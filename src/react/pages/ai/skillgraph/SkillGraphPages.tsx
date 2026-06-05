@@ -1192,21 +1192,23 @@ function RagExtractionDialog({
     setSubmitting(true);
     setError("");
     try {
-      // Group by both objectId and documentId from the chunk itself, falling back to input fields
-      const groups = new Map<string, { objectId: string; documentId?: string; chunkIds: string[] }>();
+      // Group only by objectId from the chunk itself, falling back to input field
+      const groups = new Map<string, { objectId: string; documentIds: Set<string>; chunkIds: string[] }>();
       
       chunksToExtract.forEach((chunk) => {
         const objId = chunk.objectId || objectId.trim();
-        const docId = chunk.documentId || documentId.trim() || undefined;
+        const docId = chunk.documentId || "";
         if (objId) {
-          const groupKey = `${objId}::${docId || ""}`;
-          const existing = groups.get(groupKey);
+          const existing = groups.get(objId);
           if (existing) {
             existing.chunkIds.push(chunk.chunkId);
+            if (docId) existing.documentIds.add(docId);
           } else {
-            groups.set(groupKey, {
+            const documentIds = new Set<string>();
+            if (docId) documentIds.add(docId);
+            groups.set(objId, {
               objectId: objId,
-              documentId: docId,
+              documentIds,
               chunkIds: [chunk.chunkId],
             });
           }
@@ -1221,10 +1223,16 @@ function RagExtractionDialog({
 
       let lastResponse: any = undefined;
       for (const group of groups.values()) {
+        // If all chunks in this group belong to the same document, use that documentId.
+        // Otherwise, fall back to the dialog's documentId input field, or undefined.
+        const groupDocId = group.documentIds.size === 1 
+          ? Array.from(group.documentIds)[0] 
+          : (documentId.trim() || undefined);
+
         const payload = {
           objectType: objectType.trim(),
           objectId: group.objectId,
-          documentId: group.documentId,
+          documentId: groupDocId,
           mode: "SELECTED_CHUNKS" as const,
           chunkIds: group.chunkIds,
           excludeExtracted,
