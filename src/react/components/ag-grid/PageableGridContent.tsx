@@ -205,7 +205,7 @@ function PageableGridContentInner<TData = unknown>(
         gridApiRef.current?.onFilterChanged();
         gridApiRef.current?.purgeInfiniteCache();
       },
-      selectedRows: () => selectedItems,
+      selectedRows: () => gridApiRef.current?.getSelectedRows() ?? [],
       selectAll: () => {
         if (gridApiRef.current) {
           selectViewportRows(gridApiRef.current, true);
