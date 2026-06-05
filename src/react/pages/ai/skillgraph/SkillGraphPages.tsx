@@ -5634,6 +5634,30 @@ export function SkillGraphCategoriesPage() {
     return map;
   }, [projectionPoints]);
 
+  const dictionaryQuery = useQuery({
+    queryKey: skillGraphQueryKeys.custom("category-draft-dictionary-lookup", selectedProjectionId),
+    queryFn: () => skillGraphApi.listDictionary({ limit: 10000 }),
+    enabled: Boolean(selectedProjectionId),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const dictionaryLookupMap = useMemo(() => {
+    const map = new Map<string, string>();
+    const items = skillGraphApi.pageItems(dictionaryQuery.data as any) as SkillDictionaryItem[];
+    items.forEach((item) => {
+      const id = String(item.skillId);
+      if (id && item.skillName) {
+        map.set(id, item.skillName);
+      }
+    });
+    return map;
+  }, [dictionaryQuery.data]);
+
+  const skillNameLookup = useCallback((id: string | number) => {
+    const idStr = String(id);
+    return dictionaryLookupMap.get(idStr) || pointLookupMap.get(idStr) || idStr;
+  }, [dictionaryLookupMap, pointLookupMap]);
+
   const clusterSummaries = useMemo(() => {
     const summaries = clusterSummariesFrom(projectionPoints);
     const clustersMap = new Map<string, SkillCluster>();
@@ -6949,7 +6973,7 @@ export function SkillGraphCategoriesPage() {
                                     <Box sx={{ pl: 3.25, mt: 0.5 }}>
                                       {cluster.representativeSkillIds && cluster.representativeSkillIds.length > 0 ? (
                                         <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 11, fontStyle: "italic" }}>
-                                          대표 스킬: {(cluster.representativeSkillIds || []).map(id => pointLookupMap.get(String(id)) || id).slice(0, 3).join(", ")}
+                                          대표 스킬: {(cluster.representativeSkillIds || []).map(id => skillNameLookup(id)).slice(0, 3).join(", ")}
                                           {cluster.representativeSkillIds.length > 3 ? " 외..." : ""}
                                         </Typography>
                                       ) : null}
@@ -7167,7 +7191,7 @@ export function SkillGraphCategoriesPage() {
                                   />
                                   <Box sx={{ flex: 1, minWidth: 0 }}>
                                     <Typography variant="body2" noWrap sx={{ fontWeight: member.representative ? 800 : 700, fontSize: 13.5 }}>
-                                      {pointLookupMap.get(String(member.skillId)) || member.skillId}
+                                      {skillNameLookup(member.skillId)}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary" noWrap sx={{ fontSize: 11.5 }}>
                                       ID: {member.skillId}
