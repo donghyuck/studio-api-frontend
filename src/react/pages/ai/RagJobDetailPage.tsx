@@ -1033,11 +1033,12 @@ export function RagJobDetailPage() {
   const retryButtonText = isPartialEmbedding ? "이어가기" : "재시도";
 
   const hasChanged = Boolean(
-    originalOption && selectedOption && (
+    (originalOption && selectedOption && (
       selectedOption.profileId !== originalOption.profileId ||
       selectedOption.provider !== originalOption.provider ||
       selectedOption.model !== originalOption.model
-    )
+    )) ||
+    selectedChunkingStrategy !== (job?.chunkingStrategy || "recursive")
   );
 
   const selectChunkByOffset = useCallback(
