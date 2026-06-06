@@ -1018,7 +1018,6 @@ function RagExtractionDialog({
 }) {
   const [objectType, setObjectType] = useState("");
   const [objectId, setObjectId] = useState("");
-  const [documentId, setDocumentId] = useState("");
   const [chunkQuery, setChunkQuery] = useState("");
   const [selectedCount, setSelectedCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -1180,7 +1179,6 @@ function RagExtractionDialog({
     chunkDataSource.updateFilter({
       objectType: objectType.trim(),
       objectId: objectId.trim() || undefined,
-      documentId: documentId.trim() || undefined,
       q: chunkQuery.trim() || undefined,
     });
     setRefreshKey((prev) => prev + 1);
@@ -1202,7 +1200,6 @@ function RagExtractionDialog({
       const payload = {
         objectType: objectType.trim(),
         objectId: objectId.trim() || undefined,
-        documentId: documentId.trim() || undefined,
         q: chunkQuery.trim() || undefined,
         mode: "SELECTED_CHUNKS" as const,
         chunkIds,
@@ -1242,7 +1239,6 @@ function RagExtractionDialog({
       const payload = {
         objectType: objectType.trim(),
         objectId: objectId.trim() || null,
-        documentId: documentId.trim() || null,
         q: chunkQuery.trim() || null,
         mode: "ALL_CHUNKS" as const,
         chunkIds: [],
@@ -1312,7 +1308,7 @@ function RagExtractionDialog({
             </Typography>
           </Box>
 
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} alignItems="center">
             <ObjectTypeSelect
               value={objectType}
               onChange={(value) => {
@@ -1323,7 +1319,7 @@ function RagExtractionDialog({
               includeAll={false}
               freeSolo
               includeAttachment
-              sx={{ minWidth: 240 }}
+              sx={{ minWidth: 200, flex: 1 }}
             />
             <TextField
               label="objectId"
@@ -1333,26 +1329,7 @@ function RagExtractionDialog({
                 setObjectId(event.target.value);
               }}
               fullWidth
-            />
-            <Button
-              variant="contained"
-              startIcon={loadingChunks ? <CircularProgress size={16} color="inherit" /> : <TravelExploreOutlined />}
-              onClick={loadChunks}
-              disabled={submitting || loadingChunks}
-              sx={{ minWidth: 118, whiteSpace: "nowrap", flexShrink: 0, boxShadow: "none" }}
-            >
-              {loadingChunks ? "조회 중..." : "Chunk 조회"}
-            </Button>
-          </Stack>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-            <TextField
-              label="documentId"
-              size="small"
-              value={documentId}
-              onChange={(event) => {
-                setDocumentId(event.target.value);
-              }}
-              fullWidth
+              sx={{ flex: 1 }}
             />
             <TextField
               label="chunk 검색어"
@@ -1362,7 +1339,17 @@ function RagExtractionDialog({
                 setChunkQuery(event.target.value);
               }}
               fullWidth
+              sx={{ flex: 1 }}
             />
+            <Button
+              variant="contained"
+              startIcon={loadingChunks ? <CircularProgress size={16} color="inherit" /> : <TravelExploreOutlined />}
+              onClick={loadChunks}
+              disabled={submitting || loadingChunks}
+              sx={{ minWidth: 118, height: 40, whiteSpace: "nowrap", flexShrink: 0, boxShadow: "none" }}
+            >
+              {loadingChunks ? "조회 중..." : "Chunk 조회"}
+            </Button>
           </Stack>
 
           <Accordion
