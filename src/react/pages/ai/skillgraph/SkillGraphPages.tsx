@@ -1808,6 +1808,7 @@ export function SkillGraphDashboardPage() {
 export function SkillGraphJobsPage() {
   const { canOperate } = useSkillGraphRoles();
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [status, setStatus] = useState("");
   const [keyword, setKeyword] = useState("");
   const [keywordInput, setKeywordInput] = useState("");
@@ -1830,7 +1831,8 @@ export function SkillGraphJobsPage() {
     items.forEach((c) => {
       const name = (c.rawText || c.term || "").trim();
       if (!name) return;
-      countsMap.set(name, (countsMap.get(name) || 0) + 1);
+      const occurrenceCount = Math.max(1, Number(c.occurrenceCount) || 0);
+      countsMap.set(name, (countsMap.get(name) || 0) + occurrenceCount);
     });
     return Array.from(countsMap.entries())
       .map(([name, count]) => ({ name, count }))
@@ -2118,16 +2120,52 @@ export function SkillGraphJobsPage() {
       }
     },
     { headerName: "생성일", valueGetter: ({ data }) => formatDate(data?.createdAt), width: 180 },
-    { headerName: "액션", width: 110, cellRenderer: ({ data }: { data?: SkillGraphJob }) => (
-      <Button
-        size="small"
-        disabled={!canOperate || !data || retryMutation.isPending || (data.status !== "FAILED" && !data.failedCount)}
-        onClick={() => data && retryMutation.mutate(data.jobId)}
-      >
-        실패 재시도
-      </Button>
-    ) },
-  ], [canOperate, retryMutation]);
+    { headerName: "액션", width: 110, cellRenderer: ({ data }: { data?: SkillGraphJob }) => {
+      const handleRetry = () => {
+        if (data) {
+          retryMutation.mutate(data.jobId);
+        }
+      };
+
+      const handleForceRestart = async () => {
+        if (!data) return;
+        const ok = await confirm({
+          title: "작업 강제 재시작",
+          message: "서버 재시작 등으로 인해 작업이 '동작중'으로 표시되지만 실제 동작하지 않고 멈춰 있는 경우에만 사용해야 합니다. 기존 정상 작동 중인 작업에 중복 수행을 막기 위해 상태가 잘못된 경우에만 진행하십시오. 강제 재시작하시겠습니까?",
+          okText: "강제 재시작",
+          cancelText: "취소",
+        });
+        if (ok) {
+          retryMutation.mutate(data.jobId);
+        }
+      };
+
+      if (!data) return null;
+
+      if (data.status === "RUNNING") {
+        return (
+          <Button
+            size="small"
+            color="warning"
+            disabled={!canOperate || retryMutation.isPending}
+            onClick={handleForceRestart}
+          >
+            강제 재시작
+          </Button>
+        );
+      }
+
+      return (
+        <Button
+          size="small"
+          disabled={!canOperate || retryMutation.isPending || (data.status !== "FAILED" && !data.failedCount)}
+          onClick={handleRetry}
+        >
+          실패 재시도
+        </Button>
+      );
+    } },
+  ], [canOperate, retryMutation, confirm]);
   const itemColumns = useMemo<ColDef<SkillRagExtractionJobItem>[]>(() => [
     { headerName: "상태", field: "status", width: 120, cellRenderer: ({ value }: { value?: string }) => <StatusBadge value={value} /> },
     { headerName: "Chunk ID", field: "chunkId", flex: 1, minWidth: 100, tooltipField: "chunkId" },
@@ -2295,6 +2333,28 @@ export function SkillGraphJobsPage() {
           >
             실패 chunk 재시도
           </Button>
+          {selectedJob?.status === "RUNNING" && (
+            <Button
+              size="small"
+              variant="outlined"
+              color="warning"
+              disabled={!canOperate || retryMutation.isPending}
+              onClick={async () => {
+                if (!selectedJob) return;
+                const ok = await confirm({
+                  title: "작업 강제 재시작",
+                  message: "서버 재시작 등으로 인해 작업이 '동작중'으로 표시되지만 실제 동작하지 않고 멈춰 있는 경우에만 사용해야 합니다. 기존 정상 작동 중인 작업에 중복 수행을 막기 위해 상태가 잘못된 경우에만 진행하십시오. 강제 재시작하시겠습니까?",
+                  okText: "강제 재시작",
+                  cancelText: "취소",
+                });
+                if (ok) {
+                  retryMutation.mutate(selectedJob.jobId);
+                }
+              }}
+            >
+              강제 재시작
+            </Button>
+          )}
         </Stack>
         <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
           처리 item
