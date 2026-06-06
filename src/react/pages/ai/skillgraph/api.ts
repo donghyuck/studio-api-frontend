@@ -261,10 +261,14 @@ export const skillGraphApi = {
     return normalizeJob(response);
   },
 
-  async retryJob(jobId: string | number) {
+  async retryJob(
+    jobId: string | number,
+    mode: "FAILED_ONLY" | "RESUME_INCOMPLETE" | "FORCE_RESTART" = "FAILED_ONLY"
+  ) {
     const response = await apiRequest<SkillGraphJob>(
       "post",
-      `${EXTRACTION_BASE}/${encodeURIComponent(String(jobId))}/retry-failed`
+      `${EXTRACTION_BASE}/${encodeURIComponent(String(jobId))}/retry`,
+      { data: { mode } }
     );
     return normalizeJob(response);
   },

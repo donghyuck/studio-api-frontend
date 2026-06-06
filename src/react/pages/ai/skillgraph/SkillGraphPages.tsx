@@ -1994,7 +1994,13 @@ export function SkillGraphJobsPage() {
     enabled: Boolean(selectedJob?.jobId),
   });
   const retryMutation = useMutation({
-    mutationFn: (jobId: string | number) => skillGraphApi.retryJob(jobId),
+    mutationFn: ({
+      jobId,
+      mode,
+    }: {
+      jobId: string | number;
+      mode: "FAILED_ONLY" | "RESUME_INCOMPLETE" | "FORCE_RESTART";
+    }) => skillGraphApi.retryJob(jobId, mode),
     onSuccess: (job) => {
       setRecentJobIds(rememberRecentRagExtractionJobId(job.jobId));
       setSubmittedJobs((prev) => [job, ...prev.filter((row) => row.jobId !== job.jobId)]);
@@ -2132,7 +2138,7 @@ export function SkillGraphJobsPage() {
     { headerName: "액션", width: 110, cellRenderer: ({ data }: { data?: SkillGraphJob }) => {
       const handleRetry = () => {
         if (data) {
-          retryMutation.mutate(data.jobId);
+          retryMutation.mutate({ jobId: data.jobId, mode: "FAILED_ONLY" });
         }
       };
 
@@ -2145,7 +2151,7 @@ export function SkillGraphJobsPage() {
           cancelText: "취소",
         });
         if (ok) {
-          retryMutation.mutate(data.jobId);
+          retryMutation.mutate({ jobId: data.jobId, mode: "FORCE_RESTART" });
         }
       };
 
@@ -2338,7 +2344,10 @@ export function SkillGraphJobsPage() {
             size="small"
             variant="outlined"
             disabled={!canOperate || (selectedJob?.status !== "FAILED" && !selectedJob?.failedCount) || retryMutation.isPending}
-            onClick={() => selectedJob && retryMutation.mutate(selectedJob.jobId)}
+            onClick={() => selectedJob && retryMutation.mutate({
+              jobId: selectedJob.jobId,
+              mode: "FAILED_ONLY",
+            })}
           >
             실패 chunk 재시도
           </Button>
@@ -2357,7 +2366,10 @@ export function SkillGraphJobsPage() {
                   cancelText: "취소",
                 });
                 if (ok) {
-                  retryMutation.mutate(selectedJob.jobId);
+                  retryMutation.mutate({
+                    jobId: selectedJob.jobId,
+                    mode: "FORCE_RESTART",
+                  });
                 }
               }}
             >
