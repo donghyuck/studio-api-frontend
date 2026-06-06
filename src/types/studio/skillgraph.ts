@@ -88,6 +88,10 @@ export interface SkillGraphJob {
   embeddingJobId?: string;
   embeddingStatus?: string;
   chunkingStrategy?: string;
+  mode?: string;
+  q?: string;
+  chunkIds?: string[];
+  excludeExtracted?: boolean;
 }
 
 export interface SkillCandidate {
@@ -412,7 +416,7 @@ export type SkillRagExtractionMode = "ALL_CHUNKS" | "SELECTED_CHUNKS";
 
 export interface SkillRagExtractionRequest {
   objectType: string;
-  objectId: string;
+  objectId?: string | null;
   documentId?: string;
   mode?: SkillRagExtractionMode;
   chunkIds?: string[];
@@ -423,6 +427,11 @@ export interface SkillRagExtractionRequest {
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
+}
+
+export interface SkillRagExtractionJobResponse {
+  jobId: number | string;
+  status: string;
 }
 
 export interface SkillRagChunkExtractionItem {

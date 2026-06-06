@@ -1022,6 +1022,7 @@ function RagExtractionDialog({
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const [loadingChunks, setLoadingChunks] = useState(false);
+  const [limit, setLimit] = useState<number | "">("");
 
   const chunkDataSource = useMemo(() => new SkillRagChunkDataSource((loading) => {
     setLoadingChunks(loading);
@@ -1161,6 +1162,7 @@ function RagExtractionDialog({
       setSelectedCount(0);
       setRefreshKey(0);
       setLoadingChunks(false);
+      setLimit("");
       chunkDataSource.updateFilter({ objectType: "" });
     }
   }, [open, chunkDataSource]);
@@ -1196,7 +1198,7 @@ function RagExtractionDialog({
 
       const payload = {
         objectType: objectType.trim(),
-        objectId: objectId.trim(),
+        objectId: objectId.trim() || undefined,
         documentId: documentId.trim() || undefined,
         q: chunkQuery.trim() || undefined,
         mode: "SELECTED_CHUNKS" as const,
@@ -1206,11 +1208,17 @@ function RagExtractionDialog({
         embeddingProvider: generateEmbeddings ? selectedProvider || null : null,
         embeddingModel: generateEmbeddings ? selectedModel || null : null,
         embeddingDimension: generateEmbeddings ? (Number(selectedDimension) || null) : null,
+        limit: limit !== "" ? Number(limit) : undefined,
       };
 
       console.log("RAG submitExtraction - sending payload:", payload);
       const response = await skillGraphApi.extractRag(payload);
-      onSubmitted("jobId" in response ? response : undefined);
+      
+      let job: SkillGraphJob | undefined = undefined;
+      if (response && "jobId" in response) {
+        job = await skillGraphApi.getJob(response.jobId);
+      }
+      onSubmitted(job);
       onClose();
     } catch (err) {
       setError(resolveAxiosError(err) || "SkillGraph 추출 작업 등록에 실패했습니다.");
@@ -1228,19 +1236,29 @@ function RagExtractionDialog({
     setSubmitting(true);
     setError("");
     try {
-      const response = await skillGraphApi.extractRagDocuments({
+      const payload = {
         objectType: objectType.trim(),
         objectId: objectId.trim() || null,
         documentId: documentId.trim() || null,
         q: chunkQuery.trim() || null,
-        mode: "ALL_CHUNKS",
+        mode: "ALL_CHUNKS" as const,
+        chunkIds: [],
         excludeExtracted,
         generateEmbeddings,
         embeddingProvider: generateEmbeddings ? selectedProvider || null : null,
         embeddingModel: generateEmbeddings ? selectedModel || null : null,
         embeddingDimension: generateEmbeddings ? (Number(selectedDimension) || null) : null,
-      });
-      onSubmitted("jobId" in response ? response : undefined);
+        limit: limit !== "" ? Number(limit) : undefined,
+      };
+
+      console.log("RAG submitAllExtraction - sending payload:", payload);
+      const response = await skillGraphApi.extractRag(payload);
+      
+      let job: SkillGraphJob | undefined = undefined;
+      if (response && "jobId" in response) {
+        job = await skillGraphApi.getJob(response.jobId);
+      }
+      onSubmitted(job);
       onClose();
     } catch (err) {
       setError(resolveAxiosError(err) || "SkillGraph 추출 작업 등록에 실패했습니다.");
@@ -1357,7 +1375,7 @@ function RagExtractionDialog({
               <Box sx={{ width: 4, height: 16, bgcolor: "primary.main", borderRadius: 1 }} />
               추출 옵션 설정
             </Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={3} sx={{ mb: 1 }}>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={3} alignItems="center" sx={{ mb: 1 }}>
               <Tooltip title="이전에 스킬 후보 추출이 성공한 청크를 제외합니다. RAG 임베딩 여부와는 무관합니다.">
                 <FormControlLabel
                   control={
@@ -1381,6 +1399,14 @@ function RagExtractionDialog({
                   />
                 }
                 label={<Typography variant="body2" sx={{ fontWeight: 500 }}>추출 후 임베딩 생성</Typography>}
+              />
+              <TextField
+                label="추출 제한 건수 (Limit)"
+                size="small"
+                type="number"
+                value={limit}
+                onChange={(e) => setLimit(e.target.value === "" ? "" : Number(e.target.value))}
+                sx={{ width: 180 }}
               />
             </Stack>
 
@@ -2167,6 +2193,15 @@ export function SkillGraphJobsPage() {
             ["Object", `${selectedJob?.objectType ?? "-"} / ${selectedJob?.objectId ?? "-"}`],
             ["Document", selectedJob?.documentId ?? "-"],
             ["청킹 전략", selectedJob?.chunkingStrategy ?? "-"],
+            ["검색어 (q)", selectedJob?.q ?? "-"],
+            ["모드 (mode)", selectedJob?.mode ?? "-"],
+            ["선택 chunkIds", selectedJob?.chunkIds && selectedJob.chunkIds.length > 0 ? (
+              <Box sx={{ maxHeight: 80, overflowY: "auto", fontFamily: "monospace", fontSize: 11, bgcolor: "action.hover", p: 1, borderRadius: 1, border: "1px solid", borderColor: "divider" }}>
+                {selectedJob.chunkIds.map((id) => <div key={id}>{id}</div>)}
+              </Box>
+            ) : "-"],
+            ["이미 추출된 청크 제외", selectedJob?.excludeExtracted ? "Yes" : "No"],
+            ["임베딩 생성 여부", selectedJob?.generateEmbeddings ? "Yes" : "No"],
             ["처리", `${numberValue(selectedJob?.processedChunks)}/${numberValue(selectedJob?.totalChunks)}`],
             ["진행률", (() => {
               const detailTotal = selectedJob?.totalChunks ?? 0;

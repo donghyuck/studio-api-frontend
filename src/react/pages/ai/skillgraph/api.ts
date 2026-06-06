@@ -14,11 +14,10 @@ import type {
   SkillGraphJobStatus,
   SkillGraphListParams,
   SkillGraphPageResponse,
-  SkillRagBatchExtractionResponse,
   SkillRagChunkPageResponse,
   SkillRagExtractionJobItemPageResponse,
   SkillRagExtractionRequest,
-  RagDocumentExtractionRequest,
+  SkillRagExtractionJobResponse,
   SkillGraphSimulationRequest,
   SkillGraphSimulationResponse,
   SkillMapping,
@@ -251,19 +250,7 @@ export const skillGraphApi = {
   },
 
   async extractRag(data: SkillRagExtractionRequest) {
-    const response = await apiRequest<SkillRagBatchExtractionResponse | SkillGraphJob>("post", `${EXTRACTION_BASE}/rag`, { data });
-    if (response && "jobId" in response) {
-      return normalizeJob(response as SkillGraphJob);
-    }
-    return response;
-  },
-
-  async extractRagDocuments(data: RagDocumentExtractionRequest) {
-    const response = await apiRequest<SkillRagBatchExtractionResponse | SkillGraphJob>("post", `${EXTRACTION_BASE}/rag-documents`, { data });
-    if (response && "jobId" in response) {
-      return normalizeJob(response as SkillGraphJob);
-    }
-    return response;
+    return apiRequest<SkillRagExtractionJobResponse>("post", `${EXTRACTION_BASE}/rag`, { data });
   },
 
   async getJob(jobId: string | number) {
