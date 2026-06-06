@@ -1165,6 +1165,9 @@ function RagExtractionDialog({
       setRefreshKey(0);
       setLoadingChunks(false);
       setLimit("");
+      setObjectType("");
+      setObjectId("");
+      setChunkQuery("");
       chunkDataSource.updateFilter({ objectType: "" });
     }
   }, [open, chunkDataSource]);
@@ -1181,7 +1184,7 @@ function RagExtractionDialog({
       objectId: objectId.trim() || undefined,
       q: chunkQuery.trim() || undefined,
     });
-    setRefreshKey((prev) => prev + 1);
+    chunkGridRef.current?.refresh();
   }
 
   async function submitExtraction() {
@@ -1521,7 +1524,6 @@ function RagExtractionDialog({
             </Stack>
             <Box sx={{ mt: 1 }}>
               <PageableGridContent<SkillRagChunkPreview>
-                key={refreshKey}
                 ref={chunkGridRef}
                 columns={chunkColumns}
                 datasource={chunkDataSource}
