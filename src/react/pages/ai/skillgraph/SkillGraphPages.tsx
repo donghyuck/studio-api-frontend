@@ -3308,13 +3308,17 @@ export function SkillGraphCandidatesPage() {
   }
 
   async function submitCandidateEmbedding() {
-    if (!embeddingFormValid || embeddingJobActive) {
+    if (!embeddingFormValid) {
       return;
     }
+    let message = `${embeddingForm.embeddingProvider.trim()} / ${embeddingForm.embeddingModel.trim()} 기준으로 임베딩이 없는 스킬 후보만 처리합니다.`;
+    if (embeddingJobActive) {
+      message = "주의: 현재 임베딩 작업이 진행 중으로 표시됩니다. 실제로 이전 작업이 서버 재시작 등으로 인해 멈춘 경우에만 강제 시작해야 합니다. 강제로 새로운 임베딩 작업을 시작하시겠습니까?\n\n" + message;
+    }
     const ok = await confirm({
-      title: "후보 임베딩 생성",
-      message: `${embeddingForm.embeddingProvider.trim()} / ${embeddingForm.embeddingModel.trim()} 기준으로 임베딩이 없는 스킬 후보만 처리합니다.`,
-      okText: "생성",
+      title: embeddingJobActive ? "후보 임베딩 강제 생성" : "후보 임베딩 생성",
+      message,
+      okText: embeddingJobActive ? "강제 생성" : "생성",
       cancelText: "취소",
     });
     if (ok) {
@@ -3402,7 +3406,7 @@ export function SkillGraphCandidatesPage() {
           <Button
             size="small"
             variant="outlined"
-            disabled={!canReview || embeddingJobActive}
+            disabled={!canReview}
             startIcon={embeddingJobActive ? <CircularProgress size={14} color="inherit" /> : <TravelExploreOutlined />}
             onClick={() => setEmbeddingOpen(true)}
           >
@@ -3922,10 +3926,10 @@ export function SkillGraphCandidatesPage() {
           <Button onClick={() => setEmbeddingOpen(false)}>취소</Button>
           <Button
             variant="contained"
-            disabled={!embeddingFormValid || embeddingJobActive}
+            disabled={!embeddingFormValid}
             onClick={submitCandidateEmbedding}
           >
-            생성
+            {embeddingJobActive ? "강제 생성" : "생성"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -4895,13 +4899,17 @@ export function SkillGraphDictionaryPage() {
   }
 
   async function submitDictionaryEmbedding() {
-    if (!embeddingFormValid || embeddingJobActive) {
+    if (!embeddingFormValid) {
       return;
     }
+    let message = `${embeddingForm.embeddingProvider.trim()} / ${embeddingForm.embeddingModel.trim()} 기준으로 임베딩이 없는 스킬 사전 항목만 처리합니다.`;
+    if (embeddingJobActive) {
+      message = "주의: 현재 임베딩 작업이 진행 중으로 표시됩니다. 실제로 이전 작업이 서버 재시작 등으로 인해 멈춘 경우에만 강제 시작해야 합니다. 강제로 새로운 임베딩 작업을 시작하시겠습니까?\n\n" + message;
+    }
     const ok = await confirm({
-      title: "스킬 사전 임베딩 생성",
-      message: `${embeddingForm.embeddingProvider.trim()} / ${embeddingForm.embeddingModel.trim()} 기준으로 임베딩이 없는 스킬 사전 항목만 처리합니다.`,
-      okText: "생성",
+      title: embeddingJobActive ? "스킬 사전 임베딩 강제 생성" : "스킬 사전 임베딩 생성",
+      message,
+      okText: embeddingJobActive ? "강제 생성" : "생성",
       cancelText: "취소",
     });
     if (ok) {
@@ -4965,7 +4973,7 @@ export function SkillGraphDictionaryPage() {
             <span>
               <IconButton
                 size="small"
-                disabled={!canAdmin || embeddingJobActive}
+                disabled={!canAdmin}
                 onClick={() => setEmbeddingOpen(true)}
                 aria-label="embedding 생성"
               >
@@ -5193,10 +5201,10 @@ export function SkillGraphDictionaryPage() {
           <Button onClick={() => setEmbeddingOpen(false)}>취소</Button>
           <Button
             variant="contained"
-            disabled={!embeddingFormValid || embeddingJobActive}
+            disabled={!embeddingFormValid}
             onClick={submitDictionaryEmbedding}
           >
-            생성
+            {embeddingJobActive ? "강제 생성" : "생성"}
           </Button>
         </DialogActions>
       </Dialog>
