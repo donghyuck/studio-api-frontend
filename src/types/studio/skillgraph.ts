@@ -92,6 +92,7 @@ export interface SkillGraphJob {
   q?: string;
   chunkIds?: string[];
   excludeExtracted?: boolean;
+  executionStatus?: "RUNNING" | "RECOVERING" | "STALLED";
 }
 
 export interface SkillCandidate {

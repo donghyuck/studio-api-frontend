@@ -2068,6 +2068,28 @@ export function SkillGraphJobsPage() {
       ),
     },
     { headerName: "상태", field: "status", width: 140, cellRenderer: ({ value }: { value?: string }) => <StatusBadge value={value} /> },
+    {
+      headerName: "실행 상태",
+      field: "executionStatus",
+      width: 120,
+      cellRenderer: ({ data }: { data?: SkillGraphJob }) => {
+        if (!data?.executionStatus) return "-";
+        const val = data.executionStatus;
+        let color: "info" | "warning" | "error" | "default" = "default";
+        let label: string = val;
+        if (val === "RUNNING") {
+          color = "info";
+          label = "실행중";
+        } else if (val === "RECOVERING") {
+          color = "warning";
+          label = "복구중";
+        } else if (val === "STALLED") {
+          color = "error";
+          label = "지연됨";
+        }
+        return <Chip size="small" label={label} color={color} variant="outlined" />;
+      }
+    },
     /*{ headerName: "Object Type", field: "objectType", flex: 1 },
     { headerName: "Object ID", field: "objectId", flex: 1 },*/
     { headerName: "단계", field: "currentStep", width: 100  },
@@ -2142,7 +2164,7 @@ export function SkillGraphJobsPage() {
 
       if (!data) return null;
 
-      if (data.status === "RUNNING") {
+      if (data.status === "RUNNING" || data.executionStatus === "STALLED" || data.executionStatus === "RECOVERING") {
         return (
           <Button
             size="small"
@@ -2234,6 +2256,23 @@ export function SkillGraphJobsPage() {
           const detailRows: [string, React.ReactNode][] = [
             ["Job ID", selectedJob?.jobId],
             ["상태", <StatusBadge value={selectedJob?.status} />],
+            ["실행 상태", (() => {
+              if (!selectedJob?.executionStatus) return "-";
+              const val = selectedJob.executionStatus;
+              let color: "info" | "warning" | "error" | "default" = "default";
+              let label: string = val;
+              if (val === "RUNNING") {
+                color = "info";
+                label = "실행중";
+              } else if (val === "RECOVERING") {
+                color = "warning";
+                label = "복구중";
+              } else if (val === "STALLED") {
+                color = "error";
+                label = "지연됨";
+              }
+              return <Chip size="small" label={label} color={color} variant="outlined" />;
+            })()],
             ["Object", `${selectedJob?.objectType ?? "-"} / ${selectedJob?.objectId ?? "-"}`],
             ["Document", selectedJob?.documentId ?? "-"],
             ["청킹 전략", selectedJob?.chunkingStrategy ?? "-"],
@@ -2333,7 +2372,7 @@ export function SkillGraphJobsPage() {
           >
             실패 chunk 재시도
           </Button>
-          {selectedJob?.status === "RUNNING" && (
+          {(selectedJob?.status === "RUNNING" || selectedJob?.executionStatus === "STALLED" || selectedJob?.executionStatus === "RECOVERING") && (
             <Button
               size="small"
               variant="outlined"
