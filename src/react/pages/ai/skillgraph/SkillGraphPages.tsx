@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColDef, ICellRendererParams, RowSelectedEvent, SelectionChangedEvent, SortModelItem } from "ag-grid-community";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   alpha,
   Alert,
   Box,
@@ -1362,135 +1365,151 @@ function RagExtractionDialog({
             />
           </Stack>
 
-          <Paper
+          <Accordion
             variant="outlined"
+            defaultExpanded
             sx={{
-              p: 2,
               borderRadius: 2,
               bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.01)",
               borderColor: "divider",
+              "&:before": { display: "none" },
+              overflow: "hidden",
             }}
           >
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5, display: "flex", alignItems: "center", gap: 1 }}>
-              <Box sx={{ width: 4, height: 16, bgcolor: "primary.main", borderRadius: 1 }} />
-              추출 옵션 설정
-            </Typography>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={3} alignItems="center" sx={{ mb: 1 }}>
-              <Tooltip title="이전에 스킬 후보 추출이 성공한 청크를 제외합니다. RAG 임베딩 여부와는 무관합니다.">
+            <AccordionSummary
+              expandIcon={<ExpandMore />}
+              sx={{
+                bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.02)",
+                borderBottom: "1px solid",
+                borderColor: "divider",
+                px: 2,
+                minHeight: 48,
+                "&.Mui-expanded": { minHeight: 48 },
+              }}
+            >
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, display: "flex", alignItems: "center", gap: 1 }}>
+                <Box sx={{ width: 4, height: 16, bgcolor: "primary.main", borderRadius: 1 }} />
+                추출 옵션 설정
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ p: 2 }}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={3} alignItems="center" sx={{ mb: 1 }}>
+                <Tooltip title="이전에 스킬 후보 추출이 성공한 청크를 제외합니다. RAG 임베딩 여부와는 무관합니다.">
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={excludeExtracted}
+                        onChange={(e) => setExcludeExtracted(e.target.checked)}
+                        size="small"
+                        color="primary"
+                      />
+                    }
+                    label={<Typography variant="body2" sx={{ fontWeight: 500 }}>이미 스킬 추출이 완료된 청크 제외</Typography>}
+                  />
+                </Tooltip>
                 <FormControlLabel
                   control={
                     <Checkbox
-                      checked={excludeExtracted}
-                      onChange={(e) => setExcludeExtracted(e.target.checked)}
+                      checked={generateEmbeddings}
+                      onChange={(e) => setGenerateEmbeddings(e.target.checked)}
                       size="small"
                       color="primary"
                     />
                   }
-                  label={<Typography variant="body2" sx={{ fontWeight: 500 }}>이미 스킬 추출이 완료된 청크 제외</Typography>}
+                  label={<Typography variant="body2" sx={{ fontWeight: 500 }}>추출 후 임베딩 생성</Typography>}
                 />
-              </Tooltip>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={generateEmbeddings}
-                    onChange={(e) => setGenerateEmbeddings(e.target.checked)}
-                    size="small"
-                    color="primary"
-                  />
-                }
-                label={<Typography variant="body2" sx={{ fontWeight: 500 }}>추출 후 임베딩 생성</Typography>}
-              />
-              <TextField
-                label="추출 제한 건수 (Limit)"
-                size="small"
-                type="number"
-                value={limit}
-                onChange={(e) => setLimit(e.target.value === "" ? "" : Number(e.target.value))}
-                sx={{ width: 180 }}
-              />
-            </Stack>
+                <TextField
+                  label="추출 제한 건수 (Limit)"
+                  size="small"
+                  type="number"
+                  value={limit}
+                  onChange={(e) => setLimit(e.target.value === "" ? "" : Number(e.target.value))}
+                  sx={{ width: 180 }}
+                />
+              </Stack>
 
-            {generateEmbeddings && (
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 1.5,
-                  bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(0, 0, 0, 0.2)" : "rgba(255, 255, 255, 0.8)",
-                  border: "1px dashed",
-                  borderColor: "divider",
-                  mt: 1.5
-                }}
-              >
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5, fontWeight: 600 }}>
-                  임베딩 생성 스펙 설정 (KURE 모델 권장)
-                </Typography>
-                <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
-                  <FormControl size="small" fullWidth>
-                    <InputLabel id="provider-select-label">Embedding Provider</InputLabel>
-                    <Select
-                      labelId="provider-select-label"
-                      value={selectedProvider}
-                      label="Embedding Provider"
-                      onChange={(e) => {
-                        const prov = e.target.value as string;
-                        setSelectedProvider(prov);
-                        const firstModel = embeddingOptions.find((o) => o.provider === prov);
-                        if (firstModel) {
-                          setSelectedModel(firstModel.model);
-                          setSelectedDimension(firstModel.dimension);
-                        } else {
-                          setSelectedModel("");
-                          setSelectedDimension("");
-                        }
-                      }}
-                    >
-                      {Array.from(new Set(embeddingOptions.map((o) => o.provider))).map((prov) => (
-                        <MenuItem key={prov} value={prov}>
-                          {prov}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-
-                  <FormControl size="small" fullWidth>
-                    <InputLabel id="model-select-label">Embedding Model</InputLabel>
-                    <Select
-                      labelId="model-select-label"
-                      value={selectedModel}
-                      label="Embedding Model"
-                      onChange={(e) => {
-                        const model = e.target.value as string;
-                        setSelectedModel(model);
-                        const opt = embeddingOptions.find(
-                          (o) => o.provider === selectedProvider && o.model === model
-                        );
-                        if (opt) {
-                          setSelectedDimension(opt.dimension);
-                        }
-                      }}
-                    >
-                      {embeddingOptions
-                        .filter((o) => o.provider === selectedProvider)
-                        .map((o) => (
-                          <MenuItem key={o.model} value={o.model}>
-                            {o.model}
+              {generateEmbeddings && (
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: 1.5,
+                    bgcolor: (theme) => theme.palette.mode === "dark" ? "rgba(0, 0, 0, 0.2)" : "rgba(255, 255, 255, 0.8)",
+                    border: "1px dashed",
+                    borderColor: "divider",
+                    mt: 1.5
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1.5, fontWeight: 600 }}>
+                    임베딩 생성 스펙 설정 (KURE 모델 권장)
+                  </Typography>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                    <FormControl size="small" fullWidth>
+                      <InputLabel id="provider-select-label">Embedding Provider</InputLabel>
+                      <Select
+                        labelId="provider-select-label"
+                        value={selectedProvider}
+                        label="Embedding Provider"
+                        onChange={(e) => {
+                          const prov = e.target.value as string;
+                          setSelectedProvider(prov);
+                          const firstModel = embeddingOptions.find((o) => o.provider === prov);
+                          if (firstModel) {
+                            setSelectedModel(firstModel.model);
+                            setSelectedDimension(firstModel.dimension);
+                          } else {
+                            setSelectedModel("");
+                            setSelectedDimension("");
+                          }
+                        }}
+                      >
+                        {Array.from(new Set(embeddingOptions.map((o) => o.provider))).map((prov) => (
+                          <MenuItem key={prov} value={prov}>
+                            {prov}
                           </MenuItem>
                         ))}
-                    </Select>
-                  </FormControl>
+                      </Select>
+                    </FormControl>
 
-                  <TextField
-                    label="Dimension"
-                    size="small"
-                    type="number"
-                    value={selectedDimension}
-                    onChange={(e) => setSelectedDimension(e.target.value === "" ? "" : Number(e.target.value))}
-                    fullWidth
-                  />
-                </Stack>
-              </Box>
-            )}
-          </Paper>
+                    <FormControl size="small" fullWidth>
+                      <InputLabel id="model-select-label">Embedding Model</InputLabel>
+                      <Select
+                        labelId="model-select-label"
+                        value={selectedModel}
+                        label="Embedding Model"
+                        onChange={(e) => {
+                          const model = e.target.value as string;
+                          setSelectedModel(model);
+                          const opt = embeddingOptions.find(
+                            (o) => o.provider === selectedProvider && o.model === model
+                          );
+                          if (opt) {
+                            setSelectedDimension(opt.dimension);
+                          }
+                        }}
+                      >
+                        {embeddingOptions
+                          .filter((o) => o.provider === selectedProvider)
+                          .map((o) => (
+                            <MenuItem key={o.model} value={o.model}>
+                              {o.model}
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+
+                    <TextField
+                      label="Dimension"
+                      size="small"
+                      type="number"
+                      value={selectedDimension}
+                      onChange={(e) => setSelectedDimension(e.target.value === "" ? "" : Number(e.target.value))}
+                      fullWidth
+                    />
+                  </Stack>
+                </Box>
+              )}
+            </AccordionDetails>
+          </Accordion>
 
           {error ? <Alert severity="error">{error}</Alert> : null}
 
