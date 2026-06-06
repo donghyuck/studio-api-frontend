@@ -289,25 +289,54 @@ export function StatusBadge({ value }: { value?: SkillCandidateStatus | SkillGra
         ? "error"
         : value === "RUNNING" || value === "MATCHED" || value === "ALIAS_CANDIDATE" || value === "NEW_SKILL_CANDIDATE"
           ? "info"
-          : value === "NOISE" || value === "PARTIAL" || value === "PENDING" || value === "READY"
+          : value === "NOISE" || value === "PARTIAL" || value === "PENDING" || value === "READY" || value === "RECOVERING" || value === "STALLED"
             ? "warning"
             : "default";
 
   let labelText = value ?? "-";
-  if (value === "RUNNING") labelText = "처리 중";
-  else if (value === "COMPLETED") labelText = "완료";
-  else if (value === "PARTIAL") labelText = "일부 실패";
-  else if (value === "FAILED") labelText = "실패";
-  else if (value === "READY") labelText = "대기";
-  else if (value === "PENDING") labelText = "검토 대기";
-  else if (value === "APPROVED") labelText = "승인";
-  else if (value === "REJECTED") labelText = "거부";
-  else if (value === "NOISE") labelText = "노이즈";
-  else if (value === "ALIAS_CANDIDATE") labelText = "Alias";
-  else if (value === "MATCHED") labelText = "매칭";
-  else if (value === "NEW_SKILL_CANDIDATE") labelText = "신규 스킬";
+  let icon: React.ReactNode = undefined;
 
-  return <Chip size="small" label={labelText} color={color} variant={color === "default" ? "outlined" : "filled"} />;
+  if (value === "RUNNING") {
+    labelText = "처리 중";
+    icon = <CircularProgress size={12} color="inherit" />;
+  } else if (value === "RECOVERING") {
+    labelText = "복구 대기";
+    icon = <CircularProgress size={12} color="inherit" variant="determinate" value={25} />;
+  } else if (value === "STALLED") {
+    labelText = "재개 필요";
+  } else if (value === "COMPLETED") {
+    labelText = "완료";
+  } else if (value === "PARTIAL") {
+    labelText = "일부 실패";
+  } else if (value === "FAILED") {
+    labelText = "실패";
+  } else if (value === "READY") {
+    labelText = "대기";
+  } else if (value === "PENDING") {
+    labelText = "검토 대기";
+  } else if (value === "APPROVED") {
+    labelText = "승인";
+  } else if (value === "REJECTED") {
+    labelText = "거부";
+  } else if (value === "NOISE") {
+    labelText = "노이즈";
+  } else if (value === "ALIAS_CANDIDATE") {
+    labelText = "Alias";
+  } else if (value === "MATCHED") {
+    labelText = "매칭";
+  } else if (value === "NEW_SKILL_CANDIDATE") {
+    labelText = "신규 스킬";
+  }
+
+  return (
+    <Chip
+      size="small"
+      label={labelText}
+      color={color}
+      icon={icon ? (icon as any) : undefined}
+      variant={color === "default" ? "outlined" : "filled"}
+    />
+  );
 }
 
 export function ScoreBadge({ value, label }: { value?: number; label?: string }) {

@@ -1839,6 +1839,10 @@ export function SkillGraphJobsPage() {
       .sort((a, b) => b.count - a.count);
   }, [candidatesQuery.data]);
 
+  const extractedSkillsTotalCount = useMemo(() => {
+    return extractedSkills.reduce((sum, item) => sum + item.count, 0);
+  }, [extractedSkills]);
+
   // WebSocket / STOMP state
   const [stompConnected, setStompConnected] = useState(false);
   const [stompClient, setStompClient] = useState<StompRealtimeClient | null>(null);
@@ -1895,48 +1899,50 @@ export function SkillGraphJobsPage() {
     const client = new StompRealtimeClient();
     setStompClient(client);
 
-    // List topic subscription
-    client.subscribe("/topic/skillgraph/extraction-jobs", (event: any) => {
-      if (!event || event.jobId == null) return;
+    const handleJobUpdate = async (event: any) => {
+      let jobToUpdate = event;
+      if (event.executionStatus === undefined) {
+        try {
+          jobToUpdate = await skillGraphApi.getJob(event.jobId);
+        } catch (e) {
+          console.error("Failed to fetch job details via REST", e);
+        }
+      }
+
       setLiveJobs((prev) => {
-        const index = prev.findIndex((j) => String(j.jobId) === String(event.jobId));
+        const index = prev.findIndex((j) => String(j.jobId) === String(jobToUpdate.jobId));
         let next = [...prev];
         if (index > -1) {
-          next[index] = { ...next[index], ...event };
+          next[index] = { ...next[index], ...jobToUpdate };
         } else {
-          // If not found, add it to first or we can reload
-          next = [event, ...next];
+          next = [jobToUpdate, ...next];
         }
-        // If sorting is updatedAt DESC (which is our standard), sort them
         return next.sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime());
       });
 
-      // If this event matches selected job ID, update details as well
-      if (selected && String(event.jobId) === String(selected.jobId)) {
+      if (selected && String(jobToUpdate.jobId) === String(selected.jobId)) {
         setLiveSelectedJob((current) => {
-          const updated = { ...current, ...event } as SkillGraphJob;
-          // Trigger reload of candidate lists and detailed drawer details once complete
-          if (["COMPLETED", "PARTIAL", "FAILED"].includes(event.status)) {
+          const updated = { ...current, ...jobToUpdate } as SkillGraphJob;
+          if (["COMPLETED", "PARTIAL", "FAILED"].includes(jobToUpdate.status)) {
             queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
-            queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.detail(event.jobId) });
+            queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.detail(jobToUpdate.jobId) });
           }
           return updated;
         });
       }
+    };
+
+    // List topic subscription
+    client.subscribe("/topic/skillgraph/extraction-jobs", (event: any) => {
+      if (!event || event.jobId == null) return;
+      void handleJobUpdate(event);
     });
 
     // Detail topic subscription (if selected)
     if (selected?.jobId) {
       client.subscribe(`/topic/skillgraph/extraction-jobs/${selected.jobId}`, (event: any) => {
         if (!event || String(event.jobId) !== String(selected.jobId)) return;
-        setLiveSelectedJob((current) => {
-          const updated = { ...current, ...event } as SkillGraphJob;
-          if (["COMPLETED", "PARTIAL", "FAILED"].includes(event.status)) {
-            queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
-            queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.detail(event.jobId) });
-          }
-          return updated;
-        });
+        void handleJobUpdate(event);
       });
     }
 
@@ -2067,29 +2073,10 @@ export function SkillGraphJobsPage() {
         </Button>
       ),
     },
-    { headerName: "상태", field: "status", width: 140, cellRenderer: ({ value }: { value?: string }) => <StatusBadge value={value} /> },
-    {
-      headerName: "실행 상태",
-      field: "executionStatus",
-      width: 120,
-      cellRenderer: ({ data }: { data?: SkillGraphJob }) => {
-        if (!data?.executionStatus) return "-";
-        const val = data.executionStatus;
-        let color: "info" | "warning" | "error" | "default" = "default";
-        let label: string = val;
-        if (val === "RUNNING") {
-          color = "info";
-          label = "실행중";
-        } else if (val === "RECOVERING") {
-          color = "warning";
-          label = "복구중";
-        } else if (val === "STALLED") {
-          color = "error";
-          label = "지연됨";
-        }
-        return <Chip size="small" label={label} color={color} variant="outlined" />;
-      }
-    },
+    { headerName: "상태", field: "status", width: 140, cellRenderer: ({ data }: { data?: SkillGraphJob }) => {
+      const displayStatus = data?.executionStatus || data?.status;
+      return <StatusBadge value={displayStatus} />;
+    } },
     /*{ headerName: "Object Type", field: "objectType", flex: 1 },
     { headerName: "Object ID", field: "objectId", flex: 1 },*/
     { headerName: "단계", field: "currentStep", width: 100  },
@@ -2255,24 +2242,7 @@ export function SkillGraphJobsPage() {
         <DetailRows rows={(() => {
           const detailRows: [string, React.ReactNode][] = [
             ["Job ID", selectedJob?.jobId],
-            ["상태", <StatusBadge value={selectedJob?.status} />],
-            ["실행 상태", (() => {
-              if (!selectedJob?.executionStatus) return "-";
-              const val = selectedJob.executionStatus;
-              let color: "info" | "warning" | "error" | "default" = "default";
-              let label: string = val;
-              if (val === "RUNNING") {
-                color = "info";
-                label = "실행중";
-              } else if (val === "RECOVERING") {
-                color = "warning";
-                label = "복구중";
-              } else if (val === "STALLED") {
-                color = "error";
-                label = "지연됨";
-              }
-              return <Chip size="small" label={label} color={color} variant="outlined" />;
-            })()],
+            ["상태", <StatusBadge value={selectedJob?.executionStatus || selectedJob?.status} />],
             ["Object", `${selectedJob?.objectType ?? "-"} / ${selectedJob?.objectId ?? "-"}`],
             ["Document", selectedJob?.documentId ?? "-"],
             ["청킹 전략", selectedJob?.chunkingStrategy ?? "-"],
@@ -2468,7 +2438,7 @@ export function SkillGraphJobsPage() {
         maxWidth="xs"
       >
         <DialogTitle>
-          <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>추출된 스킬 목록</Typography>
+          <Typography variant="h6" component="span" sx={{ fontWeight: 700 }}>추출된 스킬 목록 (총 {extractedSkillsTotalCount.toLocaleString()}건)</Typography>
         </DialogTitle>
         <DialogContent dividers>
           {candidatesQuery.isLoading ? (
