@@ -3157,17 +3157,21 @@ export function SkillGraphCandidatesPage() {
     { headerName: "생성일", valueGetter: ({ data }) => formatDate(data?.createdAt), width: 170 },
   ], [dictionaryNames]);
 
+  const recommendationRowSelection = useMemo(
+    () => ({
+      mode: "multiRow" as const,
+      enableClickSelection: false,
+      checkboxes: false,
+      headerCheckbox: false,
+      isRowSelectable: (rowNode: any) => {
+        return rowNode.data?.bulkApplicable === true && rowNode.data?.status === "CANDIDATE";
+      },
+    }),
+    []
+  );
+
   const recommendationGridOptions = useMemo(
     () => ({
-      rowSelection: {
-        mode: "multiRow" as const,
-        enableClickSelection: false,
-        checkboxes: false,
-        headerCheckbox: false,
-        isRowSelectable: (rowNode: any) => {
-          return rowNode.data?.bulkApplicable === true && rowNode.data?.status === "CANDIDATE";
-        },
-      },
       suppressRowClickSelection: true,
     }),
     []
@@ -4015,6 +4019,7 @@ export function SkillGraphCandidatesPage() {
                  <GridContent<SkillRecommendationResult>
                   ref={recommendationGridRef}
                   columns={recommendationColumns}
+                  rowSelection={recommendationRowSelection}
                   options={recommendationGridOptions}
                   events={recommendationGridEvents}
                   rowData={filteredRecommendationResults}
