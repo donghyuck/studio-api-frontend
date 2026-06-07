@@ -3157,6 +3157,13 @@ export function SkillGraphCandidatesPage() {
     { headerName: "생성일", valueGetter: ({ data }) => formatDate(data?.createdAt), width: 170 },
   ], [dictionaryNames]);
 
+  const recommendationRowSelection = useMemo(() => ({
+    mode: "multiRow" as const,
+    enableClickSelection: false,
+    checkboxes: false,
+    headerCheckbox: false,
+  }), []);
+
   const recommendationGridOptions = useMemo(
     () => ({
       suppressRowClickSelection: true,
@@ -3787,8 +3794,8 @@ export function SkillGraphCandidatesPage() {
             </Stack>
           </Stack>
         </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1, minHeight: 520 }}>
+        <DialogContent sx={{ pt: 2 }}>
+          <Stack spacing={2} sx={{ minHeight: 520 }}>
             {recommendationMode === "form" ? (
               <>
             <Alert severity="info" sx={{ alignItems: "flex-start" }}>
@@ -4009,7 +4016,7 @@ export function SkillGraphCandidatesPage() {
                  <GridContent<SkillRecommendationResult>
                   ref={recommendationGridRef}
                   columns={recommendationColumns}
-                  rowSelection="multiple"
+                  rowSelection={recommendationRowSelection}
                   options={recommendationGridOptions}
                   events={recommendationGridEvents}
                   rowData={filteredRecommendationResults}
