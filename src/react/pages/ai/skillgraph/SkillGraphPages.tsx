@@ -2599,6 +2599,7 @@ export function SkillGraphCandidatesPage() {
   const [selectedRecommendationIds, setSelectedRecommendationIds] = useState<string[]>([]);
   const [recommendationForm, setRecommendationForm] = useState({
     targetScope: "SELECTED" as "ALL" | "SELECTED" | "CURRENT_FILTER",
+    excludeProcessed: true,
     embeddingProvider: "kure",
     embeddingModel: "nlpai-lab/KURE-v1",
     embeddingDimension: "1024",
@@ -2676,10 +2677,27 @@ export function SkillGraphCandidatesPage() {
   }, [embeddingJobId, queryClient]);
   const recommendationMutation = useMutation({
     mutationFn: async () => {
+      let candidateIds: string[] = [];
+      if (recommendationForm.targetScope === "SELECTED") {
+        const selectedCandidates = gridRef.current?.selectedRows() ?? [];
+        candidateIds = recommendationForm.excludeProcessed
+          ? selectedCandidates
+              .filter((c) => c.status === "PENDING" || c.status === "MATCHED")
+              .map((c) => String(c.candidateId))
+          : selectedCandidates.map((c) => String(c.candidateId));
+        if (candidateIds.length === 0) {
+          throw new Error("선택한 후보 중 분석 가능한 미처리 후보(PENDING/MATCHED)가 없습니다.");
+        }
+      }
+
+      const targetStatus = recommendationForm.targetScope === "CURRENT_FILTER"
+        ? (status || (recommendationForm.excludeProcessed ? "PENDING" : undefined))
+        : (recommendationForm.targetScope === "ALL" && recommendationForm.excludeProcessed ? "PENDING" : undefined);
+
       const job = await skillGraphApi.createCandidateRecommendationJob({
         targetScope: recommendationForm.targetScope,
-        candidateIds: recommendationForm.targetScope === "SELECTED" ? selectedIds.map(String) : [],
-        status: recommendationForm.targetScope === "CURRENT_FILTER" ? status || undefined : undefined,
+        candidateIds,
+        status: targetStatus,
         keyword: recommendationForm.targetScope === "CURRENT_FILTER" ? keyword || undefined : undefined,
         embeddingProvider: recommendationForm.embeddingProvider.trim(),
         embeddingModel: recommendationForm.embeddingModel.trim(),
@@ -3826,6 +3844,15 @@ export function SkillGraphCandidatesPage() {
             <Typography variant="caption" color="text.secondary">
               대상 범위는 분석할 후보 집합입니다. 선택 후보는 체크한 행만, 현재 검색 결과는 화면의 검색어/상태 필터를, 전체 후보는 필터 없이 후보를 대상으로 합니다.
             </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={recommendationForm.excludeProcessed}
+                  onChange={(event) => setRecommendationForm((prev) => ({ ...prev, excludeProcessed: event.target.checked }))}
+                />
+              }
+              label="이미 스킬로 처리된 후보 제외 (PENDING/MATCHED 상태만 분석)"
+            />
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
                 label="Embedding Provider"
