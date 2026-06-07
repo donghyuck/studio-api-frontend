@@ -2596,6 +2596,7 @@ export function SkillGraphCandidatesPage() {
     return namesSet;
   }, [dictionaryQuery.data]);
   const [recommendationApplyResult, setRecommendationApplyResult] = useState<SkillRecommendationApplyResult | null>(null);
+  const [selectedRecommendationIds, setSelectedRecommendationIds] = useState<string[]>([]);
   const [recommendationForm, setRecommendationForm] = useState({
     targetScope: "SELECTED" as "ALL" | "SELECTED" | "CURRENT_FILTER",
     embeddingProvider: "kure",
@@ -2800,10 +2801,44 @@ export function SkillGraphCandidatesPage() {
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dashboard") });
       queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dictionary-all-lookup") });
+      if (recommendationJob?.jobId) {
+        void skillGraphApi
+          .listRecommendationJobResults(recommendationJob.jobId, { page: 0, size: 100, sort: "createdAt,asc" })
+          .then((response) => setRecommendationResultStats(listFrom<SkillRecommendationResult>(response)))
+          .catch(() => undefined);
+      }
       toast.success(`일괄 승인 완료: 적용 ${result.appliedCount.toLocaleString()}건, 제외 ${result.skippedCount.toLocaleString()}건`);
     },
     onError: (error) => {
       toast.error(resolveAxiosError(error) || "추천 결과 일괄 승인에 실패했습니다.");
+    },
+  });
+
+  const recommendationApplyResultsMutation = useMutation({
+    mutationFn: (resultIds: string[]) => skillGraphApi.applyRecommendationResults({
+      resultIds,
+      applyMode: "ELIGIBLE_ONLY",
+      recommendationTypes: ["NEW_SKILL_CANDIDATE", "EXISTING_SKILL_MATCH"],
+      minConfidence: Number(recommendationForm.newSkillMinConfidence),
+      minSimilarityScore: Number(recommendationForm.existingSkillMinScore),
+    }),
+    onSuccess: (result) => {
+      setRecommendationApplyResult(result);
+      gridRef.current?.refresh();
+      queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dashboard") });
+      queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dictionary-all-lookup") });
+      if (recommendationJob?.jobId) {
+        void skillGraphApi
+          .listRecommendationJobResults(recommendationJob.jobId, { page: 0, size: 100, sort: "createdAt,asc" })
+          .then((response) => setRecommendationResultStats(listFrom<SkillRecommendationResult>(response)))
+          .catch(() => undefined);
+      }
+      setSelectedRecommendationIds([]);
+      toast.success(`선택 승인 완료: 적용 ${result.appliedCount.toLocaleString()}건, 제외 ${result.skippedCount.toLocaleString()}건`);
+    },
+    onError: (error) => {
+      toast.error(resolveAxiosError(error) || "추천 결과 선택 승인에 실패했습니다.");
     },
   });
 
@@ -3065,6 +3100,21 @@ export function SkillGraphCandidatesPage() {
   ], [allCurrentPageSelected, partiallyCurrentPageSelected, selectedIdSet, canReview]);
 
   const recommendationColumns = useMemo<ColDef<SkillRecommendationResult>[]>(() => [
+    {
+      colId: "rowSelect",
+      headerName: "",
+      width: 44,
+      minWidth: 44,
+      maxWidth: 44,
+      pinned: "left",
+      sortable: false,
+      filter: false,
+      resizable: false,
+      suppressMovable: true,
+      lockPosition: true,
+      checkboxSelection: true,
+      headerCheckboxSelection: true,
+    },
     { headerName: "후보", field: "sourceText", minWidth: 220, flex: 1.4 },
     {
       headerName: "추천 유형",
@@ -3106,6 +3156,39 @@ export function SkillGraphCandidatesPage() {
     { headerName: "상태", field: "status", width: 120, cellRenderer: ({ value }: { value?: string }) => <StatusBadge value={value} /> },
     { headerName: "생성일", valueGetter: ({ data }) => formatDate(data?.createdAt), width: 170 },
   ], [dictionaryNames]);
+
+  const recommendationGridOptions = useMemo(
+    () => ({
+      rowSelection: {
+        mode: "multiRow" as const,
+        enableClickSelection: false,
+        checkboxes: false,
+        headerCheckbox: false,
+        isRowSelectable: (rowNode: any) => {
+          return rowNode.data?.bulkApplicable === true && rowNode.data?.status === "CANDIDATE";
+        },
+      },
+      suppressRowClickSelection: true,
+    }),
+    []
+  );
+
+  const recommendationGridEvents = useMemo(
+    () => [
+      {
+        type: "selectionChanged",
+        listener: (event: any) => {
+          const api = event.api;
+          const selectedRows = api.getSelectedRows() as SkillRecommendationResult[];
+          const ids = selectedRows
+            .map((row) => row.resultId)
+            .filter((id): id is string => id !== undefined && id !== null);
+          setSelectedRecommendationIds(ids);
+        },
+      },
+    ],
+    []
+  );
 
   const gridOptions = useMemo(
     () => ({
@@ -3379,6 +3462,29 @@ export function SkillGraphCandidatesPage() {
       recommendationApplyMutation.mutate(jobId);
     }
   }
+
+  async function applySelectedRecommendationResults() {
+    if (selectedRecommendationIds.length === 0 || recommendationApplyResultsMutation.isPending) {
+      return;
+    }
+    if (selectedRecommendationIds.length > 200) {
+      toast.error("한 번에 최대 200개 까지만 선택 승인할 수 있습니다.");
+      return;
+    }
+    const ok = await confirm({
+      title: "추천 결과 선택 승인",
+      message: `선택한 ${selectedRecommendationIds.length.toLocaleString()}건만 적용합니다. 신규 후보는 사전에 등록하고, 기존 스킬 매칭은 기존 스킬에 연결합니다.`,
+      okText: "선택 승인",
+      cancelText: "취소",
+    });
+    if (ok) {
+      recommendationApplyResultsMutation.mutate(selectedRecommendationIds);
+    }
+  }
+
+  useEffect(() => {
+    setSelectedRecommendationIds([]);
+  }, [recommendationOpen, recommendationJob?.jobId]);
 
   useEffect(() => {
     dataSource.applyFilter({ status, keyword });
@@ -3875,17 +3981,31 @@ export function SkillGraphCandidatesPage() {
                       <Chip size="small" color="success" variant="outlined" label={`일괄 승인 가능 ${recommendationEligibleResults.length.toLocaleString()}건`} />
                       <Chip size="small" color="warning" variant="outlined" label={`검토 필요 ${recommendationReviewResults.length.toLocaleString()}건`} />
                       <Chip size="small" variant="outlined" label={`제외 ${recommendationExcludedResults.length.toLocaleString()}건`} />
+                      {selectedRecommendationIds.length > 0 && (
+                        <Chip size="small" color={selectedRecommendationIds.length > 200 ? "error" : "primary"} label={`선택됨 ${selectedRecommendationIds.length}건`} />
+                      )}
                     </Stack>
                   </Stack>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    disabled={recommendationEligibleResults.length === 0 || recommendationApplyMutation.isPending}
-                    startIcon={recommendationApplyMutation.isPending ? <CircularProgress size={14} color="inherit" /> : <DoneOutlined />}
-                    onClick={applyRecommendationResults}
-                  >
-                    일괄 승인
-                  </Button>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={selectedRecommendationIds.length === 0 || selectedRecommendationIds.length > 200 || recommendationApplyResultsMutation.isPending}
+                      startIcon={recommendationApplyResultsMutation.isPending ? <CircularProgress size={14} color="inherit" /> : <DoneOutlined />}
+                      onClick={applySelectedRecommendationResults}
+                    >
+                      선택 승인 ({selectedRecommendationIds.length})
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disabled={recommendationEligibleResults.length === 0 || recommendationApplyMutation.isPending}
+                      startIcon={recommendationApplyMutation.isPending ? <CircularProgress size={14} color="inherit" /> : <DoneOutlined />}
+                      onClick={applyRecommendationResults}
+                    >
+                      일괄 승인
+                    </Button>
+                  </Stack>
                 </Stack>
                 {recommendationApplyResult ? (
                   <Alert severity={recommendationApplyResult.failedCount > 0 ? "warning" : "success"}>
@@ -3895,6 +4015,8 @@ export function SkillGraphCandidatesPage() {
                  <GridContent<SkillRecommendationResult>
                   ref={recommendationGridRef}
                   columns={recommendationColumns}
+                  options={recommendationGridOptions}
+                  events={recommendationGridEvents}
                   rowData={filteredRecommendationResults}
                 />
               </Stack>

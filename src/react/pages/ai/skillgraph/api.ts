@@ -561,6 +561,14 @@ export const skillGraphApi = {
     );
   },
 
+  applyRecommendationResults(data: SkillRecommendationApplyResultsRequest) {
+    return apiRequest<SkillRecommendationApplyResult>(
+      "post",
+      `${RECOMMENDATION_BASE}/results/apply`,
+      { data }
+    );
+  },
+
   updateDictionaryItem(skillId: string | number, data: Partial<SkillDictionaryItem>) {
     void skillId;
     void data;
@@ -1176,6 +1184,14 @@ export interface SkillCandidateRecommendationJobRequest {
 }
 
 export interface SkillRecommendationApplyRequest {
+  applyMode: "ELIGIBLE_ONLY";
+  recommendationTypes: string[];
+  minConfidence: number;
+  minSimilarityScore: number;
+}
+
+export interface SkillRecommendationApplyResultsRequest {
+  resultIds: string[];
   applyMode: "ELIGIBLE_ONLY";
   recommendationTypes: string[];
   minConfidence: number;
