@@ -56,6 +56,7 @@ import {
 } from "@mui/material";
 import {
   AddOutlined,
+  DeleteOutlined,
   DoneOutlined,
   DriveFileMoveOutlined,
   NoiseControlOffOutlined,
@@ -5444,11 +5445,48 @@ export function SkillGraphCategoryManagementPage() {
   });
   const categoryDetail = detailQuery.data ?? selected;
   const historyRows = listFrom<Record<string, unknown>>(historyQuery.data);
+
+  // Deletion impact states
+  const [deleteImpactOpen, setDeleteImpactOpen] = useState(false);
+  const [impactCategory, setImpactCategory] = useState<SkillCategory | null>(null);
+  const [impactData, setImpactData] = useState<{ categoryId: string; skillCount: number; childCount: number; deletable: boolean } | null>(null);
+  const [loadingImpact, setLoadingImpact] = useState(false);
+  const [targetCategoryId, setTargetCategoryId] = useState("");
+  const [impactError, setImpactError] = useState("");
+
+  const categoriesListQuery = useQuery({
+    queryKey: skillGraphQueryKeys.custom("categories-list-all"),
+    queryFn: () => skillGraphApi.listCategoryTree(),
+  });
+
   const refreshCategories = () => {
     gridRef.current?.refresh();
     queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("categories") });
     queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dashboard") });
+    queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("categories-list-all") });
+    queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dictionary-tree-items") });
+    queryClient.invalidateQueries({ queryKey: skillGraphQueryKeys.custom("dictionary-all-lookup") });
   };
+
+  const handleDeleteClick = useCallback((category: SkillCategory) => {
+    setImpactCategory(category);
+    setImpactData(null);
+    setTargetCategoryId("");
+    setImpactError("");
+    setDeleteImpactOpen(true);
+    setLoadingImpact(true);
+    skillGraphApi.getCategoryDeletionImpact(category.categoryId)
+      .then((data) => {
+        setImpactData(data);
+      })
+      .catch((err) => {
+        setImpactError(resolveAxiosError(err) || "삭제 영향 분석 정보를 조회하는데 실패했습니다.");
+      })
+      .finally(() => {
+        setLoadingImpact(false);
+      });
+  }, []);
+
   const saveMutation = useMutation({
     mutationFn: () => {
       const payload = {
@@ -5500,11 +5538,16 @@ export function SkillGraphCategoryManagementPage() {
     onSuccess: refreshCategories,
   });
   const mergeMutation = useMutation({
-    mutationFn: () => skillGraphApi.mergeCategories({
-      sourceCategoryIds: commaList(mergeForm.sourceCategoryIds),
-      targetCategoryId: mergeForm.targetCategoryId.trim(),
-      deleteSources: mergeForm.deleteSources,
-    }),
+    mutationFn: (customParams: { sourceCategoryIds: string[]; targetCategoryId: string; deleteSources: boolean } | void) => {
+      if (customParams) {
+        return skillGraphApi.mergeCategories(customParams);
+      }
+      return skillGraphApi.mergeCategories({
+        sourceCategoryIds: commaList(mergeForm.sourceCategoryIds),
+        targetCategoryId: mergeForm.targetCategoryId.trim(),
+        deleteSources: mergeForm.deleteSources,
+      });
+    },
     onSuccess: () => {
       setMergeForm({ sourceCategoryIds: "", targetCategoryId: "", deleteSources: true });
       refreshCategories();
@@ -5554,7 +5597,7 @@ export function SkillGraphCategoryManagementPage() {
     },
     {
       headerName: "작업",
-      width: 112,
+      width: 140,
       pinned: "right",
       cellRenderer: (params: ICellRendererParams<SkillCategory>) => (
         <Stack direction="row" spacing={0.5}>
@@ -5581,10 +5624,27 @@ export function SkillGraphCategoryManagementPage() {
               </IconButton>
             </span>
           </Tooltip>
+          <Tooltip title="삭제">
+            <span>
+              <IconButton
+                size="small"
+                color="error"
+                disabled={!canAdmin}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const row = params.data;
+                  if (!row) return;
+                  handleDeleteClick(row);
+                }}
+              >
+                <DeleteOutlined fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
         </Stack>
       ),
     },
-  ], [canAdmin]);
+  ], [canAdmin, handleDeleteClick]);
 
   function applySearch(value = keywordInput) {
     const nextKeyword = value.trim();
@@ -5672,8 +5732,8 @@ export function SkillGraphCategoryManagementPage() {
               color="error"
               disabled={!canAdmin || !selectedId || deleteMutation.isPending}
               onClick={() => {
-                if (selectedId && window.confirm("선택한 카테고리를 삭제할까요?")) {
-                  deleteMutation.mutate(selectedId);
+                if (categoryDetail) {
+                  handleDeleteClick(categoryDetail);
                 }
               }}
             >
@@ -5839,6 +5899,117 @@ export function SkillGraphCategoryManagementPage() {
           <Button variant="contained" disabled={!form.name.trim() || saveMutation.isPending} onClick={() => saveMutation.mutate()}>
             저장
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={deleteImpactOpen} onClose={() => setDeleteImpactOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>카테고리 삭제</DialogTitle>
+        <DialogContent>
+          {loadingImpact ? (
+            <Stack alignItems="center" sx={{ py: 3 }}>
+              <CircularProgress size={32} />
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>영향도 분석 중...</Typography>
+            </Stack>
+          ) : impactError ? (
+            <Alert severity="error" sx={{ mt: 1 }}>{impactError}</Alert>
+          ) : impactData ? (
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary">대상 카테고리</Typography>
+                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                  {impactCategory?.categoryName} ({impactCategory?.categoryId})
+                </Typography>
+              </Box>
+
+              <Divider />
+
+              {impactData.deletable ? (
+                <Alert severity="success">
+                  이 카테고리는 연결된 하위 카테고리나 스킬이 없어 바로 삭제할 수 있습니다.
+                </Alert>
+              ) : (
+                <Stack spacing={2}>
+                  <Alert severity="warning">
+                    이 카테고리는 사용 중이므로 삭제할 수 없습니다. 삭제하려면 다른 카테고리로 스킬과 하위 카테고리를 병합해야 합니다.
+                  </Alert>
+                  <Box sx={{ bgcolor: "action.hover", p: 1.5, borderRadius: 1 }}>
+                    <Typography variant="body2">• 연결된 스킬 수: <strong>{impactData.skillCount}</strong>개</Typography>
+                    <Typography variant="body2" sx={{ mt: 0.5 }}>• 하위 카테고리 수: <strong>{impactData.childCount}</strong>개</Typography>
+                  </Box>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="target-category-select-label">병합할 대상 카테고리</InputLabel>
+                    <Select
+                      labelId="target-category-select-label"
+                      value={targetCategoryId}
+                      onChange={(e) => setTargetCategoryId(e.target.value)}
+                      label="병합할 대상 카테고리"
+                    >
+                      <MenuItem value=""><em>선택 안 함</em></MenuItem>
+                      {categoriesListQuery.isLoading ? (
+                        <MenuItem disabled>로딩 중...</MenuItem>
+                      ) : (
+                        (categoriesListQuery.data ?? [])
+                          .filter((c) => String(c.categoryId) !== String(impactCategory?.categoryId))
+                          .map((c) => (
+                            <MenuItem key={c.categoryId} value={c.categoryId}>
+                              {c.categoryName} ({c.categoryId})
+                            </MenuItem>
+                          ))
+                      )}
+                    </Select>
+                  </FormControl>
+                </Stack>
+              )}
+
+              {deleteMutation.error ? <Alert severity="error">{resolveAxiosError(deleteMutation.error) || "카테고리 삭제에 실패했습니다."}</Alert> : null}
+              {mergeMutation.error ? <Alert severity="error">{resolveAxiosError(mergeMutation.error) || "카테고리 병합에 실패했습니다."}</Alert> : null}
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteImpactOpen(false)} disabled={deleteMutation.isPending || mergeMutation.isPending}>
+            취소
+          </Button>
+          {impactData?.deletable ? (
+            <Button
+              variant="contained"
+              color="error"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (impactCategory) {
+                  deleteMutation.mutate(impactCategory.categoryId, {
+                    onSuccess: () => {
+                      setDeleteImpactOpen(false);
+                    }
+                  });
+                }
+              }}
+            >
+              삭제 실행
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              color="primary"
+              disabled={!targetCategoryId || mergeMutation.isPending}
+              onClick={() => {
+                if (impactCategory && targetCategoryId) {
+                  mergeMutation.mutate({
+                    sourceCategoryIds: [String(impactCategory.categoryId)],
+                    targetCategoryId: targetCategoryId,
+                    deleteSources: true,
+                  }, {
+                    onSuccess: () => {
+                      setDeleteImpactOpen(false);
+                      setSelected(null);
+                    }
+                  });
+                }
+              }}
+            >
+              병합 및 삭제
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </PageFrame>

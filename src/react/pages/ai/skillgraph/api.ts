@@ -685,6 +685,18 @@ export const skillGraphApi = {
     return normalizeCategory(response);
   },
 
+  getCategoryDeletionImpact(categoryId: string | number) {
+    return apiRequest<{
+      categoryId: string;
+      skillCount: number;
+      childCount: number;
+      deletable: boolean;
+    }>(
+      "get",
+      `${CATEGORY_BASE}/${encodeURIComponent(String(categoryId))}/deletion-impact`
+    );
+  },
+
   deleteCategory(categoryId: string | number) {
     return apiRequest<void>(
       "delete",
