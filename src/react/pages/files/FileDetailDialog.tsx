@@ -33,6 +33,7 @@ import { reactFilesApi } from "@/react/pages/files/api";
 import type { AttachmentDto } from "@/types/studio/files";
 import type { RagIndexJobStatus, RagIndexJobStep } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
+import { DocumentConvertDialog, getDocumentFormat } from "./DocumentConvertDialog";
 
 const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
 const THUMBNAIL_RETRY_LIMIT = 8;
@@ -85,6 +86,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [ragJobStatus, setRagJobStatus] = useState<RagIndexJobStatus | null>(null);
   const [ragJobStep, setRagJobStep] = useState<RagIndexJobStep | null>(null);
   const [ragJobError, setRagJobError] = useState<string | null>(null);
+  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -727,7 +729,18 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         </Stack>
 
         <Divider />
-        <Stack direction="row" spacing={1} justifyContent="flex-end" sx={{ p: 2 }}>
+        <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center" sx={{ p: 2 }}>
+          <Box>
+            {file && getDocumentFormat(file.name, file.contentType) && (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => setConvertDialogOpen(true)}
+              >
+                문서 변환
+              </Button>
+            )}
+          </Box>
           <Button onClick={onClose}>닫기</Button>
         </Stack>
 
@@ -746,6 +759,14 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           </Box>
         ) : null}
       </Stack>
+
+      {file && convertDialogOpen && (
+        <DocumentConvertDialog
+          open={convertDialogOpen}
+          onClose={() => setConvertDialogOpen(false)}
+          file={file}
+        />
+      )}
     </Drawer>
   );
 }

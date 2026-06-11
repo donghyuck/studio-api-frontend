@@ -76,3 +76,70 @@ export const reactFilesApi = {
     return response.data;
   },
 };
+
+export type DocumentConvertStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELED";
+
+export interface DocumentConvertOptions {
+  pdfEngine?: "xelatex";
+  mainFont?: string;
+  toc?: boolean;
+  numberSections?: boolean;
+  standalone?: boolean;
+  metadata?: {
+    title?: string;
+    author?: string;
+  };
+}
+
+export interface DocumentConvertRequest {
+  sourceFileId: string;
+  sourceFormat: "markdown" | "html" | "docx";
+  targetFormat: "markdown" | "html" | "docx" | "pdf";
+  options?: DocumentConvertOptions;
+}
+
+export interface DocumentConvertJob {
+  jobId: string;
+  status: DocumentConvertStatus;
+  sourceFileId: string;
+  sourceFormat: string;
+  targetFormat: string;
+  resultFileId: string | null;
+  downloadUrl: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  retryCount: number;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
+export interface ApiResponse<T> {
+  success: boolean;
+  data: T;
+  message?: string;
+  meta?: Record<string, unknown>;
+}
+
+export const reactDocumentConvertApi = {
+  async convert(request: DocumentConvertRequest): Promise<ApiResponse<DocumentConvertJob>> {
+    return apiRequest<ApiResponse<DocumentConvertJob>>("post", "/api/document-conversions", {
+      data: request,
+    });
+  },
+  async getJob(jobId: string): Promise<ApiResponse<DocumentConvertJob>> {
+    return apiRequest<ApiResponse<DocumentConvertJob>>("get", `/api/document-conversions/${encodeURIComponent(jobId)}`);
+  },
+  async retryJob(jobId: string): Promise<ApiResponse<DocumentConvertJob>> {
+    return apiRequest<ApiResponse<DocumentConvertJob>>("post", `/api/document-conversions/${encodeURIComponent(jobId)}/retry`);
+  },
+  async cancelJob(jobId: string): Promise<void> {
+    await apiRequest("delete", `/api/document-conversions/${encodeURIComponent(jobId)}`);
+  },
+};
+
