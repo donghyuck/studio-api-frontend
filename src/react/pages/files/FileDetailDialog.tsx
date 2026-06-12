@@ -27,13 +27,14 @@ import {
   TimelineOutlined,
 } from "@mui/icons-material";
 import dayjs from "dayjs";
+import { useAuthStore } from "@/react/auth/store";
 import { useToast } from "@/react/feedback";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
-import { reactFilesApi } from "@/react/pages/files/api";
+import { reactFilesApi, reactDocumentConvertApi, type DocumentConvertStatus, type DocumentConvertJob } from "@/react/pages/files/api";
 import type { AttachmentDto } from "@/types/studio/files";
 import type { RagIndexJobStatus, RagIndexJobStep } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
-import { DocumentConvertDialog, getDocumentFormat } from "./DocumentConvertDialog";
+import { DocumentConvertDialog, getDocumentFormat, getFriendlyErrorMessage } from "./DocumentConvertDialog";
 
 const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
 const THUMBNAIL_RETRY_LIMIT = 8;
@@ -88,6 +89,17 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [ragJobError, setRagJobError] = useState<string | null>(null);
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
 
+  // Convert-to-markdown states for DOCX/HTML RAG Indexing
+  const [convertJobId, setConvertJobId] = useState<string | null>(null);
+  const [convertJob, setConvertJob] = useState<DocumentConvertJob | null>(null);
+  const [convertStatus, setConvertStatus] = useState<DocumentConvertStatus | null>(null);
+  const [isConvertRetrying, setIsConvertRetrying] = useState(false);
+  const [isConvertCanceling, setIsConvertCanceling] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
+
+  const roles = useAuthStore((state) => state.user?.roles) ?? [];
+  const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
+
   useEffect(() => {
     if (open) {
       reactAiApi.getEmbeddingOptions()
@@ -107,8 +119,138 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setRagJobStatus(null);
       setRagJobStep(null);
       setRagJobError(null);
+      setConvertJobId(null);
+      setConvertJob(null);
+      setConvertStatus(null);
+      setConvertError(null);
     }
   }, [open]);
+
+  // Load convert job ID from localStorage
+  useEffect(() => {
+    if (open && attachmentId && file) {
+      const format = getDocumentFormat(file.name, file.contentType);
+      const isDocxHtml = format === "docx" || format === "html";
+      if (isDocxHtml) {
+        const savedJobId = localStorage.getItem(`rag_convert_job_${attachmentId}`);
+        if (savedJobId) {
+          setConvertJobId(savedJobId);
+          setConvertStatus("RUNNING"); // Trigger polling
+          setConvertError(null);
+        } else {
+          setConvertJobId(null);
+          setConvertJob(null);
+          setConvertStatus(null);
+          setConvertError(null);
+        }
+      } else {
+        setConvertJobId(null);
+        setConvertJob(null);
+        setConvertStatus(null);
+        setConvertError(null);
+      }
+    } else {
+      setConvertJobId(null);
+      setConvertJob(null);
+      setConvertStatus(null);
+      setConvertError(null);
+    }
+  }, [open, attachmentId, file]);
+
+  // Polling for convert job status
+  useEffect(() => {
+    if (!open || !convertJobId || (convertStatus !== "PENDING" && convertStatus !== "RUNNING")) {
+      return;
+    }
+
+    let timerId: number | undefined;
+    let consecutiveErrors = 0;
+
+    const triggerRagIndexAfterConvert = async (resultFileId: number) => {
+      setRagIndexing(true);
+      try {
+        const payload: any = {
+          useLlmKeywordExtraction: true,
+          chunkingStrategy,
+        };
+        if (selectedOption) {
+          if (selectedOption.profileId) {
+            payload.embeddingProfileId = selectedOption.profileId;
+          } else {
+            payload.embeddingProvider = selectedOption.provider;
+            payload.embeddingModel = selectedOption.model;
+          }
+        }
+        const jobId = await reactFilesApi.ragIndex(resultFileId, payload);
+        if (jobId) {
+          setRagJobId(jobId);
+          toast.success(`변환된 Markdown 파일의 RAG 색인 작업이 시작되었습니다.`);
+        } else {
+          toast.success(`변환된 Markdown 파일의 RAG 색인 작업이 완료되었습니다.`);
+        }
+        await refreshDetail(true);
+      } catch (error) {
+        toast.error("RAG 색인 등록 실패: " + resolveAxiosError(error));
+      } finally {
+        setRagIndexing(false);
+      }
+    };
+
+    const poll = async () => {
+      try {
+        const res = await reactDocumentConvertApi.getJob(convertJobId);
+        consecutiveErrors = 0;
+        setConvertError(null);
+        setConvertJob(res.data);
+        setConvertStatus(res.data.status);
+
+        if (res.data.status === "COMPLETED") {
+          if (timerId) window.clearInterval(timerId);
+          if (res.data.resultFileId) {
+            void triggerRagIndexAfterConvert(Number(res.data.resultFileId));
+          } else {
+            setConvertError("변환 결과 파일 ID가 없습니다.");
+          }
+        } else if (res.data.status === "FAILED" || res.data.status === "CANCELED") {
+          if (timerId) window.clearInterval(timerId);
+        }
+      } catch (error: any) {
+        if (error?.response?.status === 403) {
+          setConvertError("조회 권한이 부족합니다. (403)");
+          if (timerId) window.clearInterval(timerId);
+          return;
+        }
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= 3) {
+          setConvertError("연속적인 네트워크 오류로 폴링이 중단되었습니다. 수동으로 새로고침 해주세요.");
+          if (timerId) window.clearInterval(timerId);
+        }
+      }
+    };
+
+    const restartInterval = (ms: number) => {
+      if (timerId) window.clearInterval(timerId);
+      timerId = window.setInterval(poll, ms);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        restartInterval(5000);
+      } else {
+        restartInterval(2000);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    // initial start
+    restartInterval(document.hidden ? 5000 : 2000);
+    void poll();
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (timerId) window.clearInterval(timerId);
+    };
+  }, [open, convertJobId, convertStatus, chunkingStrategy, selectedOption]);
 
   useEffect(() => {
     if (!open || !attachmentId) {
@@ -190,12 +332,27 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   const metadataEntries = Object.entries(ragMetadata ?? {});
   const ragIndexCompleted = ragIndexed || metadataEntries.length > 0;
-  const ragIndexDisabled = loading || ragIndexCompleted || ragIndexing || Boolean(ragJobId);
+
+  const format = file ? getDocumentFormat(file.name, file.contentType) : null;
+  const isDocxHtml = format === "docx" || format === "html";
+  const isConverting = isDocxHtml && (convertStatus === "PENDING" || convertStatus === "RUNNING");
+
+  const ragIndexDisabled =
+    loading ||
+    ragIndexCompleted ||
+    ragIndexing ||
+    Boolean(ragJobId) ||
+    isConverting;
+
   const ragIndexTooltip = ragIndexCompleted
     ? "이미 RAG 인덱싱이 완료된 파일입니다."
     : ragJobId
       ? "이미 RAG 색인 작업이 생성되었습니다."
-      : "이 파일을 RAG 검색 대상으로 색인합니다.";
+      : isConverting
+        ? "문서 변환 작업이 진행 중입니다."
+        : isDocxHtml
+          ? "이 문서를 Markdown으로 변환 후 RAG 인덱싱을 요청합니다."
+          : "이 파일을 RAG 검색 대상으로 색인합니다.";
 
   function clearThumbnail() {
     setThumbnailAvailable(false);
@@ -405,35 +562,105 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
   }
 
+  async function handleConvertRetry() {
+    if (!convertJobId) return;
+    setIsConvertRetrying(true);
+    setConvertError(null);
+    try {
+      const res = await reactDocumentConvertApi.retryJob(convertJobId);
+      setConvertJob(res.data);
+      setConvertStatus(res.data.status);
+      toast.success("변환 재시도 작업이 접수되었습니다.");
+    } catch (error) {
+      const errMsg = resolveAxiosError(error) || "변환 재시도에 실패했습니다.";
+      setConvertError(errMsg);
+      toast.error("변환 재시도 실패: " + errMsg);
+    } finally {
+      setIsConvertRetrying(false);
+    }
+  }
+
+  async function handleConvertCancel() {
+    if (!convertJobId) return;
+    const confirmed = window.confirm("진행 중인 변환 작업을 취소하시겠습니까?");
+    if (!confirmed) return;
+
+    setIsConvertCanceling(true);
+    try {
+      await reactDocumentConvertApi.cancelJob(convertJobId);
+      setConvertStatus("CANCELED");
+      if (convertJob) {
+        setConvertJob({ ...convertJob, status: "CANCELED" });
+      }
+      toast.success("변환 작업이 취소되었습니다.");
+    } catch (error) {
+      toast.error("변환 작업 취소 실패: " + resolveAxiosError(error));
+    } finally {
+      setIsConvertCanceling(false);
+    }
+  }
+
   async function handleRagIndex() {
     if (!attachmentId || !file || ragIndexCompleted) return;
 
-    setRagIndexing(true);
-    try {
-      const payload: any = {
-        useLlmKeywordExtraction: true,
-        chunkingStrategy,
-      };
-      if (selectedOption) {
-        if (selectedOption.profileId) {
-          payload.embeddingProfileId = selectedOption.profileId;
-        } else {
-          payload.embeddingProvider = selectedOption.provider;
-          payload.embeddingModel = selectedOption.model;
+    const format = getDocumentFormat(file.name, file.contentType);
+    const isDocxHtml = format === "docx" || format === "html";
+
+    if (isDocxHtml) {
+      if (!canManage) {
+        toast.error("변환 요청 권한(features:document-convert/manage)이 없습니다.");
+        return;
+      }
+      setRagIndexing(true);
+      setConvertError(null);
+      try {
+        const res = await reactDocumentConvertApi.convert({
+          sourceFileId: String(attachmentId),
+          sourceFormat: format,
+          targetFormat: "markdown",
+          options: {},
+        });
+        const newJob = res.data;
+        setConvertJob(newJob);
+        setConvertJobId(newJob.jobId);
+        setConvertStatus(newJob.status);
+        localStorage.setItem(`rag_convert_job_${attachmentId}`, newJob.jobId);
+        toast.success(`문서 Markdown 변환 작업이 시작되었습니다.`);
+      } catch (error) {
+        const errMsg = resolveAxiosError(error) || "문서 변환 요청에 실패했습니다.";
+        setConvertError(errMsg);
+        toast.error("문서 변환 요청 실패: " + errMsg);
+      } finally {
+        setRagIndexing(false);
+      }
+    } else {
+      setRagIndexing(true);
+      try {
+        const payload: any = {
+          useLlmKeywordExtraction: true,
+          chunkingStrategy,
+        };
+        if (selectedOption) {
+          if (selectedOption.profileId) {
+            payload.embeddingProfileId = selectedOption.profileId;
+          } else {
+            payload.embeddingProvider = selectedOption.provider;
+            payload.embeddingModel = selectedOption.model;
+          }
         }
+        const jobId = await reactFilesApi.ragIndex(attachmentId, payload);
+        if (jobId) {
+          setRagJobId(jobId);
+          toast.success(`${file.name} 파일의 RAG 색인 작업이 시작되었습니다.`);
+        } else {
+          toast.success(`${file.name} 파일의 RAG 색인 작업이 완료되었습니다.`);
+        }
+        await refreshDetail(true);
+      } catch (error) {
+        toast.error(resolveAxiosError(error));
+      } finally {
+        setRagIndexing(false);
       }
-      const jobId = await reactFilesApi.ragIndex(attachmentId, payload);
-      if (jobId) {
-        setRagJobId(jobId);
-        toast.success(`${file.name} 파일의 RAG 색인 작업이 시작되었습니다.`);
-      } else {
-        toast.success(`${file.name} 파일의 RAG 색인 작업이 완료되었습니다.`);
-      }
-      await refreshDetail(true);
-    } catch (error) {
-      toast.error(resolveAxiosError(error));
-    } finally {
-      setRagIndexing(false);
     }
   }
 
@@ -695,6 +922,112 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     ) : null}
                   </Box>
                 ) : null}
+
+                {/* Convert Job Progress View */}
+                {convertJobId ? (
+                  <Box sx={{ mt: 1.5, bgcolor: "action.hover", p: 1.25, borderRadius: 1 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      문서 변환 작업 ID
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
+                      {convertJobId}
+                    </Typography>
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        변환 상태:
+                      </Typography>
+                      {convertStatus ? (
+                        <Chip
+                          label={convertStatus}
+                          size="small"
+                          color={
+                            convertStatus === "COMPLETED" ? "success" :
+                            (convertStatus === "RUNNING" || convertStatus === "PENDING") ? "primary" :
+                            convertStatus === "FAILED" ? "error" :
+                            "default"
+                          }
+                          sx={{ height: 20, fontSize: 11 }}
+                        />
+                      ) : (
+                        <CircularProgress size={12} />
+                      )}
+                    </Stack>
+
+                    {(convertStatus === "PENDING" || convertStatus === "RUNNING") && (
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                        <CircularProgress size={12} />
+                        <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                          Markdown으로 변환하는 중입니다...
+                        </Typography>
+                        {canManage && (
+                          <Button
+                            size="small"
+                            color="error"
+                            variant="text"
+                            sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
+                            disabled={isConvertCanceling}
+                            onClick={() => void handleConvertCancel()}
+                          >
+                            {isConvertCanceling ? "취소 중..." : "작업 취소"}
+                          </Button>
+                        )}
+                      </Stack>
+                    )}
+
+                    {convertStatus === "COMPLETED" && (
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        <Typography variant="caption" color="success.main" display="block">
+                          ✓ Markdown 변환 완료
+                        </Typography>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="success"
+                          fullWidth
+                          onClick={() => {
+                            window.location.assign(`/api/document-conversions/${encodeURIComponent(convertJobId)}/download`);
+                          }}
+                        >
+                          변환 결과 다운로드
+                        </Button>
+                      </Stack>
+                    )}
+
+                    {convertStatus === "FAILED" && (
+                      <Stack spacing={1} sx={{ mt: 1 }}>
+                        <Typography variant="caption" color="error.main" display="block">
+                          오류: {getFriendlyErrorMessage(convertJob?.errorCode ?? null, convertJob?.errorMessage ?? null)}
+                        </Typography>
+                        {canManage && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            fullWidth
+                            disabled={isConvertRetrying}
+                            onClick={() => void handleConvertRetry()}
+                          >
+                            {isConvertRetrying ? "재시도 요청 중..." : "재시도 (Retry)"}
+                          </Button>
+                        )}
+                      </Stack>
+                    )}
+
+                    {convertStatus === "CANCELED" && (
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                        변환 작업이 취소되었습니다.
+                      </Typography>
+                    )}
+                  </Box>
+                ) : null}
+
+                {convertError && (
+                  <Box sx={{ mt: 1.5, bgcolor: "action.hover", p: 1.25, borderRadius: 1 }}>
+                    <Typography variant="caption" color="error.main" display="block">
+                      오류: {convertError}
+                    </Typography>
+                  </Box>
+                )}
               </Box>
 
               {metadataEntries.length > 0 ? (

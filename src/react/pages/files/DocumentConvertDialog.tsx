@@ -49,7 +49,7 @@ export function getDocumentFormat(filename: string, contentType: string): "markd
   return null;
 }
 
-function getFriendlyErrorMessage(errorCode: string | null, errorMessage: string | null): string {
+export function getFriendlyErrorMessage(errorCode: string | null, errorMessage: string | null): string {
   if (!errorCode) return errorMessage || "알 수 없는 오류가 발생했습니다.";
   switch (errorCode) {
     case "WORKER_UNAVAILABLE":
