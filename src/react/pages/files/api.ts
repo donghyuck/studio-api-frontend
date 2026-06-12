@@ -98,7 +98,7 @@ export interface DocumentConvertOptions {
 
 export interface DocumentConvertRequest {
   sourceFileId: string;
-  sourceFormat: "markdown" | "html" | "docx";
+  sourceFormat: "markdown" | "html" | "docx" | "pdf";
   targetFormat: "markdown" | "html" | "docx" | "pdf";
   options?: DocumentConvertOptions;
 }

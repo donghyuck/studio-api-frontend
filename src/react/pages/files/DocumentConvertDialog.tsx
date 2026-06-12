@@ -33,9 +33,10 @@ const supportedConversions = {
   markdown: ["html", "docx", "pdf"],
   html: ["docx", "pdf"],
   docx: ["markdown", "html"],
+  pdf: ["markdown", "html", "docx"],
 };
 
-export function getDocumentFormat(filename: string, contentType: string): "markdown" | "html" | "docx" | null {
+export function getDocumentFormat(filename: string, contentType: string): "markdown" | "html" | "docx" | "pdf" | null {
   const lowerName = filename.toLowerCase();
   if (lowerName.endsWith(".md") || lowerName.endsWith(".markdown") || contentType.includes("markdown")) {
     return "markdown";
@@ -45,6 +46,9 @@ export function getDocumentFormat(filename: string, contentType: string): "markd
   }
   if (lowerName.endsWith(".docx") || contentType.includes("officedocument.wordprocessingml.document")) {
     return "docx";
+  }
+  if (lowerName.endsWith(".pdf") || contentType.includes("pdf")) {
+    return "pdf";
   }
   return null;
 }
