@@ -458,6 +458,15 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     );
   }
 
+  const handleAccordionChange = (event: React.SyntheticEvent, isExpanded: boolean) => {
+    if (isExpanded) {
+      const target = event.currentTarget as HTMLElement;
+      setTimeout(() => {
+        target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }, 240);
+    }
+  };
+
   return (
     <Drawer
       anchor="right"
@@ -527,11 +536,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                       sx={{
                         width: "100%",
                         maxHeight: 180,
-                        borderRadius: 1.5,
                         objectFit: "contain",
-                        border: "1px solid",
-                        borderColor: "divider",
-                        bgcolor: "action.hover",
                       }}
                     />
                   </Box>
@@ -559,7 +564,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                 }}
               >
                 {/* Card 2: Text Extraction Accordion */}
-                <Accordion disableGutters square elevation={0}>
+                <Accordion disableGutters square elevation={0} onChange={handleAccordionChange}>
                 <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     텍스트 추출 결과
@@ -633,7 +638,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               </Accordion>
 
               {/* Card 3: Markdown and RAG Accordion */}
-              <Accordion defaultExpanded disableGutters square elevation={0}>
+              <Accordion defaultExpanded disableGutters square elevation={0} onChange={handleAccordionChange}>
                 <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     Markdown 지식 변환 및 RAG 색인
@@ -823,7 +828,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
               {/* Card 4: RAG Metadata Accordion */}
               {metadataEntries.length > 0 ? (
-                <Accordion disableGutters square elevation={0}>
+                <Accordion disableGutters square elevation={0} onChange={handleAccordionChange}>
                   <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                       RAG Metadata
