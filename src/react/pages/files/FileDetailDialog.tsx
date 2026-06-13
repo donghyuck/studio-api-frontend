@@ -477,12 +477,14 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           width: { xs: "100%", sm: 520 },
           maxWidth: "100%",
           height: "100%",
+          maxHeight: "100vh",
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
         },
       }}
     >
-      <Stack spacing={0} sx={{ height: "100%", position: "relative", minHeight: 0 }}>
+      <Stack spacing={0} sx={{ height: "100%", maxHeight: "100vh", overflow: "hidden", position: "relative", minHeight: 0 }}>
         <Box
           sx={{
             minHeight: 56,
