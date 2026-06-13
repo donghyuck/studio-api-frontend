@@ -127,19 +127,91 @@ export interface ApiResponse<T> {
 }
 
 export const reactDocumentConvertApi = {
-  async convert(request: DocumentConvertRequest): Promise<ApiResponse<DocumentConvertJob>> {
-    return apiRequest<ApiResponse<DocumentConvertJob>>("post", "/api/document-conversions", {
+  async convert(request: DocumentConvertRequest): Promise<DocumentConvertJob> {
+    return apiRequest<DocumentConvertJob>("post", "/api/document-conversions", {
       data: request,
     });
   },
-  async getJob(jobId: string): Promise<ApiResponse<DocumentConvertJob>> {
-    return apiRequest<ApiResponse<DocumentConvertJob>>("get", `/api/document-conversions/${encodeURIComponent(jobId)}`);
+  async getJob(jobId: string): Promise<DocumentConvertJob> {
+    return apiRequest<DocumentConvertJob>("get", `/api/document-conversions/${encodeURIComponent(jobId)}`);
   },
-  async retryJob(jobId: string): Promise<ApiResponse<DocumentConvertJob>> {
-    return apiRequest<ApiResponse<DocumentConvertJob>>("post", `/api/document-conversions/${encodeURIComponent(jobId)}/retry`);
+  async retryJob(jobId: string): Promise<DocumentConvertJob> {
+    return apiRequest<DocumentConvertJob>("post", `/api/document-conversions/${encodeURIComponent(jobId)}/retry`);
   },
   async cancelJob(jobId: string): Promise<void> {
     await apiRequest("delete", `/api/document-conversions/${encodeURIComponent(jobId)}`);
   },
 };
 
+export type MarkdownDocumentRevisionStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELED";
+
+export interface MarkdownDocumentDto {
+  documentId: string;
+  sourceAttachmentId: number;
+  currentRevisionId: string;
+}
+
+export interface MarkdownDocumentRevisionDto {
+  revisionId: string;
+  documentId: string;
+  resultAttachmentId: number | null;
+  documentConvertJobId: string | null;
+  status: MarkdownDocumentRevisionStatus;
+  markdownText: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface MarkdownDocumentFromAttachmentResponse {
+  document: MarkdownDocumentDto;
+  revision: MarkdownDocumentRevisionDto;
+  reused: boolean;
+}
+
+export interface MarkdownDocumentFromAttachmentRequest {
+  attachmentId: number;
+  runChunking: boolean;
+  runRagIndex: boolean;
+  runSkillExtraction: boolean;
+  force: boolean;
+}
+
+export interface MarkdownDocumentReextractRequest {
+  runChunking: boolean;
+  runRagIndex: boolean;
+  runSkillExtraction: boolean;
+}
+
+export const reactMarkdownDocumentApi = {
+  async extractFromAttachment(request: MarkdownDocumentFromAttachmentRequest): Promise<MarkdownDocumentFromAttachmentResponse> {
+    return apiRequest<MarkdownDocumentFromAttachmentResponse>("post", "/api/markdown-documents/from-attachment", {
+      data: request,
+    });
+  },
+  async getDocument(documentId: string): Promise<MarkdownDocumentDto> {
+    return apiRequest<MarkdownDocumentDto>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}`);
+  },
+  async getRevisions(documentId: string, options?: { signal?: AbortSignal }): Promise<MarkdownDocumentRevisionDto[]> {
+    return apiRequest<MarkdownDocumentRevisionDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions`, options);
+  },
+  async reextract(documentId: string, request: MarkdownDocumentReextractRequest): Promise<MarkdownDocumentFromAttachmentResponse> {
+    return apiRequest<MarkdownDocumentFromAttachmentResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/reextract`, {
+      data: request,
+    });
+  },
+  async cancelExtraction(documentId: string): Promise<void> {
+    await apiRequest("delete", `/api/markdown-documents/${encodeURIComponent(documentId)}/extraction`);
+  },
+  async getLocators(documentId: string): Promise<unknown> {
+    return apiRequest<unknown>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/locators`);
+  },
+  async getResources(documentId: string): Promise<unknown> {
+    return apiRequest<unknown>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/resources`);
+  },
+};

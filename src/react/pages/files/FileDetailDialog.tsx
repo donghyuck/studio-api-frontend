@@ -18,6 +18,8 @@ import {
   TextField,
   Tooltip,
   Typography,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -30,11 +32,19 @@ import dayjs from "dayjs";
 import { useAuthStore } from "@/react/auth/store";
 import { useToast } from "@/react/feedback";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
-import { reactFilesApi, reactDocumentConvertApi, type DocumentConvertStatus, type DocumentConvertJob } from "@/react/pages/files/api";
+import {
+  reactFilesApi,
+  reactDocumentConvertApi,
+  reactMarkdownDocumentApi,
+  type DocumentConvertStatus,
+  type DocumentConvertJob,
+  type MarkdownDocumentRevisionDto,
+} from "@/react/pages/files/api";
 import type { AttachmentDto } from "@/types/studio/files";
 import type { RagIndexJobStatus, RagIndexJobStep } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 import { DocumentConvertDialog, getDocumentFormat, getFriendlyErrorMessage } from "./DocumentConvertDialog";
+import { useMarkdownDocumentPolling } from "./hooks/useMarkdownDocumentPolling";
 
 const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
 const THUMBNAIL_RETRY_LIMIT = 8;
@@ -77,282 +87,61 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [thumbnailAvailable, setThumbnailAvailable] = useState(false);
   const [thumbnailReloadKey, setThumbnailReloadKey] = useState(0);
-  const [ragJobId, setRagJobId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [textExtracting, setTextExtracting] = useState(false);
-  const [ragIndexing, setRagIndexing] = useState(false);
-  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
-  const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
-  const [chunkingStrategy, setChunkingStrategy] = useState<string>("recursive");
-  const [ragJobStatus, setRagJobStatus] = useState<RagIndexJobStatus | null>(null);
-  const [ragJobStep, setRagJobStep] = useState<RagIndexJobStep | null>(null);
-  const [ragJobError, setRagJobError] = useState<string | null>(null);
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
 
-  // Convert-to-markdown states for DOCX/HTML RAG Indexing
-  const [convertJobId, setConvertJobId] = useState<string | null>(null);
-  const [convertJob, setConvertJob] = useState<DocumentConvertJob | null>(null);
-  const [convertStatus, setConvertStatus] = useState<DocumentConvertStatus | null>(null);
-  const [isConvertRetrying, setIsConvertRetrying] = useState(false);
-  const [isConvertCanceling, setIsConvertCanceling] = useState(false);
-  const [convertError, setConvertError] = useState<string | null>(null);
+  // Markdown Document Conversion / extraction states
+  const [documentId, setDocumentId] = useState<string | null>(null);
+  const [reused, setReused] = useState<boolean | null>(null);
+  const [runChunking, setRunChunking] = useState<boolean>(true);
+  const [runRagIndex, setRunRagIndex] = useState<boolean>(true);
+  const [runSkillExtraction, setRunSkillExtraction] = useState<boolean>(false);
+  const [isExtracting, setIsExtracting] = useState<boolean>(false);
+  const [isCanceling, setIsCanceling] = useState<boolean>(false);
+
+  const {
+    latestRevision,
+    status: markdownStatus,
+    error: markdownError,
+    isPolling: markdownIsPolling,
+    startPolling,
+    stopPolling,
+    setLatestRevision,
+    setStatus: setMarkdownStatus,
+    setError: setMarkdownError,
+  } = useMarkdownDocumentPolling();
 
   const roles = useAuthStore((state) => state.user?.roles) ?? [];
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
 
   useEffect(() => {
-    if (open) {
-      reactAiApi.getEmbeddingOptions()
-        .then((res) => {
-          const list = res.options ?? [];
-          setEmbeddingOptions(list);
-          const def = list.find((o) => o.defaultProfile) || list.find((o) => o.defaultProvider) || list[0] || null;
-          setSelectedOption(def);
-        })
-        .catch(() => {
-          // Ignore
-        });
-    } else {
-      setEmbeddingOptions([]);
-      setSelectedOption(null);
-      setChunkingStrategy("recursive");
-      setRagJobStatus(null);
-      setRagJobStep(null);
-      setRagJobError(null);
-      setConvertJobId(null);
-      setConvertJob(null);
-      setConvertStatus(null);
-      setConvertError(null);
-    }
-  }, [open]);
-
-  // Load convert job ID from localStorage
-  useEffect(() => {
     if (open && attachmentId && file) {
-      const format = getDocumentFormat(file.name, file.contentType);
-      const isDocxHtml = format === "docx" || format === "html";
-      if (isDocxHtml) {
-        const savedJobId = localStorage.getItem(`rag_convert_job_${attachmentId}`);
-        if (savedJobId) {
-          setConvertJobId(savedJobId);
-          setConvertStatus("RUNNING"); // Trigger polling
-          setConvertError(null);
-        } else {
-          setConvertJobId(null);
-          setConvertJob(null);
-          setConvertStatus(null);
-          setConvertError(null);
-        }
+      const resolvedDocId = file.properties?.documentId || localStorage.getItem(`markdown_doc_id_${attachmentId}`);
+      if (resolvedDocId) {
+        setDocumentId(resolvedDocId);
+        startPolling(resolvedDocId);
       } else {
-        setConvertJobId(null);
-        setConvertJob(null);
-        setConvertStatus(null);
-        setConvertError(null);
+        setDocumentId(null);
+        setLatestRevision(null);
+        setMarkdownStatus(null);
+        setMarkdownError(null);
       }
+      setReused(null);
     } else {
-      setConvertJobId(null);
-      setConvertJob(null);
-      setConvertStatus(null);
-      setConvertError(null);
+      setDocumentId(null);
+      setLatestRevision(null);
+      setMarkdownStatus(null);
+      setMarkdownError(null);
+      setReused(null);
+      stopPolling();
     }
-  }, [open, attachmentId, file]);
-
-  // Polling for convert job status
-  useEffect(() => {
-    if (!open || !convertJobId || (convertStatus !== "PENDING" && convertStatus !== "RUNNING")) {
-      return;
-    }
-
-    let timerId: number | undefined;
-    let consecutiveErrors = 0;
-
-    const triggerRagIndexAfterConvert = async (resultFileId: number) => {
-      setRagIndexing(true);
-      try {
-        const payload: any = {
-          useLlmKeywordExtraction: true,
-          chunkingStrategy,
-        };
-        if (selectedOption) {
-          if (selectedOption.profileId) {
-            payload.embeddingProfileId = selectedOption.profileId;
-          } else {
-            payload.embeddingProvider = selectedOption.provider;
-            payload.embeddingModel = selectedOption.model;
-          }
-        }
-        const jobId = await reactFilesApi.ragIndex(resultFileId, payload);
-        if (jobId) {
-          setRagJobId(jobId);
-          toast.success(`변환된 Markdown 파일의 RAG 색인 작업이 시작되었습니다.`);
-        } else {
-          toast.success(`변환된 Markdown 파일의 RAG 색인 작업이 완료되었습니다.`);
-        }
-        await refreshDetail(true);
-      } catch (error) {
-        toast.error("RAG 색인 등록 실패: " + resolveAxiosError(error));
-      } finally {
-        setRagIndexing(false);
-      }
-    };
-
-    const poll = async () => {
-      try {
-        const res = await reactDocumentConvertApi.getJob(convertJobId);
-        consecutiveErrors = 0;
-        setConvertError(null);
-        setConvertJob(res.data);
-        setConvertStatus(res.data.status);
-
-        if (res.data.status === "COMPLETED") {
-          if (timerId) window.clearInterval(timerId);
-          if (res.data.resultFileId) {
-            void triggerRagIndexAfterConvert(Number(res.data.resultFileId));
-          } else {
-            setConvertError("변환 결과 파일 ID가 없습니다.");
-          }
-        } else if (res.data.status === "FAILED" || res.data.status === "CANCELED") {
-          if (timerId) window.clearInterval(timerId);
-        }
-      } catch (error: any) {
-        if (error?.response?.status === 403) {
-          setConvertError("조회 권한이 부족합니다. (403)");
-          if (timerId) window.clearInterval(timerId);
-          return;
-        }
-        consecutiveErrors += 1;
-        if (consecutiveErrors >= 3) {
-          setConvertError("연속적인 네트워크 오류로 폴링이 중단되었습니다. 수동으로 새로고침 해주세요.");
-          if (timerId) window.clearInterval(timerId);
-        }
-      }
-    };
-
-    const restartInterval = (ms: number) => {
-      if (timerId) window.clearInterval(timerId);
-      timerId = window.setInterval(poll, ms);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        restartInterval(5000);
-      } else {
-        restartInterval(2000);
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    // initial start
-    restartInterval(document.hidden ? 5000 : 2000);
-    void poll();
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if (timerId) window.clearInterval(timerId);
-    };
-  }, [open, convertJobId, convertStatus, chunkingStrategy, selectedOption]);
-
-  useEffect(() => {
-    if (!open || !attachmentId) {
-      return;
-    }
-
-    let ignored = false;
-    async function checkActiveJob() {
-      try {
-        const res = await reactAiApi.listRagJobs({
-          objectType: "attachment",
-          objectId: String(attachmentId),
-          page: 0,
-          size: 1,
-        });
-        if (ignored) return;
-
-        const latestJob = res.content?.[0];
-        if (latestJob && (latestJob.status === "PENDING" || latestJob.status === "RUNNING")) {
-          setRagJobId(latestJob.jobId);
-          setRagJobStatus(latestJob.status);
-          setRagJobStep(latestJob.currentStep);
-          setRagJobError(latestJob.errorMessage);
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    void checkActiveJob();
-
-    return () => {
-      ignored = true;
-    };
-  }, [open, attachmentId]);
-
-  useEffect(() => {
-    if (!open || !ragJobId) {
-      setRagJobStatus(null);
-      setRagJobStep(null);
-      setRagJobError(null);
-      return;
-    }
-
-    let timer: number | undefined;
-
-    async function pollStatus() {
-      try {
-        const job = await reactAiApi.getRagJob(ragJobId);
-        setRagJobStatus(job.status);
-        setRagJobStep(job.currentStep);
-        setRagJobError(job.errorMessage);
-
-        if (
-          job.status === "SUCCEEDED" ||
-          job.status === "WARNING" ||
-          job.status === "FAILED" ||
-          job.status === "CANCELLED"
-        ) {
-          if (timer) window.clearInterval(timer);
-          await refreshDetail(true);
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    void pollStatus();
-    timer = window.setInterval(() => {
-      void pollStatus();
-    }, 3000);
-
-    return () => {
-      if (timer) {
-        window.clearInterval(timer);
-      }
-    };
-  }, [open, ragJobId]);
+  }, [open, attachmentId, file, startPolling, stopPolling, setLatestRevision, setMarkdownStatus, setMarkdownError]);
 
   const metadataEntries = Object.entries(ragMetadata ?? {});
-  const ragIndexCompleted = ragIndexed || metadataEntries.length > 0;
-
   const format = file ? getDocumentFormat(file.name, file.contentType) : null;
-  const isDocxHtml = format === "docx" || format === "html";
-  const isConverting = isDocxHtml && (convertStatus === "PENDING" || convertStatus === "RUNNING");
-
-  const ragIndexDisabled =
-    loading ||
-    ragIndexCompleted ||
-    ragIndexing ||
-    Boolean(ragJobId) ||
-    isConverting;
-
-  const ragIndexTooltip = ragIndexCompleted
-    ? "이미 RAG 인덱싱이 완료된 파일입니다."
-    : ragJobId
-      ? "이미 RAG 색인 작업이 생성되었습니다."
-      : isConverting
-        ? "문서 변환 작업이 진행 중입니다."
-        : isDocxHtml
-          ? "이 문서를 Markdown으로 변환 후 RAG 인덱싱을 요청합니다."
-          : "이 파일을 RAG 검색 대상으로 색인합니다.";
+  const isPendingOrRunning = markdownStatus === "PENDING" || markdownStatus === "RUNNING";
+  const controlsDisabled = isExtracting || isCanceling || markdownIsPolling;
 
   function clearThumbnail() {
     setThumbnailAvailable(false);
@@ -392,7 +181,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     setRagMetadata(null);
     setExtractedText("");
     setTextExtracted(false);
-    setRagJobId(null);
     clearThumbnail();
 
     if (!open || !attachmentId) {
@@ -497,7 +285,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     };
   }, [open, attachmentId, thumbnailReloadKey]);
 
-  async function refreshDetail(keepJobId = false) {
+  async function refreshDetail() {
     if (!attachmentId) return;
     if (!file) {
       setFile(null);
@@ -507,9 +295,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setTextExtracted(false);
       clearThumbnail();
     }
-    if (!keepJobId) {
-      setRagJobId(null);
-    }
     setThumbnailReloadKey((current) => current + 1);
     setLoading(true);
     try {
@@ -518,6 +303,12 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       const ragState = await loadRagState(nextFile);
       setRagIndexed(ragState.indexed);
       setRagMetadata(ragState.metadata);
+
+      const resolvedDocId = nextFile.properties?.documentId || localStorage.getItem(`markdown_doc_id_${attachmentId}`);
+      if (resolvedDocId) {
+        setDocumentId(resolvedDocId);
+        startPolling(resolvedDocId);
+      }
     } catch (error) {
       toast.error(resolveAxiosError(error));
     } finally {
@@ -562,105 +353,90 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
   }
 
-  async function handleConvertRetry() {
-    if (!convertJobId) return;
-    setIsConvertRetrying(true);
-    setConvertError(null);
+  function sanitizeErrorMessage(msg: string | null | undefined): string {
+    if (!msg) return "";
+    return msg
+      .replace(/(Signature|Expires|AWSAccessKeyId|token|access_token|key)=[^&\s]+/gi, '$1=***')
+      .replace(/https?:\/\/[^\s]+(signature|token|key)[^\s]+/gi, '[SENSITIVE_URL]')
+      .replace(/(s3|gs):\/\/[a-zA-Z0-9.\-_]+(\/[a-zA-Z0-9.\-_]+)*/gi, '[SENSITIVE_STORAGE_PATH]');
+  }
+
+  async function handleExtractMarkdown() {
+    if (!attachmentId || !file) return;
+    setIsExtracting(true);
+    setReused(null);
     try {
-      const res = await reactDocumentConvertApi.retryJob(convertJobId);
-      setConvertJob(res.data);
-      setConvertStatus(res.data.status);
-      toast.success("변환 재시도 작업이 접수되었습니다.");
-    } catch (error) {
-      const errMsg = resolveAxiosError(error) || "변환 재시도에 실패했습니다.";
-      setConvertError(errMsg);
-      toast.error("변환 재시도 실패: " + errMsg);
+      const res = await reactMarkdownDocumentApi.extractFromAttachment({
+        attachmentId,
+        runChunking,
+        runRagIndex,
+        runSkillExtraction,
+        force: false,
+      });
+      const newDocId = res.document.documentId;
+      setDocumentId(newDocId);
+      localStorage.setItem(`markdown_doc_id_${attachmentId}`, newDocId);
+      setReused(res.reused);
+      if (res.reused) {
+        toast.info("기존 변환 결과를 사용합니다.");
+      } else {
+        toast.success("Markdown 변환 및 RAG 색인 작업이 시작되었습니다.");
+      }
+      startPolling(newDocId);
+    } catch (err) {
+      const errMsg = sanitizeErrorMessage(resolveAxiosError(err));
+      toast.error("Markdown 변환 요청 실패: " + errMsg);
     } finally {
-      setIsConvertRetrying(false);
+      setIsExtracting(false);
     }
   }
 
-  async function handleConvertCancel() {
-    if (!convertJobId) return;
-    const confirmed = window.confirm("진행 중인 변환 작업을 취소하시겠습니까?");
-    if (!confirmed) return;
+  async function handleReextractMarkdown() {
+    if (!documentId) return;
+    const ok = window.confirm("기존 결과와 관계없이 새로 변환 및 색인을 진행하시겠습니까?");
+    if (!ok) return;
 
-    setIsConvertCanceling(true);
+    setIsExtracting(true);
+    setReused(null);
     try {
-      await reactDocumentConvertApi.cancelJob(convertJobId);
-      setConvertStatus("CANCELED");
-      if (convertJob) {
-        setConvertJob({ ...convertJob, status: "CANCELED" });
-      }
-      toast.success("변환 작업이 취소되었습니다.");
-    } catch (error) {
-      toast.error("변환 작업 취소 실패: " + resolveAxiosError(error));
+      const res = await reactMarkdownDocumentApi.reextract(documentId, {
+        runChunking,
+        runRagIndex,
+        runSkillExtraction,
+      });
+      setReused(res.reused);
+      toast.success("재추출 및 RAG 색인 작업이 시작되었습니다.");
+      startPolling(documentId);
+    } catch (err) {
+      const errMsg = sanitizeErrorMessage(resolveAxiosError(err));
+      toast.error("재추출 요청 실패: " + errMsg);
     } finally {
-      setIsConvertCanceling(false);
+      setIsExtracting(false);
     }
   }
 
-  async function handleRagIndex() {
-    if (!attachmentId || !file || ragIndexCompleted) return;
+  async function handleCancelMarkdown() {
+    if (!documentId) return;
+    const ok = window.confirm("진행 중인 변환 및 RAG 색인 작업을 취소하시겠습니까?");
+    if (!ok) return;
 
-    const format = getDocumentFormat(file.name, file.contentType);
-    const isDocxHtml = format === "docx" || format === "html";
-
-    if (isDocxHtml) {
-      if (!canManage) {
-        toast.error("변환 요청 권한(features:document-convert/manage)이 없습니다.");
-        return;
-      }
-      setRagIndexing(true);
-      setConvertError(null);
-      try {
-        const res = await reactDocumentConvertApi.convert({
-          sourceFileId: String(attachmentId),
-          sourceFormat: format,
-          targetFormat: "markdown",
-          options: {},
+    setIsCanceling(true);
+    try {
+      await reactMarkdownDocumentApi.cancelExtraction(documentId);
+      stopPolling();
+      setMarkdownStatus("CANCELED");
+      if (latestRevision) {
+        setLatestRevision({
+          ...latestRevision,
+          status: "CANCELED"
         });
-        const newJob = res.data;
-        setConvertJob(newJob);
-        setConvertJobId(newJob.jobId);
-        setConvertStatus(newJob.status);
-        localStorage.setItem(`rag_convert_job_${attachmentId}`, newJob.jobId);
-        toast.success(`문서 Markdown 변환 작업이 시작되었습니다.`);
-      } catch (error) {
-        const errMsg = resolveAxiosError(error) || "문서 변환 요청에 실패했습니다.";
-        setConvertError(errMsg);
-        toast.error("문서 변환 요청 실패: " + errMsg);
-      } finally {
-        setRagIndexing(false);
       }
-    } else {
-      setRagIndexing(true);
-      try {
-        const payload: any = {
-          useLlmKeywordExtraction: true,
-          chunkingStrategy,
-        };
-        if (selectedOption) {
-          if (selectedOption.profileId) {
-            payload.embeddingProfileId = selectedOption.profileId;
-          } else {
-            payload.embeddingProvider = selectedOption.provider;
-            payload.embeddingModel = selectedOption.model;
-          }
-        }
-        const jobId = await reactFilesApi.ragIndex(attachmentId, payload);
-        if (jobId) {
-          setRagJobId(jobId);
-          toast.success(`${file.name} 파일의 RAG 색인 작업이 시작되었습니다.`);
-        } else {
-          toast.success(`${file.name} 파일의 RAG 색인 작업이 완료되었습니다.`);
-        }
-        await refreshDetail(true);
-      } catch (error) {
-        toast.error(resolveAxiosError(error));
-      } finally {
-        setRagIndexing(false);
-      }
+      toast.success("작업이 취소되었습니다.");
+    } catch (err) {
+      const errMsg = sanitizeErrorMessage(resolveAxiosError(err));
+      toast.error("작업 취소 실패: " + errMsg);
+    } finally {
+      setIsCanceling(false);
     }
   }
 
@@ -805,228 +581,165 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
               <Box>
                 <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                  RAG
+                  Markdown 지식 변환 및 RAG 색인
                 </Typography>
 
-                {!ragIndexCompleted && embeddingOptions.length > 0 ? (
-                  <Box sx={{ mb: 1.5 }}>
-                    <TextField
-                      select
-                      label="임베딩 모델 프로필"
-                      size="small"
-                      value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
-                      onChange={(event) => {
-                        const val = event.target.value;
-                        const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
-                        if (matched) {
-                          setSelectedOption(matched);
-                        }
-                      }}
-                      disabled={ragIndexing}
-                      fullWidth
-                    >
-                      {embeddingOptions.map((opt) => {
-                        const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
-                        const label = opt.profileId
-                          ? `${opt.profileId} (${opt.provider} - ${opt.model})`
-                          : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
-                        return (
-                          <MenuItem key={valueKey} value={valueKey}>
-                            {label}
-                          </MenuItem>
-                        );
-                      })}
-                    </TextField>
-                  </Box>
-                ) : null}
+                {/* Checkbox options */}
+                <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={runChunking}
+                        onChange={(e) => setRunChunking(e.target.checked)}
+                        disabled={controlsDisabled}
+                      />
+                    }
+                    label={<Typography variant="body2">청크 분할 실행 (runChunking)</Typography>}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={runRagIndex}
+                        onChange={(e) => setRunRagIndex(e.target.checked)}
+                        disabled={controlsDisabled}
+                      />
+                    }
+                    label={<Typography variant="body2">RAG 색인 실행 (runRagIndex)</Typography>}
+                  />
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={runSkillExtraction}
+                        onChange={(e) => setRunSkillExtraction(e.target.checked)}
+                        disabled={controlsDisabled}
+                      />
+                    }
+                    label={<Typography variant="body2">스킬 추출 실행 (runSkillExtraction)</Typography>}
+                  />
+                </Stack>
 
-                {!ragIndexCompleted ? (
-                  <Box sx={{ mb: 1.5 }}>
-                    <TextField
-                      select
-                      label="청킹 전략"
-                      size="small"
-                      value={chunkingStrategy}
-                      onChange={(event) => setChunkingStrategy(event.target.value)}
-                      disabled={ragIndexing}
-                      fullWidth
-                    >
-                      <MenuItem value="recursive">재귀적 청킹 (Recursive)</MenuItem>
-                      <MenuItem value="fixed-size">고정 크기 청킹 (Fixed Size)</MenuItem>
-                      <MenuItem value="structure-based">구조 기반 청킹 (Structure Based)</MenuItem>
-                      <MenuItem value="semantic">의미론적 청킹 (Semantic)</MenuItem>
-                      <MenuItem value="llm-based">LLM 기반 청킹 (LLM Based)</MenuItem>
-                    </TextField>
-                  </Box>
-                ) : null}
-
+                {/* Status and Actions */}
                 <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                  <Box>
-                    {ragIndexCompleted ? (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        이 파일은 RAG 인덱싱이 완료되었습니다.
-                      </Typography>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    {markdownStatus ? (
+                      <Chip
+                        label={markdownStatus}
+                        size="small"
+                        color={
+                          markdownStatus === "COMPLETED" ? "success" :
+                          (markdownStatus === "RUNNING" || markdownStatus === "PENDING") ? "primary" :
+                          markdownStatus === "FAILED" ? "error" :
+                          "default"
+                        }
+                        sx={{ height: 24 }}
+                      />
                     ) : (
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        선택한 임베딩 프로필로 이 파일을 RAG 검색 대상으로 색인합니다.
+                      <Typography variant="caption" color="text.secondary">
+                        변환 이력이 없습니다.
                       </Typography>
                     )}
+                    {reused && markdownStatus === "COMPLETED" && (
+                      <Chip label="기존 변환 결과 사용" color="info" size="small" variant="outlined" sx={{ height: 24 }} />
+                    )}
                   </Box>
-                  <Tooltip title={ragIndexTooltip}>
-                    <span>
+
+                  {/* Main Action Button */}
+                  {!documentId ? (
+                    <Button
+                      size="small"
+                      variant="contained"
+                      disabled={controlsDisabled}
+                      onClick={() => void handleExtractMarkdown()}
+                    >
+                      Markdown 변환
+                    </Button>
+                  ) : (
+                    (markdownStatus === "COMPLETED" || markdownStatus === "FAILED" || markdownStatus === "CANCELED") && (
                       <Button
                         size="small"
                         variant="outlined"
-                        color="error"
-                        startIcon={<TimelineOutlined fontSize="small" />}
-                        disabled={ragIndexDisabled}
-                        onClick={() => void handleRagIndex()}
+                        disabled={controlsDisabled}
+                        onClick={() => void handleReextractMarkdown()}
                       >
-                        RAG 인덱싱
+                        재추출
                       </Button>
-                    </span>
-                  </Tooltip>
+                    )
+                  )}
                 </Stack>
-                {ragJobId ? (
+
+                {/* Polling / Running progress */}
+                {isPendingOrRunning && (
                   <Box sx={{ mt: 1.5, bgcolor: "action.hover", p: 1.25, borderRadius: 1 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      RAG 색인 작업 ID
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
-                      {ragJobId}
-                    </Typography>
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                      <CircularProgress size={16} />
                       <Typography variant="caption" color="text.secondary">
-                        진행 상태:
+                        Markdown 변환 및 색인이 진행 중입니다...
                       </Typography>
-                      {ragJobStatus ? (
-                        <Chip
-                          label={`${ragJobStatus}${ragJobStep ? ` (${ragJobStep})` : ""}`}
-                          size="small"
-                          color={
-                            ragJobStatus === "SUCCEEDED" ? "success" :
-                            ragJobStatus === "RUNNING" ? "primary" :
-                            ragJobStatus === "FAILED" ? "error" :
-                            "default"
-                          }
-                          sx={{ height: 20, fontSize: 11 }}
-                        />
-                      ) : (
-                        <CircularProgress size={12} />
-                      )}
+                      <Button
+                        size="small"
+                        color="error"
+                        variant="text"
+                        sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
+                        disabled={isCanceling}
+                        onClick={() => void handleCancelMarkdown()}
+                      >
+                        {isCanceling ? "취소 중..." : "변환 취소"}
+                      </Button>
                     </Stack>
-                    {ragJobError ? (
-                      <Typography variant="caption" color="error.main" display="block" sx={{ mt: 0.5, whiteSpace: "pre-wrap" }}>
-                        오류: {ragJobError}
-                      </Typography>
-                    ) : null}
                   </Box>
-                ) : null}
+                )}
 
-                {/* Convert Job Progress View */}
-                {convertJobId ? (
-                  <Box sx={{ mt: 1.5, bgcolor: "action.hover", p: 1.25, borderRadius: 1 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      문서 변환 작업 ID
+                {/* FAILED message */}
+                {markdownStatus === "FAILED" && (markdownError || latestRevision?.errorMessage) && (
+                  <Box sx={{ mt: 1.5, bgcolor: "error.light", color: "error.contrastText", p: 1.25, borderRadius: 1 }}>
+                    <Typography variant="caption" display="block" sx={{ fontWeight: "bold" }}>
+                      실패 원인
                     </Typography>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
-                      {convertJobId}
+                    <Typography variant="body2" sx={{ wordBreak: "break-all", fontSize: 12 }}>
+                      {sanitizeErrorMessage(latestRevision?.errorMessage || markdownError)}
                     </Typography>
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-                      <Typography variant="caption" color="text.secondary">
-                        변환 상태:
-                      </Typography>
-                      {convertStatus ? (
-                        <Chip
-                          label={convertStatus}
-                          size="small"
-                          color={
-                            convertStatus === "COMPLETED" ? "success" :
-                            (convertStatus === "RUNNING" || convertStatus === "PENDING") ? "primary" :
-                            convertStatus === "FAILED" ? "error" :
-                            "default"
-                          }
-                          sx={{ height: 20, fontSize: 11 }}
-                        />
-                      ) : (
-                        <CircularProgress size={12} />
-                      )}
-                    </Stack>
+                  </Box>
+                )}
 
-                    {(convertStatus === "PENDING" || convertStatus === "RUNNING") && (
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
-                        <CircularProgress size={12} />
-                        <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-                          Markdown으로 변환하는 중입니다...
+                {/* COMPLETED result display */}
+                {markdownStatus === "COMPLETED" && latestRevision && (
+                  <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+                    {latestRevision.markdownText && (
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                          추출된 Markdown 텍스트
                         </Typography>
-                        {canManage && (
-                          <Button
-                            size="small"
-                            color="error"
-                            variant="text"
-                            sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
-                            disabled={isConvertCanceling}
-                            onClick={() => void handleConvertCancel()}
-                          >
-                            {isConvertCanceling ? "취소 중..." : "작업 취소"}
-                          </Button>
-                        )}
-                      </Stack>
-                    )}
-
-                    {convertStatus === "COMPLETED" && (
-                      <Stack spacing={1} sx={{ mt: 1 }}>
-                        <Typography variant="caption" color="success.main" display="block">
-                          ✓ Markdown 변환 완료
-                        </Typography>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="success"
+                        <TextField
+                          multiline
+                          rows={10}
                           fullWidth
-                          onClick={() => {
-                            window.location.assign(`/api/document-conversions/${encodeURIComponent(convertJobId)}/download`);
+                          value={latestRevision.markdownText}
+                          InputProps={{
+                            readOnly: true,
+                            style: { fontSize: 12, fontFamily: "monospace" }
                           }}
-                        >
-                          변환 결과 다운로드
-                        </Button>
-                      </Stack>
+                          size="small"
+                        />
+                      </Box>
                     )}
 
-                    {convertStatus === "FAILED" && (
-                      <Stack spacing={1} sx={{ mt: 1 }}>
-                        <Typography variant="caption" color="error.main" display="block">
-                          오류: {getFriendlyErrorMessage(convertJob?.errorCode ?? null, convertJob?.errorMessage ?? null)}
-                        </Typography>
-                        {canManage && (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                            fullWidth
-                            disabled={isConvertRetrying}
-                            onClick={() => void handleConvertRetry()}
-                          >
-                            {isConvertRetrying ? "재시도 요청 중..." : "재시도 (Retry)"}
-                          </Button>
-                        )}
-                      </Stack>
+                    {latestRevision.resultAttachmentId && (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="success"
+                        fullWidth
+                        onClick={() => {
+                          window.location.assign(`/api/mgmt/files/${encodeURIComponent(latestRevision.resultAttachmentId!)}/download`);
+                        }}
+                      >
+                        변환 결과 파일 다운로드
+                      </Button>
                     )}
-
-                    {convertStatus === "CANCELED" && (
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
-                        변환 작업이 취소되었습니다.
-                      </Typography>
-                    )}
-                  </Box>
-                ) : null}
-
-                {convertError && (
-                  <Box sx={{ mt: 1.5, bgcolor: "action.hover", p: 1.25, borderRadius: 1 }}>
-                    <Typography variant="caption" color="error.main" display="block">
-                      오류: {convertError}
-                    </Typography>
-                  </Box>
+                  </Stack>
                 )}
               </Box>
 
@@ -1077,7 +790,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           <Button onClick={onClose}>닫기</Button>
         </Stack>
 
-        {loading || textExtracting || ragIndexing ? (
+        {loading || textExtracting || isExtracting || isCanceling ? (
           <Box
             sx={{
               position: "absolute",

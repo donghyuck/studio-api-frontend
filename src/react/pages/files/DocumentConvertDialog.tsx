@@ -150,12 +150,12 @@ export function DocumentConvertDialog({ open, onClose, file }: Props) {
 
     const poll = async () => {
       try {
-        const res = await reactDocumentConvertApi.getJob(jobId);
+        const job = await reactDocumentConvertApi.getJob(jobId);
         consecutiveErrors = 0;
         setNetworkError(null);
-        setJob(res.data);
-        setStatus(res.data.status);
-        if (res.data.status === "COMPLETED" || res.data.status === "FAILED" || res.data.status === "CANCELED") {
+        setJob(job);
+        setStatus(job.status);
+        if (job.status === "COMPLETED" || job.status === "FAILED" || job.status === "CANCELED") {
           if (timerId) window.clearInterval(timerId);
         }
       } catch (error: any) {
@@ -201,9 +201,9 @@ export function DocumentConvertDialog({ open, onClose, file }: Props) {
     setRefreshing(true);
     setNetworkError(null);
     try {
-      const res = await reactDocumentConvertApi.getJob(jobId);
-      setJob(res.data);
-      setStatus(res.data.status);
+      const job = await reactDocumentConvertApi.getJob(jobId);
+      setJob(job);
+      setStatus(job.status);
     } catch (error: any) {
       setNetworkError(resolveAxiosError(error) || "상태 조회에 실패했습니다.");
     } finally {
@@ -233,14 +233,13 @@ export function DocumentConvertDialog({ open, onClose, file }: Props) {
     }
 
     try {
-      const res = await reactDocumentConvertApi.convert({
+      const newJob = await reactDocumentConvertApi.convert({
         sourceFileId: String(file.attachmentId),
         sourceFormat,
         targetFormat: targetFormat as any,
         options: targetFormat === "pdf" ? convertOptions : undefined,
       });
 
-      const newJob = res.data;
       setJob(newJob);
       setJobId(newJob.jobId);
       setStatus(newJob.status);
@@ -262,9 +261,9 @@ export function DocumentConvertDialog({ open, onClose, file }: Props) {
     setIsRetrying(true);
     setNetworkError(null);
     try {
-      const res = await reactDocumentConvertApi.retryJob(jobId);
-      setJob(res.data);
-      setStatus(res.data.status);
+      const job = await reactDocumentConvertApi.retryJob(jobId);
+      setJob(job);
+      setStatus(job.status);
     } catch (error) {
       setNetworkError(resolveAxiosError(error) || "변환 재시도에 실패했습니다.");
     } finally {
