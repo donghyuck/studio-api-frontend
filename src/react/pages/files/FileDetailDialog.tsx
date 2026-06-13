@@ -481,11 +481,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          position: "relative",
         },
       }}
     >
-      <Stack spacing={0} sx={{ height: "100%", maxHeight: "100vh", overflow: "hidden", position: "relative", minHeight: 0 }}>
-        <Box
+      <Box
           sx={{
             minHeight: 56,
             px: 2,
@@ -493,6 +493,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             alignItems: "center",
             justifyContent: "space-between",
             gap: 2,
+            flexShrink: 0,
           }}
         >
           <Box sx={{ minWidth: 0 }}>
@@ -516,11 +517,21 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         </Box>
         <Divider />
 
-        <Stack spacing={2} sx={{ p: 2, flex: 1, overflowY: "auto", minHeight: 0 }}>
+        <Box
+          sx={{
+            p: 2,
+            flex: "1 1 0%",
+            minHeight: 0,
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+          }}
+        >
           {file ? (
             <>
               {/* 기본 정보 상시 노출 (박스 및 타이틀 없이 수직 나열) */}
-              <Stack spacing={2} sx={{ mb: 2 }}>
+              <Stack spacing={2} sx={{ mb: 2, flexShrink: 0 }}>
                 {renderDetail("이름", file.name)}
                 {renderDetail("콘텐츠 종류", file.contentType)}
                 {renderDetail("크기", formatFileSize(file.size))}
@@ -548,6 +559,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               {/* Accordion Group Container (No Rounding) */}
               <Box
                 sx={{
+                  flexShrink: 0,
                   border: "1px solid",
                   borderColor: "divider",
                   borderRadius: 0,
@@ -863,10 +875,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           ) : (
             <Typography color="text.secondary">데이터 없음</Typography>
           )}
-        </Stack>
+        </Box>
 
         <Divider />
-        <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center" sx={{ p: 2 }}>
+        <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center" sx={{ p: 2, flexShrink: 0 }}>
           <Box>
             {file && getDocumentFormat(file.name, file.contentType) && (
               <Button
@@ -890,12 +902,12 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              zIndex: 1300,
             }}
           >
             <CircularProgress />
           </Box>
         ) : null}
-      </Stack>
 
       {file && convertDialogOpen && (
         <DocumentConvertDialog
