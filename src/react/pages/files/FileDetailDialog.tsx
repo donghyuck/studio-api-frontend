@@ -554,8 +554,28 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                 ) : null}
               </Paper>
 
-              {/* Card 2: Text Extraction Accordion */}
-              <Accordion variant="outlined" sx={{ borderRadius: "0px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+              {/* Accordion Group Container (No Rounding) */}
+              <Box
+                sx={{
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 0,
+                  overflow: "hidden",
+                  "& .MuiAccordion-root": {
+                    border: "none",
+                    borderRadius: 0,
+                    "&:not(:last-child)": {
+                      borderBottom: "1px solid",
+                      borderColor: "divider",
+                    },
+                    "&:before": {
+                      display: "none",
+                    },
+                  },
+                }}
+              >
+                {/* Card 2: Text Extraction Accordion */}
+                <Accordion disableGutters square elevation={0}>
                 <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     텍스트 추출 결과
@@ -629,7 +649,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               </Accordion>
 
               {/* Card 3: Markdown and RAG Accordion */}
-              <Accordion defaultExpanded variant="outlined" sx={{ borderRadius: "0px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+              <Accordion defaultExpanded disableGutters square elevation={0}>
                 <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     Markdown 지식 변환 및 RAG 색인
@@ -819,7 +839,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
               {/* Card 4: RAG Metadata Accordion */}
               {metadataEntries.length > 0 ? (
-                <Accordion variant="outlined" sx={{ borderRadius: "0px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+                <Accordion disableGutters square elevation={0}>
                   <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                       RAG Metadata
@@ -847,6 +867,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                   </AccordionDetails>
                 </Accordion>
               ) : null}
+              </Box>
             </>
           ) : (
             <Typography color="text.secondary">데이터 없음</Typography>
