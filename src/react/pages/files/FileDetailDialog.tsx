@@ -20,6 +20,7 @@ import {
   Typography,
   Checkbox,
   FormControlLabel,
+  Paper,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -500,34 +501,59 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         <Stack spacing={2} sx={{ p: 2, flex: 1, overflow: "auto" }}>
           {file ? (
             <>
-              {renderDetail("파일명", file.name)}
-              {renderDetail("객체 유형", file.objectType)}
-              {renderDetail("객체 식별자", file.objectId)}
-              {renderDetail("Content Type", file.contentType)}
-              {renderDetail("크기", formatFileSize(file.size))}
-              {renderDetail("생성일시", formatDate(file.createdAt))}
-              {thumbnailAvailable && thumbnailUrl ? (
-                <Box>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
-                    썸네일
-                  </Typography>
-                  <Box
-                    component="img"
-                    src={thumbnailUrl}
-                    alt={file.name}
-                    sx={{
-                      width: "100%",
-                      maxHeight: 220,
-                      borderRadius: 1,
-                      objectFit: "contain",
-                    }}
-                  />
+              {/* Card 1: Basic Info */}
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
+                  기본 정보
+                </Typography>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                  <Box sx={{ gridColumn: "span 2" }}>
+                    {renderDetail("파일명", file.name)}
+                  </Box>
+                  <Box>
+                    {renderDetail("크기", formatFileSize(file.size))}
+                  </Box>
+                  <Box>
+                    {renderDetail("Content Type", file.contentType)}
+                  </Box>
+                  <Box>
+                    {renderDetail("객체 유형", file.objectType)}
+                  </Box>
+                  <Box>
+                    {renderDetail("객체 식별자", file.objectId)}
+                  </Box>
+                  <Box sx={{ gridColumn: "span 2" }}>
+                    {renderDetail("생성일시", formatDate(file.createdAt))}
+                  </Box>
                 </Box>
-              ) : null}
 
-              <Box>
-                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
-                  <Typography variant="caption" color="text.secondary">
+                {thumbnailAvailable && thumbnailUrl ? (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                      썸네일 프리뷰
+                    </Typography>
+                    <Box
+                      component="img"
+                      src={thumbnailUrl}
+                      alt={file.name}
+                      sx={{
+                        width: "100%",
+                        maxHeight: 180,
+                        borderRadius: 1.5,
+                        objectFit: "contain",
+                        border: "1px solid",
+                        borderColor: "divider",
+                        bgcolor: "action.hover",
+                      }}
+                    />
+                  </Box>
+                ) : null}
+              </Paper>
+
+              {/* Card 2: Text Extraction */}
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
+                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     텍스트 추출 결과
                   </Typography>
                   {!textExtracted ? (
@@ -557,8 +583,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     component="pre"
                     sx={{
                       m: 0,
-                      mt: 0.75,
-                      maxHeight: 280,
+                      maxHeight: 200,
                       overflow: "auto",
                       whiteSpace: "pre-wrap",
                       overflowWrap: "anywhere",
@@ -566,26 +591,31 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                       border: "1px solid",
                       borderColor: "divider",
                       borderRadius: 1,
-                      bgcolor: "background.default",
+                      bgcolor: "background.paper",
                       color: "text.primary",
-                      p: 1.25,
-                      fontFamily: (theme) => theme.typography.fontFamily,
+                      p: 1.5,
+                      fontFamily: "monospace",
                       fontSize: 12,
-                      lineHeight: 1.7,
+                      lineHeight: 1.6,
                     }}
                   >
                     {extractedText || "-"}
                   </Box>
-                ) : null}
-              </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 3 }}>
+                    추출된 텍스트가 없습니다. 버튼을 눌러 추출을 시작하세요.
+                  </Typography>
+                )}
+              </Paper>
 
-              <Box>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              {/* Card 3: Markdown and RAG */}
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
                   Markdown 지식 변환 및 RAG 색인
                 </Typography>
 
                 {/* Checkbox options */}
-                <Stack spacing={0.5} sx={{ mb: 1.5 }}>
+                <Stack spacing={0.5} sx={{ mb: 2, bgcolor: "action.hover", p: 1, borderRadius: 1.5 }}>
                   <FormControlLabel
                     control={
                       <Checkbox
@@ -595,7 +625,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         disabled={controlsDisabled}
                       />
                     }
-                    label={<Typography variant="body2">청크 분할 실행 (runChunking)</Typography>}
+                    label={<Typography variant="body2" sx={{ fontSize: 13 }}>청크 분할 실행 (runChunking)</Typography>}
                   />
                   <FormControlLabel
                     control={
@@ -606,7 +636,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         disabled={controlsDisabled}
                       />
                     }
-                    label={<Typography variant="body2">RAG 색인 실행 (runRagIndex)</Typography>}
+                    label={<Typography variant="body2" sx={{ fontSize: 13 }}>RAG 색인 실행 (runRagIndex)</Typography>}
                   />
                   <FormControlLabel
                     control={
@@ -617,12 +647,12 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         disabled={controlsDisabled}
                       />
                     }
-                    label={<Typography variant="body2">스킬 추출 실행 (runSkillExtraction)</Typography>}
+                    label={<Typography variant="body2" sx={{ fontSize: 13 }}>스킬 추출 실행 (runSkillExtraction)</Typography>}
                   />
                 </Stack>
 
                 {/* Status and Actions */}
-                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     {markdownStatus ? (
                       <Chip
@@ -634,7 +664,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           markdownStatus === "FAILED" ? "error" :
                           "default"
                         }
-                        sx={{ height: 24 }}
+                        sx={{ height: 24, fontWeight: 500 }}
                       />
                     ) : (
                       <Typography variant="caption" color="text.secondary">
@@ -672,7 +702,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
                 {/* Polling / Running progress */}
                 {isPendingOrRunning && (
-                  <Box sx={{ mt: 1.5, bgcolor: "action.hover", p: 1.25, borderRadius: 1 }}>
+                  <Box sx={{ mt: 1.5, bgcolor: "action.hover", p: 1.5, borderRadius: 1.5, border: "1px dashed", borderColor: "primary.main" }}>
                     <Stack direction="row" spacing={1.5} alignItems="center">
                       <CircularProgress size={16} />
                       <Typography variant="caption" color="text.secondary">
@@ -694,8 +724,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
                 {/* FAILED message */}
                 {markdownStatus === "FAILED" && (markdownError || latestRevision?.errorMessage) && (
-                  <Box sx={{ mt: 1.5, bgcolor: "error.light", color: "error.contrastText", p: 1.25, borderRadius: 1 }}>
-                    <Typography variant="caption" display="block" sx={{ fontWeight: "bold" }}>
+                  <Box sx={{ mt: 1.5, bgcolor: "error.light", color: "error.contrastText", p: 1.5, borderRadius: 1.5 }}>
+                    <Typography variant="caption" display="block" sx={{ fontWeight: "bold", mb: 0.5 }}>
                       실패 원인
                     </Typography>
                     <Typography variant="body2" sx={{ wordBreak: "break-all", fontSize: 12 }}>
@@ -712,17 +742,28 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                           추출된 Markdown 텍스트
                         </Typography>
-                        <TextField
-                          multiline
-                          rows={10}
-                          fullWidth
-                          value={latestRevision.markdownText}
-                          InputProps={{
-                            readOnly: true,
-                            style: { fontSize: 12, fontFamily: "monospace" }
+                        <Box
+                          component="pre"
+                          sx={{
+                            m: 0,
+                            maxHeight: 200,
+                            overflow: "auto",
+                            whiteSpace: "pre-wrap",
+                            overflowWrap: "anywhere",
+                            wordBreak: "break-word",
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: 1,
+                            bgcolor: "background.paper",
+                            color: "text.primary",
+                            p: 1.5,
+                            fontFamily: "monospace",
+                            fontSize: 12,
+                            lineHeight: 1.6,
                           }}
-                          size="small"
-                        />
+                        >
+                          {latestRevision.markdownText}
+                        </Box>
                       </Box>
                     )}
 
@@ -741,32 +782,33 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     )}
                   </Stack>
                 )}
-              </Box>
+              </Paper>
 
+              {/* Card 4: RAG Metadata */}
               {metadataEntries.length > 0 ? (
-                <Box>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
+                  <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
                     RAG Metadata
                   </Typography>
-                  <TableContainer>
+                  <TableContainer sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "background.paper" }}>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Name</TableCell>
-                          <TableCell>Value</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>Value</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {metadataEntries.map(([key, value]) => (
-                          <TableRow key={key}>
-                            <TableCell>{key}</TableCell>
+                          <TableRow key={key} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                            <TableCell sx={{ fontWeight: 500, color: "text.secondary" }}>{key}</TableCell>
                             <TableCell sx={{ overflowWrap: "anywhere" }}>{String(value)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
                     </Table>
                   </TableContainer>
-                </Box>
+                </Paper>
               ) : null}
             </>
           ) : (
