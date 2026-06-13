@@ -165,7 +165,34 @@ export interface MarkdownDocumentRevisionDto {
   markdownText: string | null;
   errorCode: string | null;
   errorMessage: string | null;
+  extractorType?: string;
+  extractorVersion?: string;
+  optionsJson?: string;
   createdAt: string;
+  completedAt?: string;
+}
+
+export interface MarkdownLocatorDto {
+  locatorId: string;
+  documentId: string;
+  revisionId: string;
+  title: string;
+  level: number;
+  startOffset: number;
+  endOffset: number;
+  pageNumber: number | null;
+  orderIndex: number;
+}
+
+export interface MarkdownResourceDto {
+  resourceId: string;
+  documentId: string;
+  revisionId: string;
+  name: string;
+  attachmentId: number;
+  contentType: string;
+  sizeBytes: number;
+  resourceType: string;
 }
 
 export interface MarkdownDocumentFromAttachmentResponse {
@@ -180,12 +207,28 @@ export interface MarkdownDocumentFromAttachmentRequest {
   runRagIndex: boolean;
   runSkillExtraction: boolean;
   force: boolean;
+  chunkingStrategy?: string | null;
+  chunkMaxSize?: number | null;
+  chunkOverlap?: number | null;
+  chunkUnit?: string | null;
+  embeddingProfileId?: string | null;
+  embeddingProvider?: string | null;
+  embeddingModel?: string | null;
+  embeddingDimension?: number | null;
 }
 
 export interface MarkdownDocumentReextractRequest {
   runChunking: boolean;
   runRagIndex: boolean;
   runSkillExtraction: boolean;
+  chunkingStrategy?: string | null;
+  chunkMaxSize?: number | null;
+  chunkOverlap?: number | null;
+  chunkUnit?: string | null;
+  embeddingProfileId?: string | null;
+  embeddingProvider?: string | null;
+  embeddingModel?: string | null;
+  embeddingDimension?: number | null;
 }
 
 export const reactMarkdownDocumentApi = {
@@ -208,10 +251,10 @@ export const reactMarkdownDocumentApi = {
   async cancelExtraction(documentId: string): Promise<void> {
     await apiRequest("delete", `/api/markdown-documents/${encodeURIComponent(documentId)}/extraction`);
   },
-  async getLocators(documentId: string): Promise<unknown> {
-    return apiRequest<unknown>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/locators`);
+  async getLocators(documentId: string): Promise<MarkdownLocatorDto[]> {
+    return apiRequest<MarkdownLocatorDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/locators`);
   },
-  async getResources(documentId: string): Promise<unknown> {
-    return apiRequest<unknown>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/resources`);
+  async getResources(documentId: string): Promise<MarkdownResourceDto[]> {
+    return apiRequest<MarkdownResourceDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/resources`);
   },
 };
