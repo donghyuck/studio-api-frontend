@@ -21,6 +21,9 @@ import {
   Checkbox,
   FormControlLabel,
   Paper,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -28,6 +31,7 @@ import {
   RefreshOutlined,
   TextSnippetOutlined,
   TimelineOutlined,
+  ExpandMoreOutlined,
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import { useAuthStore } from "@/react/auth/store";
@@ -501,314 +505,351 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         <Stack spacing={2} sx={{ p: 2, flex: 1, overflow: "auto" }}>
           {file ? (
             <>
-              {/* Card 1: Basic Info */}
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-                  기본 정보
-                </Typography>
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                  <Box sx={{ gridColumn: "span 2" }}>
-                    {renderDetail("파일명", file.name)}
+              {/* Card 1: Basic Info Accordion */}
+              <Accordion defaultExpanded variant="outlined" sx={{ borderRadius: "8px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+                <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    기본 정보
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
+                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                    <Box sx={{ gridColumn: "span 2" }}>
+                      {renderDetail("파일명", file.name)}
+                    </Box>
+                    <Box>
+                      {renderDetail("크기", formatFileSize(file.size))}
+                    </Box>
+                    <Box>
+                      {renderDetail("Content Type", file.contentType)}
+                    </Box>
+                    <Box>
+                      {renderDetail("객체 유형", file.objectType)}
+                    </Box>
+                    <Box>
+                      {renderDetail("객체 식별자", file.objectId)}
+                    </Box>
+                    <Box sx={{ gridColumn: "span 2" }}>
+                      {renderDetail("생성일시", formatDate(file.createdAt))}
+                    </Box>
                   </Box>
-                  <Box>
-                    {renderDetail("크기", formatFileSize(file.size))}
-                  </Box>
-                  <Box>
-                    {renderDetail("Content Type", file.contentType)}
-                  </Box>
-                  <Box>
-                    {renderDetail("객체 유형", file.objectType)}
-                  </Box>
-                  <Box>
-                    {renderDetail("객체 식별자", file.objectId)}
-                  </Box>
-                  <Box sx={{ gridColumn: "span 2" }}>
-                    {renderDetail("생성일시", formatDate(file.createdAt))}
-                  </Box>
-                </Box>
 
-                {thumbnailAvailable && thumbnailUrl ? (
-                  <Box sx={{ mt: 2 }}>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
-                      썸네일 프리뷰
-                    </Typography>
-                    <Box
-                      component="img"
-                      src={thumbnailUrl}
-                      alt={file.name}
-                      sx={{
-                        width: "100%",
-                        maxHeight: 180,
-                        borderRadius: 1.5,
-                        objectFit: "contain",
-                        border: "1px solid",
-                        borderColor: "divider",
-                        bgcolor: "action.hover",
-                      }}
-                    />
-                  </Box>
-                ) : null}
-              </Paper>
+                  {thumbnailAvailable && thumbnailUrl ? (
+                    <Box sx={{ mt: 2 }}>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                        썸네일 프리뷰
+                      </Typography>
+                      <Box
+                        component="img"
+                        src={thumbnailUrl}
+                        alt={file.name}
+                        sx={{
+                          width: "100%",
+                          maxHeight: 180,
+                          borderRadius: 1.5,
+                          objectFit: "contain",
+                          border: "1px solid",
+                          borderColor: "divider",
+                          bgcolor: "action.hover",
+                        }}
+                      />
+                    </Box>
+                  ) : null}
+                </AccordionDetails>
+              </Accordion>
 
-              {/* Card 2: Text Extraction */}
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
-                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+              {/* Card 2: Text Extraction Accordion */}
+              <Accordion variant="outlined" sx={{ borderRadius: "8px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+                <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     텍스트 추출 결과
                   </Typography>
-                  {!textExtracted ? (
-                    <Tooltip title="콘텐츠에서 텍스트를 추출합니다.">
-                      <span>
+                </AccordionSummary>
+                <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
+                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      추출 텍스트 관리
+                    </Typography>
+                    {!textExtracted ? (
+                      <Tooltip title="콘텐츠에서 텍스트를 추출합니다.">
+                        <span>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<TextSnippetOutlined fontSize="small" />}
+                            disabled={textExtracting}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleExtractText();
+                            }}
+                          >
+                            텍스트 추출
+                          </Button>
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      <Tooltip title="클립보드에 복사">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleCopyExtractedText();
+                          }}
+                        >
+                          <ContentCopyOutlined fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Stack>
+                  {textExtracted ? (
+                    <Box
+                      component="pre"
+                      sx={{
+                        m: 0,
+                        maxHeight: 200,
+                        overflow: "auto",
+                        whiteSpace: "pre-wrap",
+                        overflowWrap: "anywhere",
+                        wordBreak: "break-word",
+                        border: "1px solid",
+                        borderColor: "divider",
+                        borderRadius: 1,
+                        bgcolor: "background.default",
+                        color: "text.primary",
+                        p: 1.5,
+                        fontFamily: "monospace",
+                        fontSize: 12,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {extractedText || "-"}
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
+                      추출된 텍스트가 없습니다. 버튼을 눌러 추출을 시작하세요.
+                    </Typography>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+
+              {/* Card 3: Markdown and RAG Accordion */}
+              <Accordion defaultExpanded variant="outlined" sx={{ borderRadius: "8px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+                <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    Markdown 지식 변환 및 RAG 색인
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
+                  {/* Checkbox options */}
+                  <Stack spacing={0.5} sx={{ mb: 2, bgcolor: "action.hover", p: 1, borderRadius: 1.5 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={runChunking}
+                          onChange={(e) => setRunChunking(e.target.checked)}
+                          disabled={controlsDisabled}
+                        />
+                      }
+                      label={<Typography variant="body2" sx={{ fontSize: 13 }}>청크 분할 실행 (runChunking)</Typography>}
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={runRagIndex}
+                          onChange={(e) => setRunRagIndex(e.target.checked)}
+                          disabled={controlsDisabled}
+                        />
+                      }
+                      label={<Typography variant="body2" sx={{ fontSize: 13 }}>RAG 색인 실행 (runRagIndex)</Typography>}
+                    />
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={runSkillExtraction}
+                          onChange={(e) => setRunSkillExtraction(e.target.checked)}
+                          disabled={controlsDisabled}
+                        />
+                      }
+                      label={<Typography variant="body2" sx={{ fontSize: 13 }}>스킬 추출 실행 (runSkillExtraction)</Typography>}
+                    />
+                  </Stack>
+
+                  {/* Status and Actions */}
+                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      {markdownStatus ? (
+                        <Chip
+                          label={markdownStatus}
+                          size="small"
+                          color={
+                            markdownStatus === "COMPLETED" ? "success" :
+                            (markdownStatus === "RUNNING" || markdownStatus === "PENDING") ? "primary" :
+                            markdownStatus === "FAILED" ? "error" :
+                            "default"
+                          }
+                          sx={{ height: 24, fontWeight: 500 }}
+                        />
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
+                          변환 이력이 없습니다.
+                        </Typography>
+                      )}
+                      {reused && markdownStatus === "COMPLETED" && (
+                        <Chip label="기존 변환 결과 사용" color="info" size="small" variant="outlined" sx={{ height: 24 }} />
+                      )}
+                    </Box>
+
+                    {/* Main Action Button */}
+                    {!documentId ? (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        disabled={controlsDisabled}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleExtractMarkdown();
+                        }}
+                      >
+                        Markdown 변환
+                      </Button>
+                    ) : (
+                      (markdownStatus === "COMPLETED" || markdownStatus === "FAILED" || markdownStatus === "CANCELED") && (
                         <Button
                           size="small"
                           variant="outlined"
-                          startIcon={<TextSnippetOutlined fontSize="small" />}
-                          disabled={textExtracting}
-                          onClick={() => void handleExtractText()}
-                        >
-                          텍스트 추출
-                        </Button>
-                      </span>
-                    </Tooltip>
-                  ) : (
-                    <Tooltip title="클립보드에 복사">
-                      <IconButton size="small" onClick={() => void handleCopyExtractedText()}>
-                        <ContentCopyOutlined fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                </Stack>
-                {textExtracted ? (
-                  <Box
-                    component="pre"
-                    sx={{
-                      m: 0,
-                      maxHeight: 200,
-                      overflow: "auto",
-                      whiteSpace: "pre-wrap",
-                      overflowWrap: "anywhere",
-                      wordBreak: "break-word",
-                      border: "1px solid",
-                      borderColor: "divider",
-                      borderRadius: 1,
-                      bgcolor: "background.paper",
-                      color: "text.primary",
-                      p: 1.5,
-                      fontFamily: "monospace",
-                      fontSize: 12,
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    {extractedText || "-"}
-                  </Box>
-                ) : (
-                  <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 3 }}>
-                    추출된 텍스트가 없습니다. 버튼을 눌러 추출을 시작하세요.
-                  </Typography>
-                )}
-              </Paper>
-
-              {/* Card 3: Markdown and RAG */}
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-                  Markdown 지식 변환 및 RAG 색인
-                </Typography>
-
-                {/* Checkbox options */}
-                <Stack spacing={0.5} sx={{ mb: 2, bgcolor: "action.hover", p: 1, borderRadius: 1.5 }}>
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size="small"
-                        checked={runChunking}
-                        onChange={(e) => setRunChunking(e.target.checked)}
-                        disabled={controlsDisabled}
-                      />
-                    }
-                    label={<Typography variant="body2" sx={{ fontSize: 13 }}>청크 분할 실행 (runChunking)</Typography>}
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size="small"
-                        checked={runRagIndex}
-                        onChange={(e) => setRunRagIndex(e.target.checked)}
-                        disabled={controlsDisabled}
-                      />
-                    }
-                    label={<Typography variant="body2" sx={{ fontSize: 13 }}>RAG 색인 실행 (runRagIndex)</Typography>}
-                  />
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size="small"
-                        checked={runSkillExtraction}
-                        onChange={(e) => setRunSkillExtraction(e.target.checked)}
-                        disabled={controlsDisabled}
-                      />
-                    }
-                    label={<Typography variant="body2" sx={{ fontSize: 13 }}>스킬 추출 실행 (runSkillExtraction)</Typography>}
-                  />
-                </Stack>
-
-                {/* Status and Actions */}
-                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    {markdownStatus ? (
-                      <Chip
-                        label={markdownStatus}
-                        size="small"
-                        color={
-                          markdownStatus === "COMPLETED" ? "success" :
-                          (markdownStatus === "RUNNING" || markdownStatus === "PENDING") ? "primary" :
-                          markdownStatus === "FAILED" ? "error" :
-                          "default"
-                        }
-                        sx={{ height: 24, fontWeight: 500 }}
-                      />
-                    ) : (
-                      <Typography variant="caption" color="text.secondary">
-                        변환 이력이 없습니다.
-                      </Typography>
-                    )}
-                    {reused && markdownStatus === "COMPLETED" && (
-                      <Chip label="기존 변환 결과 사용" color="info" size="small" variant="outlined" sx={{ height: 24 }} />
-                    )}
-                  </Box>
-
-                  {/* Main Action Button */}
-                  {!documentId ? (
-                    <Button
-                      size="small"
-                      variant="contained"
-                      disabled={controlsDisabled}
-                      onClick={() => void handleExtractMarkdown()}
-                    >
-                      Markdown 변환
-                    </Button>
-                  ) : (
-                    (markdownStatus === "COMPLETED" || markdownStatus === "FAILED" || markdownStatus === "CANCELED") && (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        disabled={controlsDisabled}
-                        onClick={() => void handleReextractMarkdown()}
-                      >
-                        재추출
-                      </Button>
-                    )
-                  )}
-                </Stack>
-
-                {/* Polling / Running progress */}
-                {isPendingOrRunning && (
-                  <Box sx={{ mt: 1.5, bgcolor: "action.hover", p: 1.5, borderRadius: 1.5, border: "1px dashed", borderColor: "primary.main" }}>
-                    <Stack direction="row" spacing={1.5} alignItems="center">
-                      <CircularProgress size={16} />
-                      <Typography variant="caption" color="text.secondary">
-                        Markdown 변환 및 색인이 진행 중입니다...
-                      </Typography>
-                      <Button
-                        size="small"
-                        color="error"
-                        variant="text"
-                        sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
-                        disabled={isCanceling}
-                        onClick={() => void handleCancelMarkdown()}
-                      >
-                        {isCanceling ? "취소 중..." : "변환 취소"}
-                      </Button>
-                    </Stack>
-                  </Box>
-                )}
-
-                {/* FAILED message */}
-                {markdownStatus === "FAILED" && (markdownError || latestRevision?.errorMessage) && (
-                  <Box sx={{ mt: 1.5, bgcolor: "error.light", color: "error.contrastText", p: 1.5, borderRadius: 1.5 }}>
-                    <Typography variant="caption" display="block" sx={{ fontWeight: "bold", mb: 0.5 }}>
-                      실패 원인
-                    </Typography>
-                    <Typography variant="body2" sx={{ wordBreak: "break-all", fontSize: 12 }}>
-                      {sanitizeErrorMessage(latestRevision?.errorMessage || markdownError)}
-                    </Typography>
-                  </Box>
-                )}
-
-                {/* COMPLETED result display */}
-                {markdownStatus === "COMPLETED" && latestRevision && (
-                  <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-                    {latestRevision.markdownText && (
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                          추출된 Markdown 텍스트
-                        </Typography>
-                        <Box
-                          component="pre"
-                          sx={{
-                            m: 0,
-                            maxHeight: 200,
-                            overflow: "auto",
-                            whiteSpace: "pre-wrap",
-                            overflowWrap: "anywhere",
-                            wordBreak: "break-word",
-                            border: "1px solid",
-                            borderColor: "divider",
-                            borderRadius: 1,
-                            bgcolor: "background.paper",
-                            color: "text.primary",
-                            p: 1.5,
-                            fontFamily: "monospace",
-                            fontSize: 12,
-                            lineHeight: 1.6,
+                          disabled={controlsDisabled}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleReextractMarkdown();
                           }}
                         >
-                          {latestRevision.markdownText}
-                        </Box>
-                      </Box>
-                    )}
-
-                    {latestRevision.resultAttachmentId && (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="success"
-                        fullWidth
-                        onClick={() => {
-                          window.location.assign(`/api/mgmt/files/${encodeURIComponent(latestRevision.resultAttachmentId!)}/download`);
-                        }}
-                      >
-                        변환 결과 파일 다운로드
-                      </Button>
+                          재추출
+                        </Button>
+                      )
                     )}
                   </Stack>
-                )}
-              </Paper>
 
-              {/* Card 4: RAG Metadata */}
+                  {/* Polling / Running progress */}
+                  {isPendingOrRunning && (
+                    <Box sx={{ mt: 1.5, bgcolor: "action.hover", p: 1.5, borderRadius: 1.5, border: "1px dashed", borderColor: "primary.main" }}>
+                      <Stack direction="row" spacing={1.5} alignItems="center">
+                        <CircularProgress size={16} />
+                        <Typography variant="caption" color="text.secondary">
+                          Markdown 변환 및 색인이 진행 중입니다...
+                        </Typography>
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="text"
+                          sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
+                          disabled={isCanceling}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleCancelMarkdown();
+                          }}
+                        >
+                          {isCanceling ? "취소 중..." : "변환 취소"}
+                        </Button>
+                      </Stack>
+                    </Box>
+                  )}
+
+                  {/* FAILED message */}
+                  {markdownStatus === "FAILED" && (markdownError || latestRevision?.errorMessage) && (
+                    <Box sx={{ mt: 1.5, bgcolor: "error.light", color: "error.contrastText", p: 1.5, borderRadius: 1.5 }}>
+                      <Typography variant="caption" display="block" sx={{ fontWeight: "bold", mb: 0.5 }}>
+                        실패 원인
+                      </Typography>
+                      <Typography variant="body2" sx={{ wordBreak: "break-all", fontSize: 12 }}>
+                        {sanitizeErrorMessage(latestRevision?.errorMessage || markdownError)}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* COMPLETED result display */}
+                  {markdownStatus === "COMPLETED" && latestRevision && (
+                    <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+                      {latestRevision.markdownText && (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                            추출된 Markdown 텍스트
+                          </Typography>
+                          <Box
+                            component="pre"
+                            sx={{
+                              m: 0,
+                              maxHeight: 200,
+                              overflow: "auto",
+                              whiteSpace: "pre-wrap",
+                              overflowWrap: "anywhere",
+                              wordBreak: "break-word",
+                              border: "1px solid",
+                              borderColor: "divider",
+                              borderRadius: 1,
+                              bgcolor: "background.default",
+                              color: "text.primary",
+                              p: 1.5,
+                              fontFamily: "monospace",
+                              fontSize: 12,
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            {latestRevision.markdownText}
+                          </Box>
+                        </Box>
+                      )}
+
+                      {latestRevision.resultAttachmentId && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="success"
+                          fullWidth
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.location.assign(`/api/mgmt/files/${encodeURIComponent(latestRevision.resultAttachmentId!)}/download`);
+                          }}
+                        >
+                          변환 결과 파일 다운로드
+                        </Button>
+                      )}
+                    </Stack>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+
+              {/* Card 4: RAG Metadata Accordion */}
               {metadataEntries.length > 0 ? (
-                <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-                    RAG Metadata
-                  </Typography>
-                  <TableContainer sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "background.paper" }}>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>Value</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {metadataEntries.map(([key, value]) => (
-                          <TableRow key={key} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                            <TableCell sx={{ fontWeight: 500, color: "text.secondary" }}>{key}</TableCell>
-                            <TableCell sx={{ overflowWrap: "anywhere" }}>{String(value)}</TableCell>
+                <Accordion variant="outlined" sx={{ borderRadius: "8px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+                  <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      RAG Metadata
+                    </Typography>
+                  </AccordionSummary>
+                  <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
+                    <TableContainer sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "background.default" }}>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Value</TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Paper>
+                        </TableHead>
+                        <TableBody>
+                          {metadataEntries.map(([key, value]) => (
+                            <TableRow key={key} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                              <TableCell sx={{ fontWeight: 500, color: "text.secondary" }}>{key}</TableCell>
+                              <TableCell sx={{ overflowWrap: "anywhere" }}>{String(value)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </AccordionDetails>
+                </Accordion>
               ) : null}
             </>
           ) : (
