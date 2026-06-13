@@ -467,10 +467,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         sx: {
           width: { xs: "100%", sm: 520 },
           maxWidth: "100%",
+          height: "100%",
+          display: "flex",
+          flexDirection: "column",
         },
       }}
     >
-      <Stack spacing={0} sx={{ height: "100%", position: "relative" }}>
+      <Stack spacing={0} sx={{ height: "100%", position: "relative", minHeight: 0 }}>
         <Box
           sx={{
             minHeight: 56,
@@ -486,7 +489,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               {file?.name ?? "파일 상세"}
             </Typography>
             <Typography variant="caption" color="text.secondary" display="block" noWrap>
-              {file ? `#${file.attachmentId}` : ""}
+              {file ? (file.properties?.objectTypeName || file.properties?.objectType || `#${file.attachmentId}`) : ""}
             </Typography>
           </Box>
           <Stack direction="row" spacing={0} alignItems="center" flexShrink={0}>
@@ -502,37 +505,18 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         </Box>
         <Divider />
 
-        <Stack spacing={2} sx={{ p: 2, flex: 1, overflow: "auto" }}>
+        <Stack spacing={2} sx={{ p: 2, flex: 1, overflowY: "auto", minHeight: 0 }}>
           {file ? (
             <>
-              {/* Card 1: Basic Info (Always visible) */}
-              <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
-                  기본 정보
-                </Typography>
-                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                  <Box sx={{ gridColumn: "span 2" }}>
-                    {renderDetail("파일명", file.name)}
-                  </Box>
-                  <Box>
-                    {renderDetail("크기", formatFileSize(file.size))}
-                  </Box>
-                  <Box>
-                    {renderDetail("Content Type", file.contentType)}
-                  </Box>
-                  <Box>
-                    {renderDetail("객체 유형", file.objectType)}
-                  </Box>
-                  <Box>
-                    {renderDetail("객체 식별자", file.objectId)}
-                  </Box>
-                  <Box sx={{ gridColumn: "span 2" }}>
-                    {renderDetail("생성일시", formatDate(file.createdAt))}
-                  </Box>
-                </Box>
+              {/* 기본 정보 상시 노출 (박스 및 타이틀 없이 수직 나열) */}
+              <Stack spacing={2} sx={{ mb: 2 }}>
+                {renderDetail("이름", file.name)}
+                {renderDetail("콘텐츠 종류", file.contentType)}
+                {renderDetail("크기", formatFileSize(file.size))}
+                {renderDetail("수정일", formatDate(file.updatedAt || file.createdAt))}
 
                 {thumbnailAvailable && thumbnailUrl ? (
-                  <Box sx={{ mt: 2 }}>
+                  <Box sx={{ mt: 1 }}>
                     <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
                       썸네일 프리뷰
                     </Typography>
@@ -552,7 +536,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     />
                   </Box>
                 ) : null}
-              </Paper>
+              </Stack>
 
               {/* Accordion Group Container (No Rounding) */}
               <Box
