@@ -505,61 +505,57 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         <Stack spacing={2} sx={{ p: 2, flex: 1, overflow: "auto" }}>
           {file ? (
             <>
-              {/* Card 1: Basic Info Accordion */}
-              <Accordion defaultExpanded variant="outlined" sx={{ borderRadius: "8px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
-                <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    기본 정보
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
-                  <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                    <Box sx={{ gridColumn: "span 2" }}>
-                      {renderDetail("파일명", file.name)}
-                    </Box>
-                    <Box>
-                      {renderDetail("크기", formatFileSize(file.size))}
-                    </Box>
-                    <Box>
-                      {renderDetail("Content Type", file.contentType)}
-                    </Box>
-                    <Box>
-                      {renderDetail("객체 유형", file.objectType)}
-                    </Box>
-                    <Box>
-                      {renderDetail("객체 식별자", file.objectId)}
-                    </Box>
-                    <Box sx={{ gridColumn: "span 2" }}>
-                      {renderDetail("생성일시", formatDate(file.createdAt))}
-                    </Box>
+              {/* Card 1: Basic Info (Always visible) */}
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.default", borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>
+                  기본 정보
+                </Typography>
+                <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
+                  <Box sx={{ gridColumn: "span 2" }}>
+                    {renderDetail("파일명", file.name)}
                   </Box>
+                  <Box>
+                    {renderDetail("크기", formatFileSize(file.size))}
+                  </Box>
+                  <Box>
+                    {renderDetail("Content Type", file.contentType)}
+                  </Box>
+                  <Box>
+                    {renderDetail("객체 유형", file.objectType)}
+                  </Box>
+                  <Box>
+                    {renderDetail("객체 식별자", file.objectId)}
+                  </Box>
+                  <Box sx={{ gridColumn: "span 2" }}>
+                    {renderDetail("생성일시", formatDate(file.createdAt))}
+                  </Box>
+                </Box>
 
-                  {thumbnailAvailable && thumbnailUrl ? (
-                    <Box sx={{ mt: 2 }}>
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
-                        썸네일 프리뷰
-                      </Typography>
-                      <Box
-                        component="img"
-                        src={thumbnailUrl}
-                        alt={file.name}
-                        sx={{
-                          width: "100%",
-                          maxHeight: 180,
-                          borderRadius: 1.5,
-                          objectFit: "contain",
-                          border: "1px solid",
-                          borderColor: "divider",
-                          bgcolor: "action.hover",
-                        }}
-                      />
-                    </Box>
-                  ) : null}
-                </AccordionDetails>
-              </Accordion>
+                {thumbnailAvailable && thumbnailUrl ? (
+                  <Box sx={{ mt: 2 }}>
+                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
+                      썸네일 프리뷰
+                    </Typography>
+                    <Box
+                      component="img"
+                      src={thumbnailUrl}
+                      alt={file.name}
+                      sx={{
+                        width: "100%",
+                        maxHeight: 180,
+                        borderRadius: 1.5,
+                        objectFit: "contain",
+                        border: "1px solid",
+                        borderColor: "divider",
+                        bgcolor: "action.hover",
+                      }}
+                    />
+                  </Box>
+                ) : null}
+              </Paper>
 
               {/* Card 2: Text Extraction Accordion */}
-              <Accordion variant="outlined" sx={{ borderRadius: "8px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+              <Accordion variant="outlined" sx={{ borderRadius: "0px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
                 <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     텍스트 추출 결과
@@ -633,7 +629,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               </Accordion>
 
               {/* Card 3: Markdown and RAG Accordion */}
-              <Accordion defaultExpanded variant="outlined" sx={{ borderRadius: "8px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+              <Accordion defaultExpanded variant="outlined" sx={{ borderRadius: "0px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
                 <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     Markdown 지식 변환 및 RAG 색인
@@ -823,7 +819,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
               {/* Card 4: RAG Metadata Accordion */}
               {metadataEntries.length > 0 ? (
-                <Accordion variant="outlined" sx={{ borderRadius: "8px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
+                <Accordion variant="outlined" sx={{ borderRadius: "0px !important", "&:before": { display: "none" }, overflow: "hidden", border: "1px solid", borderColor: "divider" }}>
                   <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                       RAG Metadata
