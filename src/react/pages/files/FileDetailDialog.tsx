@@ -481,7 +481,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          position: "relative",
         },
       }}
     >
