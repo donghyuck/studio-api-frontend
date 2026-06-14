@@ -93,6 +93,7 @@ export interface SkillGraphJob {
   chunkIds?: string[];
   excludeExtracted?: boolean;
   executionStatus?: string;
+  candidateExtractorMode?: 'regex' | 'llm' | null;
 }
 
 export interface SkillCandidate {
@@ -428,11 +429,13 @@ export interface SkillRagExtractionRequest {
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
+  candidateExtractorMode?: 'regex' | 'llm' | null;
 }
 
 export interface SkillRagExtractionJobResponse {
   jobId: number | string;
   status: string;
+  candidateExtractorMode?: 'regex' | 'llm' | null;
 }
 
 export interface SkillRagChunkExtractionItem {

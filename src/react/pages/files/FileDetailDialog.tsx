@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
@@ -25,12 +25,7 @@ import {
   AccordionSummary,
   AccordionDetails,
   Grid,
-  Radio,
-  RadioGroup,
-  FormControl,
-  FormLabel,
-  ToggleButton,
-  ToggleButtonGroup,
+
   Select,
 } from "@mui/material";
 import {
@@ -41,11 +36,15 @@ import {
   TimelineOutlined,
   ExpandMoreOutlined,
   DownloadOutlined,
+  CheckCircle,
+  Cancel,
+  HourglassEmpty,
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import { useAuthStore } from "@/react/auth/store";
 import { useToast } from "@/react/feedback";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
+import type { RagChunkConfigResponseDto } from "@/types/studio/ai";
 import {
   reactFilesApi,
   reactDocumentConvertApi,
@@ -55,12 +54,17 @@ import {
   type MarkdownDocumentRevisionDto,
   type MarkdownLocatorDto,
   type MarkdownResourceDto,
+  type MarkdownPipelineStage,
+  type MarkdownPipelineExecutionDto,
+  type MarkdownRagReindexRequest,
 } from "@/react/pages/files/api";
 import { skillGraphApi } from "@/react/pages/ai/skillgraph/api";
 import type { AttachmentDto } from "@/types/studio/files";
 import type { RagIndexJobStatus, RagIndexJobStep } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 import { DocumentConvertDialog, getDocumentFormat, getFriendlyErrorMessage } from "./DocumentConvertDialog";
+import { EpubReaderDialog } from "./EpubReaderDialog";
+import { PdfReaderDialog } from "./PdfReaderDialog";
 import { useMarkdownDocumentPolling } from "./hooks/useMarkdownDocumentPolling";
 
 const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
@@ -107,6 +111,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [loading, setLoading] = useState(false);
   const [textExtracting, setTextExtracting] = useState(false);
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+  const [epubReaderOpen, setEpubReaderOpen] = useState(false);
+  const [pdfReaderOpen, setPdfReaderOpen] = useState(false);
 
   // Markdown Document Pipeline States
   const [documentId, setDocumentId] = useState<string | null>(null);
@@ -116,6 +122,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [runChunking, setRunChunking] = useState<boolean>(true);
   const [runRagIndex, setRunRagIndex] = useState<boolean>(true);
   const [runSkillExtraction, setRunSkillExtraction] = useState<boolean>(false);
+  const [skillExtractionMode, setSkillExtractionMode] = useState<'regex' | 'llm' | ''>('');
   const [force, setForce] = useState<boolean>(false);
 
   // Chunking Configuration
@@ -123,13 +130,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [chunkMaxSize, setChunkMaxSize] = useState<number | string>(800);
   const [chunkOverlap, setChunkOverlap] = useState<number | string>(100);
   const [chunkUnit, setChunkUnit] = useState<string>("TOKEN");
+  const [chunkConfig, setChunkConfig] = useState<RagChunkConfigResponseDto | null>(null);
 
-  // RAG Configuration
-  const [ragMode, setRagMode] = useState<"profile" | "direct">("profile");
-  const [embeddingProfileId, setEmbeddingProfileId] = useState<string>("retrieval");
-  const [embeddingProvider, setEmbeddingProvider] = useState<string>("google");
-  const [embeddingModel, setEmbeddingModel] = useState<string>("gemini-embedding-001");
-  const [embeddingDimension, setEmbeddingDimension] = useState<number | string>(768);
+  // RAG Configuration — unified EmbeddingOption (profileId 있으면 profile 방식, 없으면 직접 방식)
+  const [selectedEmbeddingOption, setSelectedEmbeddingOption] = useState<EmbeddingOption | null>(null);
+  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
 
   // Locators & Resources
   const [locators, setLocators] = useState<MarkdownLocatorDto[]>([]);
@@ -140,24 +145,77 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   const {
     latestRevision,
+    revisions,
+    pipelineExecution,
+    latestRagJob,
+    ragJobs,
     status: markdownStatus,
     error: markdownError,
     isPolling: markdownIsPolling,
-    ragJob,
-    skillJob,
     startPolling,
     stopPolling,
     setLatestRevision,
+    setPipelineExecution,
+    setLatestRagJob,
+    setRagJobs,
     setStatus: setMarkdownStatus,
     setError: setMarkdownError,
-    setRagJob,
-    setSkillJob,
   } = useMarkdownDocumentPolling();
 
   const roles = useAuthStore((state) => state.user?.roles) ?? [];
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
 
-  // Load locators and resources when Markdown status becomes COMPLETED
+  // Load embedding options and chunking config on open
+  const loadEmbeddingOptions = useCallback(async () => {
+    try {
+      const res = await reactAiApi.getEmbeddingOptions();
+      const opts = res.options ?? [];
+      setEmbeddingOptions(opts);
+      // Set default: prefer defaultProfile option, else defaultProvider, else first
+      const defaultOpt = opts.find((o) => o.defaultProfile) ?? opts.find((o) => o.defaultProvider) ?? opts[0];
+      if (defaultOpt) {
+        setSelectedEmbeddingOption(defaultOpt);
+      }
+    } catch {
+      // Ignore - fall back to manual input
+    }
+  }, []);
+
+  const loadChunkConfig = useCallback(async () => {
+    try {
+      const res = await reactAiApi.getRagChunkConfig();
+      setChunkConfig(res);
+      // Set default strategy from server config if not already set
+      const defaultStrategy = res.chunking.previewStrategy || res.chunking.strategy;
+      if (defaultStrategy) {
+        setChunkingStrategy(defaultStrategy);
+      }
+    } catch {
+      // Ignore - fall back to hardcoded values
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      void loadEmbeddingOptions();
+      void loadChunkConfig();
+    }
+  }, [open, loadEmbeddingOptions, loadChunkConfig]);
+
+  // Derived: available chunking strategies
+  const availableStrategies = useMemo(
+    () => chunkConfig?.chunking.availableStrategies ?? ["fixed-size", "recursive", "structure-based"],
+    [chunkConfig],
+  );
+
+  // Derived: embedding option value key (same pattern as RagPage/RagChatPage)
+  const embeddingOptionKey = (opt: EmbeddingOption) => opt.profileId || `${opt.provider}:${opt.model}`;
+  const embeddingOptionLabel = (opt: EmbeddingOption) =>
+    opt.profileId
+      ? `${opt.profileId} (${opt.provider} – ${opt.model})`
+      : `${opt.provider} – ${opt.model} (${opt.dimension}d)`;
+
+
   useEffect(() => {
     if (markdownStatus === "COMPLETED" && documentId) {
       let active = true;
@@ -186,35 +244,130 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }, [markdownStatus, documentId]);
 
   useEffect(() => {
-    if (open && attachmentId && file) {
-      const resolvedDocId = file.properties?.documentId || localStorage.getItem(`markdown_doc_id_${attachmentId}`);
-      if (resolvedDocId) {
-        setDocumentId(resolvedDocId);
-        startPolling(resolvedDocId, { runRagIndex, runSkillExtraction });
-      } else {
-        setDocumentId(null);
-        setLatestRevision(null);
-        setMarkdownStatus(null);
-        setMarkdownError(null);
-        setRagJob(null);
-        setSkillJob(null);
-      }
-      setReused(null);
+    if (open && attachmentId) {
+      let ignored = false;
+      const checkMarkdownDocument = async () => {
+        try {
+          const meta = await reactFilesApi.ragMetadata(attachmentId);
+          if (ignored) return;
+
+          setRagIndexed(Boolean(meta?.indexed));
+          setRagMetadata(meta);
+
+          const mdExists = (meta as any)?.markdown?.exists;
+          const mdDocId = (meta as any)?.markdown?.documentId;
+
+          if (mdExists) {
+            if (mdDocId) {
+              setDocumentId(mdDocId);
+              localStorage.setItem(`markdown_doc_id_${attachmentId}`, mdDocId);
+              startPolling(mdDocId, attachmentId);
+            } else {
+              try {
+                const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
+                if (!ignored && doc && doc.documentId) {
+                  setDocumentId(doc.documentId);
+                  localStorage.setItem(`markdown_doc_id_${attachmentId}`, doc.documentId);
+                  startPolling(doc.documentId, attachmentId);
+                }
+              } catch (err: any) {
+                const status = err?.response?.status ?? err?.status;
+                if (!ignored) {
+                  if (status === 404 || status === 500) {
+                    setDocumentId(null);
+                    setLatestRevision(null);
+                    setPipelineExecution(null);
+                    setMarkdownStatus(null);
+                    setMarkdownError(null);
+                  } else {
+                    toast.error("Markdown 문서 조회 실패: " + resolveAxiosError(err));
+                  }
+                }
+              }
+            }
+          } else {
+            setDocumentId(null);
+            setLatestRevision(null);
+            setPipelineExecution(null);
+            setMarkdownStatus(null);
+            setMarkdownError(null);
+            stopPolling();
+          }
+        } catch (err) {
+          console.error("Failed to load initial metadata:", err);
+        }
+      };
+      void checkMarkdownDocument();
+      return () => {
+        ignored = true;
+        stopPolling();
+      };
     } else {
       setDocumentId(null);
       setLatestRevision(null);
+      setPipelineExecution(null);
       setMarkdownStatus(null);
       setMarkdownError(null);
-      setRagJob(null);
-      setSkillJob(null);
       setReused(null);
       stopPolling();
     }
-  }, [open, attachmentId, file, startPolling, stopPolling, setLatestRevision, setMarkdownStatus, setMarkdownError, setRagJob, setSkillJob]);
+  }, [open, attachmentId, startPolling, stopPolling, setLatestRevision, setPipelineExecution, setMarkdownStatus, setMarkdownError, toast]);
+
+  // Restore form state from latestRevision.optionsJson when a processed revision is loaded
+  useEffect(() => {
+    if (!latestRevision?.optionsJson) return;
+    try {
+      const opts = JSON.parse(latestRevision.optionsJson) as Record<string, unknown>;
+
+      // Restore pipeline toggles
+      if (typeof opts.runChunking === "boolean") setRunChunking(opts.runChunking);
+      if (typeof opts.runRagIndex === "boolean") setRunRagIndex(opts.runRagIndex);
+      if (typeof opts.runSkillExtraction === "boolean") setRunSkillExtraction(opts.runSkillExtraction);
+      if (typeof opts.skillExtractionMode === "string" && (opts.skillExtractionMode === "regex" || opts.skillExtractionMode === "llm")) {
+        setSkillExtractionMode(opts.skillExtractionMode);
+      } else {
+        setSkillExtractionMode("");
+      }
+
+      // Restore chunking settings
+      if (typeof opts.chunkingStrategy === "string" && opts.chunkingStrategy) setChunkingStrategy(opts.chunkingStrategy);
+      if (opts.chunkMaxSize != null) setChunkMaxSize(Number(opts.chunkMaxSize));
+      if (opts.chunkOverlap != null) setChunkOverlap(Number(opts.chunkOverlap));
+      if (typeof opts.chunkUnit === "string" && opts.chunkUnit) setChunkUnit(opts.chunkUnit);
+
+      // Restore embedding option: match by profileId or provider+model from loaded embeddingOptions
+      if (embeddingOptions.length > 0) {
+        const profileId = typeof opts.embeddingProfileId === "string" ? opts.embeddingProfileId : null;
+        const provider = typeof opts.embeddingProvider === "string" ? opts.embeddingProvider : null;
+        const model = typeof opts.embeddingModel === "string" ? opts.embeddingModel : null;
+
+        let matched: EmbeddingOption | undefined;
+        if (profileId) {
+          matched = embeddingOptions.find((o) => o.profileId === profileId);
+        }
+        if (!matched && provider && model) {
+          matched = embeddingOptions.find((o) => o.provider === provider && o.model === model);
+        }
+        if (matched) {
+          setSelectedEmbeddingOption(matched);
+        }
+      }
+    } catch {
+      // Ignore JSON parse errors
+    }
+  }, [latestRevision?.optionsJson, embeddingOptions]);
 
   const metadataEntries = Object.entries(ragMetadata ?? {});
   const format = file ? getDocumentFormat(file.name, file.contentType) : null;
-  const isPendingOrRunning = markdownStatus === "PENDING" || markdownStatus === "RUNNING";
+  const isEpub = file?.contentType?.includes("epub") || file?.name?.toLowerCase().includes("epub");
+  const isPdf = file?.contentType?.includes("pdf") || file?.name?.toLowerCase().includes("pdf");
+  const isPendingOrRunning =
+    markdownStatus === "PENDING" ||
+    markdownStatus === "RUNNING" ||
+    pipelineExecution?.status === "PENDING" ||
+    pipelineExecution?.status === "RUNNING" ||
+    latestRagJob?.status === "PENDING" ||
+    latestRagJob?.status === "RUNNING";
   const controlsDisabled = isExtracting || isCanceling || markdownIsPolling;
 
   function clearThumbnail() {
@@ -229,24 +382,17 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   async function loadRagState(nextFile: AttachmentDto) {
     try {
-      const metadata = await reactAiApi.getRagObjectMetadata("attachment", String(nextFile.attachmentId));
-      if (metadata && metadata.indexed !== false && Object.keys(metadata).length > 0) {
-        return {
-          indexed: true,
-          metadata,
-        };
-      }
+      const metadata = await reactFilesApi.ragMetadata(nextFile.attachmentId);
+      return {
+        indexed: Boolean(metadata?.indexed),
+        metadata,
+      };
     } catch {
-      // Ignore and fallback
+      return {
+        indexed: false,
+        metadata: null,
+      };
     }
-
-    const indexed = await reactFilesApi.hasEmbedding(nextFile.attachmentId);
-    const metadata = indexed ? await reactFilesApi.ragMetadata(nextFile.attachmentId) : null;
-    const hasValidMeta = metadata && metadata.indexed !== false;
-    return {
-      indexed: indexed && Boolean(hasValidMeta),
-      metadata: hasValidMeta ? metadata : null,
-    };
   }
 
   useEffect(() => {
@@ -302,6 +448,23 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       ignored = true;
     };
   }, [open, attachmentId, toast]);
+
+  // Refresh RAG metadata when pipeline completes successfully
+  useEffect(() => {
+    if (pipelineExecution && file && pipelineExecution.status === "COMPLETED") {
+      let active = true;
+      void loadRagState(file).then((state) => {
+        if (active) {
+          setRagIndexed(state.indexed);
+          setRagMetadata(state.metadata);
+        }
+      });
+      return () => {
+        active = false;
+      };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pipelineExecution?.status]);
 
   useEffect(() => {
     if (!open || !attachmentId) {
@@ -378,10 +541,43 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setRagIndexed(ragState.indexed);
       setRagMetadata(ragState.metadata);
 
-      const resolvedDocId = nextFile.properties?.documentId || localStorage.getItem(`markdown_doc_id_${attachmentId}`);
-      if (resolvedDocId) {
-        setDocumentId(resolvedDocId);
-        startPolling(resolvedDocId, { runRagIndex, runSkillExtraction });
+      const meta = ragState.metadata;
+      const mdExists = (meta as any)?.markdown?.exists;
+      const mdDocId = (meta as any)?.markdown?.documentId;
+
+      if (mdExists) {
+        if (mdDocId) {
+          setDocumentId(mdDocId);
+          localStorage.setItem(`markdown_doc_id_${attachmentId}`, mdDocId);
+          startPolling(mdDocId, attachmentId);
+        } else {
+          try {
+            const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
+            if (doc && doc.documentId) {
+              setDocumentId(doc.documentId);
+              localStorage.setItem(`markdown_doc_id_${attachmentId}`, doc.documentId);
+              startPolling(doc.documentId, attachmentId);
+            }
+          } catch (err: any) {
+            const status = err?.response?.status ?? err?.status;
+            if (status === 404 || status === 500) {
+              setDocumentId(null);
+              setLatestRevision(null);
+              setPipelineExecution(null);
+              setMarkdownStatus(null);
+              setMarkdownError(null);
+            } else {
+              toast.error("Markdown 문서 조회 실패: " + resolveAxiosError(err));
+            }
+          }
+        }
+      } else {
+        setDocumentId(null);
+        setLatestRevision(null);
+        setPipelineExecution(null);
+        setMarkdownStatus(null);
+        setMarkdownError(null);
+        stopPolling();
       }
     } catch (error) {
       toast.error(resolveAxiosError(error));
@@ -486,17 +682,26 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       chunkUnit: runChunking ? chunkUnit : null,
     };
 
+    if (runSkillExtraction) {
+      payload.skillExtractionMode = skillExtractionMode || null;
+    }
+
     if (runRagIndex) {
-      if (ragMode === "profile") {
-        payload.embeddingProfileId = embeddingProfileId || null;
+      if (selectedEmbeddingOption?.profileId) {
+        payload.embeddingProfileId = selectedEmbeddingOption.profileId;
         payload.embeddingProvider = null;
         payload.embeddingModel = null;
-        payload.embeddingDimension = embeddingDimension === "" ? null : Number(embeddingDimension);
+        payload.embeddingDimension = selectedEmbeddingOption.dimension ?? null;
+      } else if (selectedEmbeddingOption) {
+        payload.embeddingProfileId = null;
+        payload.embeddingProvider = selectedEmbeddingOption.provider || null;
+        payload.embeddingModel = selectedEmbeddingOption.model || null;
+        payload.embeddingDimension = selectedEmbeddingOption.dimension ?? null;
       } else {
         payload.embeddingProfileId = null;
-        payload.embeddingProvider = embeddingProvider || null;
-        payload.embeddingModel = embeddingModel || null;
-        payload.embeddingDimension = embeddingDimension === "" ? null : Number(embeddingDimension);
+        payload.embeddingProvider = null;
+        payload.embeddingModel = null;
+        payload.embeddingDimension = null;
       }
     } else {
       payload.embeddingProfileId = null;
@@ -555,7 +760,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       } else {
         toast.success("Markdown 지식 파이프라인 작업이 시작되었습니다.");
       }
-      startPolling(newDocId, { runRagIndex, runSkillExtraction });
+      startPolling(newDocId, attachmentId);
     } catch (err: any) {
       const status = err?.response?.status;
       const rawMsg = resolveAxiosError(err);
@@ -585,7 +790,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       const res = await reactMarkdownDocumentApi.reextract(documentId, optionsPayload as any);
       setReused(res.reused);
       toast.success("재추출 및 RAG 색인 작업이 시작되었습니다.");
-      startPolling(documentId, { runRagIndex, runSkillExtraction });
+      startPolling(documentId, attachmentId);
     } catch (err: any) {
       const status = err?.response?.status;
       const rawMsg = resolveAxiosError(err);
@@ -621,6 +826,451 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     } finally {
       setIsCanceling(false);
     }
+  }
+
+  async function handleResume(fromStage: MarkdownPipelineStage | null) {
+    if (!documentId) return;
+    
+    let optionsPayload;
+    try {
+      optionsPayload = buildPayload();
+    } catch (err: any) {
+      toast.error(err.message);
+      return;
+    }
+
+    setIsExtracting(true);
+    try {
+      const res = await reactMarkdownDocumentApi.resume(documentId, {
+        fromStage,
+        ...optionsPayload,
+      });
+      toast.success(
+        res.resumedPhase === "COMPLETED"
+          ? "이미 모든 작업이 완료되었습니다."
+          : `작업이 [${res.resumedFrom}] 단계부터 재개되었습니다.`
+      );
+      startPolling(documentId, attachmentId);
+    } catch (err: any) {
+      toast.error("작업 재개 실패: " + resolveAxiosError(err));
+    } finally {
+      setIsExtracting(false);
+    }
+  }
+
+  async function handleCancelRagJob(jobId: string) {
+    const ok = window.confirm("진행 중인 RAG 색인 작업을 취소하시겠습니까?");
+    if (!ok) return;
+    try {
+      await reactAiApi.cancelRagJob(jobId);
+      toast.success("RAG 색인 작업이 취소되었습니다.");
+      if (documentId) {
+        startPolling(documentId, attachmentId);
+      }
+    } catch (err: any) {
+      toast.error("RAG 색인 취소 실패: " + resolveAxiosError(err));
+    }
+  }
+
+  async function handleRetryRagJob(jobId: string) {
+    try {
+      await reactAiApi.retryRagJob(jobId);
+      toast.success("RAG 색인 작업을 재시도합니다.");
+      if (documentId) {
+        startPolling(documentId, attachmentId);
+      }
+    } catch (err: any) {
+      toast.error("RAG 색인 재시도 실패: " + resolveAxiosError(err));
+    }
+  }
+
+  async function handleReindexRag() {
+    if (!documentId) return;
+    if (!selectedEmbeddingOption) {
+      toast.error("RAG 색인을 재지정할 임베딩 옵션을 선택해 주세요.");
+      return;
+    }
+    const label = selectedEmbeddingOption.profileId || `${selectedEmbeddingOption.provider}:${selectedEmbeddingOption.model}`;
+    const ok = window.confirm(`선택한 임베딩(${label})으로 RAG 색인을 재지정하시겠습니까?`);
+    if (!ok) return;
+
+    setIsExtracting(true);
+    try {
+      const payload: MarkdownRagReindexRequest = {
+        runSkillExtraction: runSkillExtraction,
+      };
+
+      if (selectedEmbeddingOption.profileId) {
+        payload.embeddingProfileId = selectedEmbeddingOption.profileId;
+        payload.embeddingProvider = null;
+        payload.embeddingModel = null;
+        payload.embeddingDimension = selectedEmbeddingOption.dimension ?? null;
+      } else {
+        payload.embeddingProfileId = null;
+        payload.embeddingProvider = selectedEmbeddingOption.provider || null;
+        payload.embeddingModel = selectedEmbeddingOption.model || null;
+        payload.embeddingDimension = selectedEmbeddingOption.dimension ?? null;
+      }
+
+      if (runSkillExtraction) {
+        payload.skillExtractionMode = skillExtractionMode || null;
+      }
+
+      await reactMarkdownDocumentApi.reindexRag(documentId, payload);
+      toast.success("RAG 색인 재지정 작업이 시작되었습니다.");
+      startPolling(documentId, attachmentId);
+    } catch (err: any) {
+      toast.error("RAG 색인 재지정 실패: " + resolveAxiosError(err));
+    } finally {
+      setIsExtracting(false);
+    }
+  }
+
+  // 1. Extract 단계 상태
+  const getExtractStepStatus = () => {
+    if (markdownStatus === "COMPLETED") return "COMPLETED";
+    if (markdownStatus === "FAILED") return "FAILED";
+    if (markdownStatus === "CANCELED") return "CANCELED";
+    if (markdownStatus === "RUNNING" || markdownStatus === "PENDING") return "RUNNING";
+    return "PENDING";
+  };
+
+  // 2. Markdown 생성 단계 상태
+  const getMarkdownStepStatus = () => {
+    return getExtractStepStatus();
+  };
+
+  // 3. Chunking 단계 상태
+  const getChunkingStepStatus = () => {
+    if (!runChunking) return "DISABLED";
+    if (markdownStatus === "COMPLETED") {
+      if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
+        return "COMPLETED";
+      }
+    }
+    if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
+      return "PENDING";
+    }
+    if (pipelineExecution.status === "FAILED" && pipelineExecution.currentStage === "CHUNKING") return "FAILED";
+    if (pipelineExecution.status === "RUNNING" && pipelineExecution.currentStage === "CHUNKING") return "RUNNING";
+    
+    const completedStages: MarkdownPipelineStage[] = ["CHUNKING", "RAG_INDEX", "SKILL_EXTRACTION", "COMPLETED"];
+    if (pipelineExecution.lastCompletedStage && completedStages.includes(pipelineExecution.lastCompletedStage)) {
+      return "COMPLETED";
+    }
+    if (pipelineExecution.status === "COMPLETED") return "COMPLETED";
+    return "PENDING";
+  };
+
+  // 4. Vector Embedding 단계 상태
+  const getEmbeddingStepStatus = () => {
+    if (!runRagIndex) return "DISABLED";
+    if (latestRagJob) {
+      const status = latestRagJob.status;
+      if (status === "RUNNING") {
+        if (latestRagJob.currentStep === "EMBEDDING") return "RUNNING";
+        if (latestRagJob.currentStep === "INDEXING" || latestRagJob.currentStep === "COMPLETED") return "COMPLETED";
+        return "PENDING";
+      }
+      if (status === "SUCCEEDED") return "COMPLETED";
+      if (status === "FAILED") {
+        if (latestRagJob.currentStep === "EMBEDDING") return "FAILED";
+        if (latestRagJob.currentStep === "INDEXING" || latestRagJob.currentStep === "COMPLETED") return "COMPLETED";
+        return "PENDING";
+      }
+      if (status === "CANCELLED") return "CANCELED";
+      if (status === "PENDING") return "RUNNING";
+    }
+    if (markdownStatus === "COMPLETED") {
+      if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
+        if (ragIndexed || ragMetadata?.indexed) return "COMPLETED";
+        return "PENDING";
+      }
+    }
+    if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
+      return "PENDING";
+    }
+    if (pipelineExecution.status === "FAILED" && pipelineExecution.currentStage === "RAG_INDEX") return "FAILED";
+    if (pipelineExecution.status === "RUNNING" && pipelineExecution.currentStage === "RAG_INDEX") return "RUNNING";
+
+    const completedStages: MarkdownPipelineStage[] = ["RAG_INDEX", "SKILL_EXTRACTION", "COMPLETED"];
+    if (pipelineExecution.lastCompletedStage && completedStages.includes(pipelineExecution.lastCompletedStage)) {
+      return "COMPLETED";
+    }
+    if (pipelineExecution.status === "COMPLETED") return "COMPLETED";
+    return "PENDING";
+  };
+
+  // 5. DB Indexing 단계 상태
+  const getIndexingStepStatus = () => {
+    if (!runRagIndex) return "DISABLED";
+    if (latestRagJob) {
+      const status = latestRagJob.status;
+      if (status === "RUNNING") {
+        if (latestRagJob.currentStep === "INDEXING") return "RUNNING";
+        if (latestRagJob.currentStep === "COMPLETED") return "COMPLETED";
+        return "PENDING";
+      }
+      if (status === "SUCCEEDED") return "COMPLETED";
+      if (status === "FAILED") {
+        if (latestRagJob.currentStep === "INDEXING") return "FAILED";
+        return "PENDING";
+      }
+      if (status === "CANCELLED") return "CANCELED";
+      if (status === "PENDING") return "PENDING";
+    }
+    if (markdownStatus === "COMPLETED") {
+      if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
+        if (ragIndexed || ragMetadata?.indexed) return "COMPLETED";
+        return "PENDING";
+      }
+    }
+    if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
+      return "PENDING";
+    }
+    const completedStages: MarkdownPipelineStage[] = ["SKILL_EXTRACTION", "COMPLETED"];
+    if (pipelineExecution.lastCompletedStage && completedStages.includes(pipelineExecution.lastCompletedStage)) {
+      return "COMPLETED";
+    }
+    if (pipelineExecution.status === "COMPLETED") return "COMPLETED";
+    return "PENDING";
+  };
+
+  // 6. Skill 추출 단계 상태
+  const getSkillStepStatus = () => {
+    if (!runSkillExtraction) return "DISABLED";
+    if (markdownStatus === "COMPLETED") {
+      if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
+        return "COMPLETED";
+      }
+    }
+    if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
+      return "PENDING";
+    }
+    if (pipelineExecution.status === "FAILED" && pipelineExecution.currentStage === "SKILL_EXTRACTION") return "FAILED";
+    if (pipelineExecution.status === "RUNNING" && pipelineExecution.currentStage === "SKILL_EXTRACTION") return "RUNNING";
+    
+    const completedStages: MarkdownPipelineStage[] = ["SKILL_EXTRACTION", "COMPLETED"];
+    if (pipelineExecution.lastCompletedStage && completedStages.includes(pipelineExecution.lastCompletedStage)) {
+      return "COMPLETED";
+    }
+    if (pipelineExecution.status === "COMPLETED") return "COMPLETED";
+    return "PENDING";
+  };
+
+  function renderPipelineStatusDashboard() {
+    if (!documentId) return null;
+
+    const getEmbeddingProgress = () => {
+      if (!latestRagJob || !latestRagJob.chunkCount) return 0;
+      return Math.floor((latestRagJob.embeddedCount / latestRagJob.chunkCount) * 100);
+    };
+
+    const getIndexingProgress = () => {
+      if (!latestRagJob || !latestRagJob.chunkCount) return 0;
+      return Math.floor((latestRagJob.indexedCount / latestRagJob.chunkCount) * 100);
+    };
+
+    const embProg = getEmbeddingProgress();
+    const idxProg = getIndexingProgress();
+
+    const steps = [
+      {
+        id: "extract",
+        label: "Extract (본문 추출)",
+        status: getExtractStepStatus(),
+        description: "첨부파일(PDF, EPUB, DOCX 등) 원본에서 원시 텍스트 추출",
+      },
+      {
+        id: "markdown",
+        label: "Markdown (구조화)",
+        status: getMarkdownStepStatus(),
+        description: "추출 텍스트를 마크다운 포맷으로 가공 및 단락/목차 구조화",
+      },
+      {
+        id: "chunking",
+        label: "Chunking (분할)",
+        status: getChunkingStepStatus(),
+        description: "최적의 크기(Chunk)로 문서 절단 및 메타데이터 추가",
+      },
+      {
+        id: "embedding",
+        label: "Embedding (벡터 변환)",
+        status: getEmbeddingStepStatus(),
+        description: "분할된 Chunk를 임베딩 모델을 통해 벡터로 변환",
+        progress: embProg,
+        details: latestRagJob && latestRagJob.chunkCount > 0 ? `${latestRagJob.embeddedCount}/${latestRagJob.chunkCount} (${embProg}%)` : undefined,
+      },
+      {
+        id: "indexing",
+        label: "Indexing (색인 저장)",
+        status: getIndexingStepStatus(),
+        description: "변환된 벡터 데이터를 Vector DB 테이블에 색인 및 적재",
+        progress: idxProg,
+        details: latestRagJob && latestRagJob.chunkCount > 0 ? `${latestRagJob.indexedCount}/${latestRagJob.chunkCount} (${idxProg}%)` : undefined,
+      },
+      {
+        id: "skill",
+        label: "Skill (지식 추출)",
+        status: getSkillStepStatus(),
+        description: "AI를 이용해 문서 내 핵심 스킬 및 연관 관계를 분석/추출",
+      },
+    ];
+
+    return (
+      <Box sx={{ mt: 2, mb: 2, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 2, bgcolor: "background.paper" }}>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+          <TimelineOutlined sx={{ fontSize: 18, color: "primary.main" }} />
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13.5 }}>
+            지식 파이프라인 처리 상태
+          </Typography>
+        </Stack>
+
+        <Box sx={{ position: "relative", pl: 0.5 }}>
+          {steps.map((step, idx) => {
+            const isLast = idx === steps.length - 1;
+            let iconColor = "text.disabled";
+            let textColor = "text.primary";
+            let descColor = "text.secondary";
+            let statusText = "대기";
+            let statusColor = "default";
+            let isRunning = step.status === "RUNNING";
+            let isCompleted = step.status === "COMPLETED";
+            let isFailed = step.status === "FAILED";
+            let isCanceled = step.status === "CANCELED";
+            let isDisabled = step.status === "DISABLED";
+
+            if (isCompleted) {
+              iconColor = "success.main";
+              textColor = "text.primary";
+              statusText = "완료";
+              statusColor = "success";
+            } else if (isRunning) {
+              iconColor = "primary.main";
+              textColor = "primary.main";
+              statusText = "진행 중";
+              statusColor = "primary";
+            } else if (isFailed) {
+              iconColor = "error.main";
+              textColor = "error.main";
+              statusText = "실패";
+              statusColor = "error";
+            } else if (isCanceled) {
+              iconColor = "text.disabled";
+              textColor = "text.disabled";
+              descColor = "text.disabled";
+              statusText = "취소됨";
+              statusColor = "default";
+            } else if (isDisabled) {
+              iconColor = "text.disabled";
+              textColor = "text.disabled";
+              descColor = "text.disabled";
+              statusText = "미실행";
+              statusColor = "default";
+            }
+
+            return (
+              <Box key={step.id} sx={{ display: "flex", position: "relative", pb: isLast ? 0 : 3 }}>
+                {!isLast && (
+                  <Box
+                    sx={{
+                      position: "absolute",
+                      left: 11,
+                      top: 24,
+                      bottom: 0,
+                      width: 2,
+                      bgcolor: isCompleted ? "success.light" : "divider",
+                      backgroundImage: isRunning
+                        ? "linear-gradient(to bottom, #1976d2 50%, transparent 50%)"
+                        : "none",
+                      backgroundSize: isRunning ? "2px 6px" : "auto",
+                      zIndex: 1,
+                    }}
+                  />
+                )}
+
+                <Box
+                  sx={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    bgcolor: isRunning ? "rgba(25, 118, 210, 0.08)" : isCompleted ? "rgba(46, 125, 50, 0.08)" : isFailed ? "rgba(211, 47, 47, 0.08)" : "action.hover",
+                    border: "2px solid",
+                    borderColor: isRunning ? "primary.main" : isCompleted ? "success.main" : isFailed ? "error.main" : "divider",
+                    color: isRunning ? "primary.main" : isCompleted ? "success.main" : isFailed ? "error.main" : "text.secondary",
+                    zIndex: 2,
+                    mr: 2,
+                    flexShrink: 0,
+                    boxShadow: isRunning ? "0 0 0 3px rgba(25, 118, 210, 0.15)" : "none",
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  {isRunning ? (
+                    <CircularProgress size={12} thickness={5} sx={{ color: "primary.main" }} />
+                  ) : isCompleted ? (
+                    <CheckCircle sx={{ fontSize: 14, color: "success.main" }} />
+                  ) : isFailed ? (
+                    <Cancel sx={{ fontSize: 14, color: "error.main" }} />
+                  ) : (
+                    <Typography variant="caption" sx={{ fontSize: 10, fontWeight: 700, color: isDisabled ? "text.disabled" : "text.secondary" }}>
+                      {idx + 1}
+                    </Typography>
+                  )}
+                </Box>
+
+                <Box sx={{ flex: 1, minWidth: 0, mt: 0.25 }}>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mb: 0.5 }}>
+                    <Typography variant="body2" sx={{ fontWeight: isRunning ? 700 : 500, color: textColor, fontSize: 12.5 }}>
+                      {step.label} {step.details && <span style={{ fontSize: "11px", fontWeight: "normal", color: "gray", marginLeft: "4px" }}>{step.details}</span>}
+                    </Typography>
+                    <Chip
+                      label={statusText}
+                      size="small"
+                      color={statusColor as any}
+                      variant={isRunning || isCompleted || isFailed ? "filled" : "outlined"}
+                      sx={{
+                        height: 18,
+                        fontSize: 9.5,
+                        fontWeight: 600,
+                        px: 0.5,
+                        borderRadius: "4px",
+                      }}
+                    />
+                  </Stack>
+                  <Typography variant="caption" sx={{ color: descColor, display: "block", fontSize: 11, lineHeight: 1.4 }}>
+                    {step.description}
+                  </Typography>
+                  
+                  {isRunning && (
+                    <Box sx={{ width: "100%", mt: 1, height: 4, bgcolor: "action.hover", borderRadius: 1, overflow: "hidden", position: "relative" }}>
+                      <Box
+                        sx={{
+                          height: "100%",
+                          width: step.progress !== undefined ? `${step.progress}%` : "50%",
+                          bgcolor: "primary.main",
+                          borderRadius: 1,
+                          animation: step.progress !== undefined ? "none" : "shimmer 1.5s infinite linear",
+                          transformOrigin: "left",
+                          transition: "width 0.4s ease",
+                          "@keyframes shimmer": {
+                            "0%": { transform: "translateX(-100%) scaleX(1)" },
+                            "50%": { transform: "translateX(0%) scaleX(1.5)" },
+                            "100%": { transform: "translateX(100%) scaleX(1)" }
+                          }
+                        }}
+                      />
+                    </Box>
+                  )}
+                </Box>
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+    );
   }
 
   function renderDetail(label: string, value?: string | number | null) {
@@ -836,6 +1486,57 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
+                  {documentId && (
+                    <Box sx={{ mb: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover" }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13, mb: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
+                        <TimelineOutlined fontSize="small" color="primary" /> 파이프라인 및 RAG 상태 요약
+                      </Typography>
+                      <Grid container spacing={1.5}>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" display="block">최종 embedding 모델</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
+                            {latestRagJob?.embeddingModel || String(ragMetadata?.embeddingModel || "-")}
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" display="block">색인(RAG) 상태</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
+                            {ragIndexed || (ragMetadata as any)?.indexed ? (
+                              <span style={{ color: "#2e7d32", fontWeight: "bold" }}>색인 완료</span>
+                            ) : (
+                              <span style={{ color: "#d32f2f" }}>색인 미완료</span>
+                            )}
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" display="block">총 Chunk 수</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
+                            {latestRagJob?.chunkCount != null ? `${latestRagJob.chunkCount}개` : "-"}
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" display="block">RAG 작업 진행률</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
+                            {latestRagJob && latestRagJob.chunkCount > 0 ? (
+                              latestRagJob.status === "RUNNING" ? (
+                                latestRagJob.currentStep === "INDEXING"
+                                  ? `색인 중: ${latestRagJob.indexedCount}/${latestRagJob.chunkCount} (${Math.floor((latestRagJob.indexedCount / latestRagJob.chunkCount) * 100)}%)`
+                                  : `임베딩 중: ${latestRagJob.embeddedCount}/${latestRagJob.chunkCount} (${Math.floor((latestRagJob.embeddedCount / latestRagJob.chunkCount) * 100)}%)`
+                              ) : latestRagJob.status === "SUCCEEDED" ? (
+                                `완료 (${latestRagJob.chunkCount}개)`
+                              ) : (
+                                `${latestRagJob.status} (${latestRagJob.currentStep})`
+                              )
+                            ) : (ragMetadata as any)?.indexed ? (
+                              "100% 완료"
+                            ) : (
+                              "-"
+                            )}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  )}
                   
                   {/* Pipeline Options */}
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, fontWeight: 600 }}>
@@ -920,9 +1621,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             onChange={(e) => setChunkingStrategy(e.target.value)}
                             disabled={controlsDisabled}
                           >
-                            <MenuItem value="fixed-size">fixed-size</MenuItem>
-                            <MenuItem value="recursive">recursive</MenuItem>
-                            <MenuItem value="structure-based">structure-based</MenuItem>
+                            {availableStrategies.map((s) => (
+                              <MenuItem key={s} value={s}>{s}</MenuItem>
+                            ))}
                           </Select>
                         </Grid>
                         <Grid size={{ xs: 6 }}>
@@ -978,88 +1679,65 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                       <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, fontSize: 13 }}>
                         RAG 색인 설정
                       </Typography>
-                      
-                      <ToggleButtonGroup
-                        size="small"
-                        value={ragMode}
-                        exclusive
-                        onChange={(e, val) => val && setRagMode(val)}
-                        disabled={controlsDisabled}
-                        fullWidth
-                        sx={{ mb: 2 }}
-                      >
-                        <ToggleButton value="profile">Profile 방식</ToggleButton>
-                        <ToggleButton value="direct">직접 선택 방식</ToggleButton>
-                      </ToggleButtonGroup>
 
-                      {ragMode === "profile" ? (
-                        <Grid container spacing={2}>
-                          <Grid size={{ xs: 6 }}>
-                            <TextField
-                              label="Embedding Profile ID"
-                              size="small"
-                              fullWidth
-                              value={embeddingProfileId}
-                              onChange={(e) => setEmbeddingProfileId(e.target.value)}
-                              disabled={controlsDisabled}
-                              placeholder="retrieval"
-                            />
-                          </Grid>
-                          <Grid size={{ xs: 6 }}>
-                            <TextField
-                              label="Dimension (차원)"
-                              size="small"
-                              type="number"
-                              fullWidth
-                              value={embeddingDimension}
-                              onChange={(e) => setEmbeddingDimension(e.target.value)}
-                              disabled={controlsDisabled}
-                              placeholder="768"
-                              helperText="Profile dimension과 일치해야 함"
-                              FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
-                            />
-                          </Grid>
-                        </Grid>
+                      {embeddingOptions.length > 0 ? (
+                        <TextField
+                          select
+                          label="임베딩 모델 / 프로파일"
+                          size="small"
+                          fullWidth
+                          value={selectedEmbeddingOption ? embeddingOptionKey(selectedEmbeddingOption) : ""}
+                          onChange={(e) => {
+                            const matched = embeddingOptions.find((o) => embeddingOptionKey(o) === e.target.value);
+                            if (matched) setSelectedEmbeddingOption(matched);
+                          }}
+                          disabled={controlsDisabled}
+                          helperText={
+                            selectedEmbeddingOption?.profileId
+                              ? `Profile 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
+                              : selectedEmbeddingOption
+                              ? `직접 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
+                              : "서버에 등록된 임베딩 옵션을 선택합니다."
+                          }
+                          FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
+                        >
+                          {embeddingOptions.map((opt) => (
+                            <MenuItem key={embeddingOptionKey(opt)} value={embeddingOptionKey(opt)}>
+                              {embeddingOptionLabel(opt)}
+                            </MenuItem>
+                          ))}
+                        </TextField>
                       ) : (
-                        <Grid container spacing={2}>
-                          <Grid size={{ xs: 6 }}>
-                            <TextField
-                              label="Provider"
-                              size="small"
-                              fullWidth
-                              value={embeddingProvider}
-                              onChange={(e) => setEmbeddingProvider(e.target.value)}
-                              disabled={controlsDisabled}
-                              placeholder="google"
-                            />
-                          </Grid>
-                          <Grid size={{ xs: 6 }}>
-                            <TextField
-                              label="Model"
-                              size="small"
-                              fullWidth
-                              value={embeddingModel}
-                              onChange={(e) => setEmbeddingModel(e.target.value)}
-                              disabled={controlsDisabled}
-                              placeholder="gemini-embedding-001"
-                            />
-                          </Grid>
-                          <Grid size={{ xs: 12 }}>
-                            <TextField
-                              label="Dimension (차원)"
-                              size="small"
-                              type="number"
-                              fullWidth
-                              value={embeddingDimension}
-                              onChange={(e) => setEmbeddingDimension(e.target.value)}
-                              disabled={controlsDisabled}
-                              placeholder="768"
-                            />
-                          </Grid>
-                        </Grid>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>
+                          임베딩 옵션 로딩 중...
+                        </Typography>
                       )}
                     </Box>
                   )}
+
+                  {/* Skill Configuration Form */}
+                  {runSkillExtraction && (
+                    <Box sx={{ mb: 2, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "background.default" }}>
+                      <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, fontSize: 13 }}>
+                        Skill 추출 설정
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                        스킬 후보 추출 방식
+                      </Typography>
+                      <Select
+                        size="small"
+                        fullWidth
+                        value={skillExtractionMode}
+                        onChange={(e) => setSkillExtractionMode(e.target.value as any)}
+                        disabled={controlsDisabled}
+                      >
+                        <MenuItem value="">서버 기본값 사용</MenuItem>
+                        <MenuItem value="regex">규칙 기반 추출 (regex)</MenuItem>
+                        <MenuItem value="llm">LLM 기반 추출 (llm)</MenuItem>
+                      </Select>
+                    </Box>
+                  )}
+
 
                   {/* Actions & Global Status */}
                   <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
@@ -1099,219 +1777,214 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         Markdown 변환
                       </Button>
                     ) : (
-                      (markdownStatus === "COMPLETED" || markdownStatus === "FAILED" || markdownStatus === "CANCELED") && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={controlsDisabled}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleReextractMarkdown();
-                          }}
-                        >
-                          재추출
-                        </Button>
-                      )
+                      <Stack spacing={1.5} width="100%" sx={{ mt: 1 }}>
+                        {/* 1. Reextract option (Create New Revision) */}
+                        <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
+                            신규 재추출 (Reextract)
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
+                            기존 이력과 관계없이 새로운 리비전(문서 버전)을 생성하여 처음부터 모든 파이프라인 단계를 다시 수행합니다.
+                          </Typography>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="warning"
+                            disabled={controlsDisabled}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleReextractMarkdown();
+                            }}
+                          >
+                            새로 재추출 실행
+                          </Button>
+                        </Box>
+
+                        {/* 2. Resume Options (Continue Existing Revision) */}
+                        <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
+                            작업 재개 (Resume)
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
+                            기존 리비전 상태를 유지하면서 지정한 단계부터 후속 처리를 이어서 진행합니다.
+                          </Typography>
+                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ gap: 1 }}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={controlsDisabled}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleResume(null);
+                              }}
+                            >
+                              이어서 진행
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={controlsDisabled}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleResume("CHUNKING");
+                              }}
+                            >
+                              청킹부터 재실행
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={controlsDisabled || !selectedEmbeddingOption}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleReindexRag();
+                              }}
+                            >
+                              RAG 색인부터 재실행
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={controlsDisabled}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleResume("SKILL_EXTRACTION");
+                              }}
+                            >
+                              Skill 추출부터 재실행
+                            </Button>
+                          </Stack>
+                        </Box>
+                      </Stack>
                     )}
                   </Stack>
 
-                  {/* 4-Step Pipeline Status Dashboard */}
-                  {documentId && (
-                    <Box sx={{ mb: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover" }}>
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, fontWeight: 600 }}>
-                        단계별 처리 상태
-                      </Typography>
-                      <Stack spacing={1}>
-                        {/* 1. Markdown 생성 상태 */}
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                          <Typography variant="body2" sx={{ fontSize: 12 }}>1. Markdown 생성</Typography>
-                          <Chip
-                            label={markdownStatus || "대기"}
-                            size="small"
-                            color={
-                              markdownStatus === "COMPLETED" ? "success" :
-                              (markdownStatus === "RUNNING" || markdownStatus === "PENDING") ? "primary" :
-                              markdownStatus === "FAILED" ? "error" : "default"
-                            }
-                            sx={{ height: 20, fontSize: 10 }}
-                          />
-                        </Stack>
-
-                        {/* 2. Chunking 상태 */}
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                          <Typography variant="body2" sx={{ fontSize: 12 }}>2. Chunking 분할</Typography>
-                          <Chip
-                            label={
-                              !runChunking ? "미실행" :
-                              markdownStatus !== "COMPLETED" ? (markdownStatus || "대기") :
-                              ragJob ? (
-                                ragJob.status === "SUCCEEDED" ? "COMPLETED" :
-                                ragJob.status === "CANCELLED" || (ragJob.status as string) === "CANCELED" ? "CANCELED" :
-                                ragJob.status === "FAILED" ? "FAILED" :
-                                (ragJob.status || "RUNNING")
-                              ) : "RUNNING"
-                            }
-                            size="small"
-                            color={
-                              !runChunking ? "default" :
-                              markdownStatus !== "COMPLETED" ? (
-                                markdownStatus === "FAILED" ? "error" :
-                                (markdownStatus === "RUNNING" || markdownStatus === "PENDING") ? "primary" : "default"
-                              ) : (
-                                ragJob ? (
-                                  ragJob.status === "SUCCEEDED" ? "success" :
-                                  ragJob.status === "FAILED" ? "error" :
-                                  (ragJob.status === "CANCELLED" || (ragJob.status as string) === "CANCELED") ? "default" : "primary"
-                                ) : "primary"
-                              )
-                            }
-                            sx={{ height: 20, fontSize: 10 }}
-                          />
-                        </Stack>
-
-                        {/* 3. RAG 색인 상태 */}
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                          <Typography variant="body2" sx={{ fontSize: 12 }}>3. RAG 색인</Typography>
-                          <Chip
-                            label={
-                              !runRagIndex ? "미실행" :
-                              markdownStatus !== "COMPLETED" ? "대기" :
-                              ragJob ? (
-                                ragJob.status === "SUCCEEDED" ? "COMPLETED" :
-                                ragJob.status === "CANCELLED" || (ragJob.status as string) === "CANCELED" ? "CANCELED" :
-                                ragJob.status === "FAILED" ? "FAILED" :
-                                (ragJob.status || "RUNNING")
-                              ) : "RUNNING"
-                            }
-                            size="small"
-                            color={
-                              !runRagIndex ? "default" :
-                              markdownStatus !== "COMPLETED" ? "default" :
-                              ragJob ? (
-                                ragJob.status === "SUCCEEDED" ? "success" :
-                                ragJob.status === "FAILED" ? "error" :
-                                (ragJob.status === "CANCELLED" || (ragJob.status as string) === "CANCELED") ? "default" : "primary"
-                              ) : "primary"
-                            }
-                            sx={{ height: 20, fontSize: 10 }}
-                          />
-                        </Stack>
-
-                        {/* 4. Skill 추출 상태 */}
-                        <Stack direction="row" justifyContent="space-between" alignItems="center">
-                          <Typography variant="body2" sx={{ fontSize: 12 }}>4. Skill 추출</Typography>
-                          <Chip
-                            label={
-                              !runSkillExtraction ? "미실행" :
-                              markdownStatus !== "COMPLETED" ? "대기" :
-                              skillJob ? (
-                                skillJob.status === "COMPLETED" ? "COMPLETED" :
-                                skillJob.status === "FAILED" ? "FAILED" :
-                                skillJob.status === "CANCELED" || skillJob.status === "CANCELLED" ? "CANCELED" :
-                                skillJob.status === "PARTIAL" ? "PARTIAL" :
-                                (skillJob.status || "RUNNING")
-                              ) : "RUNNING"
-                            }
-                            size="small"
-                            color={
-                              !runSkillExtraction ? "default" :
-                              markdownStatus !== "COMPLETED" ? "default" :
-                              skillJob ? (
-                                skillJob.status === "COMPLETED" ? "success" :
-                                skillJob.status === "FAILED" ? "error" :
-                                (skillJob.status === "CANCELED" || skillJob.status === "CANCELLED") ? "default" : "primary"
-                              ) : "primary"
-                            }
-                            sx={{ height: 20, fontSize: 10 }}
-                          />
-                        </Stack>
-                      </Stack>
-                    </Box>
-                  )}
+                  {/* Pipeline Status Dashboard */}
+                  {renderPipelineStatusDashboard()}
 
                   {/* Polling Progress */}
                   {isPendingOrRunning && (
                     <Box sx={{ mt: 1.5, mb: 1.5, bgcolor: "action.hover", p: 1.5, borderRadius: 1.5, border: "1px dashed", borderColor: "primary.main" }}>
-                      <Stack direction="row" spacing={1.5} alignItems="center">
-                        <CircularProgress size={16} />
-                        <Typography variant="caption" color="text.secondary">
-                          Markdown 지식 파이프라인이 진행 중입니다...
-                        </Typography>
-                        <Button
-                          size="small"
-                          color="error"
-                          variant="text"
-                          sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
-                          disabled={isCanceling}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleCancelMarkdown();
-                          }}
-                        >
-                          {isCanceling ? "취소 중..." : "변환 취소"}
-                        </Button>
+                      <Stack direction="column" spacing={1} width="100%">
+                        <Stack direction="row" spacing={1.5} alignItems="center" width="100%">
+                          <CircularProgress size={16} />
+                          <Typography variant="caption" color="text.secondary">
+                            {latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING"
+                              ? `RAG 색인 진행 중... (${latestRagJob.currentStep})`
+                              : "Markdown 지식 파이프라인 진행 중..."}
+                          </Typography>
+                          {(latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") && (
+                            <Button
+                              size="small"
+                              color="error"
+                              variant="text"
+                              sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleCancelRagJob(latestRagJob.jobId);
+                              }}
+                            >
+                              색인 취소
+                            </Button>
+                          )}
+                          {(markdownStatus === "RUNNING" || markdownStatus === "PENDING") && (
+                            <Button
+                              size="small"
+                              color="error"
+                              variant="text"
+                              sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
+                              disabled={isCanceling}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleCancelMarkdown();
+                              }}
+                            >
+                              {isCanceling ? "취소 중..." : "변환 취소"}
+                            </Button>
+                          )}
+                        </Stack>
                       </Stack>
                     </Box>
                   )}
 
                   {/* FAILED message */}
-                  {markdownStatus === "FAILED" && (markdownError || latestRevision?.errorMessage) && (
+                  {(markdownStatus === "FAILED" || pipelineExecution?.status === "FAILED") && (
                     <Box sx={{ mt: 1.5, mb: 1.5, bgcolor: "error.light", color: "error.contrastText", p: 1.5, borderRadius: 1.5 }}>
                       <Typography variant="caption" display="block" sx={{ fontWeight: "bold", mb: 0.5 }}>
-                        실패 원인 (Code: {latestRevision?.errorCode || "-"})
+                        실패 원인 (Code: {pipelineExecution?.errorCode || latestRevision?.errorCode || "-"})
                       </Typography>
                       <Typography variant="body2" sx={{ wordBreak: "break-all", fontSize: 12 }}>
-                        {sanitizeErrorMessage(latestRevision?.errorMessage || markdownError)}
+                        {sanitizeErrorMessage(pipelineExecution?.errorMessage || latestRevision?.errorMessage || markdownError)}
                       </Typography>
                     </Box>
                   )}
 
-                  {/* COMPLETED result display */}
-                  {markdownStatus === "COMPLETED" && latestRevision && (
+                  {/* Metadata Table (Visible whenever documentId exists) */}
+                  {documentId && (
                     <Stack spacing={2} sx={{ mt: 2 }}>
-                      
-                      {/* Metadata Table */}
                       <Box>
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
-                          변환 상세 정보
+                          변환 및 파이프라인 상세 메타데이터
                         </Typography>
                         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
                           <Table size="small">
                             <TableBody>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "35%", fontSize: 11 }}>Markdown Doc ID</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "35%", fontSize: 11 }}>1. Markdown Document ID</TableCell>
                                 <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>{documentId}</TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>Revision ID</TableCell>
-                                <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>{latestRevision.revisionId}</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>2. Revision ID</TableCell>
+                                <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>{latestRevision?.revisionId || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>원본 파일 형식</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{file?.contentType || "-"}</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>3. 추출 상태 (Revision status)</TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>{latestRevision?.status || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>추출 방식</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>4. Pipeline 상태 / 현재 단계</TableCell>
                                 <TableCell sx={{ fontSize: 11 }}>
-                                  {latestRevision.extractorType || "PANDOC"} {latestRevision.extractorVersion ? `(v${latestRevision.extractorVersion})` : ""}
+                                  {pipelineExecution ? `${pipelineExecution.status} / ${pipelineExecution.currentStage}` : "-"}
                                 </TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>결과 Attachment ID</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{latestRevision.resultAttachmentId || "-"}</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>5. 마지막 성공 단계</TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>{pipelineExecution?.lastCompletedStage || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>생성 시각</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{formatDate(latestRevision.createdAt)}</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>6. 실행 횟수 (Attempt Count)</TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>{pipelineExecution?.attemptCount ?? "-"}</TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>완료 시각</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{formatDate(latestRevision.completedAt) || "-"}</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>7. 오류 코드 및 메시지</TableCell>
+                                <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>
+                                  {pipelineExecution?.errorCode || latestRevision?.errorCode
+                                    ? `[${pipelineExecution?.errorCode || latestRevision?.errorCode}] `
+                                    : ""}
+                                  {pipelineExecution?.errorMessage || latestRevision?.errorMessage || markdownError || "-"}
+                                </TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>8. 시각 정보 (생성/시작/완료/갱신)</TableCell>
+                                <TableCell sx={{ fontSize: 11, whiteSpace: "pre-wrap" }}>
+                                  {`생성: ${formatDate(latestRevision?.createdAt) || "-"}\n` +
+                                   `시작: ${formatDate(pipelineExecution?.startedAt) || "-"}\n` +
+                                   `완료: ${formatDate(pipelineExecution?.completedAt || latestRevision?.completedAt) || "-"}\n` +
+                                   `갱신: ${formatDate(pipelineExecution?.updatedAt) || "-"}`}
+                                </TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>9. 결과 Attachment ID</TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>{latestRevision?.resultAttachmentId || "-"}</TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>10. Document Convert Job ID</TableCell>
+                                <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>{latestRevision?.documentConvertJobId || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
                                 <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>적용된 파이프라인 옵션</TableCell>
                                 <TableCell sx={{ fontSize: 11, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
-                                  {latestRevision.optionsJson ? (
+                                  {latestRevision?.optionsJson ? (
                                     (() => {
                                       try {
                                         return JSON.stringify(JSON.parse(latestRevision.optionsJson), null, 2);
@@ -1331,7 +2004,110 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         </TableContainer>
                       </Box>
 
-                      {latestRevision.markdownText && (
+                      {/* Revision 이력 Table */}
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                          Revision 이력
+                        </Typography>
+                        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200, borderRadius: 1 }}>
+                          <Table size="small" stickyHeader>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>버전 (Rev ID)</TableCell>
+                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>상태</TableCell>
+                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>생성 시간</TableCell>
+                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>오류 내용</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {revisions.map((rev) => (
+                                <TableRow key={rev.revisionId} hover>
+                                  <TableCell sx={{ fontSize: 10, fontFamily: "monospace" }}>{rev.revisionId.substring(0, 8)}</TableCell>
+                                  <TableCell sx={{ fontSize: 10 }}>
+                                    <Chip
+                                      label={rev.status}
+                                      size="small"
+                                      color={
+                                        rev.status === "COMPLETED" ? "success" :
+                                        rev.status === "FAILED" ? "error" :
+                                        rev.status === "CANCELED" ? "default" : "primary"
+                                      }
+                                      sx={{ height: 16, fontSize: 8.5, borderRadius: "3px" }}
+                                    />
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: 10 }}>{formatDate(rev.createdAt)}</TableCell>
+                                  <TableCell sx={{ fontSize: 10, color: "error.main", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {rev.errorMessage || "-"}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {revisions.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={4} align="center" sx={{ fontSize: 10, py: 2, color: "text.secondary" }}>
+                                    이력이 없습니다.
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Box>
+
+                      {/* RAG Job 이력 Table */}
+                      <Box>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                          RAG Job 이력
+                        </Typography>
+                        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200, borderRadius: 1 }}>
+                          <Table size="small" stickyHeader>
+                            <TableHead>
+                              <TableRow>
+                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>임베딩 모델</TableCell>
+                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>상태</TableCell>
+                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>청크 (색인/총)</TableCell>
+                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>실패 사유</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {ragJobs.map((job) => (
+                                <TableRow key={job.jobId} hover>
+                                  <TableCell sx={{ fontSize: 10, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {job.embeddingModel || "-"}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: 10 }}>
+                                    <Chip
+                                      label={job.status}
+                                      size="small"
+                                      color={
+                                        job.status === "SUCCEEDED" ? "success" :
+                                        job.status === "FAILED" ? "error" :
+                                        job.status === "CANCELLED" ? "default" : "primary"
+                                      }
+                                      sx={{ height: 16, fontSize: 8.5, borderRadius: "3px" }}
+                                    />
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: 10 }}>
+                                    {job.indexedCount} / {job.chunkCount}
+                                  </TableCell>
+                                  <TableCell sx={{ fontSize: 10, color: "error.main", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {job.errorMessage || "-"}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {ragJobs.length === 0 && (
+                                <TableRow>
+                                  <TableCell colSpan={4} align="center" sx={{ fontSize: 10, py: 2, color: "text.secondary" }}>
+                                    이력이 없습니다.
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Box>
+                      {latestRevision?.status === "COMPLETED" && (
+                        <>
+                          {latestRevision?.markdownText && (
                         <Box>
                           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
                             <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
@@ -1341,7 +2117,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                               size="small"
                               onClick={async (e) => {
                                 e.stopPropagation();
-                                if (latestRevision.markdownText) {
+                                if (latestRevision?.markdownText) {
                                   await navigator.clipboard.writeText(latestRevision.markdownText);
                                   toast.success("클립보드에 복사했습니다.");
                                 }
@@ -1450,7 +2226,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         </Box>
                       )}
 
-                      {latestRevision.resultAttachmentId && (
+                      {latestRevision?.resultAttachmentId && (
                         <Button
                           size="small"
                           variant="contained"
@@ -1465,8 +2241,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           변환 결과 파일 다운로드
                         </Button>
                       )}
-                    </Stack>
+                    </>
                   )}
+                </Stack>
+              )}
                 </AccordionDetails>
               </Accordion>
 
@@ -1479,19 +2257,21 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     </Typography>
                   </AccordionSummary>
                   <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
-                    <TableContainer sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "background.default" }}>
+                    <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
                       <Table size="small">
-                        <TableHead>
-                          <TableRow>
-                            <TableCell sx={{ fontWeight: 600 }}>Name</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>Value</TableCell>
-                          </TableRow>
-                        </TableHead>
                         <TableBody>
                           {metadataEntries.map(([key, value]) => (
-                            <TableRow key={key} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                              <TableCell sx={{ fontWeight: 500, color: "text.secondary" }}>{key}</TableCell>
-                              <TableCell sx={{ overflowWrap: "anywhere" }}>{String(value)}</TableCell>
+                            <TableRow key={key}>
+                              <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "35%", fontSize: 11, verticalAlign: "top" }}>{key}</TableCell>
+                              <TableCell sx={{ fontSize: 11, overflowWrap: "anywhere", wordBreak: "break-all" }}>
+                                {typeof value === "object" && value !== null ? (
+                                  <Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: 10, whiteSpace: "pre-wrap", overflowWrap: "anywhere", bgcolor: "action.hover", p: 1, borderRadius: 0.5 }}>
+                                    {JSON.stringify(value, null, 2)}
+                                  </Box>
+                                ) : (
+                                  String(value)
+                                )}
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -1509,7 +2289,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
         <Divider />
         <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center" sx={{ p: 2, flexShrink: 0 }}>
-          <Box>
+          <Stack direction="row" spacing={1}>
             {file && getDocumentFormat(file.name, file.contentType) && (
               <Button
                 variant="contained"
@@ -1519,7 +2299,25 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                 문서 변환
               </Button>
             )}
-          </Box>
+            {isEpub && (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => setEpubReaderOpen(true)}
+              >
+                미리보기 (EPUB)
+              </Button>
+            )}
+            {isPdf && (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => setPdfReaderOpen(true)}
+              >
+                미리보기 (PDF)
+              </Button>
+            )}
+          </Stack>
           <Button onClick={onClose}>닫기</Button>
         </Stack>
 
@@ -1544,6 +2342,22 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           open={convertDialogOpen}
           onClose={() => setConvertDialogOpen(false)}
           file={file}
+        />
+      )}
+      {file && epubReaderOpen && (
+        <EpubReaderDialog
+          open={epubReaderOpen}
+          onClose={() => setEpubReaderOpen(false)}
+          url={`/api/mgmt/files/${file.attachmentId}/download`}
+          filename={file.name}
+        />
+      )}
+      {file && pdfReaderOpen && (
+        <PdfReaderDialog
+          open={pdfReaderOpen}
+          onClose={() => setPdfReaderOpen(false)}
+          url={`/api/mgmt/files/${file.attachmentId}/download`}
+          filename={file.name}
         />
       )}
     </Drawer>

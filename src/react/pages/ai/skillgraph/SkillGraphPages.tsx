@@ -2090,6 +2090,17 @@ export function SkillGraphJobsPage() {
     { headerName: "Object ID", field: "objectId", flex: 1 },*/
     { headerName: "단계", field: "currentStep", width: 100  },
     {
+      headerName: "추출 방식",
+      field: "candidateExtractorMode",
+      width: 130,
+      valueGetter: ({ data }) => {
+        const mode = data?.candidateExtractorMode;
+        if (mode === "regex") return "규칙 기반 추출";
+        if (mode === "llm") return "LLM 기반 추출";
+        return "서버 기본 설정";
+      }
+    },
+    {
       headerName: "처리",
       width: 155,
       cellRenderer: ({ data }: { data?: SkillGraphJob }) => {
@@ -2257,6 +2268,12 @@ export function SkillGraphJobsPage() {
             ["청킹 전략", selectedJob?.chunkingStrategy ?? "-"],
             ["검색어 (q)", selectedJob?.q ?? "-"],
             ["모드 (mode)", selectedJob?.mode ?? "-"],
+            ["스킬 추출 모드", (() => {
+              const mode = selectedJob?.candidateExtractorMode;
+              if (mode === "regex") return "규칙 기반 추출";
+              if (mode === "llm") return "LLM 기반 추출";
+              return "서버 기본 설정";
+            })()],
             ["선택 chunkIds", selectedJob?.chunkIds && selectedJob.chunkIds.length > 0 ? (
               <Box sx={{ maxHeight: 80, overflowY: "auto", fontFamily: "monospace", fontSize: 11, bgcolor: "action.hover", p: 1, borderRadius: 1, border: "1px solid", borderColor: "divider" }}>
                 {selectedJob.chunkIds.map((id) => <div key={id}>{id}</div>)}

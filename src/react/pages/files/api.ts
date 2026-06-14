@@ -64,7 +64,7 @@ export const reactFilesApi = {
   async ragMetadata(attachmentId: number) {
     return apiRequest<Record<string, unknown>>(
       "get",
-      `/api/mgmt/files/${attachmentId}/rag/metadata`
+      `/api/mgmt/ai/rag/objects/attachment/${attachmentId}/metadata`
     );
   },
   async fetchThumbnail(attachmentId: number, size = 256, format = "png") {
@@ -215,6 +215,7 @@ export interface MarkdownDocumentFromAttachmentRequest {
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
+  skillExtractionMode?: 'regex' | 'llm' | null;
 }
 
 export interface MarkdownDocumentReextractRequest {
@@ -229,6 +230,66 @@ export interface MarkdownDocumentReextractRequest {
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
+  skillExtractionMode?: 'regex' | 'llm' | null;
+}
+
+export type MarkdownPipelineExecutionStatus =
+  | "PENDING"
+  | "RUNNING"
+  | "COMPLETED"
+  | "FAILED"
+  | "UNKNOWN";
+
+export type MarkdownPipelineStage =
+  | "CHUNKING"
+  | "RAG_INDEX"
+  | "SKILL_EXTRACTION"
+  | "COMPLETED";
+
+export interface MarkdownPipelineExecutionDto {
+  revisionId: string;
+  status: MarkdownPipelineExecutionStatus;
+  currentStage: MarkdownPipelineStage;
+  lastCompletedStage: MarkdownPipelineStage | null;
+  attemptCount: number;
+  errorCode: string | null;
+  errorMessage: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface MarkdownResumeRequest {
+  fromStage?: MarkdownPipelineStage | null;
+  runChunking?: boolean;
+  runRagIndex?: boolean;
+  runSkillExtraction?: boolean;
+  chunkingStrategy?: string;
+  chunkMaxSize?: number;
+  chunkOverlap?: number;
+  chunkUnit?: string;
+  embeddingProfileId?: string;
+  embeddingProvider?: string | null;
+  embeddingModel?: string | null;
+  embeddingDimension?: number | null;
+  skillExtractionMode?: 'regex' | 'llm' | null;
+}
+
+export interface MarkdownResumeResultDto {
+  document: MarkdownDocumentDto;
+  revision: MarkdownDocumentRevisionDto;
+  pipeline: MarkdownPipelineExecutionDto;
+  resumedPhase: string;
+  resumedFrom: MarkdownPipelineStage;
+}
+
+export interface MarkdownRagReindexRequest {
+  embeddingProfileId?: string | null;
+  embeddingProvider?: string | null;
+  embeddingModel?: string | null;
+  embeddingDimension?: number | null;
+  runSkillExtraction: boolean;
+  skillExtractionMode?: 'regex' | 'llm' | null;
 }
 
 export const reactMarkdownDocumentApi = {
@@ -240,11 +301,27 @@ export const reactMarkdownDocumentApi = {
   async getDocument(documentId: string): Promise<MarkdownDocumentDto> {
     return apiRequest<MarkdownDocumentDto>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}`);
   },
+  async getByAttachment(attachmentId: number): Promise<MarkdownDocumentDto> {
+    return apiRequest<MarkdownDocumentDto>("get", `/api/markdown-documents/by-attachment/${attachmentId}`);
+  },
   async getRevisions(documentId: string, options?: { signal?: AbortSignal }): Promise<MarkdownDocumentRevisionDto[]> {
     return apiRequest<MarkdownDocumentRevisionDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions`, options);
   },
+  async getPipeline(documentId: string): Promise<MarkdownPipelineExecutionDto> {
+    return apiRequest<MarkdownPipelineExecutionDto>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/pipeline`);
+  },
   async reextract(documentId: string, request: MarkdownDocumentReextractRequest): Promise<MarkdownDocumentFromAttachmentResponse> {
     return apiRequest<MarkdownDocumentFromAttachmentResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/reextract`, {
+      data: request,
+    });
+  },
+  async resume(documentId: string, request?: MarkdownResumeRequest): Promise<MarkdownResumeResultDto> {
+    return apiRequest<MarkdownResumeResultDto>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/resume`, {
+      data: request || {},
+    });
+  },
+  async reindexRag(documentId: string, request: MarkdownRagReindexRequest): Promise<MarkdownResumeResultDto> {
+    return apiRequest<MarkdownResumeResultDto>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/rag/reindex`, {
       data: request,
     });
   },
