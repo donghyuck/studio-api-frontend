@@ -1152,7 +1152,7 @@ export interface SkillDictionaryEmbeddingJob {
 
 export interface SkillGraphBatchJobEvent {
   jobId: string;
-  jobType?: "CANDIDATE_EMBEDDING" | "DICTIONARY_EMBEDDING" | "CANDIDATE_RECOMMENDATION" | "SKILL_CLUSTER_GENERATION";
+  jobType?: "CANDIDATE_EMBEDDING" | "DICTIONARY_EMBEDDING" | "CANDIDATE_RECOMMENDATION" | "PROJECTION_GENERATION";
   status: SkillGraphJobStatus;
   totalCount?: number;
   requestedCount?: number;

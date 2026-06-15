@@ -6268,7 +6268,19 @@ export function SkillGraphCategoriesPage() {
           throw new Error("파라미터 설정이 올바른 JSON 형식이 아닙니다.", { cause: e });
         }
       }
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const HH = String(now.getHours()).padStart(2, '0');
+      const MM = String(now.getMinutes()).padStart(2, '0');
+      const SS = String(now.getSeconds()).padStart(2, '0');
+      const algo = clusterGenerationForm.reductionAlgorithm;
+      const typeStr = clusterGenerationForm.skillType ? `_${clusterGenerationForm.skillType}` : "";
+      const generatedProjectionId = `${yyyy}${mm}${dd}${HH}${MM}${SS}_${algo}${typeStr}`;
+
       return skillGraphApi.createProjection({
+        projectionId: generatedProjectionId,
         reductionAlgorithm: clusterGenerationForm.reductionAlgorithm,
         clusteringAlgorithm: "HDBSCAN",
         embeddingProvider: clusterGenerationForm.embeddingProvider.trim(),
@@ -6292,8 +6304,8 @@ export function SkillGraphCategoriesPage() {
     },
   });
   const activeClusterGenerationJobQuery = useQuery({
-    queryKey: skillGraphQueryKeys.custom("active-batch-job", "SKILL_CLUSTER_GENERATION"),
-    queryFn: () => findActiveSkillGraphBatchJob("SKILL_CLUSTER_GENERATION"),
+    queryKey: skillGraphQueryKeys.custom("active-batch-job", "PROJECTION_GENERATION"),
+    queryFn: () => findActiveSkillGraphBatchJob("PROJECTION_GENERATION"),
     enabled: canAdmin && !clusterGenerationJobId,
   });
   useEffect(() => {
@@ -6316,7 +6328,7 @@ export function SkillGraphCategoriesPage() {
     }
     const client = new StompRealtimeClient();
     client.subscribe(`/topic/skillgraph/jobs/${clusterGenerationJobId}`, (payload: SkillGraphBatchJobEvent) => {
-      if (payload.jobType && payload.jobType !== "SKILL_CLUSTER_GENERATION") {
+      if (payload.jobType && payload.jobType !== "PROJECTION_GENERATION") {
         return;
       }
       queryClient.setQueryData(skillGraphQueryKeys.custom("cluster-generation-job", clusterGenerationJobId), payload);
