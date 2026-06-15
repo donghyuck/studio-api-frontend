@@ -2953,6 +2953,27 @@ export function VectorVisualizationPage() {
               ))}
             </TextField>
 
+            <Paper variant="outlined" sx={{ p: 1.2, bgcolor: 'background.default', borderStyle: 'dashed' }}>
+              <Typography variant="caption" display="block" color="text.primary" sx={{ fontWeight: 700, mb: 0.5 }}>
+                💡 선택된 알고리즘 안내
+              </Typography>
+              {createAlgorithm === 'PCA' && (
+                <Typography variant="caption" color="text.secondary" display="block">
+                  <strong>PCA (주성분 분석):</strong> 데이터의 분산을 최대한 보존하는 선형 축소 방식입니다. 계산이 매우 빠르고 데이터의 전역적인 뼈대 구조를 빠르게 파악하고자 할 때 유용합니다.
+                </Typography>
+              )}
+              {createAlgorithm === 'UMAP' && (
+                <Typography variant="caption" color="text.secondary" display="block">
+                  <strong>UMAP (매니폴드 분석 - 추천):</strong> 데이터의 로컬 군집 구조(유사한 벡터들의 밀집)와 전역 관계를 동시에 균형 있게 보존하는 최신 비선형 기법입니다. 전반적인 탐색과 분류 분포 확인에 가장 적합합니다.
+                </Typography>
+              )}
+              {createAlgorithm === 'TSNE' && (
+                <Typography variant="caption" color="text.secondary" display="block">
+                  <strong>TSNE (확률론적 시각화):</strong> 유사한 벡터 간의 관계를 아주 강하게 끌어당겨 군집 형태를 뚜렷하게 강조하는 비선형 기법입니다. 고차원상의 미세한 그룹 분리 양상을 시각적으로 극대화할 때 유용합니다.
+                </Typography>
+              )}
+            </Paper>
+
             <TextField
               label="Object Type"
               placeholder="예: NCS,COURSE"
