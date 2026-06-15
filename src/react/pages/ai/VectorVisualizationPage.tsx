@@ -56,6 +56,7 @@ import { GridContent } from "@/react/components/ag-grid";
 import { ObjectTypeSelect } from "@/react/components/objecttype/ObjectTypeSelect";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { reactAiApi } from "@/react/pages/ai/api";
+import { StompRealtimeClient } from "@/data/studio/mgmt/realtime";
 import type {
   AiInfoResponse,
   VectorItemDetailDto,
@@ -513,6 +514,17 @@ export function VectorVisualizationPage() {
   );
   const currentProjection = projectionDetail ?? selectedProjection;
   const selectedProjectionReady = currentProjection?.status === "COMPLETED";
+  const applyProjectionEvent = useCallback((projection: VectorProjectionSummaryDto) => {
+    setProjections((prev) => {
+      const next = prev.filter((item) => item.projectionId !== projection.projectionId);
+      return [projection, ...next];
+    });
+    setProjectionDetail((prev) => (
+      prev?.projectionId === projection.projectionId
+        ? { ...prev, ...projection }
+        : prev
+    ));
+  }, []);
   const queryReady =
     selectedProjectionReady &&
     query.trim().length > 0 &&
@@ -1193,21 +1205,21 @@ export function VectorVisualizationPage() {
     selectedProjectionReady,
   ]);
   useEffect(() => {
-    if (!selectedProjectionId) return;
+    if (!selectedProjectionId) return undefined;
     const status = currentProjection?.status;
-    if (status !== "REQUESTED" && status !== "PROCESSING") return;
+    if (status !== "REQUESTED" && status !== "PROCESSING") return undefined;
 
-    const interval = setInterval(async () => {
-      try {
-        await loadProjectionDetail(selectedProjectionId);
-        await loadProjections();
-      } catch (e) {
-        console.error("Error polling projection detail", e);
+    const client = new StompRealtimeClient();
+    client.subscribe(`/topic/ai/vectors/projections/${selectedProjectionId}`, (payload: VectorProjectionSummaryDto) => {
+      if (!payload || payload.projectionId !== selectedProjectionId) return;
+      applyProjectionEvent(payload);
+      if (payload.status === "COMPLETED") {
+        setPointsRequested(false);
       }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [selectedProjectionId, currentProjection?.status, loadProjectionDetail, loadProjections]);
+    });
+    client.connect();
+    return () => client.disconnect();
+  }, [selectedProjectionId, currentProjection?.status, applyProjectionEvent]);
 
   useEffect(() => {
     if (!selectedPoint) {
