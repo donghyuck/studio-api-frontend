@@ -213,6 +213,15 @@ export interface VectorProjectionSummaryDto {
   itemCount: number;
   createdAt?: string;
   completedAt?: string;
+  mode?: 'OVERVIEW' | 'DETAIL' | null;
+  totalCount?: number | null;
+  projectedCount?: number | null;
+  sampled?: boolean | null;
+  sampleSize?: number | null;
+  samplingStrategy?: string | null;
+  maxAllowed?: number | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
 }
 
 export interface VectorProjectionListResponseDto {
@@ -224,6 +233,9 @@ export interface VectorProjectionCreateRequestDto {
   targetTypes?: string[] | null;
   algorithm?: string;
   filters?: Record<string, unknown> | null;
+  mode?: 'OVERVIEW' | 'DETAIL';
+  sampleSize?: number | null;
+  samplingStrategy?: 'HEAD' | 'RANDOM' | 'STRATIFIED' | null;
 }
 
 export interface VectorProjectionCreateResponseDto {
@@ -243,6 +255,35 @@ export interface VectorProjectionDetailDto {
   errorMessage?: string | null;
   createdAt?: string;
   completedAt?: string;
+  mode?: 'OVERVIEW' | 'DETAIL' | null;
+  totalCount?: number | null;
+  projectedCount?: number | null;
+  sampled?: boolean | null;
+  sampleSize?: number | null;
+  samplingStrategy?: string | null;
+  maxAllowed?: number | null;
+  errorCode?: string | null;
+}
+
+export interface VectorProjectionEstimateRequest {
+  mode: 'OVERVIEW' | 'DETAIL';
+  targetTypes?: string[] | null;
+  filters?: Record<string, unknown> | null;
+  sampleSize?: number | null;
+  samplingStrategy?: 'HEAD' | 'RANDOM' | 'STRATIFIED' | null;
+}
+
+export interface VectorProjectionEstimateResponse {
+  success: boolean;
+  data: {
+    totalCount: number;
+    maxAllowed: number;
+    exceedsLimit: boolean;
+    recommendedSampling: {
+      sampleSize: number;
+      samplingStrategy: 'HEAD' | 'RANDOM' | 'STRATIFIED';
+    } | null;
+  };
 }
 
 export interface VectorProjectionPointDto {

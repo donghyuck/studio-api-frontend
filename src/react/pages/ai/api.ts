@@ -42,6 +42,8 @@ import type {
   VectorProjectionPointsResponseDto,
   VectorSearchVisualizationRequestDto,
   VectorSearchVisualizationResponseDto,
+  VectorProjectionEstimateRequest,
+  VectorProjectionEstimateResponse,
 } from "@/types/studio/ai";
 
 const BASE = "/api/ai";
@@ -187,6 +189,14 @@ export const reactAiApi = {
     return apiRequest<VectorProjectionListResponseDto>("get", `${MGMT_BASE}/vectors/projections`, {
       params,
     });
+  },
+
+  estimateVectorProjection(payload: VectorProjectionEstimateRequest) {
+    return apiRequest<VectorProjectionEstimateResponse>(
+      "post",
+      `${MGMT_BASE}/vectors/projections/estimate`,
+      { data: payload }
+    );
   },
 
   createVectorProjection(payload: VectorProjectionCreateRequestDto) {

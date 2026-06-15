@@ -65,6 +65,8 @@ import type {
   VectorProjectionSummaryDto,
   VectorSearchVisualizationResponseDto,
   VectorSearchVisualizationResultPointDto,
+  VectorProjectionEstimateRequest,
+  VectorProjectionEstimateResponse,
 } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 
@@ -469,6 +471,27 @@ export function VectorVisualizationPage() {
     useState<(typeof ALGORITHM_OPTIONS)[number]>("PCA");
   const [createTargetTypes, setCreateTargetTypes] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
+  
+  // New projection Overview/Detail options
+  const [createMode, setCreateMode] = useState<'OVERVIEW' | 'DETAIL'>('OVERVIEW');
+  const [createSamplingStrategy, setCreateSamplingStrategy] = useState<'HEAD' | 'RANDOM' | 'STRATIFIED'>('STRATIFIED');
+  const [createSampleSize, setCreateSampleSize] = useState<number | string>(1000);
+  const [createAttachmentId, setCreateAttachmentId] = useState("");
+  const [createObjectId, setCreateObjectId] = useState("");
+  const [createMetadataFilter, setCreateMetadataFilter] = useState("");
+  const [createChunkIndexFrom, setCreateChunkIndexFrom] = useState("");
+  const [createChunkIndexTo, setCreateChunkIndexTo] = useState("");
+
+  const [estimateResult, setEstimateResult] = useState<{
+    totalCount: number;
+    maxAllowed: number;
+    exceedsLimit: boolean;
+    recommendedSampling: {
+      sampleSize: number;
+      samplingStrategy: 'HEAD' | 'RANDOM' | 'STRATIFIED';
+    } | null;
+  } | null>(null);
+  const [estimating, setEstimating] = useState(false);
 
   const selectedProjection = useMemo(
     () =>
@@ -483,7 +506,21 @@ export function VectorVisualizationPage() {
     query.trim().length > 0 &&
     isValidTopK(topK) &&
     isValidMinScore(minScore);
-  const createReady = createName.trim().length > 0;
+  const hasFilters = useMemo(() => {
+    if (createMode !== "DETAIL") return true;
+    const targetTypesList = createTargetTypes.trim() ? createTargetTypes.split(",").map(t => t.trim()).filter(Boolean) : [];
+    const filtersNotEmpty = createAttachmentId.trim() || createObjectId.trim() || createMetadataFilter.trim() || createChunkIndexFrom.trim() || createChunkIndexTo.trim();
+    return targetTypesList.length > 0 || !!filtersNotEmpty;
+  }, [createMode, createTargetTypes, createAttachmentId, createObjectId, createMetadataFilter, createChunkIndexFrom, createChunkIndexTo]);
+
+  const isChunkRangeValid = useMemo(() => {
+    if (!createChunkIndexFrom.trim() || !createChunkIndexTo.trim()) return true;
+    const fromVal = parseInt(createChunkIndexFrom.trim(), 10);
+    const toVal = parseInt(createChunkIndexTo.trim(), 10);
+    return isNaN(fromVal) || isNaN(toVal) || fromVal <= toVal;
+  }, [createChunkIndexFrom, createChunkIndexTo]);
+
+  const createReady = createName.trim().length > 0 && hasFilters && isChunkRangeValid && !estimating;
   const embeddingProviders = useMemo(
     () => aiInfo?.providers.filter((provider) => provider.embedding.enabled) ?? [],
     [aiInfo],
@@ -1143,6 +1180,22 @@ export function VectorVisualizationPage() {
     selectedProjectionId,
     selectedProjectionReady,
   ]);
+  useEffect(() => {
+    if (!selectedProjectionId) return;
+    const status = currentProjection?.status;
+    if (status !== "REQUESTED" && status !== "PROCESSING") return;
+
+    const interval = setInterval(async () => {
+      try {
+        await loadProjectionDetail(selectedProjectionId);
+        await loadProjections();
+      } catch (e) {
+        console.error("Error polling projection detail", e);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [selectedProjectionId, currentProjection?.status, loadProjectionDetail, loadProjections]);
 
   useEffect(() => {
     if (!selectedPoint) {
@@ -1169,7 +1222,110 @@ export function VectorVisualizationPage() {
     setCreateAlgorithm("PCA");
     setCreateTargetTypes("");
     setCreateError(null);
+    setCreateMode("OVERVIEW");
+    setCreateSamplingStrategy("STRATIFIED");
+    setCreateSampleSize(1000);
+    setCreateAttachmentId("");
+    setCreateObjectId("");
+    setCreateMetadataFilter("");
+    setCreateChunkIndexFrom("");
+    setCreateChunkIndexTo("");
+    setEstimateResult(null);
+    setEstimating(false);
   }
+
+  useEffect(() => {
+    if (!createOpen) {
+      return;
+    }
+
+    // Parse filters
+    const targetTypesList = createTargetTypes.trim() ? createTargetTypes.split(",").map(t => t.trim()).filter(Boolean) : [];
+    const filters: Record<string, any> = {};
+    if (createAttachmentId.trim()) {
+      const num = parseInt(createAttachmentId.trim(), 10);
+      if (!isNaN(num)) {
+        filters.attachmentId = num;
+      }
+    }
+    if (createObjectId.trim()) {
+      filters.objectId = createObjectId.trim();
+    }
+    if (createMetadataFilter.trim()) {
+      try {
+        filters.metadata = JSON.parse(createMetadataFilter.trim());
+      } catch (e) {
+        filters.metadata = createMetadataFilter.trim();
+      }
+    }
+    if (createChunkIndexFrom.trim()) {
+      const num = parseInt(createChunkIndexFrom.trim(), 10);
+      if (!isNaN(num)) {
+        filters.chunkIndexFrom = num;
+      }
+    }
+    if (createChunkIndexTo.trim()) {
+      const num = parseInt(createChunkIndexTo.trim(), 10);
+      if (!isNaN(num)) {
+        filters.chunkIndexTo = num;
+      }
+    }
+
+    // Client-side validation
+    if (createMode === "DETAIL") {
+      const hasFilters = targetTypesList.length > 0 || Object.keys(filters).length > 0;
+      if (!hasFilters) {
+        setEstimateResult(null);
+        return;
+      }
+      if (createChunkIndexFrom.trim() && createChunkIndexTo.trim()) {
+        const fromVal = parseInt(createChunkIndexFrom.trim(), 10);
+        const toVal = parseInt(createChunkIndexTo.trim(), 10);
+        if (!isNaN(fromVal) && !isNaN(toVal) && fromVal > toVal) {
+          setEstimateResult(null);
+          return;
+        }
+      }
+    }
+
+    const timer = setTimeout(async () => {
+      setEstimating(true);
+      try {
+        const parsedSampleSize = createSampleSize ? (typeof createSampleSize === "string" ? parseInt(createSampleSize, 10) : createSampleSize) : null;
+        const payload: VectorProjectionEstimateRequest = {
+          mode: createMode,
+          targetTypes: targetTypesList.length > 0 ? targetTypesList : null,
+          filters: Object.keys(filters).length > 0 ? filters : null,
+          sampleSize: isNaN(parsedSampleSize as number) ? null : parsedSampleSize,
+          samplingStrategy: createSamplingStrategy || null,
+        };
+        const response = await reactAiApi.estimateVectorProjection(payload);
+        if (response.success && response.data) {
+          setEstimateResult(response.data);
+        } else {
+          setEstimateResult(null);
+        }
+      } catch (e) {
+        console.error("Failed to estimate projection: ", e);
+        setEstimateResult(null);
+      } finally {
+        setEstimating(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [
+    createOpen,
+    createMode,
+    createTargetTypes,
+    createAttachmentId,
+    createObjectId,
+    createMetadataFilter,
+    createChunkIndexFrom,
+    createChunkIndexTo,
+    createSampleSize,
+    createSamplingStrategy,
+  ]);
 
   async function handleCreateProjection() {
     const name = createName.trim();
@@ -1178,10 +1334,63 @@ export function VectorVisualizationPage() {
       return;
     }
 
+    const targetTypesList = createTargetTypes.trim() ? createTargetTypes.split(",").map(t => t.trim()).filter(Boolean) : [];
+    const filters: Record<string, any> = {};
+    if (createAttachmentId.trim()) {
+      const num = parseInt(createAttachmentId.trim(), 10);
+      if (!isNaN(num)) {
+        filters.attachmentId = num;
+      }
+    }
+    if (createObjectId.trim()) {
+      filters.objectId = createObjectId.trim();
+    }
+    if (createMetadataFilter.trim()) {
+      try {
+        filters.metadata = JSON.parse(createMetadataFilter.trim());
+      } catch (e) {
+        filters.metadata = createMetadataFilter.trim();
+      }
+    }
+    if (createChunkIndexFrom.trim()) {
+      const num = parseInt(createChunkIndexFrom.trim(), 10);
+      if (!isNaN(num)) {
+        filters.chunkIndexFrom = num;
+      }
+    }
+    if (createChunkIndexTo.trim()) {
+      const num = parseInt(createChunkIndexTo.trim(), 10);
+      if (!isNaN(num)) {
+        filters.chunkIndexTo = num;
+      }
+    }
+
+    if (createMode === "DETAIL") {
+      const hasFilters = targetTypesList.length > 0 || Object.keys(filters).length > 0;
+      if (!hasFilters) {
+        setCreateError("상세 모드에서는 최소 하나의 필터 조건을 입력해야 합니다.");
+        return;
+      }
+      if (createChunkIndexFrom.trim() && createChunkIndexTo.trim()) {
+        const fromVal = parseInt(createChunkIndexFrom.trim(), 10);
+        const toVal = parseInt(createChunkIndexTo.trim(), 10);
+        if (!isNaN(fromVal) && !isNaN(toVal) && fromVal > toVal) {
+          setCreateError("시작 청크 인덱스는 종료 청크 인덱스보다 작거나 같아야 합니다.");
+          return;
+        }
+      }
+    }
+
+    const parsedSampleSize = createSampleSize ? (typeof createSampleSize === "string" ? parseInt(createSampleSize, 10) : createSampleSize) : null;
+
     const payload: VectorProjectionCreateRequestDto = {
       name,
       algorithm: createAlgorithm,
-      targetTypes: normalizeTextList(createTargetTypes),
+      targetTypes: targetTypesList.length > 0 ? targetTypesList : null,
+      filters: Object.keys(filters).length > 0 ? filters : null,
+      mode: createMode,
+      sampleSize: isNaN(parsedSampleSize as number) ? null : parsedSampleSize,
+      samplingStrategy: createSamplingStrategy || null,
     };
 
     setCreating(true);
@@ -1191,8 +1400,16 @@ export function VectorVisualizationPage() {
       await loadProjections();
       setSelectedProjectionId(response.projectionId);
       closeCreateDialog();
-    } catch (error) {
-      setCreateError(resolveAxiosError(error));
+    } catch (error: any) {
+      const code = error.response?.data?.code;
+      const detail = error.response?.data?.detail;
+      if (code === "PROJECTION_LIMIT_EXCEEDED") {
+        setCreateError(`프로젝션 크기 제한을 초과했습니다. (${detail || "샘플 크기를 줄여서 시도해 주세요."})`);
+      } else if (code === "PROJECTION_SCOPE_REQUIRED") {
+        setCreateError(`상세 모드에서는 필터 조건이 필수적입니다. (${detail || "최소 하나의 필터를 입력해 주세요."})`);
+      } else {
+        setCreateError(resolveAxiosError(error));
+      }
     } finally {
       setCreating(false);
     }
@@ -1398,9 +1615,32 @@ export function VectorVisualizationPage() {
               value={currentProjection?.algorithm ?? "-"}
             />
             <SummaryMetric
+              label="Mode"
+              value={currentProjection?.mode ?? "OVERVIEW"}
+            />
+            <SummaryMetric
               label="Points"
               value={(currentProjection?.itemCount ?? 0).toLocaleString()}
             />
+            {currentProjection?.totalCount !== undefined && currentProjection?.totalCount !== null && (
+              <SummaryMetric
+                label="Total Count"
+                value={currentProjection.totalCount.toLocaleString()}
+              />
+            )}
+            {currentProjection?.projectedCount !== undefined && currentProjection?.projectedCount !== null && (
+              <SummaryMetric
+                label="Projected"
+                value={currentProjection.projectedCount.toLocaleString()}
+              />
+            )}
+            {currentProjection?.sampled && (
+              <SummaryMetric
+                label="Sampling"
+                value={`${currentProjection.samplingStrategy ?? "-"}(${currentProjection.sampleSize?.toLocaleString() ?? "-"})`}
+                wide
+              />
+            )}
             <SummaryMetric
               label="Target Types"
               value={
@@ -1420,8 +1660,11 @@ export function VectorVisualizationPage() {
             />
           </Stack>
 
-          {projectionDetail?.errorMessage ? (
-            <Alert severity="error">{projectionDetail.errorMessage}</Alert>
+          {projectionDetail?.errorMessage || projectionDetail?.errorCode ? (
+            <Alert severity="error">
+              {projectionDetail.errorCode && `[${projectionDetail.errorCode}] `}
+              {projectionDetail.errorMessage || "프로젝션 생성 과정에서 오류가 발생했습니다."}
+            </Alert>
           ) : null}
           {projections.length === 0 && !projectionLoading ? (
             <Alert severity="info">생성된 시각화 데이터가 없습니다.</Alert>
@@ -2665,7 +2908,23 @@ export function VectorVisualizationPage() {
       >
         <DialogTitle>시각화 데이터 생성</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
-          <Stack spacing={1.2}>
+          <Stack spacing={2}>
+            {createError && (
+              <Alert severity="error" onClose={() => setCreateError(null)}>
+                {createError}
+              </Alert>
+            )}
+
+            <Tabs
+              value={createMode}
+              onChange={(_, val) => setCreateMode(val as 'OVERVIEW' | 'DETAIL')}
+              variant="fullWidth"
+              sx={{ borderBottom: 1, borderColor: 'divider' }}
+            >
+              <Tab value="OVERVIEW" label="Overview 모드" />
+              <Tab value="DETAIL" label="Detail 모드" />
+            </Tabs>
+
             <TextField
               label="이름"
               value={createName}
@@ -2674,6 +2933,7 @@ export function VectorVisualizationPage() {
               size="small"
               autoFocus
             />
+
             <TextField
               select
               label="알고리즘"
@@ -2692,6 +2952,7 @@ export function VectorVisualizationPage() {
                 </MenuItem>
               ))}
             </TextField>
+
             <TextField
               label="Object Type"
               placeholder="예: NCS,COURSE"
@@ -2699,8 +2960,161 @@ export function VectorVisualizationPage() {
               onChange={(event) => setCreateTargetTypes(event.target.value)}
               fullWidth
               size="small"
-              helperText="비워두면 전체 대상에 대해 생성합니다."
+              helperText={createMode === "DETAIL" ? "Object Type 필터 (콤마 구분)" : "비워두면 전체 대상에 대해 생성합니다."}
             />
+
+            {createMode === "DETAIL" && (
+              <>
+                <Divider sx={{ my: 1 }}>필터 조건 (최소 1개 필수)</Divider>
+                
+                <Stack direction="row" spacing={2}>
+                  <TextField
+                    label="파일 ID (Attachment ID)"
+                    type="number"
+                    value={createAttachmentId}
+                    onChange={(event) => setCreateAttachmentId(event.target.value)}
+                    fullWidth
+                    size="small"
+                  />
+                  <TextField
+                    label="객체 ID (Object ID)"
+                    value={createObjectId}
+                    onChange={(event) => setCreateObjectId(event.target.value)}
+                    fullWidth
+                    size="small"
+                  />
+                </Stack>
+
+                <Stack direction="row" spacing={2}>
+                  <TextField
+                    label="청크 인덱스 (From)"
+                    type="number"
+                    value={createChunkIndexFrom}
+                    onChange={(event) => setCreateChunkIndexFrom(event.target.value)}
+                    fullWidth
+                    size="small"
+                    error={!isChunkRangeValid}
+                  />
+                  <TextField
+                    label="청크 인덱스 (To)"
+                    type="number"
+                    value={createChunkIndexTo}
+                    onChange={(event) => setCreateChunkIndexTo(event.target.value)}
+                    fullWidth
+                    size="small"
+                    error={!isChunkRangeValid}
+                    helperText={!isChunkRangeValid ? "시작 인덱스보다 커야 합니다." : ""}
+                  />
+                </Stack>
+
+                <TextField
+                  label="메타데이터 필터 (JSON)"
+                  placeholder='예: {"status": "SUCCESS"}'
+                  value={createMetadataFilter}
+                  onChange={(event) => setCreateMetadataFilter(event.target.value)}
+                  fullWidth
+                  size="small"
+                  multiline
+                  rows={2}
+                />
+
+                {!hasFilters && (
+                  <Alert severity="warning" sx={{ py: 0 }}>
+                    상세 모드에서는 최소 하나의 필터 조건을 입력해야 합니다.
+                  </Alert>
+                )}
+              </>
+            )}
+
+            <Divider sx={{ my: 1 }}>샘플링 설정</Divider>
+
+            <Stack direction="row" spacing={2}>
+              <TextField
+                select
+                label="샘플링 전략"
+                value={createSamplingStrategy}
+                onChange={(event) =>
+                  setCreateSamplingStrategy(
+                    event.target.value as 'HEAD' | 'RANDOM' | 'STRATIFIED',
+                  )
+                }
+                fullWidth
+                size="small"
+              >
+                <MenuItem value="HEAD">HEAD</MenuItem>
+                <MenuItem value="RANDOM">RANDOM</MenuItem>
+                <MenuItem value="STRATIFIED">STRATIFIED</MenuItem>
+              </TextField>
+
+              <TextField
+                label="샘플 크기 (Sample Size)"
+                type="number"
+                value={createSampleSize}
+                onChange={(event) => setCreateSampleSize(event.target.value)}
+                fullWidth
+                size="small"
+              />
+            </Stack>
+
+            {estimating && (
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
+                <CircularProgress size={16} />
+                <Typography variant="body2" color="text.secondary">
+                  대상 데이터 수를 계산하는 중...
+                </Typography>
+              </Stack>
+            )}
+
+            {!estimating && estimateResult && (
+              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: 'action.hover' }}>
+                <Stack spacing={1}>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    대상 건수 조회 결과
+                  </Typography>
+                  <Stack direction="row" justifyContent="space-between">
+                    <Typography variant="caption" color="text.secondary">전체 대상 수</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                      {estimateResult.totalCount.toLocaleString()} 건
+                    </Typography>
+                  </Stack>
+                  <Stack direction="row" justifyContent="space-between">
+                    <Typography variant="caption" color="text.secondary">최대 허용 한도</Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                      {estimateResult.maxAllowed.toLocaleString()} 건
+                    </Typography>
+                  </Stack>
+                  
+                  {estimateResult.exceedsLimit && (
+                    <Alert severity="warning" sx={{ mt: 1, py: 0.5 }}>
+                      <Typography variant="caption" display="block" sx={{ fontWeight: 700 }}>
+                        허용 한도를 초과했습니다!
+                      </Typography>
+                      {estimateResult.recommendedSampling && (
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mt: 0.5 }}>
+                          <Typography variant="caption">
+                            추천 샘플링: {estimateResult.recommendedSampling.sampleSize} 건 ({estimateResult.recommendedSampling.samplingStrategy})
+                          </Typography>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="warning"
+                            sx={{ py: 0, px: 1, fontSize: '0.75rem' }}
+                            onClick={() => {
+                              if (estimateResult.recommendedSampling) {
+                                setCreateSampleSize(estimateResult.recommendedSampling.sampleSize);
+                                setCreateSamplingStrategy(estimateResult.recommendedSampling.samplingStrategy);
+                              }
+                            }}
+                          >
+                            추천값 적용
+                          </Button>
+                        </Stack>
+                      )}
+                    </Alert>
+                  )}
+                </Stack>
+              </Paper>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
