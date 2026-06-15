@@ -3056,6 +3056,27 @@ export function VectorVisualizationPage() {
               />
             </Stack>
 
+            <Paper variant="outlined" sx={{ p: 1.2, bgcolor: 'background.default', borderStyle: 'dashed' }}>
+              <Typography variant="caption" display="block" color="text.primary" sx={{ fontWeight: 700, mb: 0.5 }}>
+                💡 선택된 샘플링 전략 안내
+              </Typography>
+              {createSamplingStrategy === 'STRATIFIED' && (
+                <Typography variant="caption" color="text.secondary" display="block">
+                  <strong>STRATIFIED (층화 추출 - 추천):</strong> 데이터의 Object Type(예: NCS, COURSE 등) 분포 비율을 원본과 유사하게 유지하면서 골고루 샘플링합니다. 전체 데이터의 균형 잡힌 분포를 시각화하고 싶을 때 가장 적합합니다.
+                </Typography>
+              )}
+              {createSamplingStrategy === 'RANDOM' && (
+                <Typography variant="caption" color="text.secondary" display="block">
+                  <strong>RANDOM (무작위 추출):</strong> 조건에 필터링된 전체 대상 중 무작위로 선택하여 샘플링합니다. 특정 카테고리에 편향되지 않고 전반적인 분포 양상을 빠르게 훑어볼 때 유용합니다.
+                </Typography>
+              )}
+              {createSamplingStrategy === 'HEAD' && (
+                <Typography variant="caption" color="text.secondary" display="block">
+                  <strong>HEAD (순차/상위 추출):</strong> 데이터베이스에 적재된 순서대로 최상단(가장 최근 데이터 위주)부터 지정된 크기만큼 샘플링합니다. 최근 등록된 청크들이 정상적으로 투영 및 배치되었는지 검증할 때 적합합니다.
+                </Typography>
+              )}
+            </Paper>
+
             {estimating && (
               <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 1 }}>
                 <CircularProgress size={16} />
