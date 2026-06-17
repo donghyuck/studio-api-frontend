@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Accordion,
@@ -18,6 +19,7 @@ import {
   DialogTitle,
   Divider,
   FormControlLabel,
+  Grid,
   IconButton,
   MenuItem,
   Select,
@@ -28,6 +30,7 @@ import {
   Switch,
   Tab,
   Tabs,
+  TablePagination,
   TextField,
   Tooltip,
   Typography,
@@ -71,6 +74,15 @@ import type {
 } from "@/types/studio/ai";
 import type { ObjectTypeDto } from "@/types/studio/objecttype";
 import { resolveAxiosError } from "@/utils/helpers";
+import { toast } from "@/react/feedback";
+
+export interface RagObjectGroup {
+  objectType: string;
+  objectId: string;
+  documentId?: string;
+  latestJob: RagIndexJobDto;
+  count: number;
+}
 
 type ValidationTab = "vector" | "rag" | "chat";
 type RagJobStatusFilter = RagIndexJobStatus | "";
@@ -417,6 +429,7 @@ function SearchResultDetail({
 }
 
 export function RagPage() {
+  const navigate = useNavigate();
   const statusSectionRef = useRef<HTMLDivElement | null>(null);
   const targetSectionRef = useRef<HTMLDivElement | null>(null);
   const jobsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -467,31 +480,92 @@ export function RagPage() {
   const [jobStatusFilter, setJobStatusFilter] = useState<RagJobStatusFilter>("");
   const [selectedJob, setSelectedJob] = useState<RagIndexJobDto | null>(null);
 
-  const jobsGridRef = useRef<PageableGridContentHandle<RagIndexJobDto>>(null);
-  const jobsDataSource = useMemo(() => {
-    const ds = new ReactPageDataSource<RagIndexJobDto>("/api/mgmt/ai/rag/jobs");
-    ds.setPageSize(15);
-    const originalFetch = ds.fetchForAgGrid.bind(ds);
-    ds.fetchForAgGrid = async (params) => {
-      setJobsLoading(true);
-      try {
-        const res = await originalFetch(params);
-        const items = res.rows;
-        setJobs(items);
-        setJobsTotal(res.total);
-        const selectedJobId = selectedJobIdRef.current;
-        if (selectedJobId && !items.some((job) => job.jobId === selectedJobId)) {
-          setSelectedJob(null);
-          setJobLogs([]);
-          setChunks([]);
-        }
-        return res;
-      } finally {
-        setJobsLoading(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
+  const [selectedGroup, setSelectedGroup] = useState<{ objectType: string; objectId: string } | null>(null);
+  const [groupHistoryJobs, setGroupHistoryJobs] = useState<RagIndexJobDto[]>([]);
+  const [groupHistoryLoading, setGroupHistoryLoading] = useState(false);
+
+  const jobsGridRef = useRef<any>(null);
+
+  const fetchJobs = useCallback(async () => {
+    setJobsLoading(true);
+    try {
+      const res = await reactAiApi.listRagJobs({
+        status: jobStatusFilter || undefined,
+        page: page,
+        size: pageSize,
+        sort: "createdAt",
+        direction: "desc",
+      });
+      const items = res.content ?? [];
+      setJobs(items);
+      setJobsTotal(res.totalElements ?? (res as any).total ?? 0);
+
+      const selectedJobId = selectedJobIdRef.current;
+      if (selectedJobId && !items.some((job) => job.jobId === selectedJobId)) {
+        setSelectedJob(null);
+        setJobLogs([]);
+        setChunks([]);
       }
-    };
-    return ds;
+    } catch (err) {
+      toast.error("색인 작업 목록 로드 실패: " + resolveAxiosError(err));
+    } finally {
+      setJobsLoading(false);
+    }
+  }, [page, pageSize, jobStatusFilter]);
+
+  const loadGroupHistory = useCallback(async (objectType: string, objectId: string) => {
+    setGroupHistoryLoading(true);
+    try {
+      const res = await reactAiApi.listRagJobs({
+        objectType,
+        objectId,
+        page: 0,
+        size: 50,
+        sort: "createdAt",
+        direction: "desc",
+      });
+      setGroupHistoryJobs(res.content ?? []);
+    } catch (err) {
+      toast.error("작업 상세 이력 조회 실패: " + resolveAxiosError(err));
+    } finally {
+      setGroupHistoryLoading(false);
+    }
   }, []);
+
+  const handleSelectGroup = useCallback((group: { objectType: string; objectId: string }) => {
+    setSelectedGroup({
+      objectType: group.objectType,
+      objectId: group.objectId,
+    });
+    void loadGroupHistory(group.objectType, group.objectId);
+  }, [loadGroupHistory]);
+
+  const groupedJobs = useMemo(() => {
+    const map = new Map<string, { objectType: string; objectId: string; documentId?: string; latestJob: RagIndexJobDto; count: number }>();
+    jobs.forEach((job) => {
+      const key = `${job.objectType}::${job.objectId}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          objectType: job.objectType,
+          objectId: job.objectId,
+          documentId: job.documentId,
+          latestJob: job,
+          count: 1,
+        });
+      } else {
+        const val = map.get(key)!;
+        val.count += 1;
+        const tCurrent = new Date(val.latestJob.createdAt || 0).getTime();
+        const tNext = new Date(job.createdAt || 0).getTime();
+        if (tNext > tCurrent) {
+          val.latestJob = job;
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [jobs]);
   const [jobLogs, setJobLogs] = useState<RagIndexJobLogDto[]>([]);
   const [chunks, setChunks] = useState<RagIndexChunkDto[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
@@ -689,11 +763,12 @@ export function RagPage() {
     } catch {
       setObjectTypes([]);
     }
-  }, []);
-
-  const loadJobs = useCallback(() => {
-    jobsGridRef.current?.refresh();
-  }, []);
+  }, []);  const loadJobs = useCallback(() => {
+    void fetchJobs();
+    if (selectedGroup) {
+      void loadGroupHistory(selectedGroup.objectType, selectedGroup.objectId);
+    }
+  }, [fetchJobs, selectedGroup, loadGroupHistory]);
 
   useEffect(() => {
     void loadProviders();
@@ -702,10 +777,8 @@ export function RagPage() {
   }, [loadObjectTypes, loadProviders, loadEmbeddingOptions]);
 
   useEffect(() => {
-    jobsDataSource.applyFilter({ status: jobStatusFilter || undefined });
-    loadJobs();
-  }, [jobStatusFilter, loadJobs, jobsDataSource]);
-
+    void fetchJobs();
+  }, [fetchJobs]);
   useEffect(() => {
     selectedJobIdRef.current = selectedJob?.jobId ?? null;
   }, [selectedJob?.jobId]);
@@ -855,8 +928,7 @@ export function RagPage() {
     ],
     []
   );
-
-  const jobColumnDefs = useMemo<ColDef<RagIndexJobDto>[]>(
+  const groupColumnDefs = useMemo<ColDef<RagObjectGroup>[]>(
     () => [
       {
         colId: "selection",
@@ -872,18 +944,18 @@ export function RagPage() {
         lockPosition: true,
         cellClass: "selection-column-centered",
         headerClass: "selection-column-centered",
-        cellRenderer: (params: ICellRendererParams<RagIndexJobDto>) => {
-          const checked = params.data?.jobId === selectedJob?.jobId;
+        cellRenderer: (params: ICellRendererParams<RagObjectGroup>) => {
+          const checked =
+            selectedGroup?.objectType === params.data?.objectType &&
+            selectedGroup?.objectId === params.data?.objectId;
 
           return (
             <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <JobSelectionToggle
                 checked={checked}
                 onToggle={() => {
-                  if (!params.data) {
-                    return;
-                  }
-                  toggleSelectedJob(params.data);
+                  if (!params.data) return;
+                  handleSelectGroup(params.data);
                 }}
               />
             </Box>
@@ -891,69 +963,56 @@ export function RagPage() {
         },
       },
       {
-        field: "status",
-        headerName: "상태",
+        field: "latestJob.status",
+        headerName: "최근 상태",
         width: 120,
         filter: false,
+        valueGetter: (params) => params.data?.latestJob.status,
         cellRenderer: (params: { value?: RagIndexJobStatus }) => (
           <Chip size="small" color={statusColor(params.value)} label={params.value ?? "-"} />
         ),
       },
-      { field: "currentStep", headerName: "단계", width: 120, filter: false },
-      { field: "objectType", headerName: "객체 유형", width: 130, filter: false },
-      { field: "objectId", headerName: "객체 ID", width: 130, filter: false },
-      { field: "sourceType", headerName: "소스", width: 120, filter: false },
       {
-        field: "chunkCount",
-        headerName: "Chunk",
-        width: 100,
+        field: "latestJob.currentStep",
+        headerName: "최근 단계",
+        width: 110,
         filter: false,
-        type: "numericColumn",
+        valueGetter: (params) => params.data?.latestJob.currentStep,
       },
+      { field: "objectType", headerName: "객체 유형", width: 120, filter: false },
+      { field: "objectId", headerName: "객체 ID", width: 120, filter: false },
+      { field: "documentId", headerName: "문서 ID", width: 120, filter: false },
       {
-        field: "warningCount",
-        headerName: "경고",
+        field: "count",
+        headerName: "이력 수",
         width: 90,
         filter: false,
         type: "numericColumn",
       },
       {
-        field: "durationMs",
-        headerName: "소요",
-        width: 110,
+        field: "latestJob.createdAt",
+        headerName: "최근 작업일시",
+        flex: 1,
+        minWidth: 170,
         filter: false,
-        valueFormatter: (params) =>
-          typeof params.value === "number" ? `${params.value.toLocaleString()}ms` : "-",
-      },
-      {
-        field: "createdAt",
-        headerName: "생성일시",
-        width: 190,
-        filter: false,
+        valueGetter: (params) => params.data?.latestJob.createdAt,
         valueFormatter: (params) => formatDateTime(params.value as string | undefined),
       },
-      {
-        field: "errorMessage",
-        headerName: "오류",
-        flex: 1.4,
-        minWidth: 220,
-        filter: false,
-        tooltipField: "errorMessage",
-        cellRenderer: ErrorMessageCell,
-      },
     ],
-    [selectedJob?.jobId]
+    [selectedGroup, handleSelectGroup, statusColor]
   );
 
-  const jobGridOptions = useMemo<GridOptions<RagIndexJobDto>>(
+  const groupGridOptions = useMemo<GridOptions<RagObjectGroup>>(
     () => ({
-      getRowId: (params) => params.data.jobId,
+      getRowId: (params) => `${params.data.objectType}::${params.data.objectId}`,
       suppressRowClickSelection: true,
       rowClassRules: {
-        "rag-job-row-selected": (params) => params.data?.jobId === selectedJob?.jobId,
+        "rag-job-row-selected": (params) =>
+          selectedGroup?.objectType === params.data?.objectType &&
+          selectedGroup?.objectId === params.data?.objectId,
       },
     }),
-    [selectedJob?.jobId]
+    [selectedGroup]
   );
 
   const chunkColumnDefs = useMemo<ColDef<RagIndexChunkDto>[]>(
@@ -2377,55 +2436,188 @@ export function RagPage() {
                   취소
                 </Button>
               </Stack>
-              <Box
-                sx={{
-                  "& .ag-row.rag-job-row-selected": {
-                    bgcolor: (theme) =>
-                      theme.palette.mode === "dark"
-                        ? "rgba(66, 165, 245, 0.22)"
-                        : "rgba(25, 118, 210, 0.12)",
-                  },
-                  "& .ag-row.rag-job-row-selected:hover": {
-                    bgcolor: (theme) =>
-                      theme.palette.mode === "dark"
-                        ? "rgba(66, 165, 245, 0.28)"
-                        : "rgba(25, 118, 210, 0.18)",
-                  },
-                  "& .ag-row.rag-job-row-selected::before": {
-                    content: '""',
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 3,
-                    bgcolor: "primary.main",
-                    zIndex: 1,
-                  },
-                  "& .ag-row.rag-job-row-selected .ag-cell": {
-                    fontWeight: 600,
-                  },
-                }}
-              >
-                <PageableGridContent<RagIndexJobDto>
-                  ref={jobsGridRef}
-                  datasource={jobsDataSource}
-                  columns={jobColumnDefs}
-                  options={jobGridOptions}
-                  height={300}
-                  events={[
-                    {
-                      type: "rowClicked",
-                      listener: (event) => {
-                        const row = (event as { data?: RagIndexJobDto }).data;
-                        if (!row) {
-                          return;
-                        }
-                        toggleSelectedJob(row);
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 7.5 }}>
+                  <Box
+                    sx={{
+                      "& .ag-row.rag-job-row-selected": {
+                        bgcolor: (theme) =>
+                          theme.palette.mode === "dark"
+                            ? "rgba(66, 165, 245, 0.22)"
+                            : "rgba(25, 118, 210, 0.12)",
                       },
-                    },
-                  ]}
-                />
-              </Box>
+                      "& .ag-row.rag-job-row-selected:hover": {
+                        bgcolor: (theme) =>
+                          theme.palette.mode === "dark"
+                            ? "rgba(66, 165, 245, 0.28)"
+                            : "rgba(25, 118, 210, 0.18)",
+                      },
+                      "& .ag-row.rag-job-row-selected::before": {
+                        content: '""',
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 3,
+                        bgcolor: "primary.main",
+                        zIndex: 1,
+                      },
+                      "& .ag-row.rag-job-row-selected .ag-cell": {
+                        fontWeight: 600,
+                      },
+                    }}
+                  >
+                    <GridContent<RagObjectGroup>
+                      rowData={groupedJobs}
+                      columns={groupColumnDefs}
+                      options={groupGridOptions}
+                      height={320}
+                      events={[
+                        {
+                          type: "rowClicked",
+                          listener: (event) => {
+                            const row = (event as { data?: RagObjectGroup }).data;
+                            if (!row) {
+                              return;
+                            }
+                            handleSelectGroup(row);
+                          },
+                        },
+                      ]}
+                    />
+                    <TablePagination
+                      component="div"
+                      count={jobsTotal}
+                      page={page}
+                      onPageChange={(_, newPage) => setPage(newPage)}
+                      rowsPerPage={pageSize}
+                      onRowsPerPageChange={(e) => {
+                        setPageSize(parseInt(e.target.value, 10));
+                        setPage(0);
+                      }}
+                      rowsPerPageOptions={[15, 30, 50]}
+                      labelRowsPerPage="페이지당 건수:"
+                      sx={{ borderTop: "1px solid", borderColor: "divider" }}
+                    />
+                  </Box>
+                </Grid>
+                <Grid size={{ xs: 12, md: 4.5 }}>
+                  <Card variant="outlined" sx={{ height: 372, borderRadius: 2 }}>
+                    <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: 1.5, "&:last-child": { pb: 1.5 } }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        세부 작업 이력
+                      </Typography>
+                      {selectedGroup ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                          대상: {formatObjectTypeLabel(selectedGroup.objectType)} / {selectedGroup.objectId}
+                        </Typography>
+                      ) : (
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                          대상을 선택해 주세요.
+                        </Typography>
+                      )}
+
+                      <Divider sx={{ mb: 1 }} />
+
+                      {!selectedGroup ? (
+                        <Box sx={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center" }}>
+                          <Typography variant="caption" color="text.secondary" align="center">
+                            좌측 목록에서 대상을 선택하면<br />세부 작업 이력이 표시됩니다.
+                          </Typography>
+                        </Box>
+                      ) : groupHistoryLoading ? (
+                        <Box sx={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center" }}>
+                          <CircularProgress size={24} />
+                        </Box>
+                      ) : groupHistoryJobs.length === 0 ? (
+                        <Box sx={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center" }}>
+                          <Typography variant="caption" color="text.secondary" align="center">
+                            작업 이력이 존재하지 않습니다.
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Box sx={{ flex: 1, overflowY: "auto", pr: 0.5 }}>
+                          <Stack spacing={1}>
+                            {groupHistoryJobs.map((job) => {
+                              const isSelected = selectedJob?.jobId === job.jobId;
+                              return (
+                                <Box
+                                  key={job.jobId}
+                                  onClick={() => {
+                                    toggleSelectedJob(job);
+                                  }}
+                                  sx={{
+                                    p: 1,
+                                    border: "1px solid",
+                                    borderColor: isSelected ? "primary.main" : "divider",
+                                    borderRadius: 1.5,
+                                    cursor: "pointer",
+                                    bgcolor: isSelected ? "action.selected" : "background.paper",
+                                    "&:hover": {
+                                      bgcolor: "action.hover",
+                                    },
+                                    position: "relative",
+                                  }}
+                                >
+                                  {isSelected && (
+                                    <Box
+                                      sx={{
+                                        position: "absolute",
+                                        left: 0,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: 3,
+                                        bgcolor: "primary.main",
+                                        borderTopLeftRadius: 6,
+                                        borderBottomLeftRadius: 6,
+                                      }}
+                                    />
+                                  )}
+                                  <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                                    <Stack spacing={0.25}>
+                                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                                        {formatDateTime(job.createdAt)}
+                                      </Typography>
+                                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 12 }}>
+                                        {job.currentStep || "대기"}
+                                      </Typography>
+                                      {job.documentId && (
+                                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                                          문서: {job.documentId}
+                                        </Typography>
+                                      )}
+                                    </Stack>
+                                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                                      <Chip
+                                        size="small"
+                                        color={statusColor(job.status)}
+                                        label={job.status}
+                                        sx={{ height: 18, fontSize: 9, "& .MuiChip-label": { px: 0.75 } }}
+                                      />
+                                      <IconButton
+                                        size="small"
+                                        color="primary"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigate(`/services/ai/rag/jobs/${job.jobId}`);
+                                        }}
+                                        title="상세 페이지 이동"
+                                      >
+                                        <ChevronRightOutlined sx={{ fontSize: 16 }} />
+                                      </IconButton>
+                                    </Stack>
+                                  </Stack>
+                                </Box>
+                              );
+                            })}
+                          </Stack>
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+
               {selectedJob ? (
                 <Alert severity="info" icon={false}>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={0.75} alignItems={{ sm: "center" }}>
