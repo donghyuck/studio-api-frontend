@@ -13,6 +13,10 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  Grid,
+  Divider,
+  Card,
+  CardContent,
   IconButton,
   MenuItem,
   Pagination,
@@ -41,6 +45,15 @@ import { reactObjectTypeApi } from "@/react/pages/objecttype/api";
 import type { RagIndexJobDto, RagIndexJobStatus } from "@/types/studio/ai";
 import type { ObjectTypeDto } from "@/types/studio/objecttype";
 import { resolveAxiosError } from "@/utils/helpers";
+import { toast } from "@/react/feedback";
+
+export interface RagObjectGroup {
+  objectType: string;
+  objectId: string;
+  documentId?: string;
+  latestJob: RagIndexJobDto;
+  count: number;
+}
 
 type RagJobStatusFilter = RagIndexJobStatus | "";
 type SourceMode = "attachment" | "text";
@@ -103,6 +116,9 @@ export function RagJobListPage() {
   const [documentId, setDocumentId] = useState("");
   const [indexText, setIndexText] = useState("");
   const [forceReindex, setForceReindex] = useState(false);
+  const [selectedGroup, setSelectedGroup] = useState<RagObjectGroup | null>(null);
+  const [historyJobs, setHistoryJobs] = useState<RagIndexJobDto[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const selectedJobIdRef = useRef<string | null>(null);
 
   const objectTypeOptions = useMemo<ObjectTypeOption[]>(
@@ -144,10 +160,28 @@ export function RagJobListPage() {
     );
   }, [jobs, search]);
 
-  const displayedJobs = useMemo<RagIndexJobRow[]>(
-    () => filteredJobs.map((job) => ({ ...job, __selected: job.jobId === selectedJob?.jobId })),
-    [filteredJobs, selectedJob?.jobId]
-  );
+  const groupedJobs = useMemo<RagObjectGroup[]>(() => {
+    const groupsMap = new Map<string, RagObjectGroup>();
+    for (const job of filteredJobs) {
+      const key = `${job.objectType}:${job.objectId}`;
+      const existing = groupsMap.get(key);
+      if (!existing) {
+        groupsMap.set(key, {
+          objectType: job.objectType,
+          objectId: job.objectId,
+          documentId: job.documentId,
+          latestJob: job,
+          count: 1,
+        });
+      } else {
+        existing.count += 1;
+        if (new Date(job.createdAt || 0) > new Date(existing.latestJob.createdAt || 0)) {
+          existing.latestJob = job;
+        }
+      }
+    }
+    return Array.from(groupsMap.values());
+  }, [filteredJobs]);
 
   const loadJobs = useCallback(async () => {
     setLoading(true);
@@ -169,6 +203,28 @@ export function RagJobListPage() {
       setLoading(false);
     }
   }, [page, pageSize, status]);
+
+  const loadHistory = useCallback(async (group: RagObjectGroup | null) => {
+    if (!group) {
+      setHistoryJobs([]);
+      return;
+    }
+    setHistoryLoading(true);
+    try {
+      const response = await reactAiApi.listRagJobs({
+        objectType: group.objectType,
+        objectId: group.objectId,
+        size: 50,
+        sort: "createdAt",
+        direction: "desc",
+      });
+      setHistoryJobs(response.content ?? []);
+    } catch (err) {
+      toast.error("작업 이력을 가져오는데 실패했습니다: " + resolveAxiosError(err));
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
 
   const loadObjectTypes = useCallback(async () => {
     try {
@@ -192,23 +248,26 @@ export function RagJobListPage() {
   }, [status]);
 
   useEffect(() => {
-    if (selectedJob && !jobs.some((job) => job.jobId === selectedJob.jobId)) {
-      setCurrentSelectedJob(null);
-    }
-  }, [jobs, selectedJob, setCurrentSelectedJob]);
+    void loadHistory(selectedGroup);
+  }, [selectedGroup, loadHistory]);
 
   const openDetail = useCallback((jobId: string) => {
     navigate(`/services/ai/rag/jobs/${encodeURIComponent(jobId)}`);
   }, [navigate]);
 
-  const gridOptions = useMemo<GridOptions<RagIndexJobRow>>(
+  const groupGridOptions = useMemo<GridOptions<RagObjectGroup>>(
     () => ({
-      getRowId: (params) => params.data.jobId,
+      getRowId: (params) => `${params.data.objectType}:${params.data.objectId}`,
       rowClassRules: {
-        "rag-job-row-selected": (params) => Boolean(params.data?.__selected),
+        "rag-job-row-selected": (params) =>
+          Boolean(
+            params.data &&
+              selectedGroup?.objectType === params.data.objectType &&
+              selectedGroup?.objectId === params.data.objectId
+          ),
       },
     }),
-    []
+    [selectedGroup]
   );
 
   function resetCreateForm() {
@@ -252,36 +311,20 @@ export function RagJobListPage() {
     }
   }
 
-  const columns = useMemo<ColDef<RagIndexJobRow>[]>(
+  const groupColumns = useMemo<ColDef<RagObjectGroup>[]>(
     () => [
+      { field: "objectType", headerName: "객체 유형", width: 120, filter: false },
+      { field: "objectId", headerName: "객체 ID", width: 110, filter: false },
       {
-        field: "status",
-        headerName: "상태",
-        width: 132,
-        filter: false,
-        cellRenderer: (params: { value?: RagIndexJobStatus }) => (
-          <Chip
-            size="small"
-            color={statusColor(params.value)}
-            icon={statusIcon(params.value)}
-            label={params.value ?? "-"}
-            sx={{
-              fontWeight: params.value === "FAILED" ? 700 : 500,
-              "& .MuiChip-icon": { ml: 0.75 },
-            }}
-          />
-        ),
-      },
-      {
-        colId: "sourceName",
-        headerName: "문서/파일명",
+        colId: "documentName",
+        headerName: "문서 / 파일명",
         flex: 1.2,
-        minWidth: 280,
+        minWidth: 260,
         filter: false,
-        valueGetter: (params) => (params.data ? sourceDisplayName(params.data) : "-"),
-        cellRenderer: (params: ICellRendererParams<RagIndexJobRow>) => {
-          const row = params.data;
-          if (!row) {
+        valueGetter: (params) => (params.data ? sourceDisplayName(params.data.latestJob) : "-"),
+        cellRenderer: (params: ICellRendererParams<RagObjectGroup>) => {
+          const group = params.data;
+          if (!group) {
             return "-";
           }
           return (
@@ -290,7 +333,7 @@ export function RagJobListPage() {
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                openDetail(row.jobId);
+                openDetail(group.latestJob.jobId);
               }}
               sx={{
                 display: "inline-flex",
@@ -307,68 +350,51 @@ export function RagJobListPage() {
               }}
             >
               <Typography variant="body2" noWrap>
-                {sourceDisplayName(row)}
+                {sourceDisplayName(group.latestJob)}
               </Typography>
             </Box>
           );
         },
       },
-      { field: "objectType", headerName: "객체 유형", width: 120, filter: false },
-      { field: "objectId", headerName: "객체 ID", width: 110, filter: false },
-      { field: "sourceType", headerName: "소스", width: 110, filter: false },
-      { field: "currentStep", headerName: "단계", width: 130, filter: false },
-      { field: "chunkCount", headerName: "Chunk", width: 90, filter: false, type: "numericColumn" },
-      { field: "warningCount", headerName: "경고", width: 90, filter: false, type: "numericColumn" },
       {
-        field: "createdAt",
-        headerName: "생성일시",
-        width: 190,
+        field: "latestJob.status",
+        headerName: "마지막 JOB 상태",
+        width: 140,
+        filter: false,
+        cellRenderer: (params: ICellRendererParams<RagObjectGroup>) => {
+          const val = params.data?.latestJob.status;
+          return (
+            <Chip
+              size="small"
+              color={statusColor(val)}
+              icon={statusIcon(val)}
+              label={val ?? "-"}
+              sx={{
+                fontWeight: val === "FAILED" ? 700 : 500,
+                "& .MuiChip-icon": { ml: 0.75 },
+              }}
+            />
+          );
+        },
+      },
+      {
+        field: "latestJob.createdAt",
+        headerName: "마지막 JOB 일시",
+        width: 195,
         filter: false,
         valueFormatter: (params) => formatDateTime(params.value as string | undefined),
       },
       {
-        field: "durationMs",
-        headerName: "소요",
-        width: 100,
+        field: "count",
+        headerName: "전체 Job 수",
+        width: 110,
         filter: false,
-        valueFormatter: (params) =>
-          typeof params.value === "number" ? `${params.value.toLocaleString()}ms` : "-",
-      },
-      {
-        field: "errorMessage",
-        headerName: "오류",
-        flex: 0.8,
-        minWidth: 180,
-        filter: false,
-        tooltipField: "errorMessage",
-      },
-      {
-        colId: "actions",
-        headerName: "",
-        filter: false,
-        sortable: false,
-        width: 64,
-        cellRenderer: (params: ICellRendererParams<RagIndexJobRow>) => (
-          <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
-            <Tooltip title="상세보기">
-              <IconButton
-                size="small"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (params.data) {
-                    openDetail(params.data.jobId);
-                  }
-                }}
-              >
-                <ChevronRight fontSize="small" />
-              </IconButton>
-            </Tooltip>
-          </Box>
-        ),
+        type: "numericColumn",
       },
     ],
     [openDetail]
   );
+
 
   return (
     <Stack spacing={0.5}>
@@ -423,108 +449,221 @@ export function RagJobListPage() {
         </Typography>
       </Stack>
 
-      <Box>
-        <Box
-          sx={{
-            "& .ag-row.rag-job-row-selected": {
-              bgcolor: (theme) =>
-                theme.palette.mode === "dark"
-                  ? alpha(theme.palette.primary.main, 0.26)
-                  : alpha(theme.palette.primary.main, 0.14),
-              boxShadow: (theme) => `inset 4px 0 0 ${theme.palette.primary.main}`,
-            },
-            "& .ag-row.rag-job-row-selected:hover": {
-              bgcolor: (theme) =>
-                theme.palette.mode === "dark"
-                  ? alpha(theme.palette.primary.main, 0.34)
-                  : alpha(theme.palette.primary.main, 0.2),
-            },
-            "& .ag-row.rag-job-row-selected .ag-cell": {
-              bgcolor: (theme) =>
-                theme.palette.mode === "dark"
-                  ? `${alpha(theme.palette.primary.main, 0.26)} !important`
-                  : `${alpha(theme.palette.primary.main, 0.14)} !important`,
-              fontWeight: 600,
-            },
-            "& .ag-row.ag-row-selected .ag-cell": {
-              bgcolor: (theme) =>
-                theme.palette.mode === "dark"
-                  ? `${alpha(theme.palette.primary.main, 0.26)} !important`
-                  : `${alpha(theme.palette.primary.main, 0.14)} !important`,
-              fontWeight: 600,
-            },
-            "& .ag-row.rag-job-row-selected:hover .ag-cell": {
-              bgcolor: (theme) =>
-                theme.palette.mode === "dark"
-                  ? `${alpha(theme.palette.primary.main, 0.34)} !important`
-                  : `${alpha(theme.palette.primary.main, 0.2)} !important`,
-            },
-            "& .ag-row.ag-row-selected:hover .ag-cell": {
-              bgcolor: (theme) =>
-                theme.palette.mode === "dark"
-                  ? `${alpha(theme.palette.primary.main, 0.34)} !important`
-                  : `${alpha(theme.palette.primary.main, 0.2)} !important`,
-            },
-            "& .ag-row.rag-job-row-selected .ag-cell:first-of-type": {
-              boxShadow: (theme) => `inset 4px 0 0 ${theme.palette.primary.main}`,
-            },
-            "& .ag-row.ag-row-selected .ag-cell:first-of-type": {
-              boxShadow: (theme) => `inset 4px 0 0 ${theme.palette.primary.main}`,
-            },
-          }}
-        >
-          <GridContent<RagIndexJobRow>
-            columns={columns}
-            options={gridOptions}
-            rowSelection={{
-              mode: "singleRow",
-              checkboxes: false,
-              enableClickSelection: false,
-            }}
-            rowData={displayedJobs}
-            loading={loading}
-            height={560}
-            onRowSelected={(event) => {
-              const row = (event as { data?: RagIndexJobRow; node?: { isSelected?: () => boolean } }).data;
-              const selected = (event as { node?: { isSelected?: () => boolean } }).node?.isSelected?.();
-              if (!row) {
-                return;
-              }
-              if (selected) {
-                setCurrentSelectedJob(row);
-              } else if (selectedJobIdRef.current === row.jobId) {
-                setCurrentSelectedJob(null);
-              }
-            }}
-            events={[
-              {
-                type: "rowClicked",
-                listener: (event) => {
-	                  const typedEvent = event as {
-	                    data?: RagIndexJobRow;
-	                    node?: { setSelected?: (selected: boolean) => void };
-	                  };
-	                  const row = typedEvent.data;
-	                  if (row) {
-	                    const nextSelected = selectedJobIdRef.current !== row.jobId;
-	                    typedEvent.node?.setSelected?.(nextSelected);
-	                    setCurrentSelectedJob(nextSelected ? row : null);
-	                  }
-	                },
+      <Grid container spacing={2}>
+        {/* Left Column: Grouped Master Table */}
+        <Grid size={{ xs: 12, md: 7.5 }}>
+          <Box
+            sx={{
+              "& .ag-row.rag-job-row-selected": {
+                bgcolor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? alpha(theme.palette.primary.main, 0.26)
+                    : alpha(theme.palette.primary.main, 0.14),
+                boxShadow: (theme) => `inset 4px 0 0 ${theme.palette.primary.main}`,
               },
-              {
-                type: "rowDoubleClicked",
-                listener: (event) => {
-                  const row = (event as { data?: RagIndexJobRow }).data;
-                  if (row) {
-                    openDetail(row.jobId);
-                  }
+              "& .ag-row.rag-job-row-selected:hover": {
+                bgcolor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? alpha(theme.palette.primary.main, 0.34)
+                    : alpha(theme.palette.primary.main, 0.2),
+              },
+              "& .ag-row.rag-job-row-selected .ag-cell": {
+                bgcolor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? `${alpha(theme.palette.primary.main, 0.26)} !important`
+                    : `${alpha(theme.palette.primary.main, 0.14)} !important`,
+                fontWeight: 600,
+              },
+              "& .ag-row.ag-row-selected .ag-cell": {
+                bgcolor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? `${alpha(theme.palette.primary.main, 0.26)} !important`
+                    : `${alpha(theme.palette.primary.main, 0.14)} !important`,
+                fontWeight: 600,
+              },
+              "& .ag-row.rag-job-row-selected:hover .ag-cell": {
+                bgcolor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? `${alpha(theme.palette.primary.main, 0.34)} !important`
+                    : `${alpha(theme.palette.primary.main, 0.2)} !important`,
+              },
+              "& .ag-row.ag-row-selected:hover .ag-cell": {
+                bgcolor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? `${alpha(theme.palette.primary.main, 0.34)} !important`
+                    : `${alpha(theme.palette.primary.main, 0.2)} !important`,
+              },
+              "& .ag-row.rag-job-row-selected .ag-cell:first-of-type": {
+                boxShadow: (theme) => `inset 4px 0 0 ${theme.palette.primary.main}`,
+              },
+              "& .ag-row.ag-row-selected .ag-cell:first-of-type": {
+                boxShadow: (theme) => `inset 4px 0 0 ${theme.palette.primary.main}`,
+              },
+            }}
+          >
+            <GridContent<RagObjectGroup>
+              columns={groupColumns}
+              options={groupGridOptions}
+              rowSelection={{
+                mode: "singleRow",
+                checkboxes: false,
+                enableClickSelection: false,
+              }}
+              rowData={groupedJobs}
+              loading={loading}
+              height={560}
+              onRowSelected={(event) => {
+                const row = (event as { data?: RagObjectGroup; node?: { isSelected?: () => boolean } }).data;
+                const selected = (event as { node?: { isSelected?: () => boolean } }).node?.isSelected?.();
+                if (!row) {
+                  return;
+                }
+                if (selected) {
+                  setSelectedGroup(row);
+                } else if (selectedGroup?.objectType === row.objectType && selectedGroup?.objectId === row.objectId) {
+                  setSelectedGroup(null);
+                }
+              }}
+              events={[
+                {
+                  type: "rowClicked",
+                  listener: (event) => {
+                    const typedEvent = event as {
+                      data?: RagObjectGroup;
+                      node?: { setSelected?: (selected: boolean) => void };
+                    };
+                    const row = typedEvent.data;
+                    if (row) {
+                      const isSame =
+                        selectedGroup?.objectType === row.objectType &&
+                        selectedGroup?.objectId === row.objectId;
+                      typedEvent.node?.setSelected?.(!isSame);
+                      setSelectedGroup(isSame ? null : row);
+                    }
+                  },
                 },
-              },
-            ]}
-          />
-        </Box>
-      </Box>
+              ]}
+            />
+          </Box>
+        </Grid>
+
+        {/* Right Column: Execution History runs */}
+        <Grid size={{ xs: 12, md: 4.5 }}>
+          <Card variant="outlined" sx={{ height: 604, display: "flex", flexDirection: "column" }}>
+            <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider", bgcolor: "action.hover" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                세부 작업 이력 (Runs)
+              </Typography>
+              {selectedGroup ? (
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+                  {selectedGroup.objectType} #{selectedGroup.objectId} ({sourceDisplayName(selectedGroup.latestJob)})
+                </Typography>
+              ) : (
+                <Typography variant="caption" color="text.secondary">
+                  왼쪽 목록에서 객체를 선택하십시오.
+                </Typography>
+              )}
+            </Box>
+            <CardContent sx={{ p: 0, flex: 1, overflowY: "auto" }}>
+              {historyLoading ? (
+                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%", p: 4 }}>
+                  <CircularProgress size={32} />
+                </Box>
+              ) : selectedGroup ? (
+                historyJobs.length > 0 ? (
+                  <Stack divider={<Divider />} spacing={0}>
+                    {historyJobs.map((job) => {
+                      const isSelected = selectedJob?.jobId === job.jobId;
+                      return (
+                        <Box
+                          key={job.jobId}
+                          onClick={() => setCurrentSelectedJob(job)}
+                          sx={{
+                            p: 2,
+                            cursor: "pointer",
+                            bgcolor: isSelected
+                              ? (theme) =>
+                                  alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.15 : 0.08)
+                              : "transparent",
+                            borderLeft: 4,
+                            borderLeftColor: isSelected ? "primary.main" : "transparent",
+                            "&:hover": {
+                              bgcolor: (theme) => alpha(theme.palette.action.hover, 0.8),
+                            },
+                          }}
+                        >
+                          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                            <Chip
+                              size="small"
+                              label={job.status}
+                              color={statusColor(job.status)}
+                              icon={statusIcon(job.status)}
+                              sx={{ height: 20, "& .MuiChip-label": { px: 1, fontSize: 11 } }}
+                            />
+                            <Typography variant="caption" color="text.secondary">
+                              {formatDateTime(job.createdAt)}
+                            </Typography>
+                          </Stack>
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            alignItems="center"
+                            spacing={1}
+                            sx={{ mt: 1 }}
+                          >
+                            <Box sx={{ minWidth: 0, flex: 1 }}>
+                              <Typography variant="body2" color="text.secondary" noWrap>
+                                단계: {job.currentStep ?? "-"} | Chunk: {job.chunkCount ?? 0}
+                              </Typography>
+                              <Typography variant="caption" color="text.disabled" display="block" noWrap>
+                                ID: {job.jobId}
+                              </Typography>
+                            </Box>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openDetail(job.jobId);
+                              }}
+                              sx={{ py: 0.25, minWidth: "auto", px: 1, fontSize: 11 }}
+                            >
+                              상세
+                            </Button>
+                          </Stack>
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+                ) : (
+                  <Box sx={{ p: 4, textAlign: "center" }}>
+                    <Typography variant="body2" color="text.secondary">
+                      작업 이력이 존재하지 않습니다.
+                    </Typography>
+                  </Box>
+                )
+              ) : (
+                <Box
+                  sx={{
+                    p: 4,
+                    textAlign: "center",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    height: "100%",
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    그룹을 선택하면 여기에 실행 이력이 나타납니다.
+                  </Typography>
+                </Box>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
 
       <Stack
         direction={{ xs: "column", sm: "row" }}
