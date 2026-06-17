@@ -292,6 +292,25 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             setMarkdownStatus(null);
             setMarkdownError(null);
             stopPolling();
+
+            // Fetch RAG Jobs once since markdown document doesn't exist but RAG jobs might
+            try {
+              const jobsRes = await reactAiApi.listRagJobs({
+                objectType: "attachment",
+                objectId: String(attachmentId),
+                page: 0,
+                size: 10,
+                sort: "createdAt",
+                direction: "desc",
+              });
+              const content = jobsRes.content ?? [];
+              if (!ignored) {
+                setRagJobs(content);
+                setLatestRagJob(content[0] || null);
+              }
+            } catch (err) {
+              console.error("Failed to load initial RAG jobs:", err);
+            }
           }
         } catch (err) {
           console.error("Failed to load initial metadata:", err);
@@ -311,15 +330,21 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setReused(null);
       stopPolling();
     }
-  }, [open, attachmentId, startPolling, stopPolling, setLatestRevision, setPipelineExecution, setMarkdownStatus, setMarkdownError, toast]);
+  }, [open, attachmentId, startPolling, stopPolling, setLatestRevision, setPipelineExecution, setMarkdownStatus, setMarkdownError, setLatestRagJob, setRagJobs, toast]);
 
   // Restore form state from latestRevision.optionsJson when a processed revision is loaded
   useEffect(() => {
-    if (!latestRevision?.optionsJson) return;
-    try {
-      const opts = JSON.parse(latestRevision.optionsJson) as Record<string, unknown>;
+    let opts: Record<string, unknown> | null = null;
+    if (latestRevision?.optionsJson) {
+      try {
+        opts = JSON.parse(latestRevision.optionsJson) as Record<string, unknown>;
+      } catch {
+        // Ignore JSON parse errors
+      }
+    }
 
-      // Restore pipeline toggles
+    // Restore pipeline toggles
+    if (opts) {
       if (typeof opts.runChunking === "boolean") setRunChunking(opts.runChunking);
       if (typeof opts.runRagIndex === "boolean") setRunRagIndex(opts.runRagIndex);
       if (typeof opts.runSkillExtraction === "boolean") setRunSkillExtraction(opts.runSkillExtraction);
@@ -328,34 +353,48 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       } else {
         setSkillExtractionMode("");
       }
-
-      // Restore chunking settings
-      if (typeof opts.chunkingStrategy === "string" && opts.chunkingStrategy) setChunkingStrategy(opts.chunkingStrategy);
-      if (opts.chunkMaxSize != null) setChunkMaxSize(Number(opts.chunkMaxSize));
-      if (opts.chunkOverlap != null) setChunkOverlap(Number(opts.chunkOverlap));
-      if (typeof opts.chunkUnit === "string" && opts.chunkUnit) setChunkUnit(opts.chunkUnit);
-
-      // Restore embedding option: match by profileId or provider+model from loaded embeddingOptions
-      if (embeddingOptions.length > 0) {
-        const profileId = typeof opts.embeddingProfileId === "string" ? opts.embeddingProfileId : null;
-        const provider = typeof opts.embeddingProvider === "string" ? opts.embeddingProvider : null;
-        const model = typeof opts.embeddingModel === "string" ? opts.embeddingModel : null;
-
-        let matched: EmbeddingOption | undefined;
-        if (profileId) {
-          matched = embeddingOptions.find((o) => o.profileId === profileId);
-        }
-        if (!matched && provider && model) {
-          matched = embeddingOptions.find((o) => o.provider === provider && o.model === model);
-        }
-        if (matched) {
-          setSelectedEmbeddingOption(matched);
-        }
-      }
-    } catch {
-      // Ignore JSON parse errors
     }
-  }, [latestRevision?.optionsJson, embeddingOptions]);
+
+    // Restore chunking settings
+    let strategy = opts && typeof opts.chunkingStrategy === "string" && opts.chunkingStrategy ? opts.chunkingStrategy : null;
+    let maxSize = opts && opts.chunkMaxSize != null ? Number(opts.chunkMaxSize) : null;
+    let overlap = opts && opts.chunkOverlap != null ? Number(opts.chunkOverlap) : null;
+    let unit = opts && typeof opts.chunkUnit === "string" && opts.chunkUnit ? opts.chunkUnit : null;
+
+    if (!strategy && latestRagJob?.chunkingStrategy) strategy = latestRagJob.chunkingStrategy;
+    if (maxSize === null && latestRagJob?.chunkMaxSize != null) maxSize = latestRagJob.chunkMaxSize;
+    if (overlap === null && latestRagJob?.chunkOverlap != null) overlap = latestRagJob.chunkOverlap;
+    if (!unit && latestRagJob?.chunkUnit) unit = latestRagJob.chunkUnit;
+
+    if (strategy) setChunkingStrategy(strategy);
+    if (maxSize !== null) setChunkMaxSize(maxSize);
+    if (overlap !== null) setChunkOverlap(overlap);
+    if (unit) setChunkUnit(unit);
+
+    // Restore embedding option
+    let profileId = opts && typeof opts.embeddingProfileId === "string" ? opts.embeddingProfileId : null;
+    let provider = opts && typeof opts.embeddingProvider === "string" ? opts.embeddingProvider : null;
+    let model = opts && typeof opts.embeddingModel === "string" ? opts.embeddingModel : null;
+
+    if (!profileId && !provider && !model && latestRagJob) {
+      profileId = latestRagJob.embeddingProfileId || null;
+      provider = latestRagJob.embeddingProvider || null;
+      model = latestRagJob.embeddingModel || null;
+    }
+
+    if (embeddingOptions.length > 0 && (profileId || (provider && model))) {
+      let matched: EmbeddingOption | undefined;
+      if (profileId) {
+        matched = embeddingOptions.find((o) => o.profileId === profileId);
+      }
+      if (!matched && provider && model) {
+        matched = embeddingOptions.find((o) => o.provider === provider && o.model === model);
+      }
+      if (matched) {
+        setSelectedEmbeddingOption(matched);
+      }
+    }
+  }, [latestRevision?.optionsJson, latestRagJob, embeddingOptions]);
 
   const metadataEntries = Object.entries(ragMetadata ?? {});
   const format = file ? getDocumentFormat(file.name, file.contentType) : null;
@@ -578,6 +617,22 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         setMarkdownStatus(null);
         setMarkdownError(null);
         stopPolling();
+
+        try {
+          const jobsRes = await reactAiApi.listRagJobs({
+            objectType: "attachment",
+            objectId: String(attachmentId),
+            page: 0,
+            size: 10,
+            sort: "createdAt",
+            direction: "desc",
+          });
+          const content = jobsRes.content ?? [];
+          setRagJobs(content);
+          setLatestRagJob(content[0] || null);
+        } catch (err) {
+          console.error("Failed to load initial RAG jobs in refreshDetail:", err);
+        }
       }
     } catch (error) {
       toast.error(resolveAxiosError(error));
