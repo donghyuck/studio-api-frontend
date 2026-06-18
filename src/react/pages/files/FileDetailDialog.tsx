@@ -2005,7 +2005,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           <Table size="small">
                             <TableBody>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "35%", fontSize: 11 }}>1. Markdown Document ID</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "35%", fontSize: 11 }}>원본 Attachment ID</TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>{attachmentId || "-"}</TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>1. Markdown Document ID</TableCell>
                                 <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>{documentId}</TableCell>
                               </TableRow>
                               <TableRow>
