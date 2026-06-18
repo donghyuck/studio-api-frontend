@@ -2053,11 +2053,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                 </TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>9. 결과 Attachment ID</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{latestRevision?.resultAttachmentId || "-"}</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>10. Document Convert Job ID</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>9. Document Convert Job ID</TableCell>
                                 <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>{latestRevision?.documentConvertJobId || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
