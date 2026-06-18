@@ -1120,6 +1120,17 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   function renderPipelineStatusDashboard() {
     if (!documentId) return null;
 
+    const getMarkdownProgress = () => {
+      if (!latestRevision || !latestRevision.totalPartCount) return undefined;
+      return Math.floor(((latestRevision.completedPartCount || 0) / latestRevision.totalPartCount) * 100);
+    };
+
+    const getMarkdownDetails = () => {
+      if (!latestRevision || !latestRevision.totalPartCount) return undefined;
+      const progress = getMarkdownProgress();
+      return `${latestRevision.completedPartCount || 0}/${latestRevision.totalPartCount} (${progress}%)`;
+    };
+
     const getEmbeddingProgress = () => {
       if (!latestRagJob || !latestRagJob.chunkCount) return 0;
       return Math.floor((latestRagJob.embeddedCount / latestRagJob.chunkCount) * 100);
@@ -1130,6 +1141,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       return Math.floor((latestRagJob.indexedCount / latestRagJob.chunkCount) * 100);
     };
 
+    const mdProg = getMarkdownProgress();
     const embProg = getEmbeddingProgress();
     const idxProg = getIndexingProgress();
 
@@ -1145,6 +1157,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         label: "Markdown (구조화)",
         status: getMarkdownStepStatus(),
         description: "추출 텍스트를 마크다운 포맷으로 가공 및 단락/목차 구조화",
+        progress: mdProg,
+        details: getMarkdownDetails(),
       },
       {
         id: "chunking",
@@ -1871,7 +1885,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             <Button
                               size="small"
                               variant="outlined"
-                              disabled={controlsDisabled || markdownStatus !== "COMPLETED"}
+                              disabled={controlsDisabled || markdownStatus !== "COMPLETED" || pipelineExecution?.status === "COMPLETED"}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 void handleResume(null);
@@ -1930,7 +1944,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           <Typography variant="caption" color="text.secondary">
                             {latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING"
                               ? `RAG 색인 진행 중... (${latestRagJob.currentStep})`
-                              : "Markdown 지식 파이프라인 진행 중..."}
+                              : (markdownStatus === "COMPLETED" && pipelineExecution?.status === "RUNNING" && pipelineExecution?.currentStage === "RAG_INDEX")
+                                ? "Markdown 생성 완료, RAG 색인 진행 중..."
+                                : "Markdown 지식 파이프라인 진행 중..."}
                           </Typography>
                           {(latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") && (
                             <Button

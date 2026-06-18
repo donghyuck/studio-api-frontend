@@ -170,6 +170,13 @@ export interface MarkdownDocumentRevisionDto {
   optionsJson?: string;
   createdAt: string;
   completedAt?: string;
+  completedPartCount?: number;
+  totalPartCount?: number;
+  failedPartCount?: number;
+  emptyPartCount?: number;
+  pageFrom?: number;
+  pageTo?: number;
+  lastCompletedPage?: number;
 }
 
 export interface MarkdownLocatorDto {
