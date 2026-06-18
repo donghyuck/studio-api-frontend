@@ -33,6 +33,7 @@ import {
   CheckCircleOutline,
   ChevronRight,
   ErrorOutline,
+  History,
   HourglassEmptyOutlined,
   WarningAmberOutlined,
 } from "@mui/icons-material";
@@ -550,10 +551,21 @@ export function RagJobListPage() {
         {/* Right Column: Execution History runs */}
         <Grid size={{ xs: 12, md: 4.5 }}>
           <Card variant="outlined" sx={{ height: 604, display: "flex", flexDirection: "column" }}>
-            <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider", bgcolor: "action.hover" }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                세부 작업 이력 (Runs)
-              </Typography>
+            <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider", bgcolor: "action.hover", display: "flex", flexDirection: "column", gap: 0.5 }}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  세부 작업 이력 (Runs)
+                </Typography>
+                {selectedGroup && historyJobs.length > 0 && (
+                  <Chip
+                    label={`${historyJobs.length}건`}
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    sx={{ height: 18, fontSize: 10, fontWeight: 600 }}
+                  />
+                )}
+              </Stack>
               {selectedGroup ? (
                 <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
                   {selectedGroup.objectType} #{selectedGroup.objectId} ({sourceDisplayName(selectedGroup.latestJob)})
@@ -652,10 +664,16 @@ export function RagJobListPage() {
                     justifyContent: "center",
                     alignItems: "center",
                     height: "100%",
+                    color: "text.disabled",
+                    gap: 1.5,
                   }}
                 >
-                  <Typography variant="body2" color="text.secondary">
+                  <History sx={{ fontSize: 40, color: "action.disabled" }} />
+                  <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>
                     그룹을 선택하면 여기에 실행 이력이 나타납니다.
+                  </Typography>
+                  <Typography variant="caption" color="text.disabled" sx={{ maxWidth: "80%" }}>
+                    왼쪽의 마스터 목록에서 특정 객체 유형 및 ID 행을 클릭하면 전체 실행 히스토리가 시간 순으로 상세히 조회됩니다.
                   </Typography>
                 </Box>
               )}

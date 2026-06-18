@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Box,
   Button,
   Chip,
@@ -25,7 +26,6 @@ import {
   AccordionSummary,
   AccordionDetails,
   Grid,
-
   Select,
 } from "@mui/material";
 import {
@@ -1927,6 +1927,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                               Skill 추출부터 재실행
                             </Button>
                           </Stack>
+                          {markdownStatus !== "COMPLETED" && (
+                            <Alert severity="info" sx={{ mt: 1.5, py: 0.5, px: 1, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
+                              Markdown 변환이 완료되지 않았거나 실패하여 작업을 재개할 수 없습니다. 상단의 '새로 재추출'을 먼저 실행해 주십시오.
+                            </Alert>
+                          )}
                         </Box>
                       </Stack>
                     )}
@@ -2002,10 +2007,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           변환 및 파이프라인 상세 메타데이터
                         </Typography>
                         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
-                          <Table size="small">
+                          <Table size="small" sx={{ "& tr td:first-of-type": { borderRight: "1px solid", borderColor: "divider" } }}>
                             <TableBody>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "35%", fontSize: 11 }}>원본 Attachment ID</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "32%", fontSize: 11 }}>원본 Attachment ID</TableCell>
                                 <TableCell sx={{ fontSize: 11 }}>{attachmentId || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
