@@ -885,6 +885,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   async function handleResume(fromStage: MarkdownPipelineStage | null) {
     if (!documentId) return;
+    if (markdownStatus !== "COMPLETED") {
+      toast.error("Markdown 변환이 성공적으로 완료된 상태에서만 작업을 재개할 수 있습니다. 실패한 경우 '새로 재추출 실행'을 이용해 주세요.");
+      return;
+    }
     
     let optionsPayload;
     try {
@@ -1867,7 +1871,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             <Button
                               size="small"
                               variant="outlined"
-                              disabled={controlsDisabled}
+                              disabled={controlsDisabled || markdownStatus !== "COMPLETED"}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 void handleResume(null);
@@ -1878,7 +1882,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             <Button
                               size="small"
                               variant="outlined"
-                              disabled={controlsDisabled}
+                              disabled={controlsDisabled || markdownStatus !== "COMPLETED"}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 void handleResume("CHUNKING");
@@ -1889,7 +1893,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             <Button
                               size="small"
                               variant="outlined"
-                              disabled={controlsDisabled || !selectedEmbeddingOption}
+                              disabled={controlsDisabled || markdownStatus !== "COMPLETED" || !selectedEmbeddingOption}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 void handleReindexRag();
@@ -1900,7 +1904,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             <Button
                               size="small"
                               variant="outlined"
-                              disabled={controlsDisabled}
+                              disabled={controlsDisabled || markdownStatus !== "COMPLETED"}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 void handleResume("SKILL_EXTRACTION");
