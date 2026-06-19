@@ -66,9 +66,7 @@ import { DocumentConvertDialog, getDocumentFormat, getFriendlyErrorMessage } fro
 import { EpubReaderDialog } from "./EpubReaderDialog";
 import { PdfReaderDialog } from "./PdfReaderDialog";
 import { useMarkdownDocumentPolling } from "./hooks/useMarkdownDocumentPolling";
-
-const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
-const THUMBNAIL_RETRY_LIMIT = 8;
+import { getCachedThumbnailUrl, requestThumbnail, invalidateThumbnail } from "./thumbnailCache";
 
 interface Props {
   open: boolean;
@@ -147,6 +145,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     latestRevision,
     revisions,
     pipelineExecution,
+    pipelineProgress,
     latestRagJob,
     ragJobs,
     status: markdownStatus,
@@ -156,6 +155,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     stopPolling,
     setLatestRevision,
     setPipelineExecution,
+    setPipelineProgress,
     setLatestRagJob,
     setRagJobs,
     setStatus: setMarkdownStatus,
@@ -255,9 +255,20 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           setRagMetadata(meta);
 
           const mdExists = (meta as any)?.markdown?.exists;
-          const mdDocId = (meta as any)?.markdown?.documentId;
+          let mdDocId = (meta as any)?.markdown?.documentId;
 
-          if (mdExists) {
+          if (!mdDocId) {
+            try {
+              const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
+              if (!ignored && doc && doc.documentId) {
+                mdDocId = doc.documentId;
+              }
+            } catch (err) {
+              // Ignore 404
+            }
+          }
+
+          if (mdExists || mdDocId) {
             if (mdDocId) {
               setDocumentId(mdDocId);
               localStorage.setItem(`markdown_doc_id_${attachmentId}`, mdDocId);
@@ -277,6 +288,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     setDocumentId(null);
                     setLatestRevision(null);
                     setPipelineExecution(null);
+                    setPipelineProgress(null);
                     setMarkdownStatus(null);
                     setMarkdownError(null);
                   } else {
@@ -289,6 +301,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             setDocumentId(null);
             setLatestRevision(null);
             setPipelineExecution(null);
+            setPipelineProgress(null);
             setMarkdownStatus(null);
             setMarkdownError(null);
             stopPolling();
@@ -325,12 +338,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setDocumentId(null);
       setLatestRevision(null);
       setPipelineExecution(null);
+      setPipelineProgress(null);
       setMarkdownStatus(null);
       setMarkdownError(null);
       setReused(null);
       stopPolling();
     }
-  }, [open, attachmentId, startPolling, stopPolling, setLatestRevision, setPipelineExecution, setMarkdownStatus, setMarkdownError, setLatestRagJob, setRagJobs, toast]);
+  }, [open, attachmentId, startPolling, stopPolling, setLatestRevision, setPipelineExecution, setPipelineProgress, setMarkdownStatus, setMarkdownError, setLatestRagJob, setRagJobs, toast]);
 
   // Restore form state from latestRevision.optionsJson when a processed revision is loaded
   useEffect(() => {
@@ -405,18 +419,15 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     markdownStatus === "RUNNING" ||
     pipelineExecution?.status === "PENDING" ||
     pipelineExecution?.status === "RUNNING" ||
+    pipelineProgress?.status === "PENDING" ||
+    pipelineProgress?.status === "RUNNING" ||
     latestRagJob?.status === "PENDING" ||
     latestRagJob?.status === "RUNNING";
   const controlsDisabled = isExtracting || isCanceling || markdownIsPolling;
 
   function clearThumbnail() {
     setThumbnailAvailable(false);
-    setThumbnailUrl((currentUrl) => {
-      if (currentUrl) {
-        URL.revokeObjectURL(currentUrl);
-      }
-      return null;
-    });
+    setThumbnailUrl(null);
   }
 
   async function loadRagState(nextFile: AttachmentDto) {
@@ -512,52 +523,36 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
 
     let ignored = false;
-    let timer: number | undefined;
     const requestedId = attachmentId;
 
-    function loadThumbnail(attempt: number) {
-      reactFilesApi
-        .fetchThumbnail(requestedId, 512)
-        .then((blob) => {
-          if (ignored || requestedId !== attachmentId) {
-            return;
-          }
-          if (blob.size === 0) {
-            if (attempt < THUMBNAIL_RETRY_LIMIT) {
-              timer = window.setTimeout(() => loadThumbnail(attempt + 1), THUMBNAIL_RETRY_INTERVAL_MS);
-            } else {
-              setThumbnailAvailable(false);
-            }
-            return;
-          }
-          const objectUrl = URL.createObjectURL(blob);
-          setThumbnailUrl((currentUrl) => {
-            if (currentUrl) {
-              URL.revokeObjectURL(currentUrl);
-            }
-            return objectUrl;
-          });
-          setThumbnailAvailable(true);
-        })
-        .catch(() => {
-          if (ignored) {
-            return;
-          }
-          if (attempt < THUMBNAIL_RETRY_LIMIT) {
-            timer = window.setTimeout(() => loadThumbnail(attempt + 1), THUMBNAIL_RETRY_INTERVAL_MS);
-          } else {
-            setThumbnailAvailable(false);
-          }
-        });
+    // Check cache first
+    const cached = getCachedThumbnailUrl(requestedId);
+    if (cached !== undefined) {
+      if (cached) {
+        setThumbnailUrl(cached);
+        setThumbnailAvailable(true);
+      } else {
+        setThumbnailUrl(null);
+        setThumbnailAvailable(false);
+      }
+      return;
     }
 
-    loadThumbnail(0);
+    requestThumbnail(requestedId, 256).then((url) => {
+      if (ignored || requestedId !== attachmentId) {
+        return;
+      }
+      if (url) {
+        setThumbnailUrl(url);
+        setThumbnailAvailable(true);
+      } else {
+        setThumbnailUrl(null);
+        setThumbnailAvailable(false);
+      }
+    });
 
     return () => {
       ignored = true;
-      if (timer) {
-        window.clearTimeout(timer);
-      }
     };
   }, [open, attachmentId, thumbnailReloadKey]);
 
@@ -571,6 +566,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setTextExtracted(false);
       clearThumbnail();
     }
+    invalidateThumbnail(attachmentId);
     setThumbnailReloadKey((current) => current + 1);
     setLoading(true);
     try {
@@ -582,9 +578,20 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
       const meta = ragState.metadata;
       const mdExists = (meta as any)?.markdown?.exists;
-      const mdDocId = (meta as any)?.markdown?.documentId;
+      let mdDocId = (meta as any)?.markdown?.documentId;
 
-      if (mdExists) {
+      if (!mdDocId) {
+        try {
+          const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
+          if (doc && doc.documentId) {
+            mdDocId = doc.documentId;
+          }
+        } catch (err) {
+          // Ignore 404
+        }
+      }
+
+      if (mdExists || mdDocId) {
         if (mdDocId) {
           setDocumentId(mdDocId);
           localStorage.setItem(`markdown_doc_id_${attachmentId}`, mdDocId);
@@ -603,6 +610,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               setDocumentId(null);
               setLatestRevision(null);
               setPipelineExecution(null);
+              setPipelineProgress(null);
               setMarkdownStatus(null);
               setMarkdownError(null);
             } else {
@@ -614,6 +622,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         setDocumentId(null);
         setLatestRevision(null);
         setPipelineExecution(null);
+        setPipelineProgress(null);
         setMarkdownStatus(null);
         setMarkdownError(null);
         stopPolling();
@@ -787,43 +796,220 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     return originalMsg;
   }
 
-  async function handleExtractMarkdown() {
-    if (!attachmentId || !file) return;
-    
-    let optionsPayload;
-    try {
-      optionsPayload = buildPayload();
-    } catch (err: any) {
-      toast.error(err.message);
-      return;
+  async function runPipelineWithEstimate(executeAction: (payloadOverride?: any) => Promise<void>) {
+    let effectiveDocId = documentId || (ragMetadata as any)?.markdown?.documentId;
+    const metadata = (ragMetadata || {}) as any;
+    const shouldEstimate =
+      (file?.size ?? 0) >= 10 * 1024 * 1024 ||
+      (metadata.pageCount ?? 0) >= 100 ||
+      (metadata.markdownLength ?? 0) >= 1024 * 1024;
+
+    if (shouldEstimate) {
+      setIsExtracting(true);
+      try {
+        if (!effectiveDocId) {
+          try {
+            const initRes = await reactMarkdownDocumentApi.extractFromAttachment({
+              attachmentId: attachmentId!,
+              force: false,
+              runChunking: false,
+              runRagIndex: false,
+              runSkillExtraction: false,
+            } as any);
+            effectiveDocId = initRes.document.documentId;
+            setDocumentId(effectiveDocId);
+            localStorage.setItem(`markdown_doc_id_${attachmentId}`, effectiveDocId);
+          } catch (initErr) {
+            console.error("Failed to initialize document for estimation:", initErr);
+          }
+        }
+
+        if (effectiveDocId) {
+          const payload = buildPayload();
+          const estimateReq = {
+            runChunking,
+            runRagIndex,
+            runSkillExtraction,
+            chunkingStrategy: payload.chunkingStrategy,
+            chunkMaxSize: payload.chunkMaxSize,
+            chunkOverlap: payload.chunkOverlap,
+            chunkUnit: payload.chunkUnit,
+            embeddingProfileId: payload.embeddingProfileId,
+            embeddingProvider: payload.embeddingProvider,
+            embeddingModel: payload.embeddingModel,
+            embeddingDimension: payload.embeddingDimension,
+          };
+
+          const estimateRes = await reactMarkdownDocumentApi.estimatePipeline(effectiveDocId, estimateReq);
+          if (estimateRes && (estimateRes.riskLevel === "HIGH" || estimateRes.riskLevel === "VERY_HIGH")) {
+            const recommended = estimateRes.recommended || {};
+            const msg = `이 파일은 리소스 소비가 클 것으로 예상됩니다 (위험 수준: ${estimateRes.riskLevel}).\n` +
+              `서버 권장 옵션으로 설정을 자동 변경하고 실행하시겠습니까?\n` +
+              `(취소 시 현재 설정으로 계속 진행합니다)`;
+
+            if (window.confirm(msg)) {
+              // Apply recommended values to form states
+              if (recommended.chunkingStrategy) setChunkingStrategy(recommended.chunkingStrategy);
+              if (recommended.chunkMaxSize != null) setChunkMaxSize(recommended.chunkMaxSize);
+              if (recommended.chunkOverlap != null) setChunkOverlap(recommended.chunkOverlap);
+              if (recommended.chunkUnit) setChunkUnit(recommended.chunkUnit);
+
+              if (recommended.embeddingProfileId) {
+                const opt = embeddingOptions.find(o => o.profileId === recommended.embeddingProfileId);
+                if (opt) setSelectedEmbeddingOption(opt);
+              } else if (recommended.embeddingProvider && recommended.embeddingModel) {
+                const opt = embeddingOptions.find(o => o.provider === recommended.embeddingProvider && o.model === recommended.embeddingModel);
+                if (opt) setSelectedEmbeddingOption(opt);
+              }
+
+              // Build payload again with recommended values
+              const newPayload = {
+                runChunking,
+                runRagIndex,
+                runSkillExtraction,
+                chunkingStrategy: recommended.chunkingStrategy ?? payload.chunkingStrategy,
+                chunkMaxSize: recommended.chunkMaxSize ?? payload.chunkMaxSize,
+                chunkOverlap: recommended.chunkOverlap ?? payload.chunkOverlap,
+                chunkUnit: recommended.chunkUnit ?? payload.chunkUnit,
+                embeddingProfileId: recommended.embeddingProfileId ?? payload.embeddingProfileId,
+                embeddingProvider: recommended.embeddingProvider ?? payload.embeddingProvider,
+                embeddingModel: recommended.embeddingModel ?? payload.embeddingModel,
+                embeddingDimension: recommended.embeddingDimension ?? payload.embeddingDimension,
+              };
+
+              await executeAction(newPayload);
+              return;
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Pipeline estimation failed:", err);
+      } finally {
+        setIsExtracting(false);
+      }
     }
 
+    await executeAction();
+  }
+
+  async function handleManualEstimate() {
+    let effectiveDocId = documentId || (ragMetadata as any)?.markdown?.documentId;
     setIsExtracting(true);
-    setReused(null);
     try {
-      const res = await reactMarkdownDocumentApi.extractFromAttachment({
-        attachmentId,
-        force,
-        ...optionsPayload,
-      } as any);
-      const newDocId = res.document.documentId;
-      setDocumentId(newDocId);
-      localStorage.setItem(`markdown_doc_id_${attachmentId}`, newDocId);
-      setReused(res.reused);
-      if (res.reused) {
-        toast.info("기존 변환 결과를 사용합니다.");
-      } else {
-        toast.success("Markdown 지식 파이프라인 작업이 시작되었습니다.");
+      if (!effectiveDocId) {
+        try {
+          const initRes = await reactMarkdownDocumentApi.extractFromAttachment({
+            attachmentId: attachmentId!,
+            force: false,
+            runChunking: false,
+            runRagIndex: false,
+            runSkillExtraction: false,
+          } as any);
+          effectiveDocId = initRes.document.documentId;
+          setDocumentId(effectiveDocId);
+          localStorage.setItem(`markdown_doc_id_${attachmentId}`, effectiveDocId);
+        } catch (initErr) {
+          console.error("Failed to initialize document for manual estimation:", initErr);
+          toast.error("부하 추산용 문서 생성에 실패했습니다: " + resolveAxiosError(initErr));
+          return;
+        }
       }
-      startPolling(newDocId, attachmentId);
-    } catch (err: any) {
-      const status = err?.response?.status;
-      const rawMsg = resolveAxiosError(err);
-      const errMsg = sanitizeErrorMessage(getErrorMessageByStatus(status, rawMsg));
-      toast.error("Markdown 변환 요청 실패: " + errMsg);
+
+      const payload = buildPayload();
+      const estimateReq = {
+        runChunking,
+        runRagIndex,
+        runSkillExtraction,
+        chunkingStrategy: payload.chunkingStrategy,
+        chunkMaxSize: payload.chunkMaxSize,
+        chunkOverlap: payload.chunkOverlap,
+        chunkUnit: payload.chunkUnit,
+        embeddingProfileId: payload.embeddingProfileId,
+        embeddingProvider: payload.embeddingProvider,
+        embeddingModel: payload.embeddingModel,
+        embeddingDimension: payload.embeddingDimension,
+      };
+
+      const estimateRes = await reactMarkdownDocumentApi.estimatePipeline(effectiveDocId, estimateReq);
+      if (estimateRes) {
+        const recommended = estimateRes.recommended || {};
+        let resultMsg = `[부하 추산 결과]\n` +
+          `- 위험도 (Risk Level): ${estimateRes.riskLevel}\n`;
+        if (estimateRes.reason) {
+          resultMsg += `- 사유 (Reason): ${estimateRes.reason}\n`;
+        }
+
+        if (estimateRes.riskLevel === "HIGH" || estimateRes.riskLevel === "VERY_HIGH") {
+          resultMsg += `\n위험도가 높습니다. 추천된 최적화 설정(recommended)을 적용하시겠습니까?`;
+          if (window.confirm(resultMsg)) {
+            if (recommended.chunkingStrategy) setChunkingStrategy(recommended.chunkingStrategy);
+            if (recommended.chunkMaxSize != null) setChunkMaxSize(recommended.chunkMaxSize);
+            if (recommended.chunkOverlap != null) setChunkOverlap(recommended.chunkOverlap);
+            if (recommended.chunkUnit) setChunkUnit(recommended.chunkUnit);
+
+            if (recommended.embeddingProfileId) {
+              const opt = embeddingOptions.find(o => o.profileId === recommended.embeddingProfileId);
+              if (opt) setSelectedEmbeddingOption(opt);
+            } else if (recommended.embeddingProvider && recommended.embeddingModel) {
+              const opt = embeddingOptions.find(o => o.provider === recommended.embeddingProvider && o.model === recommended.embeddingModel);
+              if (opt) setSelectedEmbeddingOption(opt);
+            }
+            toast.success("추천 설정이 적용되었습니다.");
+          }
+        } else {
+          resultMsg += `\n리소스 소비가 크지 않은 안전한 수준입니다.`;
+          window.alert(resultMsg);
+        }
+      }
+    } catch (err) {
+      console.error("Pipeline manual estimation failed:", err);
+      toast.error("부하 추산에 실패했습니다: " + resolveAxiosError(err));
     } finally {
       setIsExtracting(false);
     }
+  }
+
+  async function handleExtractMarkdown() {
+    if (!attachmentId || !file) return;
+
+    const execute = async (payloadOverride?: any) => {
+      let optionsPayload;
+      try {
+        optionsPayload = payloadOverride || buildPayload();
+      } catch (err: any) {
+        toast.error(err.message);
+        return;
+      }
+
+      setIsExtracting(true);
+      setReused(null);
+      try {
+        const res = await reactMarkdownDocumentApi.extractFromAttachment({
+          attachmentId,
+          force,
+          ...optionsPayload,
+        } as any);
+        const newDocId = res.document.documentId;
+        setDocumentId(newDocId);
+        localStorage.setItem(`markdown_doc_id_${attachmentId}`, newDocId);
+        setReused(res.reused);
+        if (res.reused) {
+          toast.info("기존 변환 결과를 사용합니다.");
+        } else {
+          toast.success("Markdown 지식 파이프라인 작업이 시작되었습니다.");
+        }
+        startPolling(newDocId, attachmentId);
+      } catch (err: any) {
+        const status = err?.response?.status;
+        const rawMsg = resolveAxiosError(err);
+        const errMsg = sanitizeErrorMessage(getErrorMessageByStatus(status, rawMsg));
+        toast.error("Markdown 변환 요청 실패: " + errMsg);
+      } finally {
+        setIsExtracting(false);
+      }
+    };
+
+    await runPipelineWithEstimate(execute);
   }
 
   async function handleReextractMarkdown() {
@@ -831,29 +1017,33 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     const ok = window.confirm("기존 결과와 관계없이 새로 변환 및 색인을 진행하시겠습니까?");
     if (!ok) return;
 
-    let optionsPayload;
-    try {
-      optionsPayload = buildPayload();
-    } catch (err: any) {
-      toast.error(err.message);
-      return;
-    }
+    const execute = async (payloadOverride?: any) => {
+      let optionsPayload;
+      try {
+        optionsPayload = payloadOverride || buildPayload();
+      } catch (err: any) {
+        toast.error(err.message);
+        return;
+      }
 
-    setIsExtracting(true);
-    setReused(null);
-    try {
-      const res = await reactMarkdownDocumentApi.reextract(documentId, optionsPayload as any);
-      setReused(res.reused);
-      toast.success("재추출 및 RAG 색인 작업이 시작되었습니다.");
-      startPolling(documentId, attachmentId);
-    } catch (err: any) {
-      const status = err?.response?.status;
-      const rawMsg = resolveAxiosError(err);
-      const errMsg = sanitizeErrorMessage(getErrorMessageByStatus(status, rawMsg));
-      toast.error("재추출 요청 실패: " + errMsg);
-    } finally {
-      setIsExtracting(false);
-    }
+      setIsExtracting(true);
+      setReused(null);
+      try {
+        const res = await reactMarkdownDocumentApi.reextract(documentId, optionsPayload as any);
+        setReused(res.reused);
+        toast.success("재추출 및 RAG 색인 작업이 시작되었습니다.");
+        startPolling(documentId, attachmentId);
+      } catch (err: any) {
+        const status = err?.response?.status;
+        const rawMsg = resolveAxiosError(err);
+        const errMsg = sanitizeErrorMessage(getErrorMessageByStatus(status, rawMsg));
+        toast.error("재추출 요청 실패: " + errMsg);
+      } finally {
+        setIsExtracting(false);
+      }
+    };
+
+    await runPipelineWithEstimate(execute);
   }
 
   async function handleCancelMarkdown() {
@@ -1838,17 +2028,30 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     </Box>
 
                     {!documentId ? (
-                      <Button
-                        size="small"
-                        variant="contained"
-                        disabled={controlsDisabled}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleExtractMarkdown();
-                        }}
-                      >
-                        Markdown 변환
-                      </Button>
+                      <Stack direction="row" spacing={1}>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          disabled={controlsDisabled}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleExtractMarkdown();
+                          }}
+                        >
+                          Markdown 변환
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          disabled={controlsDisabled}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleManualEstimate();
+                          }}
+                        >
+                          부하 추산
+                        </Button>
+                      </Stack>
                     ) : (
                       <Stack spacing={1.5} width="100%" sx={{ mt: 1 }}>
                         {/* 1. Reextract option (Create New Revision) */}
@@ -1859,18 +2062,32 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
                             기존 이력과 관계없이 새로운 리비전(문서 버전)을 생성하여 처음부터 모든 파이프라인 단계를 다시 수행합니다.
                           </Typography>
-                          <Button
-                            size="small"
-                            variant="contained"
-                            color="warning"
-                            disabled={controlsDisabled}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleReextractMarkdown();
-                            }}
-                          >
-                            새로 재추출 실행
-                          </Button>
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="warning"
+                              disabled={controlsDisabled}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleReextractMarkdown();
+                              }}
+                            >
+                              새로 재추출 실행
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              disabled={controlsDisabled}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleManualEstimate();
+                              }}
+                            >
+                              부하 추산
+                            </Button>
+                          </Stack>
                         </Box>
 
                         {/* 2. Resume Options (Continue Existing Revision) */}
@@ -1947,11 +2164,30 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         <Stack direction="row" spacing={1.5} alignItems="center" width="100%">
                           <CircularProgress size={16} />
                           <Typography variant="caption" color="text.secondary">
-                            {latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING"
-                              ? `RAG 색인 진행 중... (${latestRagJob.currentStep})`
-                              : (markdownStatus === "COMPLETED" && pipelineExecution?.status === "RUNNING" && pipelineExecution?.currentStage === "RAG_INDEX")
-                                ? "Markdown 생성 완료, RAG 색인 진행 중..."
-                                : "Markdown 지식 파이프라인 진행 중..."}
+                            {(() => {
+                              if (pipelineProgress && pipelineProgress.status === "RUNNING") {
+                                if (pipelineProgress.currentStage === "CHUNKING") {
+                                  return "청킹 중";
+                                }
+                                if (pipelineProgress.currentStage === "RAG_INDEX" && pipelineProgress.rag) {
+                                  const { currentStep, embeddedCount, indexedCount, chunkCount } = pipelineProgress.rag;
+                                  if (currentStep === "EMBEDDING") {
+                                    return `임베딩 중 ${embeddedCount ?? 0} / ${chunkCount ?? 0}`;
+                                  }
+                                  if (currentStep === "INDEXING") {
+                                    return `벡터 저장 중 ${indexedCount ?? 0} / ${chunkCount ?? 0}`;
+                                  }
+                                }
+                              }
+                              // Fallback to legacy check
+                              if (latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") {
+                                return `RAG 색인 진행 중... (${latestRagJob.currentStep})`;
+                              }
+                              if (markdownStatus === "COMPLETED" && pipelineExecution?.status === "RUNNING" && pipelineExecution?.currentStage === "RAG_INDEX") {
+                                return "Markdown 생성 완료, RAG 색인 진행 중...";
+                              }
+                              return "Markdown 지식 파이프라인 진행 중...";
+                            })()}
                           </Typography>
                           {(latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") && (
                             <Button
@@ -1988,13 +2224,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                   )}
 
                   {/* FAILED message */}
-                  {(markdownStatus === "FAILED" || pipelineExecution?.status === "FAILED") && (
+                  {(markdownStatus === "FAILED" || pipelineExecution?.status === "FAILED" || pipelineProgress?.status === "FAILED") && (
                     <Box sx={{ mt: 1.5, mb: 1.5, bgcolor: "error.light", color: "error.contrastText", p: 1.5, borderRadius: 1.5 }}>
                       <Typography variant="caption" display="block" sx={{ fontWeight: "bold", mb: 0.5 }}>
-                        실패 원인 (Code: {pipelineExecution?.errorCode || latestRevision?.errorCode || "-"})
+                        실패 원인 (Code: {pipelineProgress?.errorCode || pipelineExecution?.errorCode || latestRevision?.errorCode || "-"})
                       </Typography>
                       <Typography variant="body2" sx={{ wordBreak: "break-all", fontSize: 12 }}>
-                        {sanitizeErrorMessage(pipelineExecution?.errorMessage || latestRevision?.errorMessage || markdownError)}
+                        {sanitizeErrorMessage(pipelineProgress?.errorMessage || pipelineExecution?.errorMessage || latestRevision?.errorMessage || markdownError)}
                       </Typography>
                     </Box>
                   )}
