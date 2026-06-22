@@ -51,6 +51,7 @@ import {
   reactMarkdownDocumentApi,
   type DocumentConvertStatus,
   type DocumentConvertJob,
+  type MarkdownDocumentDto,
   type MarkdownDocumentRevisionDto,
   type MarkdownLocatorDto,
   type MarkdownResourceDto,
@@ -114,6 +115,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   // Markdown Document Pipeline States
   const [documentId, setDocumentId] = useState<string | null>(null);
+  const [markdownDocument, setMarkdownDocument] = useState<MarkdownDocumentDto | null>(null);
   const [reused, setReused] = useState<boolean | null>(null);
   
   // Pipeline Options
@@ -203,10 +205,20 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }, [open, loadEmbeddingOptions, loadChunkConfig]);
 
   // Derived: available chunking strategies
-  const availableStrategies = useMemo(
-    () => chunkConfig?.chunking.availableStrategies ?? ["fixed-size", "recursive", "structure-based"],
-    [chunkConfig],
-  );
+  const availableStrategies = useMemo(() => {
+    const serverStrategies = chunkConfig?.chunking.availableStrategies ?? ["fixed-size", "recursive", "structure-based"];
+    if (!serverStrategies.includes("blockify")) {
+      return [...serverStrategies, "blockify"];
+    }
+    return serverStrategies;
+  }, [chunkConfig]);
+
+  const strategyLabels: Record<string, string> = {
+    "recursive": "Recursive",
+    "fixed-size": "Fixed Size",
+    "structure-based": "Structure Based",
+    "blockify": "Blockify PoC",
+  };
 
   // Derived: embedding option value key (same pattern as RagPage/RagChatPage)
   const embeddingOptionKey = (opt: EmbeddingOption) => opt.profileId || `${opt.provider}:${opt.model}`;
@@ -262,6 +274,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
               if (!ignored && doc && doc.documentId) {
                 mdDocId = doc.documentId;
+                setMarkdownDocument(doc);
               }
             } catch (err) {
               // Ignore 404
@@ -273,6 +286,14 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               setDocumentId(mdDocId);
               localStorage.setItem(`markdown_doc_id_${attachmentId}`, mdDocId);
               startPolling(mdDocId, attachmentId);
+              try {
+                const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
+                if (!ignored) {
+                  setMarkdownDocument(doc);
+                }
+              } catch (err) {
+                // Ignore
+              }
             } else {
               try {
                 const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
@@ -280,12 +301,14 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                   setDocumentId(doc.documentId);
                   localStorage.setItem(`markdown_doc_id_${attachmentId}`, doc.documentId);
                   startPolling(doc.documentId, attachmentId);
+                  setMarkdownDocument(doc);
                 }
               } catch (err: any) {
                 const status = err?.response?.status ?? err?.status;
                 if (!ignored) {
                   if (status === 404 || status === 500) {
                     setDocumentId(null);
+                    setMarkdownDocument(null);
                     setLatestRevision(null);
                     setPipelineExecution(null);
                     setPipelineProgress(null);
@@ -299,6 +322,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             }
           } else {
             setDocumentId(null);
+            setMarkdownDocument(null);
             setLatestRevision(null);
             setPipelineExecution(null);
             setPipelineProgress(null);
@@ -336,6 +360,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       };
     } else {
       setDocumentId(null);
+      setMarkdownDocument(null);
       setLatestRevision(null);
       setPipelineExecution(null);
       setPipelineProgress(null);
@@ -424,6 +449,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     latestRagJob?.status === "PENDING" ||
     latestRagJob?.status === "RUNNING";
   const controlsDisabled = isExtracting || isCanceling || markdownIsPolling;
+  const isCanceledRevision =
+    documentId !== null &&
+    (!markdownDocument || markdownDocument.currentRevisionId === null || markdownDocument.currentRevisionId === undefined) &&
+    latestRevision?.status === "CANCELED";
 
   function clearThumbnail() {
     setThumbnailAvailable(false);
@@ -516,6 +545,25 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pipelineExecution?.status]);
 
+  // Sync markdownDocument state when polling finishes or when latestRevision status updates
+  useEffect(() => {
+    if (attachmentId && !markdownIsPolling) {
+      let active = true;
+      void reactMarkdownDocumentApi.getByAttachment(attachmentId)
+        .then((doc) => {
+          if (active) {
+            setMarkdownDocument(doc);
+          }
+        })
+        .catch((err) => {
+          console.debug("Failed to sync markdown document:", err);
+        });
+      return () => {
+        active = false;
+      };
+    }
+  }, [attachmentId, markdownIsPolling, latestRevision?.status]);
+
   useEffect(() => {
     if (!open || !attachmentId) {
       clearThumbnail();
@@ -585,6 +633,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
           if (doc && doc.documentId) {
             mdDocId = doc.documentId;
+            setMarkdownDocument(doc);
           }
         } catch (err) {
           // Ignore 404
@@ -596,6 +645,12 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           setDocumentId(mdDocId);
           localStorage.setItem(`markdown_doc_id_${attachmentId}`, mdDocId);
           startPolling(mdDocId, attachmentId);
+          try {
+            const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
+            setMarkdownDocument(doc);
+          } catch (err) {
+            // Ignore
+          }
         } else {
           try {
             const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
@@ -603,11 +658,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               setDocumentId(doc.documentId);
               localStorage.setItem(`markdown_doc_id_${attachmentId}`, doc.documentId);
               startPolling(doc.documentId, attachmentId);
+              setMarkdownDocument(doc);
             }
           } catch (err: any) {
             const status = err?.response?.status ?? err?.status;
             if (status === 404 || status === 500) {
               setDocumentId(null);
+              setMarkdownDocument(null);
               setLatestRevision(null);
               setPipelineExecution(null);
               setPipelineProgress(null);
@@ -620,6 +677,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         }
       } else {
         setDocumentId(null);
+        setMarkdownDocument(null);
         setLatestRevision(null);
         setPipelineExecution(null);
         setPipelineProgress(null);
@@ -689,6 +747,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   function sanitizeErrorMessage(msg: string | null | undefined): string {
     if (!msg) return "";
+    if (msg.includes("Blockify chunking is disabled")) {
+      return "Blockify 청킹이 서버에서 비활성화되어 있습니다. 서버 설정 studio.chunking.blockify.enabled=true 적용 후 다시 시도하세요.";
+    }
     return msg
       .replace(/(Signature|Expires|AWSAccessKeyId|token|access_token|key)=[^&\s]+/gi, '$1=***')
       .replace(/https?:\/\/[^\s]+(signature|token|key)[^\s]+/gi, '[SENSITIVE_URL]')
@@ -720,7 +781,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
   };
 
-  const buildPayload = () => {
+  const buildPayload = (forEstimate = false) => {
     const maxSize = chunkMaxSize === "" ? null : Number(chunkMaxSize);
     const overlap = chunkOverlap === "" ? null : Number(chunkOverlap);
 
@@ -740,17 +801,17 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       runChunking,
       runRagIndex,
       runSkillExtraction,
-      chunkingStrategy: runChunking ? chunkingStrategy : null,
-      chunkMaxSize: runChunking ? maxSize : null,
-      chunkOverlap: runChunking ? overlap : null,
-      chunkUnit: runChunking ? chunkUnit : null,
+      chunkingStrategy: (runChunking || forEstimate) ? (chunkingStrategy || null) : null,
+      chunkMaxSize: (runChunking || forEstimate) ? (maxSize || null) : null,
+      chunkOverlap: (runChunking || forEstimate) ? (overlap || null) : null,
+      chunkUnit: (runChunking || forEstimate) ? (chunkUnit || null) : null,
     };
 
-    if (runSkillExtraction) {
+    if (runSkillExtraction || forEstimate) {
       payload.skillExtractionMode = skillExtractionMode || null;
     }
 
-    if (runRagIndex) {
+    if (runRagIndex || forEstimate) {
       if (selectedEmbeddingOption?.profileId) {
         payload.embeddingProfileId = selectedEmbeddingOption.profileId;
         payload.embeddingProvider = null;
@@ -797,7 +858,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }
 
   async function runPipelineWithEstimate(executeAction: (payloadOverride?: any) => Promise<void>) {
-    let effectiveDocId = documentId || (ragMetadata as any)?.markdown?.documentId;
     const metadata = (ragMetadata || {}) as any;
     const shouldEstimate =
       (file?.size ?? 0) >= 10 * 1024 * 1024 ||
@@ -807,83 +867,73 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     if (shouldEstimate) {
       setIsExtracting(true);
       try {
-        if (!effectiveDocId) {
-          try {
-            const initRes = await reactMarkdownDocumentApi.extractFromAttachment({
-              attachmentId: attachmentId!,
-              force: false,
-              runChunking: false,
-              runRagIndex: false,
-              runSkillExtraction: false,
-            } as any);
-            effectiveDocId = initRes.document.documentId;
-            setDocumentId(effectiveDocId);
-            localStorage.setItem(`markdown_doc_id_${attachmentId}`, effectiveDocId);
-          } catch (initErr) {
-            console.error("Failed to initialize document for estimation:", initErr);
-          }
+        const payload = buildPayload(true);
+        const estimateReq = {
+          runChunking,
+          runRagIndex,
+          runSkillExtraction,
+          chunkingStrategy: payload.chunkingStrategy,
+          chunkMaxSize: payload.chunkMaxSize,
+          chunkOverlap: payload.chunkOverlap,
+          chunkUnit: payload.chunkUnit,
+          embeddingProfileId: payload.embeddingProfileId,
+          embeddingProvider: payload.embeddingProvider,
+          embeddingModel: payload.embeddingModel,
+          embeddingDimension: payload.embeddingDimension,
+        };
+
+        let estimateRes;
+        if (!markdownDocument?.currentRevisionId) {
+          estimateRes = await reactMarkdownDocumentApi.estimatePipelineByAttachment(attachmentId!, estimateReq);
+        } else {
+          estimateRes = await reactMarkdownDocumentApi.estimatePipeline(markdownDocument.documentId, estimateReq);
         }
 
-        if (effectiveDocId) {
-          const payload = buildPayload();
-          const estimateReq = {
+        if (estimateRes && estimateRes.recommended) {
+          const rec = estimateRes.recommended;
+          if (rec.chunkingStrategy) setChunkingStrategy(rec.chunkingStrategy);
+          if (rec.chunkMaxSize != null) setChunkMaxSize(rec.chunkMaxSize);
+          if (rec.chunkOverlap != null) setChunkOverlap(rec.chunkOverlap);
+          if (rec.chunkUnit) setChunkUnit(rec.chunkUnit);
+
+          if (rec.embeddingProfileId) {
+            const opt = embeddingOptions.find(o => o.profileId === rec.embeddingProfileId);
+            if (opt) setSelectedEmbeddingOption(opt);
+          } else if (rec.embeddingProvider && rec.embeddingModel) {
+            const opt = embeddingOptions.find(o => o.provider === rec.embeddingProvider && o.model === rec.embeddingModel);
+            if (opt) setSelectedEmbeddingOption(opt);
+          }
+
+          const newPayload = {
             runChunking,
             runRagIndex,
             runSkillExtraction,
-            chunkingStrategy: payload.chunkingStrategy,
-            chunkMaxSize: payload.chunkMaxSize,
-            chunkOverlap: payload.chunkOverlap,
-            chunkUnit: payload.chunkUnit,
-            embeddingProfileId: payload.embeddingProfileId,
-            embeddingProvider: payload.embeddingProvider,
-            embeddingModel: payload.embeddingModel,
-            embeddingDimension: payload.embeddingDimension,
+            chunkingStrategy: rec.chunkingStrategy ?? payload.chunkingStrategy,
+            chunkMaxSize: rec.chunkMaxSize ?? payload.chunkMaxSize,
+            chunkOverlap: rec.chunkOverlap ?? payload.chunkOverlap,
+            chunkUnit: rec.chunkUnit ?? payload.chunkUnit,
+            embeddingProfileId: rec.embeddingProfileId ?? payload.embeddingProfileId,
+            embeddingProvider: rec.embeddingProvider ?? payload.embeddingProvider,
+            embeddingModel: rec.embeddingModel ?? payload.embeddingModel,
+            embeddingDimension: rec.embeddingDimension ?? payload.embeddingDimension,
           };
 
-          const estimateRes = await reactMarkdownDocumentApi.estimatePipeline(effectiveDocId, estimateReq);
-          if (estimateRes && (estimateRes.riskLevel === "HIGH" || estimateRes.riskLevel === "VERY_HIGH")) {
-            const recommended = estimateRes.recommended || {};
-            const msg = `이 파일은 리소스 소비가 클 것으로 예상됩니다 (위험 수준: ${estimateRes.riskLevel}).\n` +
-              `서버 권장 옵션으로 설정을 자동 변경하고 실행하시겠습니까?\n` +
-              `(취소 시 현재 설정으로 계속 진행합니다)`;
-
-            if (window.confirm(msg)) {
-              // Apply recommended values to form states
-              if (recommended.chunkingStrategy) setChunkingStrategy(recommended.chunkingStrategy);
-              if (recommended.chunkMaxSize != null) setChunkMaxSize(recommended.chunkMaxSize);
-              if (recommended.chunkOverlap != null) setChunkOverlap(recommended.chunkOverlap);
-              if (recommended.chunkUnit) setChunkUnit(recommended.chunkUnit);
-
-              if (recommended.embeddingProfileId) {
-                const opt = embeddingOptions.find(o => o.profileId === recommended.embeddingProfileId);
-                if (opt) setSelectedEmbeddingOption(opt);
-              } else if (recommended.embeddingProvider && recommended.embeddingModel) {
-                const opt = embeddingOptions.find(o => o.provider === recommended.embeddingProvider && o.model === recommended.embeddingModel);
-                if (opt) setSelectedEmbeddingOption(opt);
-              }
-
-              // Build payload again with recommended values
-              const newPayload = {
-                runChunking,
-                runRagIndex,
-                runSkillExtraction,
-                chunkingStrategy: recommended.chunkingStrategy ?? payload.chunkingStrategy,
-                chunkMaxSize: recommended.chunkMaxSize ?? payload.chunkMaxSize,
-                chunkOverlap: recommended.chunkOverlap ?? payload.chunkOverlap,
-                chunkUnit: recommended.chunkUnit ?? payload.chunkUnit,
-                embeddingProfileId: recommended.embeddingProfileId ?? payload.embeddingProfileId,
-                embeddingProvider: recommended.embeddingProvider ?? payload.embeddingProvider,
-                embeddingModel: recommended.embeddingModel ?? payload.embeddingModel,
-                embeddingDimension: recommended.embeddingDimension ?? payload.embeddingDimension,
-              };
-
-              await executeAction(newPayload);
-              return;
-            }
-          }
+          await executeAction(newPayload);
+          return;
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Pipeline estimation failed:", err);
+        const status = err?.response?.status;
+        const data = err?.response?.data;
+        const code = data?.code || data?.message;
+        if (code === "markdown.source.too-large" || status === 413) {
+          toast.error("첨부파일이 Markdown 처리 허용 크기를 초과했습니다.");
+          return;
+        } else if (code === "markdown.pipeline.estimate-unavailable" || status === 409) {
+          toast.error("Markdown 생성 완료 전에는 문서 기준 estimate를 사용할 수 없습니다. 첨부파일 기준 estimate를 사용합니다.");
+        } else {
+          toast.error("부하 추산에 실패했습니다: " + resolveAxiosError(err));
+        }
       } finally {
         setIsExtracting(false);
       }
@@ -893,29 +943,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }
 
   async function handleManualEstimate() {
-    let effectiveDocId = documentId || (ragMetadata as any)?.markdown?.documentId;
     setIsExtracting(true);
     try {
-      if (!effectiveDocId) {
-        try {
-          const initRes = await reactMarkdownDocumentApi.extractFromAttachment({
-            attachmentId: attachmentId!,
-            force: false,
-            runChunking: false,
-            runRagIndex: false,
-            runSkillExtraction: false,
-          } as any);
-          effectiveDocId = initRes.document.documentId;
-          setDocumentId(effectiveDocId);
-          localStorage.setItem(`markdown_doc_id_${attachmentId}`, effectiveDocId);
-        } catch (initErr) {
-          console.error("Failed to initialize document for manual estimation:", initErr);
-          toast.error("부하 추산용 문서 생성에 실패했습니다: " + resolveAxiosError(initErr));
-          return;
-        }
-      }
-
-      const payload = buildPayload();
+      const payload = buildPayload(true);
       const estimateReq = {
         runChunking,
         runRagIndex,
@@ -930,7 +960,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         embeddingDimension: payload.embeddingDimension,
       };
 
-      const estimateRes = await reactMarkdownDocumentApi.estimatePipeline(effectiveDocId, estimateReq);
+      let estimateRes;
+      if (!markdownDocument?.currentRevisionId) {
+        estimateRes = await reactMarkdownDocumentApi.estimatePipelineByAttachment(attachmentId!, estimateReq);
+      } else {
+        estimateRes = await reactMarkdownDocumentApi.estimatePipeline(markdownDocument.documentId, estimateReq);
+      }
+
       if (estimateRes) {
         const recommended = estimateRes.recommended || {};
         let resultMsg = `[부하 추산 결과]\n` +
@@ -939,31 +975,34 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           resultMsg += `- 사유 (Reason): ${estimateRes.reason}\n`;
         }
 
-        if (estimateRes.riskLevel === "HIGH" || estimateRes.riskLevel === "VERY_HIGH") {
-          resultMsg += `\n위험도가 높습니다. 추천된 최적화 설정(recommended)을 적용하시겠습니까?`;
-          if (window.confirm(resultMsg)) {
-            if (recommended.chunkingStrategy) setChunkingStrategy(recommended.chunkingStrategy);
-            if (recommended.chunkMaxSize != null) setChunkMaxSize(recommended.chunkMaxSize);
-            if (recommended.chunkOverlap != null) setChunkOverlap(recommended.chunkOverlap);
-            if (recommended.chunkUnit) setChunkUnit(recommended.chunkUnit);
+        if (recommended.chunkingStrategy) setChunkingStrategy(recommended.chunkingStrategy);
+        if (recommended.chunkMaxSize != null) setChunkMaxSize(recommended.chunkMaxSize);
+        if (recommended.chunkOverlap != null) setChunkOverlap(recommended.chunkOverlap);
+        if (recommended.chunkUnit) setChunkUnit(recommended.chunkUnit);
 
-            if (recommended.embeddingProfileId) {
-              const opt = embeddingOptions.find(o => o.profileId === recommended.embeddingProfileId);
-              if (opt) setSelectedEmbeddingOption(opt);
-            } else if (recommended.embeddingProvider && recommended.embeddingModel) {
-              const opt = embeddingOptions.find(o => o.provider === recommended.embeddingProvider && o.model === recommended.embeddingModel);
-              if (opt) setSelectedEmbeddingOption(opt);
-            }
-            toast.success("추천 설정이 적용되었습니다.");
-          }
-        } else {
-          resultMsg += `\n리소스 소비가 크지 않은 안전한 수준입니다.`;
-          window.alert(resultMsg);
+        if (recommended.embeddingProfileId) {
+          const opt = embeddingOptions.find(o => o.profileId === recommended.embeddingProfileId);
+          if (opt) setSelectedEmbeddingOption(opt);
+        } else if (recommended.embeddingProvider && recommended.embeddingModel) {
+          const opt = embeddingOptions.find(o => o.provider === recommended.embeddingProvider && o.model === recommended.embeddingModel);
+          if (opt) setSelectedEmbeddingOption(opt);
         }
+
+        toast.success("추천 설정이 적용되었습니다.");
+        window.alert(resultMsg + `\n추천 설정이 적용되었습니다.`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Pipeline manual estimation failed:", err);
-      toast.error("부하 추산에 실패했습니다: " + resolveAxiosError(err));
+      const status = err?.response?.status;
+      const data = err?.response?.data;
+      const code = data?.code || data?.message;
+      if (code === "markdown.source.too-large" || status === 413) {
+        toast.error("첨부파일이 Markdown 처리 허용 크기를 초과했습니다.");
+      } else if (code === "markdown.pipeline.estimate-unavailable" || status === 409) {
+        toast.error("Markdown 생성 완료 전에는 문서 기준 estimate를 사용할 수 없습니다. 첨부파일 기준 estimate를 사용합니다.");
+      } else {
+        toast.error("부하 추산에 실패했습니다: " + resolveAxiosError(err));
+      }
     } finally {
       setIsExtracting(false);
     }
@@ -1010,6 +1049,31 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     };
 
     await runPipelineWithEstimate(execute);
+  }
+
+  async function handleRecreateMarkdownFromCanceled() {
+    if (!attachmentId) return;
+    setIsExtracting(true);
+    try {
+      const res = await reactMarkdownDocumentApi.extractFromAttachment({
+        attachmentId,
+        force: true,
+        runChunking: false,
+        runRagIndex: false,
+        runSkillExtraction: false,
+      } as any);
+      const newDocId = res.document.documentId;
+      setDocumentId(newDocId);
+      setMarkdownDocument(res.document);
+      localStorage.setItem(`markdown_doc_id_${attachmentId}`, newDocId);
+      setReused(res.reused);
+      toast.success("Markdown 지식 파이프라인 작업이 다시 시작되었습니다.");
+      startPolling(newDocId, attachmentId);
+    } catch (err: any) {
+      toast.error("Markdown 다시 생성 실패: " + resolveAxiosError(err));
+    } finally {
+      setIsExtracting(false);
+    }
   }
 
   async function handleReextractMarkdown() {
@@ -1764,11 +1828,28 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         <Grid size={{ xs: 6 }}>
                           <Typography variant="caption" color="text.secondary" display="block">색인(RAG) 상태</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
-                            {ragIndexed || (ragMetadata as any)?.indexed ? (
-                              <span style={{ color: "#2e7d32", fontWeight: "bold" }}>색인 완료</span>
-                            ) : (
-                              <span style={{ color: "#d32f2f" }}>색인 미완료</span>
-                            )}
+                            {(() => {
+                              if (latestRagJob) {
+                                const status = latestRagJob.status;
+                                if (status === "RUNNING" || status === "PENDING") {
+                                  return <span style={{ color: "#1976d2", fontWeight: "bold" }}>색인 진행 중</span>;
+                                }
+                                if (status === "SUCCEEDED") {
+                                  return <span style={{ color: "#2e7d32", fontWeight: "bold" }}>색인 완료</span>;
+                                }
+                                if (status === "FAILED") {
+                                  return <span style={{ color: "#d32f2f", fontWeight: "bold" }}>색인 실패</span>;
+                                }
+                                if (status === "CANCELLED") {
+                                  return <span style={{ color: "#757575" }}>색인 취소됨</span>;
+                                }
+                              }
+                              return ragIndexed || (ragMetadata as any)?.indexed ? (
+                                <span style={{ color: "#2e7d32", fontWeight: "bold" }}>색인 완료</span>
+                              ) : (
+                                <span style={{ color: "#d32f2f" }}>색인 미완료</span>
+                              );
+                            })()}
                           </Typography>
                         </Grid>
                         <Grid size={{ xs: 6 }}>
@@ -1819,7 +1900,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             size="small"
                             checked={runChunking}
                             onChange={(e) => handleRunChunkingChange(e.target.checked)}
-                            disabled={controlsDisabled}
+                            disabled={controlsDisabled || isCanceledRevision}
                           />
                         }
                         label={<Typography variant="body2" sx={{ fontSize: 13 }}>Chunking 분할</Typography>}
@@ -1832,7 +1913,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             size="small"
                             checked={runRagIndex}
                             onChange={(e) => handleRunRagIndexChange(e.target.checked)}
-                            disabled={controlsDisabled}
+                            disabled={controlsDisabled || isCanceledRevision}
                           />
                         }
                         label={<Typography variant="body2" sx={{ fontSize: 13 }}>RAG 색인</Typography>}
@@ -1845,7 +1926,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             size="small"
                             checked={runSkillExtraction}
                             onChange={(e) => handleRunSkillExtractionChange(e.target.checked)}
-                            disabled={controlsDisabled}
+                            disabled={controlsDisabled || isCanceledRevision}
                           />
                         }
                         label={<Typography variant="body2" sx={{ fontSize: 13 }}>Skill 추출</Typography>}
@@ -1858,7 +1939,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             size="small"
                             checked={force}
                             onChange={(e) => setForce(e.target.checked)}
-                            disabled={controlsDisabled}
+                            disabled={controlsDisabled || isCanceledRevision}
                           />
                         }
                         label={<Typography variant="body2" sx={{ fontSize: 13 }}>강제 재추출 (force)</Typography>}
@@ -1882,13 +1963,20 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             fullWidth
                             value={chunkingStrategy}
                             onChange={(e) => setChunkingStrategy(e.target.value)}
-                            disabled={controlsDisabled}
+                            disabled={controlsDisabled || isCanceledRevision}
                           >
                             {availableStrategies.map((s) => (
-                              <MenuItem key={s} value={s}>{s}</MenuItem>
+                              <MenuItem key={s} value={s}>{strategyLabels[s] || s}</MenuItem>
                             ))}
                           </Select>
                         </Grid>
+                        {chunkingStrategy === "blockify" && (
+                          <Grid size={{ xs: 12 }}>
+                            <Alert severity="warning" sx={{ fontSize: 11, py: 0.5 }}>
+                              Blockify는 질문·답변 중심 Knowledge Block을 생성하는 PoC 전략입니다. 동일 원본 비교 테스트는 별도 Attachment와 별도 Projection으로 수행하세요.
+                            </Alert>
+                          </Grid>
+                        )}
                         <Grid size={{ xs: 6 }}>
                           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                             단위
@@ -1898,7 +1986,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             fullWidth
                             value={chunkUnit}
                             onChange={(e) => setChunkUnit(e.target.value)}
-                            disabled={controlsDisabled}
+                            disabled={controlsDisabled || isCanceledRevision}
                           >
                             <MenuItem value="CHARACTER">CHARACTER</MenuItem>
                             <MenuItem value="TOKEN">TOKEN</MenuItem>
@@ -1912,7 +2000,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             fullWidth
                             value={chunkMaxSize}
                             onChange={(e) => setChunkMaxSize(e.target.value)}
-                            disabled={controlsDisabled}
+                            disabled={controlsDisabled || isCanceledRevision}
                             placeholder="800 (기본값)"
                             helperText="양수"
                             FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
@@ -1926,7 +2014,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             fullWidth
                             value={chunkOverlap}
                             onChange={(e) => setChunkOverlap(e.target.value)}
-                            disabled={controlsDisabled}
+                            disabled={controlsDisabled || isCanceledRevision}
                             placeholder="100 (기본값)"
                             helperText="0 이상, 최대 크기 미만"
                             FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
@@ -1954,7 +2042,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             const matched = embeddingOptions.find((o) => embeddingOptionKey(o) === e.target.value);
                             if (matched) setSelectedEmbeddingOption(matched);
                           }}
-                          disabled={controlsDisabled}
+                          disabled={controlsDisabled || isCanceledRevision}
                           helperText={
                             selectedEmbeddingOption?.profileId
                               ? `Profile 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
@@ -1992,7 +2080,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         fullWidth
                         value={skillExtractionMode}
                         onChange={(e) => setSkillExtractionMode(e.target.value as any)}
-                        disabled={controlsDisabled}
+                        disabled={controlsDisabled || isCanceledRevision}
                       >
                         <MenuItem value="">서버 기본값 사용</MenuItem>
                         <MenuItem value="regex">규칙 기반 추출 (regex)</MenuItem>
@@ -2007,9 +2095,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       {markdownStatus ? (
                         <Chip
-                          label={`Markdown: ${markdownStatus}`}
+                          label={`Markdown: ${isCanceledRevision ? "취소됨" : markdownStatus}`}
                           size="small"
                           color={
+                            isCanceledRevision ? "default" :
                             markdownStatus === "COMPLETED" ? "success" :
                             (markdownStatus === "RUNNING" || markdownStatus === "PENDING") ? "primary" :
                             markdownStatus === "FAILED" ? "error" :
@@ -2054,102 +2143,127 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                       </Stack>
                     ) : (
                       <Stack spacing={1.5} width="100%" sx={{ mt: 1 }}>
-                        {/* 1. Reextract option (Create New Revision) */}
-                        <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
-                            신규 재추출 (Reextract)
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
-                            기존 이력과 관계없이 새로운 리비전(문서 버전)을 생성하여 처음부터 모든 파이프라인 단계를 다시 수행합니다.
-                          </Typography>
-                          <Stack direction="row" spacing={1}>
+                        {isCanceledRevision ? (
+                          <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
+                              Markdown 생성 취소됨
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
+                              이전 Markdown 변환이 취소되었습니다. 작업을 완료하려면 다시 생성해야 합니다.
+                            </Typography>
                             <Button
                               size="small"
                               variant="contained"
-                              color="warning"
+                              color="primary"
                               disabled={controlsDisabled}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                void handleReextractMarkdown();
+                                void handleRecreateMarkdownFromCanceled();
                               }}
                             >
-                              새로 재추출 실행
+                              Markdown 다시 생성
                             </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="warning"
-                              disabled={controlsDisabled}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleManualEstimate();
-                              }}
-                            >
-                              부하 추산
-                            </Button>
-                          </Stack>
-                        </Box>
+                          </Box>
+                        ) : (
+                          <>
+                            {/* 1. Reextract option (Create New Revision) */}
+                            <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
+                                신규 재추출 (Reextract)
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
+                                기존 이력과 관계없이 새로운 리비전(문서 버전)을 생성하여 처음부터 모든 파이프라인 단계를 다시 수행합니다.
+                              </Typography>
+                              <Stack direction="row" spacing={1}>
+                                <Button
+                                  size="small"
+                                  variant="contained"
+                                  color="warning"
+                                  disabled={controlsDisabled}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleReextractMarkdown();
+                                  }}
+                                >
+                                  새로 재추출 실행
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  color="warning"
+                                  disabled={controlsDisabled}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleManualEstimate();
+                                  }}
+                                >
+                                  부하 추산
+                                </Button>
+                              </Stack>
+                            </Box>
 
-                        {/* 2. Resume Options (Continue Existing Revision) */}
-                        <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
-                            작업 재개 (Resume)
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
-                            기존 리비전 상태를 유지하면서 지정한 단계부터 후속 처리를 이어서 진행합니다.
-                          </Typography>
-                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ gap: 1 }}>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={controlsDisabled || markdownStatus !== "COMPLETED" || pipelineExecution?.status === "COMPLETED"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleResume(null);
-                              }}
-                            >
-                              이어서 진행
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={controlsDisabled || markdownStatus !== "COMPLETED"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleResume("CHUNKING");
-                              }}
-                            >
-                              청킹부터 재실행
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={controlsDisabled || markdownStatus !== "COMPLETED" || !selectedEmbeddingOption}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleReindexRag();
-                              }}
-                            >
-                              RAG 색인부터 재실행
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={controlsDisabled || markdownStatus !== "COMPLETED"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleResume("SKILL_EXTRACTION");
-                              }}
-                            >
-                              Skill 추출부터 재실행
-                            </Button>
-                          </Stack>
-                          {markdownStatus !== "COMPLETED" && (
-                            <Alert severity="info" sx={{ mt: 1.5, py: 0.5, px: 1, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
-                              Markdown 변환이 완료되지 않았거나 실패하여 작업을 재개할 수 없습니다. 상단의 '새로 재추출'을 먼저 실행해 주십시오.
-                            </Alert>
-                          )}
-                        </Box>
+                            {/* 2. Resume Options (Continue Existing Revision) */}
+                            <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
+                                작업 재개 (Resume)
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
+                                기존 리비전 상태를 유지하면서 지정한 단계부터 후속 처리를 이어서 진행합니다.
+                              </Typography>
+                              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ gap: 1 }}>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={controlsDisabled || markdownStatus !== "COMPLETED" || pipelineExecution?.status === "COMPLETED"}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleResume(null);
+                                  }}
+                                >
+                                  이어서 진행
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={controlsDisabled || markdownStatus !== "COMPLETED"}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleResume("CHUNKING");
+                                  }}
+                                >
+                                  청킹부터 재실행
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={controlsDisabled || markdownStatus !== "COMPLETED" || !selectedEmbeddingOption}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleReindexRag();
+                                  }}
+                                >
+                                  RAG 색인부터 재실행
+                                </Button>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  disabled={controlsDisabled || markdownStatus !== "COMPLETED"}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleResume("SKILL_EXTRACTION");
+                                  }}
+                                >
+                                  Skill 추출부터 재실행
+                                </Button>
+                              </Stack>
+                              {markdownStatus !== "COMPLETED" && (
+                                <Alert severity="info" sx={{ mt: 1.5, py: 0.5, px: 1, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
+                                  Markdown 변환이 완료되지 않았거나 실패하여 작업을 재개할 수 없습니다. 상단의 '새로 재추출'을 먼저 실행해 주십시오.
+                                </Alert>
+                              )}
+                            </Box>
+                          </>
+                        )}
                       </Stack>
                     )}
                   </Stack>
@@ -2165,18 +2279,21 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           <CircularProgress size={16} />
                           <Typography variant="caption" color="text.secondary">
                             {(() => {
-                              if (pipelineProgress && pipelineProgress.status === "RUNNING") {
-                                if (pipelineProgress.currentStage === "CHUNKING") {
+                              if (pipelineProgress) {
+                                const pipeline = pipelineProgress;
+                                const rag = pipeline.rag;
+                                if (pipeline.status === "RUNNING" && pipeline.currentStage === "CHUNKING") {
                                   return "청킹 중";
                                 }
-                                if (pipelineProgress.currentStage === "RAG_INDEX" && pipelineProgress.rag) {
-                                  const { currentStep, embeddedCount, indexedCount, chunkCount } = pipelineProgress.rag;
-                                  if (currentStep === "EMBEDDING") {
-                                    return `임베딩 중 ${embeddedCount ?? 0} / ${chunkCount ?? 0}`;
+                                if (pipeline.status === "RUNNING" && pipeline.currentStage === "RAG_INDEX") {
+                                  if (rag?.currentStep === "EMBEDDING") {
+                                    return `임베딩 중 ${rag.embeddedCount ?? 0} / ${rag.chunkCount ?? 0}`;
+                                  } else if (rag?.currentStep === "INDEXING") {
+                                    return `벡터 저장 중 ${rag.indexedCount ?? 0} / ${rag.chunkCount ?? 0}`;
                                   }
-                                  if (currentStep === "INDEXING") {
-                                    return `벡터 저장 중 ${indexedCount ?? 0} / ${chunkCount ?? 0}`;
-                                  }
+                                }
+                                if (pipeline.status === "FAILED") {
+                                  return `실패: ${pipeline.errorCode}`;
                                 }
                               }
                               // Fallback to legacy check

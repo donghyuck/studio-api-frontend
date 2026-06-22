@@ -34,6 +34,12 @@ import {
   TextField,
   Tooltip,
   Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableRow,
+  Paper,
 } from "@mui/material";
 import {
   ArticleOutlined,
@@ -385,6 +391,24 @@ function SearchResultDetail({
   content?: string | null;
   metadata?: Record<string, unknown>;
 }) {
+  const specialFields = [
+    { key: "requestedChunkingStrategy", label: "Requested Strategy" },
+    { key: "actualChunkingStrategy", label: "Actual Strategy" },
+    { key: "validationStatus", label: "Validation Status" },
+    { key: "fallbackReason", label: "Fallback Reason" },
+    { key: "blockifyFingerprint", label: "Blockify Fingerprint" },
+    { key: "promptVersion", label: "Prompt Version" },
+    { key: "generatorModel", label: "Generator Model" },
+    { key: "sourceEvidence", label: "Source Evidence" },
+  ];
+
+  const hasSpecialFields = metadata && specialFields.some(({ key }) => metadata[key] !== undefined && metadata[key] !== null);
+
+  const isFallback = metadata && (
+    metadata.fallbackReason || 
+    (metadata.requestedChunkingStrategy === "blockify" && metadata.actualChunkingStrategy === "structure-based")
+  );
+
   return (
     <Box sx={{ border: 1, borderColor: "divider", borderRadius: 2, p: 1.25 }}>
       <Stack spacing={1}>
@@ -407,21 +431,62 @@ function SearchResultDetail({
         >
           {content?.trim() || "검색 결과 row를 선택하면 전체 콘텐츠가 여기에 표시됩니다."}
         </Box>
+        {hasSpecialFields && metadata ? (
+          <TableContainer component={Paper} variant="outlined" sx={{ overflow: "hidden", mt: 1 }}>
+            <Table size="small">
+              <TableBody>
+                {specialFields.map(({ key, label }) => {
+                  const val = metadata[key];
+                  if (val === undefined || val === null) return null;
+                  const displayVal = typeof val === "object" ? JSON.stringify(val) : String(val);
+                  
+                  const shouldUnderline = 
+                    (key === "fallbackReason" && isFallback) ||
+                    (key === "actualChunkingStrategy" && metadata.requestedChunkingStrategy === "blockify" && metadata.actualChunkingStrategy === "structure-based");
+
+                  return (
+                    <TableRow key={key}>
+                      <TableCell sx={{ fontWeight: 600, width: "35%", fontSize: 11, py: 0.5 }}>{label}</TableCell>
+                      <TableCell 
+                        sx={{ 
+                          fontSize: 11, 
+                          py: 0.5, 
+                          textDecoration: shouldUnderline ? "underline" : "none",
+                          fontWeight: shouldUnderline ? 600 : "normal",
+                          color: shouldUnderline ? "error.main" : "text.primary"
+                        }}
+                      >
+                        {displayVal}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        ) : null}
         {metadata ? (
-          <Box
-            component="pre"
-            sx={{
-              m: 0,
-              maxHeight: 180,
-              overflow: "auto",
-              whiteSpace: "pre-wrap",
-              overflowWrap: "anywhere",
-              color: "text.secondary",
-              fontSize: 12,
-            }}
-          >
-            {JSON.stringify(metadata, null, 2)}
-          </Box>
+          (() => {
+            const remaining = { ...metadata };
+            specialFields.forEach(({ key }) => delete remaining[key]);
+            if (Object.keys(remaining).length === 0) return null;
+            return (
+              <Box
+                component="pre"
+                sx={{
+                  m: 0,
+                  maxHeight: 180,
+                  overflow: "auto",
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
+                  color: "text.secondary",
+                  fontSize: 12,
+                }}
+              >
+                {JSON.stringify(remaining, null, 2)}
+              </Box>
+            );
+          })()
         ) : null}
       </Stack>
     </Box>
