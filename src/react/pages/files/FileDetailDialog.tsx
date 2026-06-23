@@ -165,6 +165,12 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   } = useMarkdownDocumentPolling();
 
   const roles = useAuthStore((state) => state.user?.roles) ?? [];
+  const [lastFailedMessage, setLastFailedMessage] = useState<string | null>(null);
+  const [blockifyValidationResult, setBlockifyValidationResult] = useState<{
+    isValid: boolean;
+    missingFields: string[];
+    hasChunks: boolean;
+  } | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
 
   // Load embedding options and chunking config on open
@@ -254,6 +260,87 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setResources([]);
     }
   }, [markdownStatus, documentId]);
+
+  useEffect(() => {
+    if (open && latestRagJob?.jobId && latestRagJob.status === "SUCCEEDED" && (chunkingStrategy === "blockify" || latestRagJob.chunkingStrategy === "blockify")) {
+      let active = true;
+      const validateBlockify = async () => {
+        try {
+          const res = await reactAiApi.getRagJobChunks(latestRagJob.jobId, 0, 5);
+          if (!active) return;
+          const chunks = res.content ?? [];
+          if (chunks.length === 0) {
+            setBlockifyValidationResult({ isValid: false, missingFields: [], hasChunks: false });
+            return;
+          }
+          const requiredKeys = ["requestedChunkingStrategy", "actualChunkingStrategy", "blockifyFingerprint", "sourceEvidence"];
+          const missing = new Set<string>(requiredKeys);
+          
+          for (const chunk of chunks) {
+            const meta = chunk.metadata || {};
+            for (const key of requiredKeys) {
+              if (meta[key] !== undefined && meta[key] !== null && meta[key] !== "") {
+                missing.delete(key);
+              }
+            }
+          }
+          
+          setBlockifyValidationResult({
+            isValid: missing.size === 0,
+            missingFields: Array.from(missing),
+            hasChunks: true,
+          });
+        } catch (err) {
+          console.error("Failed to fetch job chunks for blockify validation", err);
+          if (active) {
+            setBlockifyValidationResult(null);
+          }
+        }
+      };
+      void validateBlockify();
+      return () => {
+        active = false;
+      };
+    } else {
+      setBlockifyValidationResult(null);
+    }
+  }, [open, latestRagJob?.jobId, latestRagJob?.status, latestRagJob?.chunkingStrategy, chunkingStrategy]);
+
+  const getStageFailureState = (stage: "EXTRACT" | "MARKDOWN" | "CHUNKING" | "EMBEDDING" | "INDEXING" | "SKILL_EXTRACTION") => {
+    const isPipelineFailed = markdownStatus === "FAILED" || pipelineExecution?.status === "FAILED" || pipelineProgress?.status === "FAILED";
+    if (!isPipelineFailed) return null;
+
+    let failedStage: string = "";
+    let failedStep: string = "";
+
+    if (markdownStatus === "FAILED") {
+      failedStage = "MARKDOWN";
+    } else if (pipelineProgress?.status === "FAILED") {
+      failedStage = pipelineProgress.currentStage || "";
+      failedStep = pipelineProgress.rag?.currentStep || "";
+    } else if (pipelineExecution?.status === "FAILED") {
+      failedStage = pipelineExecution.currentStage || "";
+    }
+
+    const stagesOrder = ["EXTRACT", "MARKDOWN", "CHUNKING", "EMBEDDING", "INDEXING", "SKILL_EXTRACTION"];
+    const currentIdx = stagesOrder.indexOf(stage);
+    let failedIdx = stagesOrder.indexOf(failedStage);
+    if (failedStage === "RAG_INDEX") {
+      if (failedStep === "INDEXING") {
+        failedIdx = stagesOrder.indexOf("INDEXING");
+      } else {
+        failedIdx = stagesOrder.indexOf("EMBEDDING");
+      }
+    }
+
+    if (currentIdx > failedIdx) {
+      return "NOT_RUN";
+    }
+    if (currentIdx === failedIdx) {
+      return "FAILED";
+    }
+    return "COMPLETED";
+  };
 
   useEffect(() => {
     if (open && attachmentId) {
@@ -1137,8 +1224,16 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
   }
 
+  const storeLastFailedMessage = () => {
+    const currentErr = pipelineProgress?.errorMessage || pipelineExecution?.errorMessage || latestRevision?.errorMessage || markdownError || "";
+    if (currentErr) {
+      setLastFailedMessage(currentErr);
+    }
+  };
+
   async function handleResume(fromStage: MarkdownPipelineStage | null) {
     if (!documentId) return;
+    storeLastFailedMessage();
     if (markdownStatus !== "COMPLETED") {
       toast.error("Markdown 변환이 성공적으로 완료된 상태에서만 작업을 재개할 수 있습니다. 실패한 경우 '새로 재추출 실행'을 이용해 주세요.");
       return;
@@ -1199,6 +1294,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   async function handleReindexRag() {
     if (!documentId) return;
+    storeLastFailedMessage();
     if (!selectedEmbeddingOption) {
       toast.error("RAG 색인을 재지정할 임베딩 옵션을 선택해 주세요.");
       return;
@@ -1241,6 +1337,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   // 1. Extract 단계 상태
   const getExtractStepStatus = () => {
+    const failState = getStageFailureState("EXTRACT");
+    if (failState) return failState;
     if (markdownStatus === "COMPLETED") return "COMPLETED";
     if (markdownStatus === "FAILED") return "FAILED";
     if (markdownStatus === "CANCELED") return "CANCELED";
@@ -1250,12 +1348,16 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   // 2. Markdown 생성 단계 상태
   const getMarkdownStepStatus = () => {
+    const failState = getStageFailureState("MARKDOWN");
+    if (failState) return failState;
     return getExtractStepStatus();
   };
 
   // 3. Chunking 단계 상태
   const getChunkingStepStatus = () => {
     if (!runChunking) return "DISABLED";
+    const failState = getStageFailureState("CHUNKING");
+    if (failState) return failState;
     if (markdownStatus === "COMPLETED") {
       if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
         return "COMPLETED";
@@ -1264,7 +1366,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
       return "PENDING";
     }
-    if (pipelineExecution.status === "FAILED" && pipelineExecution.currentStage === "CHUNKING") return "FAILED";
     if (pipelineExecution.status === "RUNNING" && pipelineExecution.currentStage === "CHUNKING") return "RUNNING";
     
     const completedStages: MarkdownPipelineStage[] = ["CHUNKING", "RAG_INDEX", "SKILL_EXTRACTION", "COMPLETED"];
@@ -1278,6 +1379,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   // 4. Vector Embedding 단계 상태
   const getEmbeddingStepStatus = () => {
     if (!runRagIndex) return "DISABLED";
+    const failState = getStageFailureState("EMBEDDING");
+    if (failState) return failState;
+
     if (latestRagJob) {
       const status = latestRagJob.status;
       if (status === "RUNNING") {
@@ -1286,11 +1390,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         return "PENDING";
       }
       if (status === "SUCCEEDED") return "COMPLETED";
-      if (status === "FAILED") {
-        if (latestRagJob.currentStep === "EMBEDDING") return "FAILED";
-        if (latestRagJob.currentStep === "INDEXING" || latestRagJob.currentStep === "COMPLETED") return "COMPLETED";
-        return "PENDING";
-      }
       if (status === "CANCELLED") return "CANCELED";
       if (status === "PENDING") return "RUNNING";
     }
@@ -1303,7 +1402,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
       return "PENDING";
     }
-    if (pipelineExecution.status === "FAILED" && pipelineExecution.currentStage === "RAG_INDEX") return "FAILED";
     if (pipelineExecution.status === "RUNNING" && pipelineExecution.currentStage === "RAG_INDEX") return "RUNNING";
 
     const completedStages: MarkdownPipelineStage[] = ["RAG_INDEX", "SKILL_EXTRACTION", "COMPLETED"];
@@ -1317,6 +1415,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   // 5. DB Indexing 단계 상태
   const getIndexingStepStatus = () => {
     if (!runRagIndex) return "DISABLED";
+    const failState = getStageFailureState("INDEXING");
+    if (failState) return failState;
+
     if (latestRagJob) {
       const status = latestRagJob.status;
       if (status === "RUNNING") {
@@ -1325,10 +1426,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         return "PENDING";
       }
       if (status === "SUCCEEDED") return "COMPLETED";
-      if (status === "FAILED") {
-        if (latestRagJob.currentStep === "INDEXING") return "FAILED";
-        return "PENDING";
-      }
       if (status === "CANCELLED") return "CANCELED";
       if (status === "PENDING") return "PENDING";
     }
@@ -1352,6 +1449,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   // 6. Skill 추출 단계 상태
   const getSkillStepStatus = () => {
     if (!runSkillExtraction) return "DISABLED";
+    const failState = getStageFailureState("SKILL_EXTRACTION");
+    if (failState) return failState;
+
     if (markdownStatus === "COMPLETED") {
       if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
         return "COMPLETED";
@@ -1360,7 +1460,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     if (!pipelineExecution || pipelineExecution.status === "UNKNOWN" || pipelineExecution.errorCode === "PIPELINE_HISTORY_UNAVAILABLE") {
       return "PENDING";
     }
-    if (pipelineExecution.status === "FAILED" && pipelineExecution.currentStage === "SKILL_EXTRACTION") return "FAILED";
     if (pipelineExecution.status === "RUNNING" && pipelineExecution.currentStage === "SKILL_EXTRACTION") return "RUNNING";
     
     const completedStages: MarkdownPipelineStage[] = ["SKILL_EXTRACTION", "COMPLETED"];
@@ -1430,7 +1529,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       },
       {
         id: "indexing",
-        label: "Indexing (색인 저장)",
+        label: "Vector upsert (벡터 저장)",
         status: getIndexingStepStatus(),
         description: "변환된 벡터 데이터를 Vector DB 테이블에 색인 및 적재",
         progress: idxProg,
@@ -1466,6 +1565,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             let isFailed = step.status === "FAILED";
             let isCanceled = step.status === "CANCELED";
             let isDisabled = step.status === "DISABLED";
+            let isNotRun = step.status === "NOT_RUN";
 
             if (isCompleted) {
               iconColor = "success.main";
@@ -1489,6 +1589,12 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               statusText = "취소됨";
               statusColor = "default";
             } else if (isDisabled) {
+              iconColor = "text.disabled";
+              textColor = "text.disabled";
+              descColor = "text.disabled";
+              statusText = "미실행";
+              statusColor = "default";
+            } else if (isNotRun) {
               iconColor = "text.disabled";
               textColor = "text.disabled";
               descColor = "text.disabled";
@@ -1596,7 +1702,53 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             );
           })}
         </Box>
+        {renderBlockifyDiagnostic()}
       </Box>
+    );
+  }
+
+  function renderBlockifyDiagnostic() {
+    if (chunkingStrategy !== "blockify" && latestRagJob?.chunkingStrategy !== "blockify") {
+      return null;
+    }
+    if (!blockifyValidationResult) {
+      if (latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") {
+        return (
+          <Alert severity="info" sx={{ mt: 2, py: 0.5, px: 1.5, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
+            Blockify PoC 진단: 파이프라인 완료 후 메타데이터 검증을 시작합니다.
+          </Alert>
+        );
+      }
+      return null;
+    }
+
+    const { isValid, missingFields, hasChunks } = blockifyValidationResult;
+
+    if (!hasChunks) {
+      return (
+        <Alert severity="warning" sx={{ mt: 2, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
+          <strong>Blockify 결과 미반영:</strong> 생성된 RAG Chunk가 존재하지 않습니다.
+        </Alert>
+      );
+    }
+
+    if (isValid) {
+      return (
+        <Alert severity="success" sx={{ mt: 2, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
+          <strong>Blockify 검증 통과:</strong> 모든 필수 메타데이터 필드가 정상 반영되었습니다.
+        </Alert>
+      );
+    }
+
+    return (
+      <Alert severity="error" sx={{ mt: 2, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
+        <strong>Blockify 결과 미반영:</strong> 필수 메타데이터 필드가 누락되었습니다.
+        <Box sx={{ mt: 0.5, pl: 1, fontSize: 11 }}>
+          • 누락된 필드: {missingFields.join(", ")}
+          <br />
+          • 원인: 서버 설정 `studio.chunking.blockify.enabled=true` 비활성화 또는 Fallback 동작으로 인해 `structure-based` 청킹이 실행되었을 수 있습니다.
+        </Box>
+      </Alert>
     );
   }
 
@@ -2341,16 +2493,83 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                   )}
 
                   {/* FAILED message */}
-                  {(markdownStatus === "FAILED" || pipelineExecution?.status === "FAILED" || pipelineProgress?.status === "FAILED") && (
-                    <Box sx={{ mt: 1.5, mb: 1.5, bgcolor: "error.light", color: "error.contrastText", p: 1.5, borderRadius: 1.5 }}>
-                      <Typography variant="caption" display="block" sx={{ fontWeight: "bold", mb: 0.5 }}>
-                        실패 원인 (Code: {pipelineProgress?.errorCode || pipelineExecution?.errorCode || latestRevision?.errorCode || "-"})
-                      </Typography>
-                      <Typography variant="body2" sx={{ wordBreak: "break-all", fontSize: 12 }}>
-                        {sanitizeErrorMessage(pipelineProgress?.errorMessage || pipelineExecution?.errorMessage || latestRevision?.errorMessage || markdownError)}
-                      </Typography>
-                    </Box>
-                  )}
+                  {(() => {
+                    const isFailedState = markdownStatus === "FAILED" || pipelineExecution?.status === "FAILED" || pipelineProgress?.status === "FAILED";
+                    if (!isFailedState) return null;
+
+                    const errCode = pipelineProgress?.errorCode || pipelineExecution?.errorCode || latestRevision?.errorCode || "-";
+                    const errMessage = pipelineProgress?.errorMessage || pipelineExecution?.errorMessage || latestRevision?.errorMessage || markdownError || "-";
+                    const ragErrMessage = (pipelineProgress?.rag as any)?.errorMessage || latestRagJob?.errorMessage;
+
+                    let stageStr = "";
+                    let stepStr = "";
+                    const stage = (pipelineProgress?.currentStage || pipelineExecution?.currentStage || (markdownStatus === "FAILED" ? "MARKDOWN" : "")) as string;
+                    if (stage === "EXTRACT") stageStr = "본문 추출";
+                    else if (stage === "MARKDOWN") stageStr = "Markdown 구조화";
+                    else if (stage === "CHUNKING") stageStr = "분할 (Chunking)";
+                    else if (stage === "RAG_INDEX") stageStr = "RAG 색인";
+                    else if (stage === "SKILL_EXTRACTION") stageStr = "지식 추출 (Skill)";
+
+                    const step = pipelineProgress?.rag?.currentStep || latestRagJob?.currentStep;
+                    if (step === "EMBEDDING") stepStr = "임베딩";
+                    else if (step === "INDEXING") stepStr = "벡터 저장";
+
+                    const stageStepLabel = stageStr && stepStr ? `${stageStr} > ${stepStr}` : (stageStr || "-");
+                    
+                    const isSameError = errMessage && lastFailedMessage && errMessage === lastFailedMessage;
+
+                    return (
+                      <Box sx={{ mt: 1.5, mb: 1.5, bgcolor: "error.light", color: "error.contrastText", p: 1.5, borderRadius: 1.5 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1 }}>
+                          지식 파이프라인 실행 실패
+                        </Typography>
+                        <Stack spacing={0.5} sx={{ fontSize: 12, mb: 1.5 }}>
+                          <Box><strong>단계:</strong> {stageStepLabel}</Box>
+                          <Box><strong>원인:</strong> {errCode} ({sanitizeErrorMessage(errMessage)})</Box>
+                          {ragErrMessage && (
+                            <Box><strong>상세 (RAG):</strong> {sanitizeErrorMessage(ragErrMessage)}</Box>
+                          )}
+                        </Stack>
+                        {isSameError && (
+                          <Alert severity="warning" sx={{ mt: 1, mb: 1.5, color: "warning.dark", py: 0.5, px: 1, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
+                            이전 실행과 동일한 오류가 발생했습니다. 재시도 전 서버 설정(예: KURE 임베딩 서버 batch size, Blockify 활성화 여부 등)이 변경 및 반영되었는지 꼭 확인해 주세요.
+                          </Alert>
+                        )}
+                        <Stack direction="row" spacing={1.5}>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="warning"
+                            sx={{ textTransform: "none", fontSize: 11, py: 0.5 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const failedStage = pipelineProgress?.currentStage || pipelineExecution?.currentStage;
+                              if (failedStage) {
+                                void handleResume(failedStage);
+                              } else {
+                                void handleResume(null);
+                              }
+                            }}
+                          >
+                            실패 단계부터 재개
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="inherit"
+                            sx={{ textTransform: "none", fontSize: 11, py: 0.5 }}
+                            disabled={!selectedEmbeddingOption}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleReindexRag();
+                            }}
+                          >
+                            RAG 다시 실행
+                          </Button>
+                        </Stack>
+                      </Box>
+                    );
+                  })()}
 
                   {/* Metadata Table (Visible whenever documentId exists) */}
                   {documentId && (
