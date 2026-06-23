@@ -218,6 +218,8 @@ export interface MarkdownDocumentFromAttachmentRequest {
   chunkMaxSize?: number | null;
   chunkOverlap?: number | null;
   chunkUnit?: string | null;
+  blockifyLlmProvider?: string | null;
+  blockifyLlmModel?: string | null;
   embeddingProfileId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
@@ -233,6 +235,8 @@ export interface MarkdownDocumentReextractRequest {
   chunkMaxSize?: number | null;
   chunkOverlap?: number | null;
   chunkUnit?: string | null;
+  blockifyLlmProvider?: string | null;
+  blockifyLlmModel?: string | null;
   embeddingProfileId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
@@ -275,6 +279,8 @@ export interface MarkdownResumeRequest {
   chunkMaxSize?: number;
   chunkOverlap?: number;
   chunkUnit?: string;
+  blockifyLlmProvider?: string | null;
+  blockifyLlmModel?: string | null;
   embeddingProfileId?: string;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
@@ -311,11 +317,24 @@ export const reactMarkdownDocumentApi = {
   async getByAttachment(attachmentId: number): Promise<MarkdownDocumentDto> {
     return apiRequest<MarkdownDocumentDto>("get", `/api/markdown-documents/by-attachment/${attachmentId}`);
   },
+  async estimatePipelineByAttachment(attachmentId: number, request: MarkdownPipelineEstimateRequest): Promise<MarkdownPipelineEstimateResponse> {
+    return apiRequest<MarkdownPipelineEstimateResponse>("post", `/api/markdown-documents/by-attachment/${attachmentId}/pipeline/estimate`, {
+      data: request,
+    });
+  },
   async getRevisions(documentId: string, options?: { signal?: AbortSignal }): Promise<MarkdownDocumentRevisionDto[]> {
     return apiRequest<MarkdownDocumentRevisionDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions`, options);
   },
   async getPipeline(documentId: string): Promise<MarkdownPipelineExecutionDto> {
     return apiRequest<MarkdownPipelineExecutionDto>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/pipeline`);
+  },
+  async estimatePipeline(documentId: string, request: MarkdownPipelineEstimateRequest): Promise<MarkdownPipelineEstimateResponse> {
+    return apiRequest<MarkdownPipelineEstimateResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/pipeline/estimate`, {
+      data: request,
+    });
+  },
+  async getProgress(documentId: string): Promise<MarkdownPipelineProgressResponseDto> {
+    return apiRequest<MarkdownPipelineProgressResponseDto>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/pipeline/progress`);
   },
   async reextract(documentId: string, request: MarkdownDocumentReextractRequest): Promise<MarkdownDocumentFromAttachmentResponse> {
     return apiRequest<MarkdownDocumentFromAttachmentResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/reextract`, {
@@ -342,3 +361,47 @@ export const reactMarkdownDocumentApi = {
     return apiRequest<MarkdownResourceDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/resources`);
   },
 };
+
+export interface MarkdownPipelineEstimateRequest {
+  runChunking: boolean;
+  runRagIndex: boolean;
+  runSkillExtraction: boolean;
+  chunkingStrategy?: string | null;
+  chunkMaxSize?: number | null;
+  chunkOverlap?: number | null;
+  chunkUnit?: string | null;
+  blockifyLlmProvider?: string | null;
+  blockifyLlmModel?: string | null;
+  embeddingProfileId?: string | null;
+  embeddingProvider?: string | null;
+  embeddingModel?: string | null;
+  embeddingDimension?: number | null;
+}
+
+export interface MarkdownPipelineEstimateResponse {
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
+  recommended: {
+    chunkingStrategy?: string;
+    chunkMaxSize?: number;
+    chunkOverlap?: number;
+    chunkUnit?: string;
+    embeddingProfileId?: string;
+    embeddingProvider?: string;
+    embeddingModel?: string;
+    embeddingDimension?: number;
+  };
+  reason?: string | null;
+}
+
+export interface MarkdownPipelineProgressResponseDto {
+  status: MarkdownPipelineExecutionStatus;
+  currentStage: MarkdownPipelineStage;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  rag?: {
+    currentStep?: 'EMBEDDING' | 'INDEXING' | string;
+    embeddedCount?: number;
+    indexedCount?: number;
+    chunkCount?: number;
+  } | null;
+}

@@ -44,7 +44,7 @@ import dayjs from "dayjs";
 import { useAuthStore } from "@/react/auth/store";
 import { useToast } from "@/react/feedback";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
-import type { RagChunkConfigResponseDto } from "@/types/studio/ai";
+import type { RagChunkConfigResponseDto, AiInfoResponse } from "@/types/studio/ai";
 import {
   reactFilesApi,
   reactDocumentConvertApi,
@@ -171,6 +171,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     missingFields: string[];
     hasChunks: boolean;
   } | null>(null);
+  const [blockifyLlmProvider, setBlockifyLlmProvider] = useState<string>("");
+  const [blockifyLlmModel, setBlockifyLlmModel] = useState<string>("");
+  const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
 
   // Load embedding options and chunking config on open
@@ -203,12 +206,29 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
   }, []);
 
+  const loadProviders = useCallback(async () => {
+    try {
+      const res = await reactAiApi.fetchProviders();
+      setAiInfo(res);
+      if (res.defaultProvider) {
+        setBlockifyLlmProvider(res.defaultProvider);
+        const match = res.providers.find((p) => p.name === res.defaultProvider);
+        if (match?.chat?.model) {
+          setBlockifyLlmModel(match.chat.model);
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
   useEffect(() => {
     if (open) {
       void loadEmbeddingOptions();
       void loadChunkConfig();
+      void loadProviders();
     }
-  }, [open, loadEmbeddingOptions, loadChunkConfig]);
+  }, [open, loadEmbeddingOptions, loadChunkConfig, loadProviders]);
 
   // Derived: available chunking strategies
   const availableStrategies = useMemo(() => {
@@ -892,6 +912,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       chunkMaxSize: (runChunking || forEstimate) ? (maxSize || null) : null,
       chunkOverlap: (runChunking || forEstimate) ? (overlap || null) : null,
       chunkUnit: (runChunking || forEstimate) ? (chunkUnit || null) : null,
+      blockifyLlmProvider: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? (blockifyLlmProvider || null) : null,
+      blockifyLlmModel: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? (blockifyLlmModel || null) : null,
     };
 
     if (runSkillExtraction || forEstimate) {
@@ -2128,6 +2150,55 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                               Blockify는 질문·답변 중심 Knowledge Block을 생성하는 PoC 전략입니다. 동일 원본 비교 테스트는 별도 Attachment와 별도 Projection으로 수행하세요.
                             </Alert>
                           </Grid>
+                        )}
+                        {chunkingStrategy === "blockify" && (
+                          <>
+                            <Grid size={{ xs: 6 }}>
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                Blockify LLM Provider
+                              </Typography>
+                              <Select
+                                size="small"
+                                fullWidth
+                                value={blockifyLlmProvider}
+                                onChange={(e) => {
+                                  const prov = e.target.value;
+                                  setBlockifyLlmProvider(prov);
+                                  const match = aiInfo?.providers.find((p) => p.name === prov);
+                                  if (match?.chat?.model) {
+                                    setBlockifyLlmModel(match.chat.model);
+                                  }
+                                }}
+                                disabled={controlsDisabled || isCanceledRevision}
+                              >
+                                <MenuItem value="">(서버 기본값)</MenuItem>
+                                {aiInfo?.providers.map((p) => (
+                                  <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>
+                                ))}
+                              </Select>
+                            </Grid>
+                            <Grid size={{ xs: 6 }}>
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                Blockify LLM Model
+                              </Typography>
+                              <Select
+                                size="small"
+                                fullWidth
+                                value={blockifyLlmModel}
+                                onChange={(e) => setBlockifyLlmModel(e.target.value)}
+                                disabled={controlsDisabled || isCanceledRevision || !blockifyLlmProvider}
+                              >
+                                <MenuItem value="">(서버 기본값)</MenuItem>
+                                {(() => {
+                                  const selectedProv = aiInfo?.providers.find((p) => p.name === blockifyLlmProvider);
+                                  if (!selectedProv) return null;
+                                  return (
+                                    <MenuItem value={selectedProv.chat.model}>{selectedProv.chat.model}</MenuItem>
+                                  );
+                                })()}
+                              </Select>
+                            </Grid>
+                          </>
                         )}
                         <Grid size={{ xs: 6 }}>
                           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
