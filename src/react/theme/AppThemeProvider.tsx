@@ -88,21 +88,60 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
         palette: {
           mode: resolvedMode,
           primary: {
-            main: "#2563eb",
+            main: "#cc785c", // Claude Coral
+            dark: "#a9583e",
+            contrastText: "#ffffff",
           },
           background: {
-            default: resolvedMode === "dark" ? "#090d16" : "#f8fafc",
-            paper: resolvedMode === "dark" ? "#111827" : "#ffffff",
+            default: resolvedMode === "dark" ? "#181715" : "#faf9f5", // Cream Canvas / Navy Dark
+            paper: resolvedMode === "dark" ? "#1f1e1b" : "#efe9de",  // Surface Dark Soft / Surface Card Cream
+          },
+          text: {
+            primary: resolvedMode === "dark" ? "#faf9f5" : "#141413", // Ink / On-Dark
+            secondary: resolvedMode === "dark" ? "#a09d96" : "#6c6a64", // Muted
           },
         },
         shape: {
           borderRadius: 8,
+        },
+        typography: {
+          fontFamily: '"Inter", "-apple-system", BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          h1: {
+            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
+            fontWeight: 400,
+            letterSpacing: "-1px",
+          },
+          h2: {
+            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
+            fontWeight: 400,
+            letterSpacing: "-0.5px",
+          },
+          h3: {
+            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
+            fontWeight: 400,
+            letterSpacing: "-0.3px",
+          },
+          h4: {
+            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
+            fontWeight: 400,
+          },
+          h5: {
+            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
+            fontWeight: 400,
+          },
+          h6: {
+            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
+            fontWeight: 400,
+          },
         },
         components: {
           MuiButton: {
             styleOverrides: {
               root: {
                 transition: "all 200ms cubic-bezier(0.4, 0, 0.2, 1)",
+                borderRadius: "8px", // rounded.md
+                textTransform: "none",
+                fontWeight: 500,
               },
             },
             variants: [
@@ -120,6 +159,7 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
             styleOverrides: {
               root: {
                 transition: "background-color 200ms ease, box-shadow 200ms ease, border-color 200ms ease",
+                borderRadius: "12px", // rounded.lg
               },
             },
           },
@@ -131,23 +171,20 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
                     backdropFilter: "blur(6px)",
                     backgroundColor: (theme: any) =>
                       theme.palette.mode === "dark"
-                        ? "rgba(0, 0, 0, 0.5)"
-                        : "rgba(15, 23, 42, 0.2)",
+                        ? "rgba(0, 0, 0, 0.6)"
+                        : "rgba(20, 20, 19, 0.25)",
                   },
                 },
               },
             },
             styleOverrides: {
               paper: ({ theme, ownerState }: { theme: any; ownerState: any }) => ({
-                borderRadius: "14px",
+                borderRadius: "12px", // rounded.lg
                 border:
                   theme.palette.mode === "dark"
-                    ? "1px solid rgba(255, 255, 255, 0.08)"
-                    : "1px solid rgba(0, 0, 0, 0.08)",
-                boxShadow:
-                  theme.palette.mode === "dark"
-                    ? "0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4)"
-                    : "0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.02)",
+                    ? "1px solid #efe9de"
+                    : "1px solid #e6dfd8", // Hairline border
+                boxShadow: "0 20px 25px -5px rgba(20, 20, 19, 0.1)",
                 backgroundColor: theme.palette.background.paper,
                 backgroundImage: "none",
                 ...(!ownerState.onClose && {
@@ -164,8 +201,9 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
             },
             styleOverrides: {
               root: {
-                fontWeight: 700,
-                fontSize: "1.125rem",
+                fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
+                fontWeight: 500,
+                fontSize: "1.5rem",
                 padding: "20px 24px 8px 24px",
               },
             },
@@ -195,7 +233,7 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
                 backgroundColor: "transparent",
               },
               bar: {
-                background: "linear-gradient(90deg, #2563eb 0%, #6366f1 100%)",
+                background: "linear-gradient(90deg, #cc785c 0%, #efe9de 100%)", // Coral to soft cream gradient
               },
             },
           },
@@ -214,38 +252,38 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
               }),
               standardSuccess: ({ theme }: { theme: any }) => ({
                 backgroundColor: theme.palette.mode === "dark"
-                  ? "rgba(16, 185, 129, 0.12)"
-                  : "rgba(16, 185, 129, 0.06)",
-                color: theme.palette.mode === "dark" ? "#34d399" : "#059669",
+                  ? "rgba(93, 184, 114, 0.12)"
+                  : "rgba(93, 184, 114, 0.06)",
+                color: theme.palette.mode === "dark" ? "#5db872" : "#059669",
                 "& .MuiAlert-icon": {
-                  color: theme.palette.mode === "dark" ? "#34d399" : "#059669",
+                  color: theme.palette.mode === "dark" ? "#5db872" : "#059669",
                 },
               }),
               standardError: ({ theme }: { theme: any }) => ({
                 backgroundColor: theme.palette.mode === "dark"
-                  ? "rgba(239, 68, 68, 0.12)"
-                  : "rgba(239, 68, 68, 0.06)",
-                color: theme.palette.mode === "dark" ? "#f87171" : "#dc2626",
+                  ? "rgba(198, 69, 69, 0.12)"
+                  : "rgba(198, 69, 69, 0.06)",
+                color: theme.palette.mode === "dark" ? "#c64545" : "#dc2626",
                 "& .MuiAlert-icon": {
-                  color: theme.palette.mode === "dark" ? "#f87171" : "#dc2626",
+                  color: theme.palette.mode === "dark" ? "#c64545" : "#dc2626",
                 },
               }),
               standardWarning: ({ theme }: { theme: any }) => ({
                 backgroundColor: theme.palette.mode === "dark"
-                  ? "rgba(245, 158, 11, 0.12)"
-                  : "rgba(245, 158, 11, 0.06)",
-                color: theme.palette.mode === "dark" ? "#fbbf24" : "#d97706",
+                  ? "rgba(232, 165, 90, 0.12)"
+                  : "rgba(232, 165, 90, 0.06)",
+                color: theme.palette.mode === "dark" ? "#e8a55a" : "#d97706",
                 "& .MuiAlert-icon": {
-                  color: theme.palette.mode === "dark" ? "#fbbf24" : "#d97706",
+                  color: theme.palette.mode === "dark" ? "#e8a55a" : "#d97706",
                 },
               }),
               standardInfo: ({ theme }: { theme: any }) => ({
                 backgroundColor: theme.palette.mode === "dark"
-                  ? "rgba(37, 99, 235, 0.12)"
-                  : "rgba(37, 99, 235, 0.06)",
-                color: theme.palette.mode === "dark" ? "#60a5fa" : "#2563eb",
+                  ? "rgba(204, 120, 92, 0.12)"
+                  : "rgba(204, 120, 92, 0.06)",
+                color: theme.palette.mode === "dark" ? "#cc785c" : "#cc785c",
                 "& .MuiAlert-icon": {
-                  color: theme.palette.mode === "dark" ? "#60a5fa" : "#2563eb",
+                  color: theme.palette.mode === "dark" ? "#cc785c" : "#cc785c",
                 },
               }),
             },

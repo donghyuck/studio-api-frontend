@@ -214,6 +214,14 @@ export const reactAiApi = {
     );
   },
 
+  deleteVectorProjection(projectionId: string) {
+    return apiRequest<void>(
+      "delete",
+      `${MGMT_BASE}/vectors/projections/${encodeURIComponent(projectionId)}`
+    );
+  },
+
+
   getVectorProjectionPoints(
     projectionId: string,
     params?: {

@@ -17,6 +17,7 @@ import { filesQueryKeys } from "@/react/pages/files/queryKeys";
 import type { AttachmentDto } from "@/types/studio/files";
 import { API_BASE_URL } from "@/config/backend";
 import { ObjectTypeSelect } from "@/react/components/objecttype/ObjectTypeSelect";
+import { getCachedThumbnailUrl, requestThumbnail } from "./thumbnailCache";
 
 function formatFileSize(size: number) {
   if (size < 1024) return `${size} B`;
@@ -28,85 +29,6 @@ class FilesDataSource extends ReactPageDataSource<AttachmentDto> {
   constructor() {
     super("/api/mgmt/files");
   }
-}
-
-type ThumbnailCacheEntry = {
-  url?: string | null;
-  promise?: Promise<string | null>;
-  unavailableUntil?: number;
-};
-
-const thumbnailCache = new Map<number, ThumbnailCacheEntry>();
-const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
-const THUMBNAIL_RETRY_LIMIT = 6;
-const THUMBNAIL_MISSING_TTL_MS = 30_000;
-
-function getCachedThumbnailUrl(attachmentId: number) {
-  const entry = thumbnailCache.get(attachmentId);
-  if (!entry) {
-    return undefined;
-  }
-  if (entry.url === null && entry.unavailableUntil && entry.unavailableUntil < Date.now()) {
-    thumbnailCache.delete(attachmentId);
-    return undefined;
-  }
-  return entry.url;
-}
-
-async function requestThumbnail(attachmentId: number) {
-  const cached = getCachedThumbnailUrl(attachmentId);
-  if (cached !== undefined) {
-    return cached;
-  }
-
-  const existing = thumbnailCache.get(attachmentId);
-  if (existing?.promise) {
-    return existing.promise;
-  }
-
-  const promise = new Promise<string | null>((resolve) => {
-    let attempt = 0;
-
-    function markUnavailable() {
-      thumbnailCache.set(attachmentId, {
-        url: null,
-        unavailableUntil: Date.now() + THUMBNAIL_MISSING_TTL_MS,
-      });
-      resolve(null);
-    }
-
-    function load() {
-      reactFilesApi
-        .fetchThumbnail(attachmentId, 128)
-        .then((blob) => {
-          if (blob.size === 0) {
-            if (attempt < THUMBNAIL_RETRY_LIMIT) {
-              attempt += 1;
-              window.setTimeout(load, THUMBNAIL_RETRY_INTERVAL_MS);
-            } else {
-              markUnavailable();
-            }
-            return;
-          }
-          const nextUrl = URL.createObjectURL(blob);
-          thumbnailCache.set(attachmentId, { url: nextUrl });
-          resolve(nextUrl);
-        })
-        .catch(() => {
-          if (attempt < THUMBNAIL_RETRY_LIMIT) {
-            attempt += 1;
-            window.setTimeout(load, THUMBNAIL_RETRY_INTERVAL_MS);
-          } else {
-            markUnavailable();
-          }
-        });
-    }
-
-    load();
-  });
-
-  thumbnailCache.set(attachmentId, { promise });
-  return promise;
 }
 
 const FileThumbnail = memo(function FileThumbnail({ attachmentId, name }: { attachmentId: number; name: string }) {

@@ -3,6 +3,7 @@ import {
   reactMarkdownDocumentApi,
   type MarkdownDocumentRevisionDto,
   type MarkdownPipelineExecutionDto,
+  type MarkdownPipelineProgressResponseDto,
 } from "../api";
 import { reactAiApi } from "@/react/pages/ai/api";
 import type { RagIndexJobDto } from "@/types/studio/ai";
@@ -11,6 +12,7 @@ export function useMarkdownDocumentPolling(maxPollTimeMs = 300000) { // 5 minute
   const [latestRevision, setLatestRevision] = useState<MarkdownDocumentRevisionDto | null>(null);
   const [revisions, setRevisions] = useState<MarkdownDocumentRevisionDto[]>([]);
   const [pipelineExecution, setPipelineExecution] = useState<MarkdownPipelineExecutionDto | null>(null);
+  const [pipelineProgress, setPipelineProgress] = useState<MarkdownPipelineProgressResponseDto | null>(null);
   const [latestRagJob, setLatestRagJob] = useState<RagIndexJobDto | null>(null);
   const [ragJobs, setRagJobs] = useState<RagIndexJobDto[]>([]);
   const [status, setStatus] = useState<string | null>(null);
@@ -131,16 +133,26 @@ export function useMarkdownDocumentPolling(maxPollTimeMs = 300000) { // 5 minute
 
     if (shouldFetchPipeline) {
       try {
-        let pipeline = await reactMarkdownDocumentApi.getPipeline(documentId);
+        const [pipelineRes, progressRes] = await Promise.all([
+          reactMarkdownDocumentApi.getPipeline(documentId).catch(() => null),
+          reactMarkdownDocumentApi.getProgress(documentId).catch(() => null),
+        ]);
+
+        let pipeline = pipelineRes;
         if (pipeline && (pipeline as any).data !== undefined) {
           pipeline = (pipeline as any).data;
         }
         setPipelineExecution(pipeline);
-        if (pipeline) {
-          const pStatus = pipeline.status;
-          if (pStatus === "COMPLETED" || pStatus === "FAILED") {
-            pipelineDone = true;
-          }
+
+        let progress = progressRes;
+        if (progress && (progress as any).data !== undefined) {
+          progress = (progress as any).data;
+        }
+        setPipelineProgress(progress);
+
+        const pStatus = progress?.status || pipeline?.status;
+        if (pStatus === "COMPLETED" || pStatus === "FAILED") {
+          pipelineDone = true;
         }
       } catch (err: any) {
         if (err.name === "CanceledError" || err.name === "AbortError" || err.message === "canceled") {
@@ -149,6 +161,7 @@ export function useMarkdownDocumentPolling(maxPollTimeMs = 300000) { // 5 minute
         if (err?.response?.status === 404) {
           pipelineDone = true;
           setPipelineExecution(null);
+          setPipelineProgress(null);
         } else {
           console.error("Pipeline polling failed:", err);
         }
@@ -212,6 +225,7 @@ export function useMarkdownDocumentPolling(maxPollTimeMs = 300000) { // 5 minute
     setLatestRevision(null);
     setRevisions([]);
     setPipelineExecution(null);
+    setPipelineProgress(null);
     setLatestRagJob(null);
     setRagJobs([]);
     startTimeRef.current = Date.now();
@@ -232,6 +246,7 @@ export function useMarkdownDocumentPolling(maxPollTimeMs = 300000) { // 5 minute
     latestRevision,
     revisions,
     pipelineExecution,
+    pipelineProgress,
     latestRagJob,
     ragJobs,
     status,
@@ -242,6 +257,7 @@ export function useMarkdownDocumentPolling(maxPollTimeMs = 300000) { // 5 minute
     setLatestRevision,
     setRevisions,
     setPipelineExecution,
+    setPipelineProgress,
     setLatestRagJob,
     setRagJobs,
     setStatus,

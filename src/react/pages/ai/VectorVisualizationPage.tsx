@@ -49,9 +49,11 @@ import {
   TuneOutlined,
   RefreshOutlined,
   SearchOutlined,
+  DeleteOutline,
 } from "@mui/icons-material";
 import type { ColDef, GridOptions } from "ag-grid-community";
 import { Link } from "react-router-dom";
+import { useConfirm, useToast } from "@/react/feedback";
 import { GridContent } from "@/react/components/ag-grid";
 import { ObjectTypeSelect } from "@/react/components/objecttype/ObjectTypeSelect";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
@@ -414,6 +416,11 @@ function topValue<T>(entries: T[], fallback: T) {
 }
 
 export function VectorVisualizationPage() {
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+
   const [projections, setProjections] = useState<VectorProjectionSummaryDto[]>(
     [],
   );
@@ -444,10 +451,13 @@ export function VectorVisualizationPage() {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [zoom, setZoom] = useState({ scale: 1, x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [isZooming, setIsZooming] = useState(false);
+  const zoomTimeoutRef = useRef<number | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [dragMoved, setDragMoved] = useState(false);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const [hoveredPoint, setHoveredPoint] = useState<SemanticPoint | null>(null);
+  const isPanningOrZooming = isDragging || isZooming;
 
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState(String(DEFAULT_TOP_K));
@@ -741,6 +751,16 @@ export function VectorVisualizationPage() {
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+
+      if (zoomTimeoutRef.current !== null) {
+        window.clearTimeout(zoomTimeoutRef.current);
+      }
+      setIsZooming(true);
+      zoomTimeoutRef.current = window.setTimeout(() => {
+        setIsZooming(false);
+        zoomTimeoutRef.current = null;
+      }, 150);
+
       const scaleFactor = 1.15;
       const nextScale = e.deltaY < 0 ? zoom.scale * scaleFactor : zoom.scale / scaleFactor;
       const clampedScale = Math.max(0.8, Math.min(25, nextScale));
@@ -769,6 +789,9 @@ export function VectorVisualizationPage() {
     svgEl.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       svgEl.removeEventListener("wheel", onWheel);
+      if (zoomTimeoutRef.current !== null) {
+        window.clearTimeout(zoomTimeoutRef.current);
+      }
     };
   }, [zoom]);
 
@@ -1083,6 +1106,48 @@ export function VectorVisualizationPage() {
     }
   }, []);
 
+  const handleDelete = useCallback(
+    async (projection: VectorProjectionSummaryDto | VectorProjectionDetailDto) => {
+      const ok = await confirm({
+        title: "프로젝션 삭제",
+        message: `프로젝션 "${projection.name}"을(를) 삭제하시겠습니까?`,
+        okText: "삭제",
+        cancelText: "취소",
+      });
+      if (!ok) return;
+
+      setDeletingId(projection.projectionId);
+      try {
+        await reactAiApi.deleteVectorProjection(projection.projectionId);
+        toast.success("프로젝션이 성공적으로 삭제되었습니다.");
+
+        if (selectedProjectionId === projection.projectionId) {
+          setSelectedProjectionId(null);
+          setProjectionDetail(null);
+          setProjectionPoints([]);
+        }
+
+        await loadProjections();
+      } catch (error) {
+        const status = (error as any)?.response?.status;
+        const msg = resolveAxiosError(error);
+        if (status === 404) {
+          toast.error("이미 삭제되었거나 존재하지 않는 프로젝션입니다.");
+          await loadProjections();
+        } else if (status === 409) {
+          toast.error("실행 중인 프로젝션은 삭제할 수 없습니다.");
+        } else if (status === 401 || status === 403) {
+          toast.error("삭제 권한이 없습니다.");
+        } else {
+          toast.error(msg || "프로젝션 삭제에 실패했습니다.");
+        }
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [confirm, toast, selectedProjectionId, loadProjections],
+  );
+
   const loadAiInfo = useCallback(async () => {
     try {
       const response = await reactAiApi.fetchProviders();
@@ -1181,6 +1246,7 @@ export function VectorVisualizationPage() {
     setProjectionPointError(null);
     setPointsRequested(false);
     setClusterId("");
+    setSelectedTypes([]);
     setZoom({ scale: 1, x: 0, y: 0 });
     if (selectedProjectionId) {
       void loadProjectionDetail(selectedProjectionId);
@@ -1615,11 +1681,45 @@ export function VectorVisualizationPage() {
                         label={projection.status}
                         sx={{ height: 20, fontWeight: 700 }}
                       />
+                      <IconButton
+                        aria-label="delete"
+                        size="small"
+                        color="error"
+                        disabled={
+                          projection.status === "REQUESTED" ||
+                          projection.status === "PROCESSING" ||
+                          deletingId === projection.projectionId
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          void handleDelete(projection);
+                        }}
+                      >
+                        <DeleteOutline fontSize="small" />
+                      </IconButton>
                     </Stack>
                   </MenuItem>
                 ))}
               </Select>
             </Box>
+            {currentProjection && (
+              <Button
+                variant="outlined"
+                color="error"
+                size="small"
+                disabled={
+                  currentProjection.status === "REQUESTED" ||
+                  currentProjection.status === "PROCESSING" ||
+                  deletingId === currentProjection.projectionId
+                }
+                onClick={() => void handleDelete(currentProjection)}
+                startIcon={<DeleteOutline fontSize="small" />}
+                sx={{ height: 40 }}
+              >
+                삭제
+              </Button>
+            )}
             {projectionLoading || projectionDetailLoading ? (
               <CircularProgress size={20} />
             ) : null}
@@ -2250,15 +2350,18 @@ export function VectorVisualizationPage() {
                       selectedPoint?.vectorItemId === point.vectorItemId;
                     const color = targetTypeColor(point.targetType);
                     const isHovered = hoveredPoint?.vectorItemId === point.vectorItemId;
+                    const isFilteredOut = selectedTypes.length > 0 && !selectedTypes.includes(point.targetType ?? "UNKNOWN");
+                    const pointOpacity = isFilteredOut ? 0.12 : (point.searchResult ? 1 : 0.85);
+
                     return (
                       <g key={point.vectorItemId}>
-                        {(isHovered || selected) && (
+                        {(isHovered || selected) && !isFilteredOut && (
                           <circle
                             cx={point.px}
                             cy={point.py}
                             r={selected ? 12 : 10}
                             fill={alpha(point.searchResult ? "#facc15" : color, 0.25)}
-                            style={{ pointerEvents: "none", transition: "r 0.15s ease" }}
+                            style={{ pointerEvents: "none", transition: isPanningOrZooming ? "none" : "r 0.15s ease" }}
                           />
                         )}
                         <circle
@@ -2276,11 +2379,15 @@ export function VectorVisualizationPage() {
                           strokeWidth={
                             selected ? 2.4 : point.searchResult ? 1.8 : 0.8
                           }
-                          opacity={point.searchResult ? 1 : 0.8}
-                          style={{ cursor: "pointer", transition: "r 0.15s ease" }}
-                          onClick={() => handlePointClick(point.vectorItemId)}
-                          onMouseEnter={() => setHoveredPoint(point)}
-                          onMouseLeave={() => setHoveredPoint(null)}
+                          opacity={pointOpacity}
+                          style={{
+                            cursor: "pointer",
+                            transition: isPanningOrZooming ? "none" : "r 0.15s ease, opacity 0.15s ease",
+                            pointerEvents: isFilteredOut ? "none" : "auto"
+                          }}
+                          onClick={() => !isFilteredOut && handlePointClick(point.vectorItemId)}
+                          onMouseEnter={() => !isFilteredOut && setHoveredPoint(point)}
+                          onMouseLeave={() => !isFilteredOut && setHoveredPoint(null)}
                         />
                         {point.searchResult && point.rank ? (
                           <text
@@ -2295,6 +2402,24 @@ export function VectorVisualizationPage() {
                             {point.rank}
                           </text>
                         ) : null}
+                        {zoom.scale > 2.5 && point.label && !isFilteredOut && (
+                          <text
+                            x={point.px}
+                            y={point.py - (selected ? 10 : isHovered ? 9 : 6)}
+                            textAnchor="middle"
+                            fontSize={9.5}
+                            fill="#1e293b"
+                            fontWeight={selected ? 800 : isHovered ? 700 : 500}
+                            style={{
+                              pointerEvents: "none",
+                              userSelect: "none",
+                              textShadow: "1px 1px 0px #fff, -1px -1px 0px #fff, 1px -1px 0px #fff, -1px 1px 0px #fff",
+                              transition: isPanningOrZooming ? "none" : "y 0.15s ease"
+                            }}
+                          >
+                            {point.label}
+                          </text>
+                        )}
                       </g>
                     );
                   })}
@@ -2495,24 +2620,58 @@ export function VectorVisualizationPage() {
           <Stack
             direction="row"
             spacing={1.2}
+            alignItems="center"
             useFlexGap
             flexWrap="wrap"
             sx={{ mt: 1.2 }}
           >
-            {typeDistribution.map(([type, count]) => (
-              <Chip
-                key={type}
+            {typeDistribution.map(([type, count]) => {
+              const isSelected = selectedTypes.includes(type);
+              const hasActiveFilters = selectedTypes.length > 0;
+              const isDimmed = hasActiveFilters && !isSelected;
+              return (
+                <Chip
+                  key={type}
+                  size="small"
+                  label={`${type} ${count.toLocaleString()}`}
+                  onClick={() => {
+                    setSelectedTypes((prev) =>
+                      prev.includes(type)
+                        ? prev.filter((t) => t !== type)
+                        : [...prev, type]
+                    );
+                  }}
+                  sx={{
+                    bgcolor: isSelected
+                      ? targetTypeColor(type)
+                      : alpha(targetTypeColor(type), 0.06),
+                    color: isSelected
+                      ? "#ffffff"
+                      : targetTypeColor(type),
+                    borderColor: alpha(targetTypeColor(type), 0.3),
+                    fontWeight: 600,
+                    opacity: isDimmed ? 0.45 : 1,
+                    transition: "all 0.15s ease",
+                    "&:hover": {
+                      bgcolor: isSelected
+                        ? targetTypeColor(type)
+                        : alpha(targetTypeColor(type), 0.15),
+                      opacity: 1,
+                    },
+                  }}
+                  variant={isSelected ? "filled" : "outlined"}
+                />
+              );
+            })}
+            {selectedTypes.length > 0 && (
+              <Button
                 size="small"
-                label={`${type} ${count.toLocaleString()}`}
-                sx={{
-                  bgcolor: alpha(targetTypeColor(type), 0.08),
-                  color: targetTypeColor(type),
-                  borderColor: alpha(targetTypeColor(type), 0.25),
-                  fontWeight: 600,
-                }}
-                variant="outlined"
-              />
-            ))}
+                onClick={() => setSelectedTypes([])}
+                sx={{ fontSize: "0.75rem", p: "2px 8px", minWidth: 0 }}
+              >
+                필터 초기화
+              </Button>
+            )}
           </Stack>
         </Box>
 
