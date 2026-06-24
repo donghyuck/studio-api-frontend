@@ -24,12 +24,12 @@ export function AppShellHeader({ children, leading }: Props) {
           borderBottom: "1px solid",
           borderColor: (theme) =>
             theme.palette.mode === "dark"
-              ? "rgba(255, 255, 255, 0.08)"
-              : "rgba(0, 0, 0, 0.06)",
+              ? "rgba(250, 249, 245, 0.12)" // Hairline border matched to text color
+              : "rgba(20, 20, 19, 0.08)",
           bgcolor: (theme) =>
             theme.palette.mode === "dark"
-              ? "rgba(17, 24, 39, 0.75)"
-              : "rgba(255, 255, 255, 0.75)",
+              ? "rgba(24, 23, 21, 0.85)" // Warm Navy default background with opacity
+              : "rgba(250, 249, 245, 0.85)", // Warm Cream default background with opacity
           backdropFilter: "blur(12px)",
           WebkitBackdropFilter: "blur(12px)",
           transition: "background-color 200ms ease, border-color 200ms ease",

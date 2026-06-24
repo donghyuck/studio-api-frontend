@@ -329,8 +329,8 @@ export function FullLayoutNavigation({
                       "&.Mui-selected": {
                         bgcolor: (theme) =>
                           theme.palette.mode === "dark"
-                            ? "rgba(37, 99, 235, 0.12)"
-                            : "rgba(37, 99, 235, 0.06)",
+                            ? "rgba(204, 120, 92, 0.15)"
+                            : "rgba(204, 120, 92, 0.08)",
                         color: "primary.main",
                         "&::before": collapsed ? {} : {
                           content: '""',
@@ -346,15 +346,15 @@ export function FullLayoutNavigation({
                       "&.Mui-selected:hover": {
                         bgcolor: (theme) =>
                           theme.palette.mode === "dark"
-                            ? "rgba(37, 99, 235, 0.18)"
-                            : "rgba(37, 99, 235, 0.10)",
+                            ? "rgba(204, 120, 92, 0.22)"
+                            : "rgba(204, 120, 92, 0.12)",
                         transform: collapsed ? "none" : "translateX(4px)",
                       },
                       "&:hover": {
                         bgcolor: (theme) =>
                           theme.palette.mode === "dark"
-                            ? "rgba(255, 255, 255, 0.03)"
-                            : "rgba(0, 0, 0, 0.03)",
+                            ? "rgba(204, 120, 92, 0.08)"
+                            : "rgba(204, 120, 92, 0.04)",
                         color: active ? "primary.main" : "text.primary",
                         transform: collapsed ? "none" : "translateX(4px)",
                       },
