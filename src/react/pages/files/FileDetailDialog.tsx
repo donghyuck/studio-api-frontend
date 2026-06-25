@@ -27,6 +27,7 @@ import {
   AccordionDetails,
   Grid,
   Select,
+  Switch,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -2222,7 +2223,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             <Grid size={{ xs: 12 }}>
                               <FormControlLabel
                                 control={
-                                  <Checkbox
+                                  <Switch
                                     size="small"
                                     checked={blockifyPiiMaskingEnabled}
                                     onChange={(e) => setBlockifyPiiMaskingEnabled(e.target.checked)}
