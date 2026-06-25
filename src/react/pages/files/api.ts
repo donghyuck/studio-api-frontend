@@ -220,6 +220,7 @@ export interface MarkdownDocumentFromAttachmentRequest {
   chunkUnit?: string | null;
   blockifyLlmProvider?: string | null;
   blockifyLlmModel?: string | null;
+  blockifyPiiMaskingEnabled?: boolean | null;
   embeddingProfileId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
@@ -237,6 +238,7 @@ export interface MarkdownDocumentReextractRequest {
   chunkUnit?: string | null;
   blockifyLlmProvider?: string | null;
   blockifyLlmModel?: string | null;
+  blockifyPiiMaskingEnabled?: boolean | null;
   embeddingProfileId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
@@ -281,6 +283,7 @@ export interface MarkdownResumeRequest {
   chunkUnit?: string;
   blockifyLlmProvider?: string | null;
   blockifyLlmModel?: string | null;
+  blockifyPiiMaskingEnabled?: boolean | null;
   embeddingProfileId?: string;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
@@ -372,6 +375,7 @@ export interface MarkdownPipelineEstimateRequest {
   chunkUnit?: string | null;
   blockifyLlmProvider?: string | null;
   blockifyLlmModel?: string | null;
+  blockifyPiiMaskingEnabled?: boolean | null;
   embeddingProfileId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;

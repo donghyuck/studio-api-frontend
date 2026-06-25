@@ -173,6 +173,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   } | null>(null);
   const [blockifyLlmProvider, setBlockifyLlmProvider] = useState<string>("");
   const [blockifyLlmModel, setBlockifyLlmModel] = useState<string>("");
+  const [blockifyPiiMaskingEnabled, setBlockifyPiiMaskingEnabled] = useState<boolean>(true);
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
 
@@ -516,6 +517,25 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     if (maxSize !== null) setChunkMaxSize(maxSize);
     if (overlap !== null) setChunkOverlap(overlap);
     if (unit) setChunkUnit(unit);
+
+    // Restore blockify settings
+    let llmProvider = opts && typeof opts.blockifyLlmProvider === "string" ? opts.blockifyLlmProvider : null;
+    let llmModel = opts && typeof opts.blockifyLlmModel === "string" ? opts.blockifyLlmModel : null;
+    let piiMasking = opts && typeof opts.blockifyPiiMaskingEnabled === "boolean" ? opts.blockifyPiiMaskingEnabled : null;
+
+    if (!llmProvider && latestRagJob?.chunkingStrategy === "blockify") llmProvider = (latestRagJob as any).blockifyLlmProvider || null;
+    if (!llmModel && latestRagJob?.chunkingStrategy === "blockify") llmModel = (latestRagJob as any).blockifyLlmModel || null;
+    if (piiMasking === null && latestRagJob?.chunkingStrategy === "blockify" && (latestRagJob as any).blockifyPiiMaskingEnabled !== undefined) {
+      piiMasking = (latestRagJob as any).blockifyPiiMaskingEnabled;
+    }
+
+    if (llmProvider) setBlockifyLlmProvider(llmProvider);
+    if (llmModel) setBlockifyLlmModel(llmModel);
+    if (piiMasking !== null) {
+      setBlockifyPiiMaskingEnabled(piiMasking);
+    } else {
+      setBlockifyPiiMaskingEnabled(true);
+    }
 
     // Restore embedding option
     let profileId = opts && typeof opts.embeddingProfileId === "string" ? opts.embeddingProfileId : null;
@@ -914,6 +934,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       chunkUnit: (runChunking || forEstimate) ? (chunkUnit || null) : null,
       blockifyLlmProvider: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? (blockifyLlmProvider || null) : null,
       blockifyLlmModel: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? (blockifyLlmModel || null) : null,
+      blockifyPiiMaskingEnabled: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? blockifyPiiMaskingEnabled : null,
     };
 
     if (runSkillExtraction || forEstimate) {
@@ -2197,6 +2218,23 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                   );
                                 })()}
                               </Select>
+                            </Grid>
+                            <Grid size={{ xs: 12 }}>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    size="small"
+                                    checked={blockifyPiiMaskingEnabled}
+                                    onChange={(e) => setBlockifyPiiMaskingEnabled(e.target.checked)}
+                                    disabled={controlsDisabled || isCanceledRevision}
+                                  />
+                                }
+                                label={
+                                  <Typography variant="body2" sx={{ fontSize: 13 }}>
+                                    개인정보 마스킹 (Presidio PII) 활성화
+                                  </Typography>
+                                }
+                              />
                             </Grid>
                           </>
                         )}
