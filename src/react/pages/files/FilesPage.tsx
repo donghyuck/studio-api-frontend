@@ -423,7 +423,18 @@ export function FilesPage() {
     []
   );
 
+  const isMounted = useRef(false);
+  useEffect(() => {
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return;
+    }
+    applyFilters();
+  }, [objectType]);
+
   function applyFilters() {
+    gridRef.current?.deselectAll();
+    setSelectedIds([]);
     dataSource.applyFilter({
       ...(keyword.trim() ? { keyword: keyword.trim() } : {}),
       ...(objectType.trim() ? { objectType: Number(objectType) } : {}),
