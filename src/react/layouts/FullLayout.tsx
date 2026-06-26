@@ -201,8 +201,8 @@ export function FullLayout() {
               borderRadius: 3.5, // 14px
               border: (theme) =>
                 theme.palette.mode === "dark"
-                  ? "1px solid rgba(255, 255, 255, 0.06)"
-                  : "1px solid rgba(0, 0, 0, 0.05)",
+                  ? "1px solid rgba(139, 92, 246, 0.15)"
+                  : "1px solid rgba(139, 92, 246, 0.1)",
               boxShadow: (theme) =>
                 theme.palette.mode === "dark"
                   ? "0 4px 24px rgba(0, 0, 0, 0.3)"

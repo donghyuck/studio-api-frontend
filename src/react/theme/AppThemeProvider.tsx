@@ -88,17 +88,22 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
         palette: {
           mode: resolvedMode,
           primary: {
-            main: "#cc785c", // Claude Coral
-            dark: "#a9583e",
+            main: "#8b5cf6", // Quantum Violet
+            dark: "#7c3aed",
+            contrastText: "#ffffff",
+          },
+          secondary: {
+            main: "#06b6d4", // Cyber Cyan
+            dark: "#0891b2",
             contrastText: "#ffffff",
           },
           background: {
-            default: resolvedMode === "dark" ? "#181715" : "#faf9f5", // Cream Canvas / Navy Dark
-            paper: resolvedMode === "dark" ? "#1f1e1b" : "#efe9de",  // Surface Dark Soft / Surface Card Cream
+            default: resolvedMode === "dark" ? "#07080f" : "#f8fafc", // Space Navy / Light Canvas
+            paper: resolvedMode === "dark" ? "rgba(13, 16, 31, 0.75)" : "rgba(255, 255, 255, 0.85)", // Glassmorphism Soft
           },
           text: {
-            primary: resolvedMode === "dark" ? "#faf9f5" : "#141413", // Ink / On-Dark
-            secondary: resolvedMode === "dark" ? "#a09d96" : "#6c6a64", // Muted
+            primary: resolvedMode === "dark" ? "#f8fafc" : "#0f172a",
+            secondary: resolvedMode === "dark" ? "#94a3b8" : "#475569",
           },
         },
         shape: {
@@ -107,31 +112,31 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
         typography: {
           fontFamily: '"Inter", "-apple-system", BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           h1: {
-            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
-            fontWeight: 400,
+            fontFamily: '"Outfit", "Inter", sans-serif',
+            fontWeight: 600,
             letterSpacing: "-1px",
           },
           h2: {
-            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
-            fontWeight: 400,
+            fontFamily: '"Outfit", "Inter", sans-serif',
+            fontWeight: 600,
             letterSpacing: "-0.5px",
           },
           h3: {
-            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
-            fontWeight: 400,
+            fontFamily: '"Outfit", "Inter", sans-serif',
+            fontWeight: 600,
             letterSpacing: "-0.3px",
           },
           h4: {
-            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
-            fontWeight: 400,
+            fontFamily: '"Outfit", "Inter", sans-serif',
+            fontWeight: 600,
           },
           h5: {
-            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
-            fontWeight: 400,
+            fontFamily: '"Outfit", "Inter", sans-serif',
+            fontWeight: 600,
           },
           h6: {
-            fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
-            fontWeight: 400,
+            fontFamily: '"Outfit", "Inter", sans-serif',
+            fontWeight: 600,
           },
         },
         components: {
@@ -142,15 +147,22 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
                 borderRadius: "8px", // rounded.md
                 textTransform: "none",
                 fontWeight: 500,
+                "&:hover": {
+                  boxShadow: "0 0 12px rgba(139, 92, 246, 0.4)",
+                },
               },
             },
             variants: [
               {
                 props: { variant: "outlined", color: "inherit" },
                 style: {
-                  color: "rgba(148, 163, 184, 0.95)",
-                  borderColor: "rgba(148, 163, 184, 0.45)",
-                  backgroundColor: "rgba(148, 163, 184, 0.10)",
+                  color: "rgba(139, 92, 246, 0.95)",
+                  borderColor: "rgba(139, 92, 246, 0.45)",
+                  backgroundColor: "rgba(139, 92, 246, 0.05)",
+                  "&:hover": {
+                    borderColor: "#8b5cf6",
+                    backgroundColor: "rgba(139, 92, 246, 0.15)",
+                  },
                 },
               },
             ],
@@ -160,6 +172,7 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
               root: {
                 transition: "background-color 200ms ease, box-shadow 200ms ease, border-color 200ms ease",
                 borderRadius: "12px", // rounded.lg
+                backdropFilter: "blur(12px)",
               },
             },
           },
@@ -168,11 +181,11 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
               slotProps: {
                 backdrop: {
                   sx: {
-                    backdropFilter: "blur(6px)",
+                    backdropFilter: "blur(12px)",
                     backgroundColor: (theme: any) =>
                       theme.palette.mode === "dark"
-                        ? "rgba(0, 0, 0, 0.6)"
-                        : "rgba(20, 20, 19, 0.25)",
+                        ? "rgba(3, 4, 9, 0.7)"
+                        : "rgba(241, 245, 249, 0.4)",
                   },
                 },
               },
@@ -182,9 +195,11 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
                 borderRadius: "12px", // rounded.lg
                 border:
                   theme.palette.mode === "dark"
-                    ? "1px solid #efe9de"
-                    : "1px solid #e6dfd8", // Hairline border
-                boxShadow: "0 20px 25px -5px rgba(20, 20, 19, 0.1)",
+                    ? "1px solid rgba(139, 92, 246, 0.2)"
+                    : "1px solid rgba(139, 92, 246, 0.15)", // Violet transparent border
+                boxShadow: theme.palette.mode === "dark"
+                  ? "0 25px 50px -12px rgba(0, 0, 0, 0.6)"
+                  : "0 25px 50px -12px rgba(148, 163, 184, 0.2)",
                 backgroundColor: theme.palette.background.paper,
                 backgroundImage: "none",
                 ...(!ownerState.onClose && {
@@ -201,9 +216,9 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
             },
             styleOverrides: {
               root: {
-                fontFamily: '"Cormorant Garamond", "Garamond", "Times New Roman", serif',
-                fontWeight: 500,
-                fontSize: "1.5rem",
+                fontFamily: '"Outfit", "Inter", sans-serif',
+                fontWeight: 600,
+                fontSize: "1.4rem",
                 padding: "20px 24px 8px 24px",
               },
             },
@@ -233,7 +248,7 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
                 backgroundColor: "transparent",
               },
               bar: {
-                background: "linear-gradient(90deg, #cc785c 0%, #efe9de 100%)", // Coral to soft cream gradient
+                background: "linear-gradient(90deg, #8b5cf6 0%, #06b6d4 100%)", // Quantum Violet to Cyber Cyan gradient
               },
             },
           },
@@ -279,11 +294,11 @@ export function AppThemeProvider({ children }: { children: React.ReactNode }) {
               }),
               standardInfo: ({ theme }: { theme: any }) => ({
                 backgroundColor: theme.palette.mode === "dark"
-                  ? "rgba(204, 120, 92, 0.12)"
-                  : "rgba(204, 120, 92, 0.06)",
-                color: theme.palette.mode === "dark" ? "#cc785c" : "#cc785c",
+                  ? "rgba(6, 182, 212, 0.12)"
+                  : "rgba(6, 182, 212, 0.06)",
+                color: theme.palette.mode === "dark" ? "#06b6d4" : "#0891b2",
                 "& .MuiAlert-icon": {
-                  color: theme.palette.mode === "dark" ? "#cc785c" : "#cc785c",
+                  color: theme.palette.mode === "dark" ? "#06b6d4" : "#0891b2",
                 },
               }),
             },
