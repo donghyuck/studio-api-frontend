@@ -402,10 +402,24 @@ export interface MarkdownPipelineProgressResponseDto {
   currentStage: MarkdownPipelineStage;
   errorCode?: string | null;
   errorMessage?: string | null;
+  chunking?: {
+    chunkCount: number;
+    ideaBlockCount: number;
+    fallbackCount: number;
+    fallbackReasonCounts: Record<string, number>;
+    sourceBlockTargetCount: number;
+    sourceBlockCoveredCount: number;
+    sourceBlockCoverage: number;
+    averageConfidence: number;
+  } | null;
   rag?: {
+    jobId?: string | null;
+    status?: string | null;
     currentStep?: 'EMBEDDING' | 'INDEXING' | string;
     embeddedCount?: number;
     indexedCount?: number;
     chunkCount?: number;
+    warningCount?: number;
+    errorMessage?: string | null;
   } | null;
 }

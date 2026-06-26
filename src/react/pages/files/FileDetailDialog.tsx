@@ -172,6 +172,12 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     missingFields: string[];
     hasChunks: boolean;
   } | null>(null);
+  const [blockifyStats, setBlockifyStats] = useState<{
+    totalChunks: number;
+    ideaBlockCount: number;
+    fallbackCount: number;
+    fallbackReasons: Record<string, number>;
+  } | null>(null);
   const [blockifyLlmProvider, setBlockifyLlmProvider] = useState<string>("");
   const [blockifyLlmModel, setBlockifyLlmModel] = useState<string>("");
   const [blockifyPiiMaskingEnabled, setBlockifyPiiMaskingEnabled] = useState<boolean>(true);
@@ -244,8 +250,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const strategyLabels: Record<string, string> = {
     "recursive": "Recursive",
     "fixed-size": "Fixed Size",
-    "structure-based": "Structure Based",
-    "blockify": "Blockify PoC",
+    "structure-based": "Structure-Based",
+    "blockify": "Blockify / IdeaBlock",
   };
 
   // Derived: embedding option value key (same pattern as RagPage/RagChatPage)
@@ -288,22 +294,42 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       let active = true;
       const validateBlockify = async () => {
         try {
-          const res = await reactAiApi.getRagJobChunks(latestRagJob.jobId, 0, 5);
+          // Fetch up to 1000 chunks to compute accurate statistics on the client side
+          const res = await reactAiApi.getRagJobChunks(latestRagJob.jobId, 0, 1000);
           if (!active) return;
           const chunks = res.content ?? [];
           if (chunks.length === 0) {
             setBlockifyValidationResult({ isValid: false, missingFields: [], hasChunks: false });
+            setBlockifyStats(null);
             return;
           }
           const requiredKeys = ["requestedChunkingStrategy", "actualChunkingStrategy", "blockifyFingerprint", "sourceEvidence"];
           const missing = new Set<string>(requiredKeys);
           
+          let ideaBlockCount = 0;
+          let fallbackCount = 0;
+          const fallbackReasons: Record<string, number> = {};
+
           for (const chunk of chunks) {
             const meta = chunk.metadata || {};
             for (const key of requiredKeys) {
               if (meta[key] !== undefined && meta[key] !== null && meta[key] !== "") {
                 missing.delete(key);
               }
+            }
+
+            // Stat calculation
+            const chunkType = chunk.chunkType || meta.chunkType;
+            const actualStrat = meta.actualChunkingStrategy || (chunk as any).actualChunkingStrategy;
+            const reqStrat = meta.requestedChunkingStrategy || (chunk as any).requestedChunkingStrategy;
+            
+            if (chunkType === "ideaBlock") {
+              ideaBlockCount++;
+            }
+            if (actualStrat === "structure-based" && reqStrat === "blockify") {
+              fallbackCount++;
+              const reason = String(meta.fallbackReason || "UNKNOWN");
+              fallbackReasons[reason] = (fallbackReasons[reason] || 0) + 1;
             }
           }
           
@@ -312,10 +338,18 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             missingFields: Array.from(missing),
             hasChunks: true,
           });
+
+          setBlockifyStats({
+            totalChunks: res.totalElements ?? chunks.length,
+            ideaBlockCount,
+            fallbackCount,
+            fallbackReasons,
+          });
         } catch (err) {
-          console.error("Failed to fetch job chunks for blockify validation", err);
+          console.error("Failed to fetch job chunks for blockify validation and stats", err);
           if (active) {
             setBlockifyValidationResult(null);
+            setBlockifyStats(null);
           }
         }
       };
@@ -325,6 +359,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       };
     } else {
       setBlockifyValidationResult(null);
+      setBlockifyStats(null);
     }
   }, [open, latestRagJob?.jobId, latestRagJob?.status, latestRagJob?.chunkingStrategy, chunkingStrategy]);
 
@@ -877,6 +912,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     if (!msg) return "";
     if (msg.includes("Blockify chunking is disabled")) {
       return "Blockify 청킹이 서버에서 비활성화되어 있습니다. 서버 설정 studio.chunking.blockify.enabled=true 적용 후 다시 시도하세요.";
+    }
+    if (msg.includes("Invalid blockify chunk metadata") || msg.includes("Blockify chunking produced no chunks")) {
+      return "Blockify 결과 검증에 실패했습니다. IdeaBlock 필수 metadata가 생성되지 않아 잘못된 성공 저장을 차단했습니다.";
     }
     return msg
       .replace(/(Signature|Expires|AWSAccessKeyId|token|access_token|key)=[^&\s]+/gi, '$1=***')
@@ -1542,6 +1580,42 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     const embProg = getEmbeddingProgress();
     const idxProg = getIndexingProgress();
 
+    const getChunkingDetails = () => {
+      const chunking = pipelineProgress?.chunking;
+      if (!chunking) return undefined;
+      return `IdeaBlock: ${chunking.ideaBlockCount} / Fallback: ${chunking.fallbackCount} / Coverage: ${(chunking.sourceBlockCoverage * 100).toFixed(1)}%`;
+    };
+
+    const getEmbeddingDetails = () => {
+      if (pipelineProgress?.rag) {
+        const r = pipelineProgress.rag;
+        const count = r.chunkCount ?? 0;
+        if (count > 0) {
+          const prog = Math.floor(((r.embeddedCount ?? 0) / count) * 100);
+          return `${r.embeddedCount ?? 0}/${count} (${prog}%)`;
+        }
+      }
+      if (latestRagJob && latestRagJob.chunkCount > 0) {
+        return `${latestRagJob.embeddedCount}/${latestRagJob.chunkCount} (${embProg}%)`;
+      }
+      return undefined;
+    };
+
+    const getIndexingDetails = () => {
+      if (pipelineProgress?.rag) {
+        const r = pipelineProgress.rag;
+        const count = r.chunkCount ?? 0;
+        if (count > 0) {
+          const prog = Math.floor(((r.indexedCount ?? 0) / count) * 100);
+          return `${r.indexedCount ?? 0}/${count} (${prog}%)`;
+        }
+      }
+      if (latestRagJob && latestRagJob.chunkCount > 0) {
+        return `${latestRagJob.indexedCount}/${latestRagJob.chunkCount} (${idxProg}%)`;
+      }
+      return undefined;
+    };
+
     const steps = [
       {
         id: "extract",
@@ -1562,22 +1636,23 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         label: "Chunking (분할)",
         status: getChunkingStepStatus(),
         description: "최적의 크기(Chunk)로 문서 절단 및 메타데이터 추가",
+        details: getChunkingDetails(),
       },
       {
         id: "embedding",
         label: "Embedding (벡터 변환)",
         status: getEmbeddingStepStatus(),
         description: "분할된 Chunk를 임베딩 모델을 통해 벡터로 변환",
-        progress: embProg,
-        details: latestRagJob && latestRagJob.chunkCount > 0 ? `${latestRagJob.embeddedCount}/${latestRagJob.chunkCount} (${embProg}%)` : undefined,
+        progress: pipelineProgress?.rag?.chunkCount ? Math.floor(((pipelineProgress.rag.embeddedCount ?? 0) / pipelineProgress.rag.chunkCount) * 100) : embProg,
+        details: getEmbeddingDetails(),
       },
       {
         id: "indexing",
         label: "Vector upsert (벡터 저장)",
         status: getIndexingStepStatus(),
         description: "변환된 벡터 데이터를 Vector DB 테이블에 색인 및 적재",
-        progress: idxProg,
-        details: latestRagJob && latestRagJob.chunkCount > 0 ? `${latestRagJob.indexedCount}/${latestRagJob.chunkCount} (${idxProg}%)` : undefined,
+        progress: pipelineProgress?.rag?.chunkCount ? Math.floor(((pipelineProgress.rag.indexedCount ?? 0) / pipelineProgress.rag.chunkCount) * 100) : idxProg,
+        details: getIndexingDetails(),
       },
       {
         id: "skill",
@@ -2016,13 +2091,51 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                       </Typography>
                       <Grid container spacing={1.5}>
                         <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" display="block">선택된 청킹 전략</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 12, color: "primary.main" }}>
+                            {strategyLabels[latestRagJob?.chunkingStrategy || ""] || latestRagJob?.chunkingStrategy || String((ragMetadata as any)?.chunkingStrategy || "-")}
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
                           <Typography variant="caption" color="text.secondary" display="block">최종 embedding 모델</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
                             {latestRagJob?.embeddingModel || String(ragMetadata?.embeddingModel || "-")}
                           </Typography>
                         </Grid>
                         <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary" display="block">색인(RAG) 상태</Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">1. Markdown 생성 상태</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
+                            {markdownStatus === "COMPLETED" ? (
+                              <span style={{ color: "#2e7d32" }}>생성 완료</span>
+                            ) : markdownStatus === "FAILED" ? (
+                              <span style={{ color: "#d32f2f" }}>생성 실패</span>
+                            ) : markdownStatus ? (
+                              <span style={{ color: "#1976d2" }}>진행 중 ({markdownStatus})</span>
+                            ) : (
+                              "-"
+                            )}
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" display="block">2. Chunking 상태</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
+                            {latestRagJob ? (
+                              latestRagJob.status === "SUCCEEDED" || latestRagJob.currentStep === "EMBEDDING" || latestRagJob.currentStep === "INDEXING" || latestRagJob.currentStep === "COMPLETED" ? (
+                                <span style={{ color: "#2e7d32" }}>완료</span>
+                              ) : latestRagJob.status === "FAILED" && latestRagJob.currentStep === "CHUNKING" ? (
+                                <span style={{ color: "#d32f2f" }}>실패</span>
+                              ) : (
+                                <span style={{ color: "#1976d2" }}>진행 중</span>
+                              )
+                            ) : (ragMetadata as any)?.indexed ? (
+                              <span style={{ color: "#2e7d32" }}>완료</span>
+                            ) : (
+                              "-"
+                            )}
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" display="block">3. RAG 색인 상태</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
                             {(() => {
                               if (latestRagJob) {
@@ -2046,6 +2159,24 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                 <span style={{ color: "#d32f2f" }}>색인 미완료</span>
                               );
                             })()}
+                          </Typography>
+                        </Grid>
+                        <Grid size={{ xs: 6 }}>
+                          <Typography variant="caption" color="text.secondary" display="block">4. Skill extraction 상태</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
+                            {latestRagJob ? (
+                              latestRagJob.status === "SUCCEEDED" ? (
+                                <span style={{ color: "#2e7d32" }}>완료 (또는 스킵)</span>
+                              ) : latestRagJob.status === "FAILED" && latestRagJob.currentStep === "EXTRACTING" ? (
+                                <span style={{ color: "#d32f2f" }}>실패</span>
+                              ) : (
+                                "-"
+                              )
+                            ) : (ragMetadata as any)?.indexed ? (
+                              <span style={{ color: "#2e7d32" }}>완료</span>
+                            ) : (
+                              "-"
+                            )}
                           </Typography>
                         </Grid>
                         <Grid size={{ xs: 6 }}>
@@ -2075,6 +2206,161 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           </Typography>
                         </Grid>
                       </Grid>
+
+                      {/* Blockify/Chunking 집계 표시 영역 */}
+                      {(() => {
+                        const chunking = pipelineProgress?.chunking;
+                        
+                        // 집계 데이터 획득 (서버 응답 chunking을 우선하되, 없으면 기존 blockifyStats fallback)
+                        const stats = chunking ? {
+                          totalChunks: chunking.chunkCount,
+                          ideaBlockCount: chunking.ideaBlockCount,
+                          fallbackCount: chunking.fallbackCount,
+                          fallbackReasons: chunking.fallbackReasonCounts || {},
+                          sourceBlockCoverage: chunking.sourceBlockCoverage,
+                          averageConfidence: chunking.averageConfidence,
+                          sourceBlockTargetCount: chunking.sourceBlockTargetCount,
+                        } : blockifyStats ? {
+                          totalChunks: blockifyStats.totalChunks,
+                          ideaBlockCount: blockifyStats.ideaBlockCount,
+                          fallbackCount: blockifyStats.fallbackCount,
+                          fallbackReasons: blockifyStats.fallbackReasons || {},
+                          sourceBlockCoverage: undefined,
+                          averageConfidence: undefined,
+                          sourceBlockTargetCount: undefined,
+                        } : null;
+
+                        if (!stats) return null;
+
+                        const blockifyApplied = stats.totalChunks > 0 && (stats.ideaBlockCount > 0 || stats.fallbackCount > 0);
+                        const blockifyEffective = stats.ideaBlockCount > 0;
+
+                        let blockifyStatusText = "청킹 결과 대기 중";
+                        let blockifyStatusColor = "text.secondary";
+                        if (stats.totalChunks === 0) {
+                          blockifyStatusText = "청킹 결과 없음";
+                          blockifyStatusColor = "text.secondary";
+                        } else if (blockifyEffective) {
+                          blockifyStatusText = "IdeaBlock 생성됨";
+                          blockifyStatusColor = "success.main";
+                        } else if (blockifyApplied) {
+                          blockifyStatusText = "전체 Fallback 처리됨";
+                          blockifyStatusColor = "warning.main";
+                        }
+
+                        // Coverage 경고 메시지 결정
+                        let coverageSeverity: "success" | "warning" | "error" | null = null;
+                        let coverageMessage = "";
+                        const coverageVal = stats.sourceBlockCoverage;
+                        const targetCount = stats.sourceBlockTargetCount ?? 0;
+
+                        if (coverageVal !== undefined && targetCount > 0) {
+                          if (coverageVal >= 0.95) {
+                            coverageSeverity = "success";
+                            coverageMessage = "Source block coverage 양호";
+                          } else if (coverageVal >= 0.8) {
+                            coverageSeverity = "warning";
+                            coverageMessage = "일부 source block이 fallback 또는 누락되었을 수 있습니다.";
+                          } else {
+                            coverageSeverity = "error";
+                            coverageMessage = "IdeaBlock coverage가 낮습니다. structure-based 또는 hybrid 검색을 권장합니다.";
+                          }
+                        }
+
+                        return (
+                          <Box sx={{ mt: 2, pt: 1.5, borderTop: "1px dashed", borderColor: "divider" }}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: "primary.main" }}>
+                                IdeaBlock 분할 및 청킹 통계
+                              </Typography>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: blockifyStatusColor }}>
+                                {blockifyStatusText}
+                              </Typography>
+                            </Stack>
+                            <Grid container spacing={1}>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">전체 Chunk 수</Typography>
+                                <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
+                                  {stats.totalChunks}개
+                                </Typography>
+                              </Grid>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">IdeaBlock 수</Typography>
+                                <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, color: "success.main" }}>
+                                  {stats.ideaBlockCount}개
+                                </Typography>
+                              </Grid>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">Fallback Chunk 수</Typography>
+                                <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, color: "warning.main" }}>
+                                  {stats.fallbackCount}개
+                                </Typography>
+                              </Grid>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">Source Block Coverage</Typography>
+                                <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
+                                  {stats.sourceBlockCoverage !== undefined ? `${(stats.sourceBlockCoverage * 100).toFixed(1)}%` : "상세 조회 필요"}
+                                </Typography>
+                              </Grid>
+                              {stats.averageConfidence !== undefined && (
+                                <Grid size={{ xs: 6 }}>
+                                  <Typography variant="caption" color="text.secondary" display="block">평균 신뢰도</Typography>
+                                  <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
+                                    {stats.averageConfidence.toFixed(2)}
+                                  </Typography>
+                                </Grid>
+                              )}
+                              {coverageSeverity && coverageMessage && (
+                                <Grid size={{ xs: 12 }} sx={{ mt: 0.5 }}>
+                                  <Alert severity={coverageSeverity} sx={{ py: 0.25, px: 1, "& .MuiAlert-message": { fontSize: 10, lineHeight: 1.4 } }}>
+                                    {coverageMessage}
+                                  </Alert>
+                                </Grid>
+                              )}
+                              {stats.fallbackCount > 0 && (
+                                <Grid size={{ xs: 12 }}>
+                                  <Accordion disableGutters square elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, mt: 0.5 }}>
+                                    <AccordionSummary expandIcon={<ExpandMoreOutlined sx={{ fontSize: 16 }} />} sx={{ minHeight: 28, height: 28, px: 1, bgcolor: "action.hover" }}>
+                                      <Typography sx={{ fontSize: 11, fontWeight: 600 }}>
+                                        Fallback 상세 ({stats.fallbackCount}건)
+                                      </Typography>
+                                    </AccordionSummary>
+                                    <AccordionDetails sx={{ p: 1, bgcolor: "background.paper" }}>
+                                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontSize: 10.5 }}>
+                                        일부 source block은 IdeaBlock 생성 조건을 만족하지 않아 structure-based chunk로 보존되었습니다.
+                                      </Typography>
+                                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
+                                        {Object.entries(stats.fallbackReasons).map(([reason, count]) => {
+                                          const labels: Record<string, string> = {
+                                            ANSWER_TOO_SHORT: "생성 답변이 너무 짧음",
+                                            ANSWER_HAS_NO_BODY: "답변 본문 없음",
+                                            ANSWER_EQUALS_TITLE: "답변이 제목만 반복",
+                                            HEADING_ONLY: "제목만 있는 block",
+                                            EVIDENCE_NOT_FOUND: "원문 evidence 없음",
+                                            TRUSTED_ANSWER_FACT_MISMATCH: "팩트 불일치",
+                                            GENERIC_QUESTION: "질문이 너무 일반적",
+                                            TABLE_SECTION: "표 섹션 fallback",
+                                            COVERAGE_GAP: "누락 보존 fallback",
+                                          };
+                                          return (
+                                            <Chip
+                                              key={reason}
+                                              size="small"
+                                              variant="outlined"
+                                              label={`${labels[reason] || reason}: ${count}개`}
+                                              sx={{ fontSize: 9.5, height: 18 }}
+                                            />
+                                          );
+                                        })}
+                                      </Box>
+                                    </AccordionDetails>
+                                  </Accordion>
+                                </Grid>
+                              )}
+                            </Grid>
+                          </Box>
+                        );
+                      })()}
                     </Box>
                   )}
                   
@@ -2165,11 +2451,18 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                               <MenuItem key={s} value={s}>{strategyLabels[s] || s}</MenuItem>
                             ))}
                           </Select>
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block", fontSize: 10 }}>
+                            {chunkingStrategy === "structure-based" && "Markdown heading/block 구조 기반 chunk"}
+                            {chunkingStrategy === "blockify" && "source block 단위 질문·답변 IdeaBlock 생성"}
+                          </Typography>
                         </Grid>
                         {chunkingStrategy === "blockify" && (
                           <Grid size={{ xs: 12 }}>
-                            <Alert severity="warning" sx={{ fontSize: 11, py: 0.5 }}>
-                              Blockify는 질문·답변 중심 Knowledge Block을 생성하는 PoC 전략입니다. 동일 원본 비교 테스트는 별도 Attachment와 별도 Projection으로 수행하세요.
+                            <Alert severity="info" sx={{ fontSize: 11, py: 1, whiteSpace: "pre-wrap" }}>
+                              <strong>Blockify / IdeaBlock 안내:</strong>{"\n"}
+                              Blockify는 문서의 조항, 항, 호, 표 row, 예외 조건 단위로 IdeaBlock을 생성합니다.{"\n"}
+                              각 IdeaBlock은 critical question, trusted answer, source evidence를 포함합니다.{"\n"}
+                              누락되거나 검증 실패한 source block은 structure-based fallback chunk로 보존됩니다.
                             </Alert>
                           </Grid>
                         )}
@@ -2236,6 +2529,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                   </Typography>
                                 }
                               />
+                              {!blockifyPiiMaskingEnabled && (
+                                <Alert severity="error" sx={{ fontSize: 11, mt: 1, py: 0.5 }}>
+                                  [주의] 외부 LLM 사용 전 개인정보 마스킹 비활성화 시 민감 정보 누출 위험이 있습니다.
+                                </Alert>
+                              )}
                             </Grid>
                           </>
                         )}
