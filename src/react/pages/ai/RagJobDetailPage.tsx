@@ -741,6 +741,21 @@ function ChunkInspector({
               {chunkWarnings(chunk).length > 0 ? <Chip size="small" color="warning" label="WARNING" /> : null}
               {chunk.page != null ? <Chip size="small" label={`page ${chunk.page}`} /> : null}
               {chunk.slide != null ? <Chip size="small" label={`slide ${chunk.slide}`} /> : null}
+
+              {/* 신규 요구사항 뱃지 추가 */}
+              {chunk.chunkType === "ideaBlock" && (
+                <Chip size="small" color="secondary" label="IdeaBlock" />
+              )}
+              {metadataValue(chunk.metadata, ["actualChunkingStrategy", "actual_chunking_strategy"]) === "structure-based" &&
+               metadataValue(chunk.metadata, ["requestedChunkingStrategy", "requested_chunking_strategy"]) === "blockify" && (
+                <Chip size="small" color="warning" label="Fallback" />
+              )}
+              {metadataValue(chunk.metadata, ["validationStatus", "validation_status"]) === "RULE_VALIDATED" && (
+                <Chip size="small" color="success" label="Validated" />
+              )}
+              {metadataValue(chunk.metadata, ["validationStatus", "validation_status"]) === "REVIEW_REQUIRED" && (
+                <Chip size="small" color="error" label="Review" />
+              )}
             </Stack>
 
             <Stack direction="row" spacing={0.5}>
@@ -888,6 +903,48 @@ function ChunkInspector({
                   <DetailRow label="dimension" value={metadataText(chunk, ["embeddingDimension"])} />
                   <DetailRow label="indexedAt" value={formatDateTime(chunk.indexedAt ?? (metadataValue(chunk.metadata, ["indexedAt"]) as string | undefined))} />
                 </Stack>
+
+                {(() => {
+                  const meta = chunk.metadata || {};
+                  const isIdea = chunk.chunkType === "ideaBlock" || meta.chunkType === "ideaBlock" || meta.criticalQuestion || meta.trustedAnswer;
+                  if (!isIdea && !meta.fallbackReason) return null;
+
+                  const fallbackLabels: Record<string, string> = {
+                    ANSWER_TOO_SHORT: "생성 답변이 너무 짧음",
+                    ANSWER_HAS_NO_BODY: "답변 본문 없음",
+                    ANSWER_EQUALS_TITLE: "답변이 제목만 반복",
+                    HEADING_ONLY: "제목만 있는 block",
+                    EVIDENCE_NOT_FOUND: "원문 evidence 없음",
+                    TRUSTED_ANSWER_FACT_MISMATCH: "숫자/날짜/기간/비율이 원문과 불일치",
+                    GENERIC_QUESTION: "질문이 너무 일반적",
+                    TABLE_SECTION: "표 섹션 fallback",
+                    COVERAGE_GAP: "coverage 누락 보존 fallback",
+                  };
+
+                  return (
+                    <Stack spacing={0.75}>
+                      <Typography variant="subtitle2" color="secondary">IdeaBlock / Fallback 상세</Typography>
+                      <DetailRow label="chunkType" value={formatValue(meta.chunkType || chunk.chunkType)} />
+                      <DetailRow label="ideaBlockName" value={formatValue(meta.ideaBlockName || meta.title)} />
+                      <DetailRow label="criticalQuestion" value={formatValue(meta.criticalQuestion || meta.question)} />
+                      <DetailRow label="trustedAnswer" value={formatValue(meta.trustedAnswer || meta.answer)} />
+                      <DetailRow label="entityName" value={formatValue(meta.entityName)} />
+                      <DetailRow label="entityType" value={formatValue(meta.entityType)} />
+                      <DetailRow label="keywords" value={formatValue(meta.keywords)} />
+                      <DetailRow label="tags" value={formatValue(meta.tags)} />
+                      <DetailRow label="sourceEvidence" value={formatValue(meta.sourceEvidence)} />
+                      <DetailRow label="sourceBlockRange" value={formatValue(meta.sourceBlockRange)} />
+                      <DetailRow label="sourceSectionId" value={formatValue(meta.sourceSectionId)} />
+                      <DetailRow label="confidence" value={formatValue(meta.confidence)} />
+                      {meta.fallbackReason && (
+                        <DetailRow
+                          label="fallbackReason"
+                          value={`${fallbackLabels[String(meta.fallbackReason)] || String(meta.fallbackReason)} (${meta.fallbackReason})`}
+                        />
+                      )}
+                    </Stack>
+                  );
+                })()}
               </Stack>
             </Box>
 
@@ -1735,6 +1792,14 @@ export function RagJobDetailPage() {
                       options={chunkGridOptions}
                       datasource={dataSource}
                       height={640}
+                      onRowClicked={(event) => {
+                        const typedEvent = event as { data?: RagIndexChunkDto };
+                        if (typedEvent.data) {
+                          setSelectedChunk(
+                            chunkRowId(selectedChunk) === chunkRowId(typedEvent.data) ? null : typedEvent.data
+                          );
+                        }
+                      }}
                     />
                   </Box>
                   <Drawer

@@ -503,25 +503,20 @@ export function RagJobListPage() {
                   setSelectedGroup(null);
                 }
               }}
-              events={[
-                {
-                  type: "rowClicked",
-                  listener: (event) => {
-                    const typedEvent = event as {
-                      data?: RagObjectGroup;
-                      node?: { setSelected?: (selected: boolean) => void };
-                    };
-                    const row = typedEvent.data;
-                    if (row) {
-                      const isSame =
-                        selectedGroup?.objectType === row.objectType &&
-                        selectedGroup?.objectId === row.objectId;
-                      typedEvent.node?.setSelected?.(!isSame);
-                      setSelectedGroup(isSame ? null : row);
-                    }
-                  },
-                },
-              ]}
+              onRowClicked={(event) => {
+                const typedEvent = event as {
+                  data?: RagObjectGroup;
+                  node?: { setSelected?: (selected: boolean) => void };
+                };
+                const row = typedEvent.data;
+                if (row) {
+                  const isSame =
+                    selectedGroup?.objectType === row.objectType &&
+                    selectedGroup?.objectId === row.objectId;
+                  typedEvent.node?.setSelected?.(!isSame);
+                  setSelectedGroup(isSame ? null : row);
+                }
+              }}
             />
           </Box>
         </Grid>

@@ -2537,18 +2537,13 @@ export function RagPage() {
                       columns={groupColumnDefs}
                       options={groupGridOptions}
                       height={320}
-                      events={[
-                        {
-                          type: "rowClicked",
-                          listener: (event) => {
+                      onRowClicked={(event) => {
                             const row = (event as { data?: RagObjectGroup }).data;
                             if (!row) {
                               return;
                             }
                             handleSelectGroup(row);
-                          },
-                        },
-                      ]}
+                          }}
                     />
                     <TablePagination
                       component="div"
@@ -3053,15 +3048,10 @@ export function RagPage() {
                   rowData={vectorRows}
                   loading={vectorLoading}
                   height={360}
-                  events={[
-                    {
-                      type: "rowClicked",
-                      listener: (event) => {
+                  onRowClicked={(event) => {
                         const row = (event as { data?: VectorSearchResultDto }).data;
                         setSelectedVectorResult(row ?? null);
-                      },
-                    },
-                  ]}
+                      }}
                 />
                 <SearchResultDetail
                   title={
@@ -3091,15 +3081,10 @@ export function RagPage() {
                   rowData={ragRows}
                   loading={ragLoading}
                   height={360}
-                  events={[
-                    {
-                      type: "rowClicked",
-                      listener: (event) => {
+                  onRowClicked={(event) => {
                         const row = (event as { data?: SearchResultDto }).data;
                         setSelectedRagResult(row ?? null);
-                      },
-                    },
-                  ]}
+                      }}
                 />
                 <SearchResultDetail
                   title={
@@ -3276,10 +3261,7 @@ export function RagPage() {
                 rowData={chunks}
                 loading={chunksLoading}
                 height={280}
-                events={[
-                  {
-                    type: "rowClicked",
-                    listener: (event) => {
+                onRowClicked={(event) => {
                       const row = (event as { data?: RagIndexChunkDto }).data;
                       const node = (event as {
                         node?: { setSelected: (selected: boolean, clearSelection?: boolean) => void };
@@ -3288,9 +3270,7 @@ export function RagPage() {
                         node?.setSelected(true, true);
                         setSelectedChunk(row);
                       }
-                    },
-                  },
-                ]}
+                    }}
               />
             </Box>
             <Typography variant="caption" color="text.secondary">
@@ -3498,14 +3478,9 @@ export function RagPage() {
               rowData={chunkPreviewRows}
               loading={chunkPreviewLoading}
               height={260}
-              events={[
-                {
-                  type: "rowClicked",
-                  listener: (event) => {
+              onRowClicked={(event) => {
                     setSelectedPreviewChunk((event as { data?: RagChunkPreviewItemDto }).data ?? null);
-                  },
-                },
-              ]}
+                  }}
             />
             <SearchResultDetail
               title={

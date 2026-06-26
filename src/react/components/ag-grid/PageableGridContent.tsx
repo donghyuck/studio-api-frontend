@@ -54,6 +54,7 @@ function PageableGridContentInner<TData = unknown>(
     colIdToSnakeCase,
     height,
     onFilterActived,
+    onRowClicked,
   }: PageableGridContentProps<TData>,
   ref: React.ForwardedRef<PageableGridContentHandle<TData>>
 ) {
@@ -243,6 +244,8 @@ function PageableGridContentInner<TData = unknown>(
         pagination
         paginationPageSize={pageSize}
         cacheBlockSize={pageSize}
+        paginationPageSizeSelector={gridOptions.paginationPageSizeSelector}
+        onRowClicked={onRowClicked as any}
         onPaginationChanged={handlePaginationChanged}
         onSelectionChanged={handleSelectionChanged}
         onSortChanged={reloadInfiniteRows}

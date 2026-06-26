@@ -23,6 +23,7 @@ export interface GridContentProps<TData = unknown> {
   height?: number;
   onFilterActived?: (active: boolean) => void;
   onRowSelected?: (event: unknown) => void;
+  onRowClicked?: (event: unknown) => void;
 }
 
 export interface PageableGridContentProps<TData = unknown> {
@@ -35,6 +36,7 @@ export interface PageableGridContentProps<TData = unknown> {
   colIdToSnakeCase?: boolean;
   height?: number;
   onFilterActived?: (active: boolean) => void;
+  onRowClicked?: (event: unknown) => void;
 }
 
 export interface GridContentHandle<TData = unknown> {
