@@ -1795,8 +1795,8 @@ export function RagJobDetailPage() {
                       onRowClicked={(event) => {
                         const typedEvent = event as { data?: RagIndexChunkDto };
                         if (typedEvent.data) {
-                          setSelectedChunk(
-                            chunkRowId(selectedChunk) === chunkRowId(typedEvent.data) ? null : typedEvent.data
+                          setSelectedChunk((prev) =>
+                            chunkRowId(prev) === chunkRowId(typedEvent.data) ? null : typedEvent.data!
                           );
                         }
                       }}

@@ -491,31 +491,21 @@ export function RagJobListPage() {
               rowData={groupedJobs}
               loading={loading}
               height={604}
-              onRowSelected={(event) => {
-                const row = (event as { data?: RagObjectGroup; node?: { isSelected?: () => boolean } }).data;
-                const selected = (event as { node?: { isSelected?: () => boolean } }).node?.isSelected?.();
-                if (!row) {
-                  return;
-                }
-                if (selected) {
-                  setSelectedGroup(row);
-                } else if (selectedGroup?.objectType === row.objectType && selectedGroup?.objectId === row.objectId) {
-                  setSelectedGroup(null);
-                }
-              }}
               onRowClicked={(event) => {
                 const typedEvent = event as {
                   data?: RagObjectGroup;
-                  node?: { setSelected?: (selected: boolean) => void };
+                  node?: { isSelected?: () => boolean; setSelected?: (selected: boolean) => void };
                 };
                 const row = typedEvent.data;
-                if (row) {
-                  const isSame =
-                    selectedGroup?.objectType === row.objectType &&
-                    selectedGroup?.objectId === row.objectId;
-                  typedEvent.node?.setSelected?.(!isSame);
-                  setSelectedGroup(isSame ? null : row);
-                }
+                if (!row) return;
+
+                const isCurrentlySelected = typedEvent.node?.isSelected?.();
+                typedEvent.node?.setSelected?.(!isCurrentlySelected);
+
+                setSelectedGroup((prev) => {
+                  const isSame = prev?.objectType === row.objectType && prev?.objectId === row.objectId;
+                  return isSame ? null : row;
+                });
               }}
             />
           </Box>
