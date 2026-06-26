@@ -329,31 +329,9 @@ export function RagJobListPage() {
             return "-";
           }
           return (
-            <Box
-              component="button"
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                openDetail(group.latestJob.jobId);
-              }}
-              sx={{
-                display: "inline-flex",
-                alignItems: "center",
-                border: 0,
-                p: 0,
-                maxWidth: "100%",
-                bgcolor: "transparent",
-                color: "primary.main",
-                cursor: "pointer",
-                font: "inherit",
-                textAlign: "left",
-                "&:hover": { textDecoration: "underline" },
-              }}
-            >
-              <Typography variant="body2" noWrap>
-                {sourceDisplayName(group.latestJob)}
-              </Typography>
-            </Box>
+            <Typography variant="body2" noWrap sx={{ display: "inline-flex", alignItems: "center", maxWidth: "100%" }}>
+              {sourceDisplayName(group.latestJob)}
+            </Typography>
           );
         },
       },
@@ -393,7 +371,7 @@ export function RagJobListPage() {
         type: "numericColumn",
       },
     ],
-    [openDetail]
+    [statusColor]
   );
 
 
@@ -512,7 +490,7 @@ export function RagJobListPage() {
               }}
               rowData={groupedJobs}
               loading={loading}
-              height={560}
+              height={604}
               onRowSelected={(event) => {
                 const row = (event as { data?: RagObjectGroup; node?: { isSelected?: () => boolean } }).data;
                 const selected = (event as { node?: { isSelected?: () => boolean } }).node?.isSelected?.();
