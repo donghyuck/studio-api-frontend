@@ -231,7 +231,7 @@ export function RagEvaluationDashboard({
     }
 
     // Determine whether to use sync or async job API
-    const useJobApi = questions.length >= 10 || selectedStrategies.length >= 2;
+    const useAsyncJob = questions.length > 5 || selectedStrategies.length > 1;
 
     setIsCreating(true);
     setJobPollingError(null);
@@ -254,7 +254,7 @@ export function RagEvaluationDashboard({
       questions,
     };
 
-    if (useJobApi) {
+    if (useAsyncJob) {
       // Async Job API
       try {
         const job = await reactMarkdownDocumentApi.createEvaluationJob(requestPayload);
@@ -807,26 +807,35 @@ export function RagEvaluationDashboard({
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {compareResult.strategies.map((s) => (
-                    <TableRow key={s.strategy} hover>
-                      <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
-                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{(s.beforeHitRate * 100).toFixed(0)}%</TableCell>
-                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{(s.afterHitRate * 100).toFixed(0)}%</TableCell>
-                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>
-                        {renderDeltaMetric(s.hitRateDelta)}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.beforeMrr.toFixed(3)}</TableCell>
-                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.afterMrr.toFixed(3)}</TableCell>
-                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>
-                        {renderDeltaMetric(s.mrrDelta)}
-                      </TableCell>
-                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.beforeAverageElapsedMs.toFixed(0)}ms</TableCell>
-                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.afterAverageElapsedMs.toFixed(0)}ms</TableCell>
-                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>
-                        {renderDeltaMetric(s.averageElapsedMsDelta, true)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {compareResult.strategies.map((s) => {
+                    const beforeHit = s.hitRateBefore ?? s.beforeHitRate ?? 0;
+                    const afterHit = s.hitRateAfter ?? s.afterHitRate ?? 0;
+                    const beforeMrrVal = s.mrrBefore ?? s.beforeMrr ?? 0;
+                    const afterMrrVal = s.mrrAfter ?? s.afterMrr ?? 0;
+                    const beforeMs = s.averageElapsedMsBefore ?? s.beforeAverageElapsedMs ?? 0;
+                    const afterMs = s.averageElapsedMsAfter ?? s.afterAverageElapsedMs ?? 0;
+
+                    return (
+                      <TableRow key={s.strategy} hover>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{(beforeHit * 100).toFixed(0)}%</TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{(afterHit * 100).toFixed(0)}%</TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>
+                          {renderDeltaMetric(s.hitRateDelta)}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{beforeMrrVal.toFixed(3)}</TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{afterMrrVal.toFixed(3)}</TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>
+                          {renderDeltaMetric(s.mrrDelta)}
+                        </TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{beforeMs.toFixed(0)}ms</TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{afterMs.toFixed(0)}ms</TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>
+                          {renderDeltaMetric(s.averageElapsedMsDelta, true)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </TableContainer>

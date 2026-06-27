@@ -711,14 +711,20 @@ export type RagEvaluationCompareResponse = {
   afterRunId: string;
   strategies: {
     strategy: string;
-    beforeHitRate: number;
-    afterHitRate: number;
+    beforeHitRate?: number;
+    hitRateBefore?: number;
+    afterHitRate?: number;
+    hitRateAfter?: number;
     hitRateDelta: number;
-    beforeMrr: number;
-    afterMrr: number;
+    beforeMrr?: number;
+    mrrBefore?: number;
+    afterMrr?: number;
+    mrrAfter?: number;
     mrrDelta: number;
-    beforeAverageElapsedMs: number;
-    afterAverageElapsedMs: number;
+    beforeAverageElapsedMs?: number;
+    averageElapsedMsBefore?: number;
+    afterAverageElapsedMs?: number;
+    averageElapsedMsAfter?: number;
     averageElapsedMsDelta: number;
   }[];
 };
