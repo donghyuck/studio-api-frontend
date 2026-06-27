@@ -26,6 +26,7 @@ import {
   AccordionDetails,
   Divider,
   Chip,
+  IconButton,
 } from "@mui/material";
 import {
   ExpandMoreOutlined,
@@ -34,11 +35,11 @@ import {
   CheckCircleOutline,
   TrendingUp,
   TrendingDown,
+  InfoOutlined,
 } from "@mui/icons-material";
 import {
   reactMarkdownDocumentApi,
   type RagEvaluationRunResponse,
-  type RagEvaluationDetailResponse,
   type RagEvaluationCompareResponse,
 } from "./api";
 import { useToast } from "@/react/feedback";
@@ -49,6 +50,20 @@ interface Props {
   embeddingProfileId?: string;
 }
 
+const PRESET_QUERIES_FAST = [
+  "근무일과 1주 근로시간은 어떻게 정해져 있는가",
+  "휴게시간은 근무 중 언제 어떻게 주어지는가",
+  "연장근로는 1주일에 최대 몇 시간까지 가능한가",
+  "야간근로와 휴일근로 시 임금 가산율은 어떻게 되는가",
+  "퇴직금은 어떤 기준으로 지급되는가"
+];
+
+const PRESET_QUERIES_BOOST = [
+  "여름 휴가 규정이 있는가",
+  "식대 지급 요건이 어떻게 되나요",
+  "근무 태만 시 징계 기준이 무엇인가요"
+];
+
 export function RagEvaluationDashboard({
   documentId,
   attachmentId,
@@ -58,7 +73,14 @@ export function RagEvaluationDashboard({
 
   const [evaluations, setEvaluations] = useState<RagEvaluationRunResponse[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string>("");
-  const [selectedRunDetail, setSelectedRunDetail] = useState<RagEvaluationDetailResponse | null>(null);
+  const [selectedRunDetail, setSelectedRunDetail] = useState<RagEvaluationRunResponse | null>(null);
+
+  // Attachment comparison states
+  const [baselineAttachmentId, setBaselineAttachmentId] = useState<number | string>(attachmentId);
+  const [candidateAttachmentId, setCandidateAttachmentId] = useState<number | string>("");
+  const [baselineRun, setBaselineRun] = useState<RagEvaluationRunResponse | null>(null);
+  const [candidateRun, setCandidateRun] = useState<RagEvaluationRunResponse | null>(null);
+  const [isDualLoading, setIsDualLoading] = useState(false);
 
   // Compare states
   const [beforeRunId, setBeforeRunId] = useState<string>("");
@@ -66,16 +88,10 @@ export function RagEvaluationDashboard({
   const [compareResult, setCompareResult] = useState<RagEvaluationCompareResponse | null>(null);
 
   // Form states
-  const [queriesInput, setQueriesInput] = useState<string>(
-    "여름 휴가 규정이 있는가\n업무 인수인계 절차는 어떻게 되나요"
-  );
-  const [selectedStrategies, setSelectedStrategies] = useState<string[]>([
-    "structure",
-    "ideaBlock",
-    "hybrid",
-  ]);
+  const [queriesInput, setQueriesInput] = useState<string>(PRESET_QUERIES_FAST.join("\n"));
+  const [selectedStrategies, setSelectedStrategies] = useState<string[]>(["structure", "ideaBlock", "hybrid"]);
   const [topK, setTopK] = useState<number>(5);
-  const [minScore, setMinScore] = useState<number>(0.6);
+  const [minScore, setMinScore] = useState<number>(0.2);
   const [distilledBoost, setDistilledBoost] = useState<number>(0.05);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -83,15 +99,18 @@ export function RagEvaluationDashboard({
   const [isCreating, setIsCreating] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
 
+  // Detail strategy selection
+  const [activeDetailStrategy, setActiveDetailStrategy] = useState<string>("hybrid");
+
   const loadHistory = async () => {
     setIsLoading(true);
     try {
       const list = await reactMarkdownDocumentApi.getEvaluations();
-      // filter history by current objectId (attachmentId)
+      // filter history by current objectId
       const filtered = list.filter((run) => String(run.objectId) === String(attachmentId));
       setEvaluations(filtered);
-    } catch (err) {
-      console.error("Failed to load evaluations history:", err);
+    } catch (err: any) {
+      handleHttpError(err, "이력 조회");
     } finally {
       setIsLoading(false);
     }
@@ -103,6 +122,40 @@ export function RagEvaluationDashboard({
     }
   }, [attachmentId]);
 
+  const handleHttpError = (err: any, actionName: string) => {
+    const status = err?.response?.status ?? err?.status;
+    const msg = err?.response?.data?.message || err?.message || "";
+
+    if (status === 401) {
+      toast.error("로그인이 만료되었습니다. 다시 로그인 해 주세요.");
+    } else if (status === 403) {
+      toast.error(`권한 오류: RAG 평가를 위한 services:ai_rag read 권한이 부족합니다.`);
+    } else if (status === 404) {
+      toast.error("요청하신 평가 run 데이터를 찾을 수 없습니다. 목록을 다시 조회합니다.");
+      void loadHistory();
+    } else {
+      toast.error(`${actionName} 중 오류가 발생했습니다: ${msg}`);
+    }
+  };
+
+  const handleApplyPreset = (type: "fast" | "boost") => {
+    if (type === "fast") {
+      setSelectedStrategies(["structure", "ideaBlock", "hybrid"]);
+      setTopK(5);
+      setMinScore(0.2);
+      setDistilledBoost(0.05);
+      setQueriesInput(PRESET_QUERIES_FAST.join("\n"));
+      toast.success("빠른 비교 Preset이 설정되었습니다.");
+    } else {
+      setSelectedStrategies(["hybrid"]);
+      setTopK(5);
+      setMinScore(0.2);
+      setDistilledBoost(0.05);
+      setQueriesInput(PRESET_QUERIES_BOOST.join("\n"));
+      toast.success("Boost 실험 Preset이 설정되었습니다.");
+    }
+  };
+
   const handleCreateEvaluation = async () => {
     const questions = queriesInput
       .split("\n")
@@ -113,6 +166,11 @@ export function RagEvaluationDashboard({
     if (questions.length === 0) {
       toast.warning("최소 한 개 이상의 질문을 입력하세요.");
       return;
+    }
+
+    if (questions.length > 10) {
+      const ok = window.confirm("질문 수가 10개를 초과하면 동기 평가 특성상 시간이 다소 오래 걸릴 수 있습니다. 진행할까요?");
+      if (!ok) return;
     }
 
     setIsCreating(true);
@@ -134,13 +192,13 @@ export function RagEvaluationDashboard({
         questions,
       });
 
-      toast.success("평가 프로세스가 생성 및 완료되었습니다.");
+      toast.success("RAG 평가 실행이 정상 완료되었습니다.");
       await loadHistory();
       setSelectedRunId(res.runId);
       void handleViewDetail(res.runId);
     } catch (err: any) {
       console.error(err);
-      toast.error(err?.response?.data?.message || err?.message || "평가 생성 실패");
+      handleHttpError(err, "평가 실행");
     } finally {
       setIsCreating(false);
     }
@@ -152,9 +210,13 @@ export function RagEvaluationDashboard({
     try {
       const res = await reactMarkdownDocumentApi.getEvaluationDetail(runId);
       setSelectedRunDetail(res);
+      if (res.strategies && res.strategies.length > 0) {
+        // set first strategy as active detail
+        setActiveDetailStrategy(res.strategies[0].strategy);
+      }
     } catch (err: any) {
       console.error(err);
-      toast.error("평가 상세를 불러오지 못했습니다.");
+      handleHttpError(err, "상세 조회");
     } finally {
       setIsDetailLoading(false);
     }
@@ -174,17 +236,57 @@ export function RagEvaluationDashboard({
       setCompareResult(res);
     } catch (err: any) {
       console.error(err);
-      toast.error("평가 성능 대조에 실패했습니다.");
+      handleHttpError(err, "델타 비교");
     } finally {
       setIsComparing(false);
     }
   };
 
-  const renderDelta = (val: number, isMs = false) => {
+  const handleFetchDualAttachmentRuns = async () => {
+    if (!baselineAttachmentId || !candidateAttachmentId) {
+      toast.warning("비교할 Baseline 및 Candidate Attachment ID를 모두 입력하세요.");
+      return;
+    }
+    setIsDualLoading(true);
+    setBaselineRun(null);
+    setCandidateRun(null);
+    try {
+      const list = await reactMarkdownDocumentApi.getEvaluations();
+      // find latest run for each
+      const baseRuns = list
+        .filter((r) => String(r.objectId) === String(baselineAttachmentId))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const candRuns = list
+        .filter((r) => String(r.objectId) === String(candidateAttachmentId))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      if (baseRuns.length === 0) {
+        toast.warning(`Baseline Attachment (ID: ${baselineAttachmentId})의 최근 평가 이력이 없습니다. 새로 평가를 먼저 수행하세요.`);
+      } else {
+        const detail = await reactMarkdownDocumentApi.getEvaluationDetail(baseRuns[0].runId);
+        setBaselineRun(detail);
+      }
+
+      if (candRuns.length === 0) {
+        toast.warning(`Candidate Attachment (ID: ${candidateAttachmentId})의 최근 평가 이력이 없습니다. 새로 평가를 먼저 수행하세요.`);
+      } else {
+        const detail = await reactMarkdownDocumentApi.getEvaluationDetail(candRuns[0].runId);
+        setCandidateRun(detail);
+      }
+      toast.success("이중 Attachment 대조군 데이터를 성공적으로 매핑했습니다.");
+    } catch (err: any) {
+      console.error(err);
+      handleHttpError(err, "대조 이력 로드");
+    } finally {
+      setIsDualLoading(false);
+    }
+  };
+
+  const renderDeltaMetric = (val: number, isMs = false) => {
     if (val === undefined || isNaN(val)) return "-";
     const color = val > 0 ? (isMs ? "error.main" : "success.main") : val < 0 ? (isMs ? "success.main" : "error.main") : "text.secondary";
     const sign = val > 0 ? "+" : "";
-    const label = isMs ? `${sign}${val.toFixed(1)}ms` : `${sign}${(val * 100).toFixed(1)}%`;
+    const label = isMs ? `${sign}${val.toFixed(0)}ms` : `${sign}${(val * 100).toFixed(1)}%`;
     const Icon = val > 0 ? (isMs ? TrendingDown : TrendingUp) : val < 0 ? (isMs ? TrendingUp : TrendingDown) : CheckCircleOutline;
 
     return (
@@ -195,8 +297,31 @@ export function RagEvaluationDashboard({
     );
   };
 
+  const getActiveDetailQuestions = () => {
+    if (!selectedRunDetail) return [];
+    const stratMatch = selectedRunDetail.strategies.find((s) => s.strategy === activeDetailStrategy);
+    return stratMatch ? stratMatch.questions : [];
+  };
+
   return (
     <Stack spacing={2} sx={{ py: 1 }}>
+      {/* Preset Control Panel */}
+      <Card variant="outlined" sx={{ borderLeft: "4px solid", borderLeftColor: "primary.main" }}>
+        <CardContent sx={{ p: 1.5 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="caption" sx={{ fontWeight: 600 }}>RAG 평가 질문 프리셋</Typography>
+            <Stack direction="row" spacing={1}>
+              <Button variant="outlined" size="small" onClick={() => handleApplyPreset("fast")} sx={{ fontSize: 9.5, height: 22 }}>
+                빠른 비교 Preset (5문항)
+              </Button>
+              <Button variant="outlined" size="small" color="secondary" onClick={() => handleApplyPreset("boost")} sx={{ fontSize: 9.5, height: 22 }}>
+                Boost 실험 Preset (3문항)
+              </Button>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
       {/* 1. Evaluation Run Section */}
       <Card variant="outlined">
         <CardContent sx={{ p: 1.5 }}>
@@ -208,7 +333,7 @@ export function RagEvaluationDashboard({
               <TextField
                 label="평가 질문 목록 (엔터로 구분)"
                 multiline
-                rows={3}
+                rows={4}
                 fullWidth
                 value={queriesInput}
                 onChange={(e) => setQueriesInput(e.target.value)}
@@ -217,7 +342,7 @@ export function RagEvaluationDashboard({
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <Stack spacing={1}>
+              <Stack spacing={1.5}>
                 <Stack direction="row" spacing={2}>
                   {["structure", "ideaBlock", "hybrid"].map((strategy) => (
                     <FormControlLabel
@@ -267,6 +392,13 @@ export function RagEvaluationDashboard({
                     sx={{ "& .MuiInputBase-root": { fontSize: 11 } }}
                   />
                 </Stack>
+
+                {isCreating && (
+                  <Alert severity="info" sx={{ fontSize: 9.5, py: 0.2 }}>
+                    RAG 검색 및 메트릭 평가 중입니다. 문항 및 검색 전략 수가 많을수록 처리 속도가 길어집니다.
+                  </Alert>
+                )}
+
                 <Button
                   variant="contained"
                   size="small"
@@ -283,7 +415,101 @@ export function RagEvaluationDashboard({
         </CardContent>
       </Card>
 
-      {/* 2. Run History & Metric Comparison */}
+      {/* 2. Baseline vs Candidate Attachment Comparison Card */}
+      <Card variant="outlined" sx={{ bgcolor: "action.hover" }}>
+        <CardContent sx={{ p: 1.5 }}>
+          <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
+            이중 Attachment 대조군 비교 (Baseline vs Candidate)
+          </Typography>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
+            <TextField
+              label="Baseline Attachment ID"
+              size="small"
+              type="number"
+              value={baselineAttachmentId}
+              onChange={(e) => setBaselineAttachmentId(e.target.value)}
+              sx={{ "& .MuiInputBase-root": { fontSize: 11, bgcolor: "background.paper" }, flex: 1 }}
+            />
+            <Typography variant="caption" color="text.secondary">vs</Typography>
+            <TextField
+              label="Candidate Attachment ID"
+              size="small"
+              type="number"
+              value={candidateAttachmentId}
+              onChange={(e) => setCandidateAttachmentId(e.target.value)}
+              sx={{ "& .MuiInputBase-root": { fontSize: 11, bgcolor: "background.paper" }, flex: 1 }}
+            />
+            <Button
+              variant="contained"
+              size="small"
+              color="secondary"
+              disabled={isDualLoading || !baselineAttachmentId || !candidateAttachmentId}
+              onClick={handleFetchDualAttachmentRuns}
+              sx={{ height: 32, fontSize: 10.5 }}
+            >
+              대조 비교 실행
+            </Button>
+          </Stack>
+
+          {isDualLoading && <CircularProgress size={20} sx={{ display: "block", mx: "auto", my: 2 }} />}
+
+          {(baselineRun || candidateRun) && (
+            <Grid container spacing={2}>
+              {/* Baseline column */}
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Card variant="outlined">
+                  <CardContent sx={{ p: 1 }}>
+                    <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
+                      Baseline (ID: {baselineAttachmentId}) {baselineRun ? `[Run: ${baselineRun.runId.substring(0, 8)}]` : "이력 없음"}
+                    </Typography>
+                    {baselineRun && (
+                      <Table size="small" sx={{ mt: 1 }}>
+                        <TableBody>
+                          {baselineRun.strategies.map((s) => (
+                            <TableRow key={s.strategy}>
+                              <TableCell sx={{ fontSize: 9.5, p: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
+                              <TableCell sx={{ fontSize: 9.5, p: 0.5 }}>Hit@K: {(s.hitRate * 100).toFixed(0)}%</TableCell>
+                              <TableCell sx={{ fontSize: 9.5, p: 0.5 }}>MRR: {s.mrr.toFixed(3)}</TableCell>
+                              <TableCell sx={{ fontSize: 9.5, p: 0.5, textAlign: "right" }}>{s.averageElapsedMs.toFixed(0)}ms</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* Candidate column */}
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Card variant="outlined">
+                  <CardContent sx={{ p: 1 }}>
+                    <Typography variant="caption" color="secondary.main" sx={{ fontWeight: 600 }}>
+                      Candidate (ID: {candidateAttachmentId}) {candidateRun ? `[Run: ${candidateRun.runId.substring(0, 8)}]` : "이력 없음"}
+                    </Typography>
+                    {candidateRun && (
+                      <Table size="small" sx={{ mt: 1 }}>
+                        <TableBody>
+                          {candidateRun.strategies.map((s) => (
+                            <TableRow key={s.strategy}>
+                              <TableCell sx={{ fontSize: 9.5, p: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
+                              <TableCell sx={{ fontSize: 9.5, p: 0.5 }}>Hit@K: {(s.hitRate * 100).toFixed(0)}%</TableCell>
+                              <TableCell sx={{ fontSize: 9.5, p: 0.5 }}>MRR: {s.mrr.toFixed(3)}</TableCell>
+                              <TableCell sx={{ fontSize: 9.5, p: 0.5, textAlign: "right" }}>{s.averageElapsedMs.toFixed(0)}ms</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 3. Run History & Metric Comparison */}
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 5 }}>
           <Card variant="outlined" sx={{ height: "100%" }}>
@@ -296,7 +522,7 @@ export function RagEvaluationDashboard({
               ) : evaluations.length === 0 ? (
                 <Typography variant="caption" color="text.secondary">이력이 없습니다.</Typography>
               ) : (
-                <TableContainer sx={{ maxHeight: 200 }}>
+                <TableContainer sx={{ maxHeight: 250 }}>
                   <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow>
@@ -349,42 +575,56 @@ export function RagEvaluationDashboard({
                     Embedding Profile: {selectedRunDetail.embeddingProfileId} | TopK: {selectedRunDetail.topK} | MinScore: {selectedRunDetail.minScore}
                   </Typography>
 
+                  {/* Strategy Summary Table (Strategy, Questions, Hit, Hit@K, MRR, Avg ms) */}
                   <TableContainer component={Paper} variant="outlined">
                     <Table size="small">
                       <TableHead>
                         <TableRow sx={{ bgcolor: "action.hover" }}>
-                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600 }}>RAG 전략</TableCell>
-                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Hit Rate</TableCell>
+                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600 }}>Strategy</TableCell>
+                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Questions</TableCell>
+                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Hit</TableCell>
+                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Hit@K</TableCell>
                           <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>MRR</TableCell>
-                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>평균 속도</TableCell>
+                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Avg ms</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {selectedRunDetail.strategies.map((strategy) => {
-                          const metric = selectedRunDetail.strategyResults?.[strategy] || {
-                            hitRate: 0,
-                            mrr: 0,
-                            averageElapsedMs: 0,
-                          };
-                          return (
-                            <TableRow key={strategy} hover>
-                              <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 500 }}>{strategy}</TableCell>
-                              <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{(metric.hitRate * 100).toFixed(1)}%</TableCell>
-                              <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{metric.mrr.toFixed(3)}</TableCell>
-                              <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{metric.averageElapsedMs.toFixed(1)}ms</TableCell>
-                            </TableRow>
-                          );
-                        })}
+                        {selectedRunDetail.strategies.map((s) => (
+                          <TableRow key={s.strategy} hover selected={activeDetailStrategy === s.strategy} onClick={() => setActiveDetailStrategy(s.strategy)} sx={{ cursor: "pointer" }}>
+                            <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
+                            <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.questionCount}</TableCell>
+                            <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.hitCount}</TableCell>
+                            <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{(s.hitRate * 100).toFixed(0)}%</TableCell>
+                            <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.mrr.toFixed(3)}</TableCell>
+                            <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.averageElapsedMs.toFixed(0)}</TableCell>
+                          </TableRow>
+                        ))}
                       </TableBody>
                     </Table>
                   </TableContainer>
 
-                  {/* Distilled Impact Info */}
-                  <Box sx={{ bgcolor: "action.hover", p: 1, borderRadius: 1, border: "1px dashed", borderColor: "divider" }}>
-                    <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>Distilled Boost Impact</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      IdeaBlock 병합 적용 결과(`ideaBlockDistilled=true`)가 검색 시 최상위 랭킹에 안착하도록 Score Boost 가산 정렬이 수행되었습니다.
+                  {/* Active Strategy Details (Questions breakdown) */}
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.5, display: "block" }}>
+                      전략 질문 상세 분석 ({activeDetailStrategy})
                     </Typography>
+                    <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200 }}>
+                      <Table size="small">
+                        <TableHead sx={{ bgcolor: "action.hover" }}>
+                          <TableRow>
+                            <TableCell sx={{ fontSize: 9.5, py: 0.5 }}>Query</TableCell>
+                            <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center" }}>Hit</TableCell>
+                            <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center" }}>First Rank</TableCell>
+                            <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center" }}>Result Count</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {getActiveDetailQuestions().map((q, idx) => (
+                            <QuestionRow key={idx} question={q} strategy={activeDetailStrategy} />
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
                   </Box>
                 </Stack>
               )}
@@ -393,7 +633,7 @@ export function RagEvaluationDashboard({
         </Grid>
       </Grid>
 
-      {/* 3. Before/After Delta Compare */}
+      {/* 4. Before/After Delta Compare */}
       <Card variant="outlined">
         <CardContent sx={{ p: 1.5 }}>
           <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
@@ -407,7 +647,7 @@ export function RagEvaluationDashboard({
               displayEmpty
               sx={{ fontSize: 11, flex: 1 }}
             >
-              <MenuItem value="">Before Run 선택</MenuItem>
+              <MenuItem value="">Before Run 선택 (병합 전)</MenuItem>
               {evaluations.map((run) => (
                 <MenuItem key={run.runId} value={run.runId} sx={{ fontSize: 11 }}>
                   {run.runId.substring(0, 8)}... ({new Date(run.createdAt).toLocaleTimeString()})
@@ -424,7 +664,7 @@ export function RagEvaluationDashboard({
               displayEmpty
               sx={{ fontSize: 11, flex: 1 }}
             >
-              <MenuItem value="">After Run 선택</MenuItem>
+              <MenuItem value="">After Run 선택 (병합 후)</MenuItem>
               {evaluations.map((run) => (
                 <MenuItem key={run.runId} value={run.runId} sx={{ fontSize: 11 }}>
                   {run.runId.substring(0, 8)}... ({new Date(run.createdAt).toLocaleTimeString()})
@@ -444,85 +684,141 @@ export function RagEvaluationDashboard({
           </Stack>
 
           {compareResult && (
-            <Stack spacing={1.5}>
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small">
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: "action.hover" }}>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600 }}>RAG 전략</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Hit Rate Delta</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>MRR Delta</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>평균 속도 Delta</TableCell>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ bgcolor: "action.hover" }}>
+                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600 }}>RAG 전략</TableCell>
+                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Before HitRate</TableCell>
+                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>After HitRate</TableCell>
+                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>HitRate Delta</TableCell>
+                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Before MRR</TableCell>
+                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>After MRR</TableCell>
+                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>MRR Delta</TableCell>
+                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Before Avg ms</TableCell>
+                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>After Avg ms</TableCell>
+                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Avg ms Delta</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {compareResult.strategies.map((s) => (
+                    <TableRow key={s.strategy} hover>
+                      <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
+                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{(s.beforeHitRate * 100).toFixed(0)}%</TableCell>
+                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{(s.afterHitRate * 100).toFixed(0)}%</TableCell>
+                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>
+                        {renderDeltaMetric(s.hitRateDelta)}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.beforeMrr.toFixed(3)}</TableCell>
+                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.afterMrr.toFixed(3)}</TableCell>
+                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>
+                        {renderDeltaMetric(s.mrrDelta)}
+                      </TableCell>
+                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.beforeAverageElapsedMs.toFixed(0)}ms</TableCell>
+                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.afterAverageElapsedMs.toFixed(0)}ms</TableCell>
+                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>
+                        {renderDeltaMetric(s.averageElapsedMsDelta, true)}
+                      </TableCell>
                     </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {Object.keys(compareResult.hitRateDelta || {}).map((strategy) => (
-                      <TableRow key={strategy} hover>
-                        <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 500 }}>{strategy}</TableCell>
-                        <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>
-                          {renderDelta(compareResult.hitRateDelta[strategy])}
-                        </TableCell>
-                        <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>
-                          {renderDelta(compareResult.mrrDelta?.[strategy], false)}
-                        </TableCell>
-                        <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>
-                          {renderDelta(compareResult.averageElapsedMsDelta?.[strategy], true)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              {/* Alert / Details on degraded or hit-rate change */}
-              <Typography variant="caption" sx={{ fontWeight: 600 }}>질문별 상세 분석</Typography>
-              <Stack spacing={0.5}>
-                {selectedRunDetail?.questionResults?.map((qRes, idx) => {
-                  const hasDegraded = Object.keys(qRes.strategyHits).some((strat) => {
-                    return qRes.strategyHits[strat] === false;
-                  });
-                  return (
-                    <Accordion key={idx} disableGutters square elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 0.5 }}>
-                      <AccordionSummary expandIcon={<ExpandMoreOutlined sx={{ fontSize: 14 }} />} sx={{ minHeight: 30, px: 1 }}>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Typography variant="caption" sx={{ fontWeight: 500 }}>Q: {qRes.query}</Typography>
-                          {hasDegraded && (
-                            <Chip label="일부 전략 실패" color="warning" size="small" variant="outlined" sx={{ height: 16, fontSize: 8 }} />
-                          )}
-                        </Stack>
-                      </AccordionSummary>
-                      <AccordionDetails sx={{ p: 1, bgcolor: "background.paper" }}>
-                        <Grid container spacing={1}>
-                          {Object.keys(qRes.strategyHits).map((strat) => (
-                            <Grid size={{ xs: 12, sm: 4 }} key={strat}>
-                              <Box sx={{ p: 0.5, border: "1px solid", borderColor: "divider", borderRadius: 0.5, bgcolor: "action.hover" }}>
-                                <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>{strat}</Typography>
-                                <Typography variant="caption" color="text.secondary" display="block">
-                                  Hit: {qRes.strategyHits[strat] ? "YES" : "NO"} | Rank: {qRes.strategyRanks[strat] || "-"}
-                                </Typography>
-                                {qRes.strategyChunks[strat] && qRes.strategyChunks[strat].length > 0 && (
-                                  <Box sx={{ mt: 0.5 }}>
-                                    <Typography variant="caption" sx={{ fontSize: 8.5, fontWeight: 500, display: "block" }}>검색 Chunk ID:</Typography>
-                                    {qRes.strategyChunks[strat].map((c) => (
-                                      <Typography key={c.chunkId} variant="caption" color="text.secondary" display="block" sx={{ fontSize: 8, fontFamily: "monospace", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap" }}>
-                                        {c.chunkId} ({c.score?.toFixed(3)}) {c.ideaBlockDistilled && "🌟[Distilled]"}
-                                      </Typography>
-                                    ))}
-                                  </Box>
-                                )}
-                              </Box>
-                            </Grid>
-                          ))}
-                        </Grid>
-                      </AccordionDetails>
-                    </Accordion>
-                  );
-                })}
-              </Stack>
-            </Stack>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
           )}
         </CardContent>
       </Card>
     </Stack>
+  );
+}
+
+function QuestionRow({ question, strategy }: { question: any; strategy: string }) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <TableRow hover onClick={() => setOpen(!open)} sx={{ cursor: "pointer" }}>
+        <TableCell sx={{ fontSize: 9.5, py: 0.5 }}>{question.query}</TableCell>
+        <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center", color: question.hit ? "success.main" : "error.main", fontWeight: 600 }}>
+          {String(question.hit)}
+        </TableCell>
+        <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center" }}>{question.firstRank ?? "-"}</TableCell>
+        <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center" }}>{question.resultCount}</TableCell>
+      </TableRow>
+      {open && (
+        <TableRow>
+          <TableCell colSpan={4} sx={{ bgcolor: "action.hover", p: 1 }}>
+            <Box sx={{ pl: 2 }}>
+              <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
+                검색된 결과 청크 리스트 (Metadata 포함)
+              </Typography>
+              {(!question.chunks || question.chunks.length === 0) ? (
+                <Typography variant="caption" color="text.secondary">반환된 청크가 없습니다.</Typography>
+              ) : (
+                <Stack spacing={0.5}>
+                  {question.chunks.map((c: any, index: number) => {
+                    const meta = c.metadata || {};
+                    return (
+                      <Box key={index} sx={{ borderBottom: "1px dashed", borderColor: "divider", pb: 0.5, mb: 0.5 }}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Chip label={`Rank ${index + 1}`} size="small" sx={{ height: 16, fontSize: 8 }} />
+                          <Typography variant="caption" sx={{ fontWeight: 600, fontFamily: "monospace" }}>
+                            {c.chunkId}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            (Score: {c.score?.toFixed(3)})
+                          </Typography>
+                          {meta.ideaBlockDistilled && (
+                            <Chip label="🌟 Distilled" size="small" color="primary" sx={{ height: 14, fontSize: 8 }} />
+                          )}
+                        </Stack>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 9, mt: 0.5, whiteSpace: "pre-wrap", bgcolor: "background.paper", p: 0.5, borderRadius: 0.5 }}>
+                          {c.text || "(텍스트 본문 없음)"}
+                        </Typography>
+                        {/* Metadata grid */}
+                        <Grid container spacing={0.5} sx={{ mt: 0.5 }}>
+                          <Grid size={{ xs: 6, sm: 4 }}>
+                            <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>Strategy: {strategy}</Typography>
+                          </Grid>
+                          {meta.chunkType && (
+                            <Grid size={{ xs: 6, sm: 4 }}>
+                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>Type: {meta.chunkType}</Typography>
+                            </Grid>
+                          )}
+                          {meta.actualChunkingStrategy && (
+                            <Grid size={{ xs: 6, sm: 4 }}>
+                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>Chunking: {meta.actualChunkingStrategy}</Typography>
+                            </Grid>
+                          )}
+                          {meta.sectionTitle && (
+                            <Grid size={{ xs: 6, sm: 4 }}>
+                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>Section: {meta.sectionTitle}</Typography>
+                            </Grid>
+                          )}
+                          {meta.markdownDocumentId && (
+                            <Grid size={{ xs: 6, sm: 4 }}>
+                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>DocID: {meta.markdownDocumentId.substring(0, 8)}...</Typography>
+                            </Grid>
+                          )}
+                          {meta.markdownRevisionId && (
+                            <Grid size={{ xs: 6, sm: 4 }}>
+                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>RevID: {meta.markdownRevisionId.substring(0, 8)}...</Typography>
+                            </Grid>
+                          )}
+                          {meta.ideaBlockDistillationFingerprint && (
+                            <Grid size={{ xs: 12 }}>
+                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>Fingerprint: {meta.ideaBlockDistillationFingerprint}</Typography>
+                            </Grid>
+                          )}
+                        </Grid>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Box>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
   );
 }

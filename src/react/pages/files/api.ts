@@ -663,7 +663,34 @@ export type RagEvaluationRunResponse = {
   embeddingProfileId: string;
   topK: number;
   minScore: number;
-  strategies: string[];
+  strategies: {
+    strategy: string;
+    questionCount: number;
+    hitCount: number;
+    hitRate: number;
+    mrr: number;
+    averageElapsedMs: number;
+    questions: {
+      query: string;
+      hit: boolean;
+      firstRank: number | null;
+      resultCount: number;
+      chunks: {
+        chunkId: string;
+        text?: string;
+        score?: number;
+        metadata?: {
+          chunkType?: string;
+          actualChunkingStrategy?: string;
+          sectionTitle?: string;
+          markdownDocumentId?: string;
+          markdownRevisionId?: string;
+          ideaBlockDistilled?: boolean;
+          ideaBlockDistillationFingerprint?: string;
+        };
+      }[];
+    }[];
+  }[];
 };
 
 export type RagEvaluationCompareRequest = {
@@ -672,21 +699,20 @@ export type RagEvaluationCompareRequest = {
 };
 
 export type RagEvaluationCompareResponse = {
-  hitRateDelta: Record<string, number>;
-  mrrDelta: Record<string, number>;
-  averageElapsedMsDelta: Record<string, number>;
-};
-
-export type RagEvaluationDetailResponse = RagEvaluationRunResponse & {
-  strategyResults?: Record<string, {
-    hitRate: number;
-    mrr: number;
-    averageElapsedMs: number;
-  }>;
-  questionResults?: {
-    query: string;
-    strategyHits: Record<string, boolean>;
-    strategyRanks: Record<string, number>;
-    strategyChunks: Record<string, { chunkId: string; text?: string; score?: number; ideaBlockDistilled?: boolean }[]>;
+  beforeRunId: string;
+  afterRunId: string;
+  strategies: {
+    strategy: string;
+    beforeHitRate: number;
+    afterHitRate: number;
+    hitRateDelta: number;
+    beforeMrr: number;
+    afterMrr: number;
+    mrrDelta: number;
+    beforeAverageElapsedMs: number;
+    afterAverageElapsedMs: number;
+    averageElapsedMsDelta: number;
   }[];
 };
+
+export type RagEvaluationDetailResponse = RagEvaluationRunResponse;
