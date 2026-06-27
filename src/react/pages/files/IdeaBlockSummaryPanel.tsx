@@ -176,7 +176,7 @@ export function IdeaBlockSummaryPanel({
       </Box>
 
       {/* Tab Panels */}
-      <Box sx={{ pt: 1.5, maxHeight: 350, overflowY: "auto" }}>
+      <Box sx={{ pt: 1.5 }}>
         {hasSummary && summary && activeTab === "samples" && (
           <SamplesTab
             samples={summary.samples || []}
