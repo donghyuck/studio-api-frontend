@@ -1269,6 +1269,7 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
         topK: topKNumber,
         hybrid: true,
         ...searchScope,
+        minScore: Number.isFinite(minScoreNumber) ? minScoreNumber : undefined,
       };
       if (selectedOption) {
         if (selectedOption.profileId) {
