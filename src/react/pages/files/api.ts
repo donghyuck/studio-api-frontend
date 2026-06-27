@@ -475,6 +475,33 @@ export const reactMarkdownDocumentApi = {
   async getEvaluationJobStatus(jobId: string): Promise<RagEvaluationJobResponse> {
     return apiRequest<RagEvaluationJobResponse>("get", `/api/ai/chat/rag/evaluations/jobs/${encodeURIComponent(jobId)}`);
   },
+  async getQuestionSets(): Promise<RagEvaluationQuestionSetDto[]> {
+    return apiRequest<RagEvaluationQuestionSetDto[]>("get", "/api/ai/chat/rag/evaluations/question-sets");
+  },
+  async getQuestionSetDetail(questionSetId: string): Promise<RagEvaluationQuestionSetDto> {
+    return apiRequest<RagEvaluationQuestionSetDto>("get", `/api/ai/chat/rag/evaluations/question-sets/${encodeURIComponent(questionSetId)}`);
+  },
+  async getEvaluationAnalysis(questionSetId: string): Promise<RagRetrievalEvaluationAnalysis> {
+    return apiRequest<RagRetrievalEvaluationAnalysis>("get", `/api/ai/chat/rag/evaluations/question-sets/${encodeURIComponent(questionSetId)}/analysis`);
+  },
+  async createEvaluationJobFromQuestionSet(
+    questionSetId: string,
+    request: {
+      strategies: string[];
+      topK?: number;
+      minScore?: number;
+      objectType: string;
+      objectId: string;
+      embeddingProfileId?: string;
+      embeddingProvider?: string;
+      embeddingModel?: string;
+      retrievalOptions?: any;
+    }
+  ): Promise<RagEvaluationJobResponse> {
+    return apiRequest<RagEvaluationJobResponse>("post", `/api/ai/chat/rag/evaluations/question-sets/${encodeURIComponent(questionSetId)}/jobs`, {
+      data: request,
+    });
+  },
 };
 
 export interface MarkdownPipelineEstimateRequest {
@@ -821,3 +848,42 @@ export const reactRetrievalPolicyApi = {
     return apiRequest<RetrievalPolicySummaryDto>("get", `/api/ai/chat/rag/retrieval-policies/${objectType}/${objectId}/usage/summary`);
   },
 };
+
+export interface RagStrategyAnalysis {
+  strategy: string;
+  runCount: number;
+  questionCount: number;
+  hitCount: number;
+  hitRate: number;
+  mrr: number;
+  averageElapsedMs: number;
+  failedQuestionCount: number;
+}
+
+export interface RagQuestionAnalysis {
+  query: string;
+  hitStrategies: string[];
+  missedStrategies: string[];
+  bestStrategy?: string | null;
+  bestRank?: number | null;
+}
+
+export interface RagRetrievalEvaluationAnalysis {
+  questionSetId: string;
+  runCount: number;
+  questionCount: number;
+  strategies: RagStrategyAnalysis[];
+  questions: RagQuestionAnalysis[];
+}
+
+export interface RagEvaluationQuestionSetDto {
+  questionSetId: string;
+  name: string;
+  description?: string;
+  createdAt: string;
+  updatedAt: string;
+  questions: {
+    query: string;
+    expectedContentContains?: string[];
+  }[];
+}

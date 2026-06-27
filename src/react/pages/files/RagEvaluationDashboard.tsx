@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Box,
   Typography,
@@ -25,6 +25,8 @@ import {
   AccordionSummary,
   AccordionDetails,
   Chip,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import {
   ExpandMoreOutlined,
@@ -33,14 +35,21 @@ import {
   CheckCircleOutline,
   TrendingUp,
   TrendingDown,
+  DownloadOutlined,
 } from "@mui/icons-material";
 import {
   reactMarkdownDocumentApi,
+  reactRetrievalPolicyApi,
   type RagEvaluationRunResponse,
   type RagEvaluationCompareResponse,
   type RagEvaluationJobResponse,
+  type RagRetrievalEvaluationAnalysis,
+  type RagStrategyAnalysis,
+  type RagQuestionAnalysis,
+  type RagEvaluationQuestionSetDto,
 } from "./api";
 import { useToast } from "@/react/feedback";
+import { resolveAxiosError } from "@/utils/helpers";
 
 interface Props {
   documentId: string;
@@ -103,6 +112,157 @@ export function RagEvaluationDashboard({
 
   // Detail strategy selection
   const [activeDetailStrategy, setActiveDetailStrategy] = useState<string>("hybrid");
+
+  // Analysis Tabs & States
+  const [activeTab, setActiveTab] = useState<"evaluation" | "analysis">("evaluation");
+  const [questionSets, setQuestionSets] = useState<RagEvaluationQuestionSetDto[]>([]);
+  const [selectedQuestionSetId, setSelectedQuestionSetId] = useState<string>("");
+  const [analysisData, setAnalysisData] = useState<RagRetrievalEvaluationAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisFilter, setAnalysisFilter] = useState<string>("all");
+
+  const loadQuestionSets = async () => {
+    try {
+      const list = await reactMarkdownDocumentApi.getQuestionSets();
+      setQuestionSets(list);
+      if (list.length > 0 && !selectedQuestionSetId) {
+        setSelectedQuestionSetId(list[0].questionSetId);
+      }
+    } catch (err: any) {
+      console.error("Error loading question sets:", err);
+    }
+  };
+
+  const loadAnalysis = async (qsetId: string) => {
+    if (!qsetId) return;
+    setAnalysisLoading(true);
+    setAnalysisError(null);
+    try {
+      const data = await reactMarkdownDocumentApi.getEvaluationAnalysis(qsetId);
+      setAnalysisData(data);
+    } catch (err: any) {
+      const status = err?.response?.status ?? err?.status;
+      if (status === 404) {
+        setAnalysisError("평가 질문 세트를 찾을 수 없습니다.");
+      } else {
+        setAnalysisError("분석 데이터 조회 실패: " + resolveAxiosError(err));
+      }
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
+
+  // Trigger reloading question sets when tab changes to analysis
+  useEffect(() => {
+    if (activeTab === "analysis") {
+      void loadQuestionSets();
+    }
+  }, [activeTab]);
+
+  // Load analysis whenever selected questionSetId changes
+  useEffect(() => {
+    if (selectedQuestionSetId && activeTab === "analysis") {
+      void loadAnalysis(selectedQuestionSetId);
+    }
+  }, [selectedQuestionSetId, activeTab]);
+
+  const handleReevaluate = async () => {
+    if (!selectedQuestionSetId) return;
+    setIsCreating(true);
+    setJobPollingError(null);
+    setActiveJob(null);
+    try {
+      const job = await reactMarkdownDocumentApi.createEvaluationJobFromQuestionSet(selectedQuestionSetId, {
+        strategies: ["structure", "ideaBlock", "hybrid"],
+        topK: topK,
+        minScore: minScore,
+        objectType: "attachment",
+        objectId: String(attachmentId),
+        embeddingProfileId: embeddingProfileId,
+      });
+      setActiveJob(job);
+      toast.success("질문 세트 RAG 평가 재실행 작업이 등록되었습니다.");
+    } catch (err: any) {
+      setIsCreating(false);
+      handleHttpError(err, "재평가 실행");
+    }
+  };
+
+  const handleApplyRecommendation = async () => {
+    if (!selectedQuestionSetId) return;
+    try {
+      await reactRetrievalPolicyApi.applyRecommendation({
+        questionSetId: selectedQuestionSetId,
+        objectType: "attachment",
+        objectId: String(attachmentId),
+      });
+      toast.success("평가 추천 전략이 이 파일의 RAG 검색 정책으로 저장되었습니다!");
+    } catch (err: any) {
+      toast.error("추천 전략 적용 실패: " + resolveAxiosError(err));
+    }
+  };
+
+  const bestStrategyName = useMemo(() => {
+    if (!analysisData || analysisData.strategies.length === 0) return null;
+    const sorted = [...analysisData.strategies].sort((a, b) => {
+      if (b.hitRate !== a.hitRate) return b.hitRate - a.hitRate;
+      if (b.mrr !== a.mrr) return b.mrr - a.mrr;
+      return a.averageElapsedMs - b.averageElapsedMs;
+    });
+    return sorted[0].strategy;
+  }, [analysisData]);
+
+  const filteredAnalysisQuestions = useMemo(() => {
+    if (!analysisData) return [];
+    let items = [...analysisData.questions];
+
+    if (analysisFilter === "all_failed") {
+      items = items.filter((q) => q.hitStrategies.length === 0);
+    } else if (analysisFilter === "ideablock_failed") {
+      items = items.filter((q) => q.missedStrategies.includes("ideaBlock"));
+    } else if (analysisFilter === "hybrid_failed") {
+      items = items.filter((q) => q.missedStrategies.includes("hybrid"));
+    } else if (analysisFilter === "structure_success_only") {
+      items = items.filter(
+        (q) => q.hitStrategies.includes("structure") && !q.hitStrategies.includes("ideaBlock")
+      );
+    }
+
+    return items.sort((a, b) => {
+      if (b.missedStrategies.length !== a.missedStrategies.length) {
+        return b.missedStrategies.length - a.missedStrategies.length;
+      }
+      const rankA = a.bestRank ?? 999;
+      const rankB = b.bestRank ?? 999;
+      if (rankA !== rankB) return rankA - rankB;
+      return a.query.localeCompare(b.query);
+    });
+  }, [analysisData, analysisFilter]);
+
+  const handleExportAnalysisCSV = () => {
+    if (!analysisData || filteredAnalysisQuestions.length === 0) return;
+    const headers = ["query", "hitStrategies", "missedStrategies", "bestStrategy", "bestRank"];
+    const rows = filteredAnalysisQuestions.map((q) => [
+      q.query,
+      q.hitStrategies.join("|"),
+      q.missedStrategies.join("|"),
+      q.bestStrategy || "-",
+      q.bestRank != null ? q.bestRank : "-",
+    ]);
+    const csvContent =
+      "\uFEFF" +
+      [headers.join(","), ...rows.map((row) => row.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `rag_analysis_${selectedQuestionSetId}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const loadHistory = async () => {
     setIsLoading(true);
@@ -381,11 +541,20 @@ export function RagEvaluationDashboard({
 
   return (
     <Stack spacing={2} sx={{ py: 1 }}>
-      {/* Preset Control Panel */}
-      <Card variant="outlined" sx={{ borderLeft: "4px solid", borderLeftColor: "primary.main" }}>
-        <CardContent sx={{ p: 1.5 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>RAG 평가 질문 프리셋</Typography>
+      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+        <Tabs value={activeTab} onChange={(_, val) => setActiveTab(val)}>
+          <Tab label="RAG 성능 평가 실행" value="evaluation" sx={{ fontSize: 13.5, fontWeight: 700 }} />
+          <Tab label="질문 세트 전략 분석" value="analysis" sx={{ fontSize: 13.5, fontWeight: 700 }} />
+        </Tabs>
+      </Box>
+
+      {activeTab === "evaluation" ? (
+        <>
+          {/* Preset Control Panel */}
+          <Card variant="outlined" sx={{ borderLeft: "4px solid", borderLeftColor: "primary.main" }}>
+            <CardContent sx={{ p: 1.5 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>RAG 평가 질문 프리셋</Typography>
             <Stack direction="row" spacing={1}>
               <Button variant="outlined" size="small" onClick={() => handleApplyPreset("fast")} sx={{ fontSize: 12, height: 28 }}>
                 빠른 비교 Preset (5문항)
@@ -842,6 +1011,241 @@ export function RagEvaluationDashboard({
           )}
         </CardContent>
       </Card>
+      </>
+      ) : (
+        /* 신규 질문 세트 전략 분석 탭 UI */
+        <Stack spacing={2}>
+          <Card variant="outlined">
+            <CardContent sx={{ p: 2 }}>
+              <Grid container spacing={2} alignItems="center">
+                <Grid size={{ xs: 12, md: 5 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                    분석할 질문 세트 선택
+                  </Typography>
+                  <Select
+                    size="small"
+                    fullWidth
+                    value={selectedQuestionSetId}
+                    onChange={(e) => setSelectedQuestionSetId(e.target.value)}
+                    disabled={analysisLoading}
+                  >
+                    {questionSets.map((qset) => (
+                      <MenuItem key={qset.questionSetId} value={qset.questionSetId}>
+                        {qset.name} ({qset.questions.length}개 질문)
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </Grid>
+                <Grid size={{ xs: 12, md: 7 }} sx={{ display: "flex", gap: 1.5, justifyContent: "flex-end", pt: { xs: 0, md: 2 } }}>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={isCreating ? <CircularProgress size={12} color="inherit" /> : <PlayArrowOutlined />}
+                    onClick={handleReevaluate}
+                    disabled={isCreating || !selectedQuestionSetId}
+                  >
+                    재평가 실행
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="secondary"
+                    onClick={handleApplyRecommendation}
+                    disabled={!selectedQuestionSetId || !analysisData || analysisData.runCount === 0}
+                  >
+                    추천 전략 적용
+                  </Button>
+                </Grid>
+              </Grid>
+            </CardContent>
+          </Card>
+
+          {isCreating && activeJob && (
+            <Card variant="outlined" sx={{ p: 2, bgcolor: "action.hover" }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                재평가 실행 중 (비동기 Job)
+              </Typography>
+              <CircularProgress size={16} sx={{ mr: 1, verticalAlign: "middle" }} />
+              <Typography variant="caption" color="text.secondary">
+                진행 상황: {activeJob.completedQuestions} / {activeJob.totalQuestions} 문항 완료 (전략: {activeJob.currentStrategy || "-"})
+              </Typography>
+            </Card>
+          )}
+
+          {analysisLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
+              <CircularProgress />
+            </Box>
+          ) : analysisError ? (
+            <Alert severity="error">{analysisError}</Alert>
+          ) : !analysisData || analysisData.runCount === 0 ? (
+            <Box sx={{ py: 6, textAlign: "center", border: "1px dashed", borderColor: "divider", borderRadius: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                아직 이 질문 세트로 완료된 RAG 평가 Run이 존재하지 않습니다. 우측 상단의 "재평가 실행"을 통해 평가를 수행해주세요.
+              </Typography>
+            </Box>
+          ) : (
+            <>
+              {/* 전략별 성능 테이블 */}
+              <Card variant="outlined">
+                <CardContent sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                    전략별 성능 비교 ({analysisData.runCount}회 실행, 질문 {analysisData.questionCount}개 기준)
+                  </Typography>
+                  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: "action.hover" }}>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700 }}>전략</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>평가 질문 수</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>성공 수</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>Hit Rate</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>MRR</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>평균 지연</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>실패 질문 수</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {analysisData.strategies.map((s) => {
+                          const isBest = s.strategy === bestStrategyName;
+                          return (
+                            <TableRow key={s.strategy} hover sx={{ bgcolor: isBest ? "rgba(25, 118, 210, 0.08)" : "inherit" }}>
+                              <TableCell sx={{ fontSize: 13, fontWeight: isBest ? 700 : 500, display: "flex", alignItems: "center", gap: 1 }}>
+                                {s.strategy}
+                                {isBest && (
+                                  <Chip label="최적 추천" size="small" color="primary" sx={{ height: 16, fontSize: 9, fontWeight: 700 }} />
+                                )}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: 13, textAlign: "center" }}>{s.questionCount}개</TableCell>
+                              <TableCell sx={{ fontSize: 13, textAlign: "center" }}>{s.hitCount}개</TableCell>
+                              <TableCell sx={{ fontSize: 13, textAlign: "center", fontWeight: isBest ? 700 : 400 }}>
+                                {(s.hitRate * 100).toFixed(1)}%
+                              </TableCell>
+                              <TableCell sx={{ fontSize: 13, textAlign: "center" }}>{s.mrr.toFixed(3)}</TableCell>
+                              <TableCell sx={{ fontSize: 13, textAlign: "center" }}>{s.averageElapsedMs.toFixed(1)} ms</TableCell>
+                              <TableCell
+                                sx={{
+                                  fontSize: 13,
+                                  textAlign: "center",
+                                  color: s.failedQuestionCount > 0 ? "error.main" : "inherit",
+                                  fontWeight: s.failedQuestionCount > 0 ? 600 : 400,
+                                }}
+                              >
+                                {s.failedQuestionCount}개
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </CardContent>
+              </Card>
+
+              {/* 질문별 상세 실패 분석 */}
+              <Card variant="outlined">
+                <CardContent sx={{ p: 2 }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      질문별 실패 분석 및 유형 진단
+                    </Typography>
+                    <Stack direction="row" spacing={1.5} alignItems="center">
+                      <Select
+                        size="small"
+                        value={analysisFilter}
+                        onChange={(e) => setAnalysisFilter(e.target.value)}
+                        sx={{ height: 32, fontSize: 12.5, minWidth: 160, bgcolor: "background.paper" }}
+                      >
+                        <MenuItem value="all">전체 질문 보기</MenuItem>
+                        <MenuItem value="all_failed">모든 전략 실패</MenuItem>
+                        <MenuItem value="ideablock_failed">IdeaBlock 실패</MenuItem>
+                        <MenuItem value="hybrid_failed">Hybrid 실패</MenuItem>
+                        <MenuItem value="structure_success_only">Structure만 성공</MenuItem>
+                      </Select>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<DownloadOutlined />}
+                        onClick={handleExportAnalysisCSV}
+                        sx={{ height: 32, fontSize: 12.5 }}
+                      >
+                        CSV 내보내기
+                      </Button>
+                    </Stack>
+                  </Stack>
+
+                  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1.5, maxHeight: 450 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: "action.hover" }}>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700 }}>질문</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>성공 전략</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>실패 전략</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>최고 전략</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>최고 순위</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {filteredAnalysisQuestions.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} align="center" sx={{ py: 3, fontSize: 13, color: "text.secondary" }}>
+                              검색 결과 조건에 부합하는 질문이 없습니다.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredAnalysisQuestions.map((q, idx) => {
+                            const allFailed = q.hitStrategies.length === 0;
+                            const isIdeaBlockBest = q.bestStrategy === "ideaBlock" || q.bestStrategy === "hybrid";
+                            const isImprovementCandidate = q.bestStrategy === "structure" && q.missedStrategies.includes("ideaBlock");
+                            return (
+                              <TableRow key={idx} hover sx={{ bgcolor: allFailed ? "rgba(211, 47, 47, 0.04)" : "inherit" }}>
+                                <TableCell sx={{ fontSize: 13, fontWeight: 500, maxWidth: 350 }}>
+                                  {q.query}
+                                  {allFailed && (
+                                    <Chip label="모든 전략 실패" size="small" color="error" sx={{ height: 16, fontSize: 9, ml: 1, fontWeight: 700 }} />
+                                  )}
+                                  {isIdeaBlockBest && (
+                                    <Chip label="IdeaBlock 효과" size="small" color="success" sx={{ height: 16, fontSize: 9, ml: 1, fontWeight: 700 }} />
+                                  )}
+                                  {isImprovementCandidate && (
+                                    <Chip label="IdeaBlock 개선 후보" size="small" color="warning" sx={{ height: 16, fontSize: 9, ml: 1, fontWeight: 700 }} />
+                                  )}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 13, textAlign: "center" }}>
+                                  {q.hitStrategies.length > 0 ? (
+                                    q.hitStrategies.map((s) => (
+                                      <Chip key={s} label={s} size="small" color="primary" variant="outlined" sx={{ height: 18, fontSize: 10, mr: 0.3 }} />
+                                    ))
+                                  ) : (
+                                    <Typography variant="caption" color="error.main" fontWeight={600}>-</Typography>
+                                  )}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 13, textAlign: "center" }}>
+                                  {q.missedStrategies.length > 0 ? (
+                                    q.missedStrategies.map((s) => (
+                                      <Chip key={s} label={s} size="small" color="error" variant="outlined" sx={{ height: 18, fontSize: 10, mr: 0.3 }} />
+                                    ))
+                                  ) : (
+                                    <Chip label="없음" size="small" color="success" sx={{ height: 18, fontSize: 10 }} />
+                                  )}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 13, textAlign: "center", fontWeight: 600 }}>{q.bestStrategy || "-"}</TableCell>
+                                <TableCell sx={{ fontSize: 13, textAlign: "center", fontWeight: 600 }}>
+                                  {q.bestRank != null ? `${q.bestRank}위` : "-"}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </Stack>
+      )}
     </Stack>
   );
 }

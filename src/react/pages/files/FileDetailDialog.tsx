@@ -66,6 +66,7 @@ import {
   type RetrievalPolicyUsageDto,
   type RetrievalPolicySummaryDto,
 } from "@/react/pages/files/api";
+import { RagEvaluationAnalysisDialog } from "./RagEvaluationAnalysisDialog";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { resolveAxiosError } from "@/utils/helpers";
 import type { AttachmentDto } from "@/types/studio/files";
@@ -125,6 +126,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [policyUsages, setPolicyUsages] = useState<RetrievalPolicyUsageDto[]>([]);
   const [policyLoading, setPolicyLoading] = useState(false);
   const [policySaving, setPolicySaving] = useState(false);
+  const [isAnalysisDialogOpen, setIsAnalysisDialogOpen] = useState(false);
 
   // Policy Form Fields (For manual editing)
   const [policyStrategy, setPolicyStrategy] = useState<string>("hybrid");
@@ -2947,15 +2949,25 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
                     <Stack direction="row" spacing={1.5} sx={{ mt: 2 }} justifyContent="flex-end">
                       {retrievalPolicy?.questionSetId && (
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="secondary"
-                          onClick={() => void handleApplyRecommendation(retrievalPolicy.questionSetId!)}
-                          disabled={policySaving || policyLoading}
-                        >
-                          평가 최적 추천 전략 적용
-                        </Button>
+                        <>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                            onClick={() => setIsAnalysisDialogOpen(true)}
+                          >
+                            평가 분석 보기
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="secondary"
+                            onClick={() => void handleApplyRecommendation(retrievalPolicy.questionSetId!)}
+                            disabled={policySaving || policyLoading}
+                          >
+                            평가 최적 추천 전략 적용
+                          </Button>
+                        </>
                       )}
                       <Button
                         size="small"
@@ -3244,6 +3256,13 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
               onClose={() => setPdfReaderOpen(false)}
               url={`/api/mgmt/files/${file.attachmentId}/download`}
               filename={file.name}
+            />
+          )}
+          {retrievalPolicy?.questionSetId && (
+            <RagEvaluationAnalysisDialog
+              open={isAnalysisDialogOpen}
+              questionSetId={retrievalPolicy.questionSetId}
+              onClose={() => setIsAnalysisDialogOpen(false)}
             />
           )}
         </>
