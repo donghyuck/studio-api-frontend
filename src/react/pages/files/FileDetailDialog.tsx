@@ -2231,31 +2231,31 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           sourceBlockTargetCount: undefined,
                         } : null;
 
-                        if (!stats) return null;
-
-                        const blockifyApplied = stats.totalChunks > 0 && (stats.ideaBlockCount > 0 || stats.fallbackCount > 0);
-                        const blockifyEffective = stats.ideaBlockCount > 0;
+                        const blockifyApplied = stats ? (stats.totalChunks > 0 && (stats.ideaBlockCount > 0 || stats.fallbackCount > 0)) : false;
+                        const blockifyEffective = stats ? (stats.ideaBlockCount > 0) : false;
 
                         let blockifyStatusText = "청킹 결과 대기 중";
                         let blockifyStatusColor = "text.secondary";
-                        if (stats.totalChunks === 0) {
-                          blockifyStatusText = "청킹 결과 없음";
-                          blockifyStatusColor = "text.secondary";
-                        } else if (blockifyEffective) {
-                          blockifyStatusText = "IdeaBlock 생성됨";
-                          blockifyStatusColor = "success.main";
-                        } else if (blockifyApplied) {
-                          blockifyStatusText = "전체 Fallback 처리됨";
-                          blockifyStatusColor = "warning.main";
+                        if (stats) {
+                          if (stats.totalChunks === 0) {
+                            blockifyStatusText = "청킹 결과 없음";
+                            blockifyStatusColor = "text.secondary";
+                          } else if (blockifyEffective) {
+                            blockifyStatusText = "IdeaBlock 생성됨";
+                            blockifyStatusColor = "success.main";
+                          } else if (blockifyApplied) {
+                            blockifyStatusText = "전체 Fallback 처리됨";
+                            blockifyStatusColor = "warning.main";
+                          }
                         }
 
                         // Coverage 경고 메시지 결정
                         let coverageSeverity: "success" | "warning" | "error" | null = null;
                         let coverageMessage = "";
-                        const coverageVal = stats.sourceBlockCoverage;
-                        const targetCount = stats.sourceBlockTargetCount ?? 0;
+                        const coverageVal = stats?.sourceBlockCoverage;
+                        const targetCount = stats?.sourceBlockTargetCount ?? 0;
 
-                        if (coverageVal !== undefined && targetCount > 0) {
+                        if (stats && coverageVal !== undefined && targetCount > 0) {
                           if (coverageVal >= 0.95) {
                             coverageSeverity = "success";
                             coverageMessage = "Source block coverage 양호";

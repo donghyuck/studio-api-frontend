@@ -47,6 +47,9 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
+import { useQuery } from "@tanstack/react-query";
+import { IdeaBlockSummaryPanel } from "@/react/pages/files/IdeaBlockSummaryPanel";
+import { reactMarkdownDocumentApi } from "@/react/pages/files/api";
 import type {
   RagIndexChunkDto,
   RagIndexJobDto,
@@ -1053,6 +1056,19 @@ export function RagJobDetailPage() {
   const [chunks, setChunks] = useState<RagIndexChunkDto[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
   const [loading, setLoading] = useState(false);
+  const ideablocksRef = useRef<HTMLDivElement | null>(null);
+
+  const { data: revisionsList } = useQuery({
+    queryKey: ["markdown-revisions", job?.documentId],
+    queryFn: () => reactMarkdownDocumentApi.getRevisions(job!.documentId!),
+    enabled: !!job?.documentId,
+    retry: false,
+  });
+
+  const latestRevision = useMemo(() => {
+    if (!revisionsList || revisionsList.length === 0) return null;
+    return revisionsList[0];
+  }, [revisionsList]);
 
   const gridRef = useRef<PageableGridContentHandle<RagIndexChunkDto>>(null);
   const dataSource = useMemo(() => {
@@ -1140,11 +1156,12 @@ export function RagJobDetailPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectChunkByOffset, selectedChunk]);
 
-  function scrollToSection(section: "summary" | "chunks" | "logs") {
+  function scrollToSection(section: "summary" | "chunks" | "logs" | "ideablocks") {
     const refs = {
       summary: summaryRef,
       chunks: chunksRef,
       logs: logsRef,
+      ideablocks: ideablocksRef,
     };
 
     window.setTimeout(() => {
@@ -1735,6 +1752,21 @@ export function RagJobDetailPage() {
                   <StatItem label="실제 저장 완료 chunk 수" value={job.indexedCount.toLocaleString()} />
                 </Box>
                 <TokenizerStatusPanel job={job} chunks={chunks} />
+                {job.documentId && latestRevision && (
+                  <Box ref={ideablocksRef} sx={{ mt: 3, scrollMarginTop: 56 }}>
+                    <IdeaBlockSummaryPanel
+                      documentId={job.documentId}
+                      revisionId={latestRevision.revisionId}
+                      revisionStatus={latestRevision.status}
+                      attachmentId={Number(job.objectId)}
+                      chunkingStrategy={job.chunkingStrategy || "recursive"}
+                      llmProvider={job.embeddingProvider || "google-ai-gemini"}
+                      llmModel={job.embeddingModel || "gemini-2.5-flash"}
+                      embeddingProfileId={job.embeddingProfileId}
+                      useLlmKeywordExtraction={true}
+                    />
+                  </Box>
+                )}
                 <Box sx={{ mt: 3, overflowX: "auto", pb: 0.5 }}>
                   <Stepper activeStep={activeStepIndex(job)} alternativeLabel sx={{ minWidth: 620 }}>
                     {INDEX_STEPS.map((step, index) => (
@@ -1868,6 +1900,7 @@ export function RagJobDetailPage() {
               {[
                 ["summary", "상태 요약"],
                 ["chunks", "색인 결과"],
+                ["ideablocks", "IdeaBlock 품질"],
                 ["logs", "실패·경고 로그"],
               ].map(([key, label]) => (
                 <Button
@@ -1881,7 +1914,7 @@ export function RagJobDetailPage() {
                     borderLeft: "2px solid transparent",
                     pl: 1,
                   }}
-                  onClick={() => scrollToSection(key as "summary" | "chunks" | "logs")}
+                  onClick={() => scrollToSection(key as "summary" | "chunks" | "logs" | "ideablocks")}
                 >
                   {label}
                 </Button>
