@@ -1746,10 +1746,10 @@ export function FileDetailPage() {
   function renderDetail(label: string, value?: string | number | null) {
     return (
       <Box>
-        <Typography variant="caption" color="text.secondary" display="block">
+        <Typography variant="body2" color="text.secondary" display="block" sx={{ fontWeight: 500, fontSize: 13 }}>
           {label}
         </Typography>
-        <Typography variant="body2" sx={{ mt: 0.25, overflowWrap: "anywhere", fontWeight: 500 }}>
+        <Typography variant="body1" sx={{ mt: 0.5, overflowWrap: "anywhere", fontWeight: 600, fontSize: 15.5 }}>
           {value || "-"}
         </Typography>
       </Box>
@@ -1893,7 +1893,7 @@ export function FileDetailPage() {
             </Paper>
 
               {/* Card 3: Markdown 지식 파이프라인 Panel */}
-              <Paper id="section-pipeline" variant="outlined" sx={{ p: 2.5, mb: 2 }}>
+              <Paper id="section-pipelineSummary" variant="outlined" sx={{ p: 2.5, mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
                   Markdown 지식 파이프라인
                 </Typography>
@@ -2042,12 +2042,12 @@ export function FileDetailPage() {
                       )}
                     </Box>
                   )}
-                  
                   {/* Pipeline Step Checklist */}
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, fontWeight: 600 }}>
-                    파이프라인 단계 선택
-                  </Typography>
-                  <Grid container spacing={1} sx={{ mb: 2, bgcolor: "action.hover", p: 1.5, borderRadius: 1.5 }}>
+                  <Box id="section-pipelineConfig" sx={{ mt: 1 }}>
+                    <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 1, fontWeight: 700, fontSize: 13.5 }}>
+                      파이프라인 단계 선택
+                    </Typography>
+                    <Grid container spacing={1} sx={{ mb: 2, bgcolor: "action.hover", p: 1.5, borderRadius: 1.5 }}>
                     <Grid size={{ xs: 6, sm: 4 }}>
                       <FormControlLabel
                         control={<Checkbox size="small" checked disabled />}
@@ -2515,7 +2515,7 @@ export function FileDetailPage() {
 
                     return (
                       <Box sx={{ mt: 1.5, mb: 1.5, bgcolor: "error.light", color: "error.contrastText", p: 1.5, borderRadius: 1.5 }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: "bold", mb: 1, fontSize: 14 }}>
                           지식 파이프라인 실행 실패
                         </Typography>
                         <Stack spacing={0.5} sx={{ fontSize: 12, mb: 1.5 }}>
@@ -2557,42 +2557,43 @@ export function FileDetailPage() {
                       </Box>
                     );
                   })()}
+                  </Box>
 
                   {/* Metadata Table */}
                   {documentId && (
                     <Stack spacing={2} sx={{ mt: 2 }}>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                      <Box id="section-metadata">
+                        <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 0.8, fontWeight: 700, fontSize: 13.5 }}>
                           상세 메타데이터
                         </Typography>
                         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
                           <Table size="small">
                             <TableBody>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "32%", fontSize: 11 }}>1. Markdown Document ID</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{documentId}</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "32%", fontSize: 12.5 }}>1. Markdown Document ID</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>{documentId}</TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>2. Revision ID</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{latestRevision?.revisionId || "-"}</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>2. Revision ID</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>{latestRevision?.revisionId || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>3. 추출 상태 (Revision status)</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{latestRevision?.status || "-"}</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>3. 추출 상태 (Revision status)</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>{latestRevision?.status || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>4. Pipeline 상태 / 현재 단계</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>4. Pipeline 상태 / 현재 단계</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>
                                   {pipelineExecution ? `${pipelineExecution.status} / ${pipelineExecution.currentStage}` : "-"}
                                 </TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>5. 마지막 성공 단계</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{pipelineExecution?.lastCompletedStage || "-"}</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>5. 마지막 성공 단계</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>{pipelineExecution?.lastCompletedStage || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>적용된 파이프라인 옵션</TableCell>
-                                <TableCell sx={{ fontSize: 11, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>적용된 파이프라인 옵션</TableCell>
+                                <TableCell sx={{ fontSize: 12.5, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
                                   {latestRevision?.optionsJson ? (
                                     (() => {
                                       try {
@@ -2614,25 +2615,25 @@ export function FileDetailPage() {
                       </Box>
 
                       {/* Revision 이력 Table */}
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                      <Box id="section-revisionHistory">
+                        <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 0.8, fontWeight: 700, fontSize: 13.5 }}>
                           Revision 이력
                         </Typography>
                         <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200, borderRadius: 1 }}>
                           <Table size="small" stickyHeader>
                             <TableHead>
                               <TableRow>
-                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>버전 (Rev ID)</TableCell>
-                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>상태</TableCell>
-                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>생성 시간</TableCell>
-                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>오류 내용</TableCell>
+                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>버전 (Rev ID)</TableCell>
+                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>상태</TableCell>
+                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>생성 시간</TableCell>
+                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>오류 내용</TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
                               {revisions.map((rev) => (
                                 <TableRow key={rev.revisionId} hover>
-                                  <TableCell sx={{ fontSize: 10 }}>{rev.revisionId.substring(0, 8)}</TableCell>
-                                  <TableCell sx={{ fontSize: 10 }}>
+                                  <TableCell sx={{ fontSize: 12 }}>{rev.revisionId.substring(0, 8)}</TableCell>
+                                  <TableCell sx={{ fontSize: 12 }}>
                                     <Chip
                                       label={rev.status}
                                       size="small"
@@ -2641,11 +2642,11 @@ export function FileDetailPage() {
                                         rev.status === "FAILED" ? "error" :
                                         rev.status === "CANCELED" ? "default" : "primary"
                                       }
-                                      sx={{ height: 16, fontSize: 8.5 }}
+                                      sx={{ height: 18, fontSize: 10 }}
                                     />
                                   </TableCell>
-                                  <TableCell sx={{ fontSize: 10 }}>{formatDate(rev.createdAt)}</TableCell>
-                                  <TableCell sx={{ fontSize: 10, color: "error.main" }}>{rev.errorMessage || "-"}</TableCell>
+                                  <TableCell sx={{ fontSize: 12 }}>{formatDate(rev.createdAt)}</TableCell>
+                                  <TableCell sx={{ fontSize: 12, color: "error.main" }}>{rev.errorMessage || "-"}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -2654,25 +2655,25 @@ export function FileDetailPage() {
                       </Box>
 
                       {/* RAG Job 이력 Table */}
-                      <Box>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                      <Box id="section-ragJobHistory">
+                        <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 0.8, fontWeight: 700, fontSize: 13.5 }}>
                           RAG Job 이력
                         </Typography>
                         <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200, borderRadius: 1 }}>
                           <Table size="small" stickyHeader>
                             <TableHead>
                               <TableRow>
-                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>임베딩 모델</TableCell>
-                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>상태</TableCell>
-                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>청크 (색인/총)</TableCell>
-                                <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>실패 사유</TableCell>
+                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>임베딩 모델</TableCell>
+                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>상태</TableCell>
+                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>청크 (색인/총)</TableCell>
+                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>실패 사유</TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
                               {ragJobs.map((job) => (
                                 <TableRow key={job.jobId} hover>
-                                  <TableCell sx={{ fontSize: 10 }}>{job.embeddingModel || "-"}</TableCell>
-                                  <TableCell sx={{ fontSize: 10 }}>
+                                  <TableCell sx={{ fontSize: 12 }}>{job.embeddingModel || "-"}</TableCell>
+                                  <TableCell sx={{ fontSize: 12 }}>
                                     <Chip
                                       label={job.status}
                                       size="small"
@@ -2681,11 +2682,11 @@ export function FileDetailPage() {
                                         job.status === "FAILED" ? "error" :
                                         job.status === "CANCELLED" ? "default" : "primary"
                                       }
-                                      sx={{ height: 16, fontSize: 8.5 }}
+                                      sx={{ height: 18, fontSize: 10 }}
                                     />
                                   </TableCell>
-                                  <TableCell sx={{ fontSize: 10 }}>{job.indexedCount} / {job.chunkCount}</TableCell>
-                                  <TableCell sx={{ fontSize: 10, color: "error.main" }}>{job.errorMessage || "-"}</TableCell>
+                                  <TableCell sx={{ fontSize: 12 }}>{job.indexedCount} / {job.chunkCount}</TableCell>
+                                  <TableCell sx={{ fontSize: 12, color: "error.main" }}>{job.errorMessage || "-"}</TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -2713,20 +2714,23 @@ export function FileDetailPage() {
             py: 1,
           }}
         >
-          <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 0.2 }}>
+          <Typography variant="subtitle2" color="text.primary" fontWeight={700} sx={{ mb: 2, letterSpacing: 0.5 }}>
             Contents
           </Typography>
-          <Stack spacing={0.5} sx={{ mt: 1 }}>
+          <Stack spacing={0.75} sx={{ mt: 1 }}>
             <Button
               size="small"
               variant="text"
               sx={{
                 justifyContent: "flex-start",
                 color: activeSection === "info" ? "primary.main" : "text.secondary",
-                fontWeight: activeSection === "info" ? 700 : 400,
-                borderLeft: activeSection === "info" ? "2px solid" : "2px solid transparent",
+                fontWeight: activeSection === "info" ? 700 : 500,
+                borderLeft: activeSection === "info" ? "2.5px solid" : "2.5px solid transparent",
                 borderColor: activeSection === "info" ? "primary.main" : "transparent",
-                pl: 1,
+                pl: 1.5,
+                py: 0.6,
+                fontSize: 13.5,
+                textTransform: "none",
               }}
               onClick={() => handleScrollToSection("info")}
             >
@@ -2738,10 +2742,13 @@ export function FileDetailPage() {
               sx={{
                 justifyContent: "flex-start",
                 color: activeSection === "textExtract" ? "primary.main" : "text.secondary",
-                fontWeight: activeSection === "textExtract" ? 700 : 400,
-                borderLeft: activeSection === "textExtract" ? "2px solid" : "2px solid transparent",
+                fontWeight: activeSection === "textExtract" ? 700 : 500,
+                borderLeft: activeSection === "textExtract" ? "2.5px solid" : "2.5px solid transparent",
                 borderColor: activeSection === "textExtract" ? "primary.main" : "transparent",
-                pl: 1,
+                pl: 1.5,
+                py: 0.6,
+                fontSize: 13.5,
+                textTransform: "none",
               }}
               onClick={() => handleScrollToSection("textExtract")}
             >
@@ -2752,15 +2759,90 @@ export function FileDetailPage() {
               variant="text"
               sx={{
                 justifyContent: "flex-start",
-                color: activeSection === "pipeline" ? "primary.main" : "text.secondary",
-                fontWeight: activeSection === "pipeline" ? 700 : 400,
-                borderLeft: activeSection === "pipeline" ? "2px solid" : "2px solid transparent",
-                borderColor: activeSection === "pipeline" ? "primary.main" : "transparent",
-                pl: 1,
+                color: activeSection === "pipelineSummary" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "pipelineSummary" ? 700 : 500,
+                borderLeft: activeSection === "pipelineSummary" ? "2.5px solid" : "2.5px solid transparent",
+                borderColor: activeSection === "pipelineSummary" ? "primary.main" : "transparent",
+                pl: 1.5,
+                py: 0.6,
+                fontSize: 13.5,
+                textTransform: "none",
               }}
-              onClick={() => handleScrollToSection("pipeline")}
+              onClick={() => handleScrollToSection("pipelineSummary")}
             >
-              지식 파이프라인
+              파이프라인 요약
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "pipelineConfig" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "pipelineConfig" ? 700 : 500,
+                borderLeft: activeSection === "pipelineConfig" ? "2.5px solid" : "2.5px solid transparent",
+                borderColor: activeSection === "pipelineConfig" ? "primary.main" : "transparent",
+                pl: 1.5,
+                py: 0.6,
+                fontSize: 13.5,
+                textTransform: "none",
+              }}
+              onClick={() => handleScrollToSection("pipelineConfig")}
+            >
+              실행 및 설정
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "metadata" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "metadata" ? 700 : 500,
+                borderLeft: activeSection === "metadata" ? "2.5px solid" : "2.5px solid transparent",
+                borderColor: activeSection === "metadata" ? "primary.main" : "transparent",
+                pl: 1.5,
+                py: 0.6,
+                fontSize: 13.5,
+                textTransform: "none",
+              }}
+              onClick={() => handleScrollToSection("metadata")}
+            >
+              상세 메타데이터
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "revisionHistory" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "revisionHistory" ? 700 : 500,
+                borderLeft: activeSection === "revisionHistory" ? "2.5px solid" : "2.5px solid transparent",
+                borderColor: activeSection === "revisionHistory" ? "primary.main" : "transparent",
+                pl: 1.5,
+                py: 0.6,
+                fontSize: 13.5,
+                textTransform: "none",
+              }}
+              onClick={() => handleScrollToSection("revisionHistory")}
+            >
+              Revision 이력
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "ragJobHistory" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "ragJobHistory" ? 700 : 500,
+                borderLeft: activeSection === "ragJobHistory" ? "2.5px solid" : "2.5px solid transparent",
+                borderColor: activeSection === "ragJobHistory" ? "primary.main" : "transparent",
+                pl: 1.5,
+                py: 0.6,
+                fontSize: 13.5,
+                textTransform: "none",
+              }}
+              onClick={() => handleScrollToSection("ragJobHistory")}
+            >
+              RAG Job 이력
             </Button>
           </Stack>
         </Box>
