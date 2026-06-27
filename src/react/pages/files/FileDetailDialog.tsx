@@ -2274,6 +2274,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             documentId={latestRevision.documentId}
                             revisionId={latestRevision.revisionId} 
                             revisionStatus={latestRevision?.status}
+                            attachmentId={attachmentId}
                             chunkingStrategy={latestRagJob?.chunkingStrategy || (ragMetadata as any)?.chunkingStrategy || chunkingStrategy}
                             llmProvider={blockifyLlmProvider}
                             llmModel={blockifyLlmModel}

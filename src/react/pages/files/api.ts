@@ -441,6 +441,32 @@ export const reactMarkdownDocumentApi = {
       data: request,
     });
   },
+  async mergeUndo(documentId: string, revisionId: string, request: IdeaBlockMergeUndoRequest): Promise<IdeaBlockMergeUndoResponse> {
+    return apiRequest<IdeaBlockMergeUndoResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/ideablocks/merge-undo`, {
+      data: request,
+    });
+  },
+  async mergeApplyBatch(documentId: string, revisionId: string, request: IdeaBlockMergeApplyBatchRequest): Promise<IdeaBlockMergeApplyBatchResponse> {
+    return apiRequest<IdeaBlockMergeApplyBatchResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/ideablocks/merge-apply-batch`, {
+      data: request,
+    });
+  },
+  async createEvaluation(request: RagEvaluationRequest): Promise<RagEvaluationRunResponse> {
+    return apiRequest<RagEvaluationRunResponse>("post", "/api/ai/chat/rag/evaluations", {
+      data: request,
+    });
+  },
+  async getEvaluations(): Promise<RagEvaluationRunResponse[]> {
+    return apiRequest<RagEvaluationRunResponse[]>("get", "/api/ai/chat/rag/evaluations");
+  },
+  async getEvaluationDetail(runId: string): Promise<RagEvaluationDetailResponse> {
+    return apiRequest<RagEvaluationDetailResponse>("get", `/api/ai/chat/rag/evaluations/${encodeURIComponent(runId)}`);
+  },
+  async compareEvaluations(request: RagEvaluationCompareRequest): Promise<RagEvaluationCompareResponse> {
+    return apiRequest<RagEvaluationCompareResponse>("post", "/api/ai/chat/rag/evaluations/compare", {
+      data: request,
+    });
+  },
 };
 
 export interface MarkdownPipelineEstimateRequest {
@@ -557,4 +583,110 @@ export type IdeaBlockMergeApplyResponse = {
     resumedPhase: string;
     resumedFrom: string;
   } | null;
+};
+
+export type IdeaBlockMergeUndoRequest = {
+  mergedChunkId: string;
+  planFingerprint: string;
+  runRagIndex?: boolean;
+  embeddingProfileId?: string;
+};
+
+export type IdeaBlockMergeUndoResponse = {
+  documentId: string;
+  revisionId: string;
+  mergedChunkId: string;
+  planFingerprint: string;
+  restoredChunkIds: string[];
+  beforeChunkCount: number;
+  afterChunkCount: number;
+  pipelineResult?: {
+    resumedPhase: string;
+    resumedFrom: string;
+  } | null;
+};
+
+export type IdeaBlockMergeApplyBatchRequest = {
+  items: {
+    clusterId: string;
+    preferEmbeddingClusters: boolean;
+    llmProvider: string;
+    llmModel: string;
+    maxClusters: number;
+    planFingerprint: string;
+  }[];
+  runRagIndex?: boolean;
+  embeddingProfileId?: string;
+};
+
+export type IdeaBlockMergeApplyBatchResponse = {
+  applied: {
+    planId: string;
+    mergedChunkId: string;
+    mergedFromChunkIds: string[];
+  }[];
+  failed: {
+    planFingerprint: string;
+    errorMessage: string;
+  }[];
+  pipelineResult?: {
+    resumedPhase: string;
+    resumedFrom: string;
+  } | null;
+};
+
+export type RagEvaluationRequest = {
+  strategies: string[];
+  objectType: 'attachment' | string;
+  objectId: string;
+  embeddingProfileId?: string;
+  topK?: number;
+  minScore?: number;
+  retrievalOptions?: {
+    structureTopK?: number;
+    ideaBlockTopK?: number;
+    finalTopK?: number;
+    dedupe?: boolean;
+    distilledScoreBoost?: number;
+  };
+  questions: {
+    query: string;
+    expectedContentContains?: string[];
+  }[];
+};
+
+export type RagEvaluationRunResponse = {
+  runId: string;
+  createdAt: string;
+  objectType: string;
+  objectId: string;
+  embeddingProfileId: string;
+  topK: number;
+  minScore: number;
+  strategies: string[];
+};
+
+export type RagEvaluationCompareRequest = {
+  beforeRunId: string;
+  afterRunId: string;
+};
+
+export type RagEvaluationCompareResponse = {
+  hitRateDelta: Record<string, number>;
+  mrrDelta: Record<string, number>;
+  averageElapsedMsDelta: Record<string, number>;
+};
+
+export type RagEvaluationDetailResponse = RagEvaluationRunResponse & {
+  strategyResults?: Record<string, {
+    hitRate: number;
+    mrr: number;
+    averageElapsedMs: number;
+  }>;
+  questionResults?: {
+    query: string;
+    strategyHits: Record<string, boolean>;
+    strategyRanks: Record<string, number>;
+    strategyChunks: Record<string, { chunkId: string; text?: string; score?: number; ideaBlockDistilled?: boolean }[]>;
+  }[];
 };

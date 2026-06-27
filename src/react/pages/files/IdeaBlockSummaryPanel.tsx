@@ -20,9 +20,13 @@ import {
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions
+  DialogActions,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import { ExpandMoreOutlined, InfoOutlined, CheckCircleOutlined, ErrorOutline } from "@mui/icons-material";
+import { useToast } from "@/react/feedback";
+import { RagEvaluationDashboard } from "./RagEvaluationDashboard";
 import { useQuery } from "@tanstack/react-query";
 import { reactMarkdownDocumentApi } from "./api";
 import type { IdeaBlockSummaryDto, MergeCandidateCluster, SampleIdeaBlock, MergePreviewCluster } from "./api";
@@ -31,6 +35,7 @@ interface Props {
   documentId: string;
   revisionId: string;
   revisionStatus?: string;
+  attachmentId?: number;
   chunkingStrategy?: string;
   llmProvider?: string;
   llmModel?: string;
@@ -44,6 +49,7 @@ export function IdeaBlockSummaryPanel({
   documentId,
   revisionId,
   revisionStatus,
+  attachmentId,
   chunkingStrategy,
   llmProvider,
   llmModel,
@@ -164,12 +170,22 @@ export function IdeaBlockSummaryPanel({
           <Tab label="Fallbacks" />
           {showMergeUI && <Tab label="Lexical Merge Candidates" />}
           {showMergeUI && <Tab label="Embedding Merge Candidates" />}
+          <Tab label="Evaluation Dashboard" />
         </Tabs>
       </Box>
 
       {/* Tab Panels */}
       <Box sx={{ pt: 1.5, maxHeight: 350, overflowY: "auto" }}>
-        {tabIndex === 0 && <SamplesTab samples={summary.samples || []} />}
+        {tabIndex === 0 && (
+          <SamplesTab
+            samples={summary.samples || []}
+            documentId={documentId}
+            revisionId={revisionId}
+            embeddingProfileId={embeddingProfileId || "retrieval-ko-kure"}
+            onMergeApplied={onMergeApplied}
+            refetchSummary={refetch}
+          />
+        )}
         {tabIndex === 1 && <FallbacksTab summary={summary} />}
         {showMergeUI && tabIndex === 2 && (
           <ClusterListTab
@@ -177,10 +193,10 @@ export function IdeaBlockSummaryPanel({
             type="lexical"
             documentId={documentId}
             revisionId={revisionId}
-            llmProvider={llmProvider}
-            llmModel={llmModel}
-            embeddingProfileId={embeddingProfileId}
-            useLlmKeywordExtraction={useLlmKeywordExtraction}
+            llmProvider={llmProvider || "google-ai-gemini"}
+            llmModel={llmModel || "gemini-2.5-flash"}
+            embeddingProfileId={embeddingProfileId || "retrieval-ko-kure"}
+            useLlmKeywordExtraction={!!useLlmKeywordExtraction}
             disabled={!!disabled}
             onMergeApplied={onMergeApplied}
             refetchSummary={refetch}
@@ -193,13 +209,20 @@ export function IdeaBlockSummaryPanel({
             noEmbedding={noEmbedding}
             documentId={documentId}
             revisionId={revisionId}
-            llmProvider={llmProvider}
-            llmModel={llmModel}
-            embeddingProfileId={embeddingProfileId}
-            useLlmKeywordExtraction={useLlmKeywordExtraction}
+            llmProvider={llmProvider || "google-ai-gemini"}
+            llmModel={llmModel || "gemini-2.5-flash"}
+            embeddingProfileId={embeddingProfileId || "retrieval-ko-kure"}
+            useLlmKeywordExtraction={!!useLlmKeywordExtraction}
             disabled={!!disabled}
             onMergeApplied={onMergeApplied}
             refetchSummary={refetch}
+          />
+        )}
+        {tabIndex === 4 && (
+          <RagEvaluationDashboard
+            documentId={documentId}
+            attachmentId={attachmentId || 1}
+            embeddingProfileId={embeddingProfileId}
           />
         )}
       </Box>
@@ -207,7 +230,21 @@ export function IdeaBlockSummaryPanel({
   );
 }
 
-function SamplesTab({ samples }: { samples: SampleIdeaBlock[] }) {
+function SamplesTab({
+  samples,
+  documentId,
+  revisionId,
+  embeddingProfileId,
+  onMergeApplied,
+  refetchSummary,
+}: {
+  samples: SampleIdeaBlock[];
+  documentId: string;
+  revisionId: string;
+  embeddingProfileId: string;
+  onMergeApplied?: (runRagIndex: boolean) => void;
+  refetchSummary: () => void;
+}) {
   if (samples.length === 0) {
     return <Typography variant="caption" color="text.secondary">샘플이 없습니다.</Typography>;
   }
@@ -215,37 +252,169 @@ function SamplesTab({ samples }: { samples: SampleIdeaBlock[] }) {
   return (
     <Stack spacing={1}>
       {samples.map((sample, idx) => (
-        <Paper key={idx} variant="outlined" sx={{ p: 1, bgcolor: "background.paper", borderRadius: 1 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 0.5 }}>
-            <Typography variant="caption" sx={{ fontWeight: 600, color: "primary.main", wordBreak: "break-all" }}>
-              {sample.chunkId}
-            </Typography>
-            <Stack direction="row" spacing={0.5}>
-              {sample.mergeCandidate && (
-                <Tooltip title={`Cluster ID: ${sample.similarityClusterId || '-'}, Max Score: ${sample.similarityMaxScore?.toFixed(3) || '-'}`}>
-                  <Chip label="Lexical Candidate" size="small" color="info" variant="outlined" sx={{ height: 16, fontSize: 9, "& .MuiChip-label": { px: 0.5 } }} />
-                </Tooltip>
-              )}
-              {sample.embeddingMergeCandidate && (
-                <Tooltip title={`Cluster ID: ${sample.embeddingSimilarityClusterId || '-'}, Max Score: ${sample.embeddingSimilarityMaxScore?.toFixed(3) || '-'}`}>
-                  <Chip label="Embedding Candidate" size="small" color="secondary" variant="outlined" sx={{ height: 16, fontSize: 9, "& .MuiChip-label": { px: 0.5 } }} />
-                </Tooltip>
-              )}
-            </Stack>
-          </Stack>
-          {sample.criticalQuestion && (
-            <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, mb: 0.5 }}>
-              Q: {sample.criticalQuestion}
-            </Typography>
-          )}
-          {sample.trustedAnswer && (
-            <Typography variant="body2" sx={{ fontSize: 11, color: "text.secondary", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-              A: {sample.trustedAnswer}
-            </Typography>
-          )}
-        </Paper>
+        <SampleItem
+          key={idx}
+          sample={sample}
+          documentId={documentId}
+          revisionId={revisionId}
+          embeddingProfileId={embeddingProfileId}
+          onMergeApplied={onMergeApplied}
+          refetchSummary={refetchSummary}
+        />
       ))}
     </Stack>
+  );
+}
+
+function SampleItem({
+  sample,
+  documentId,
+  revisionId,
+  embeddingProfileId,
+  onMergeApplied,
+  refetchSummary,
+}: {
+  sample: SampleIdeaBlock;
+  documentId: string;
+  revisionId: string;
+  embeddingProfileId: string;
+  onMergeApplied?: (runRagIndex: boolean) => void;
+  refetchSummary: () => void;
+}) {
+  const [isUndoLoading, setIsUndoLoading] = useState(false);
+  const [undoInfo, setUndoInfo] = useState<any>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
+
+  const [progress, setProgress] = useState<any>(null);
+  const [isPolling, setIsPolling] = useState(false);
+
+  const toast = useToast();
+
+  useEffect(() => {
+    if (!isPolling || !documentId) return;
+    let active = true;
+    const fetchProgress = async () => {
+      try {
+        const res = await reactMarkdownDocumentApi.getProgress(documentId);
+        if (!active) return;
+        setProgress(res);
+        const isCompleted = res.status === "COMPLETED";
+        const isFailed = res.status === "FAILED";
+        const ragStatus = res.rag?.status;
+        const isRagFinished = ragStatus === "SUCCEEDED" || ragStatus === "FAILED" || ragStatus === "WARNING";
+
+        if (isCompleted || isFailed || isRagFinished) {
+          setIsPolling(false);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    void fetchProgress();
+    const timer = setInterval(fetchProgress, 3000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [isPolling, documentId]);
+
+  const handleUndo = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const ok = window.confirm("이 병합된 청크를 되돌리시겠습니까? 원본 청크들이 복원됩니다.");
+    if (!ok) return;
+
+    setIsUndoLoading(true);
+    setUndoError(null);
+    try {
+      const res = await reactMarkdownDocumentApi.mergeUndo(documentId, revisionId, {
+        mergedChunkId: sample.chunkId,
+        planFingerprint: sample.fingerprint || "dummy-fingerprint",
+        runRagIndex: true,
+        embeddingProfileId,
+      });
+
+      setUndoInfo(res);
+      if (res.pipelineResult) {
+        setIsPolling(true);
+      }
+      toast.success("병합 되돌리기 성공! RAG 재색인이 시작되었습니다.");
+      refetchSummary();
+      if (onMergeApplied) {
+        onMergeApplied(true);
+      }
+    } catch (err: any) {
+      console.error(err);
+      const errMsg = err?.response?.data?.message || err?.message || "병합 되돌리기 실패";
+      setUndoError(errMsg);
+    } finally {
+      setIsUndoLoading(false);
+    }
+  };
+
+  const isDistilled = sample.chunkId.startsWith("ideablock-merged-") || sample.fingerprint;
+
+  return (
+    <Paper variant="outlined" sx={{ p: 1, bgcolor: "background.paper", borderRadius: 1 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 0.5 }}>
+        <Typography variant="caption" sx={{ fontWeight: 600, color: "primary.main", wordBreak: "break-all" }}>
+          {sample.chunkId}
+        </Typography>
+        <Stack direction="row" spacing={0.5} alignItems="center">
+          {sample.mergeCandidate && (
+            <Tooltip title={`Cluster ID: ${sample.similarityClusterId || '-'}, Max Score: ${sample.similarityMaxScore?.toFixed(3) || '-'}`}>
+              <Chip label="Lexical Candidate" size="small" color="info" variant="outlined" sx={{ height: 16, fontSize: 9, "& .MuiChip-label": { px: 0.5 } }} />
+            </Tooltip>
+          )}
+          {sample.embeddingMergeCandidate && (
+            <Tooltip title={`Cluster ID: ${sample.embeddingSimilarityClusterId || '-'}, Max Score: ${sample.embeddingSimilarityMaxScore?.toFixed(3) || '-'}`}>
+              <Chip label="Embedding Candidate" size="small" color="secondary" variant="outlined" sx={{ height: 16, fontSize: 9, "& .MuiChip-label": { px: 0.5 } }} />
+            </Tooltip>
+          )}
+          {isDistilled && !undoInfo && (
+            <Button
+              variant="outlined"
+              size="small"
+              color="error"
+              disabled={isUndoLoading}
+              onClick={handleUndo}
+              sx={{ height: 16, fontSize: 8, px: 0.5, py: 0, minWidth: 0 }}
+            >
+              {isUndoLoading ? <CircularProgress size={8} /> : "되돌리기"}
+            </Button>
+          )}
+        </Stack>
+      </Stack>
+      {sample.criticalQuestion && (
+        <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, mb: 0.5 }}>
+          Q: {sample.criticalQuestion}
+        </Typography>
+      )}
+      {sample.trustedAnswer && (
+        <Typography variant="body2" sx={{ fontSize: 11, color: "text.secondary", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+          A: {sample.trustedAnswer}
+        </Typography>
+      )}
+
+      {undoError && (
+        <Alert severity="error" sx={{ fontSize: 9, py: 0, px: 1, mt: 0.5 }}>
+          {undoError}
+        </Alert>
+      )}
+
+      {undoInfo && (
+        <Alert severity="warning" sx={{ fontSize: 9, py: 0, px: 1, mt: 0.5 }}>
+          병합 되돌리기 성공! 원본 청크 복원 중. (청크 {undoInfo.beforeChunkCount}개 → {undoInfo.afterChunkCount}개)
+        </Alert>
+      )}
+
+      {isPolling && progress && (
+        <Box sx={{ mt: 0.5, p: 0.5, bgcolor: "action.hover", borderRadius: 0.5, border: "1px dashed", borderColor: "warning.main" }}>
+          <Typography variant="caption" sx={{ fontSize: 8.5, display: "block" }}>
+            되돌리기 색인 상태: {progress.status} / {progress.rag?.currentStep || "-"}
+          </Typography>
+        </Box>
+      )}
+    </Paper>
   );
 }
 
@@ -396,6 +565,7 @@ function ClusterItem({
   onMergeApplied?: (runRagIndex: boolean) => void;
   refetchSummary: () => void;
 }) {
+  const toast = useToast();
   const [preview, setPreview] = useState<MergePreviewCluster | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isApplyLoading, setIsApplyLoading] = useState(false);
@@ -617,12 +787,53 @@ function ClusterItem({
 
             {appliedInfo && (
               <Alert severity="success" icon={<CheckCircleOutlined sx={{ fontSize: 16 }} />} sx={{ fontSize: 10, py: 0.5, px: 1 }}>
-                <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>병합 적용 성공</Typography>
-                <Typography variant="caption" display="block">새 Chunk ID: {appliedInfo.mergedChunkId}</Typography>
-                <Typography variant="caption" display="block">청크 개수 변화: {appliedInfo.beforeChunkCount}개 → {appliedInfo.afterChunkCount}개</Typography>
-                <Typography variant="caption" display="block">
-                  상태: {isPolling ? "RAG 재색인 진행 중..." : pollingError ? `오류: ${pollingError}` : appliedInfo.reindexed ? "RAG 재색인 완료" : "병합 적용됨 (재색인 미실행)"}
-                </Typography>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ width: "100%" }}>
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>병합 적용 성공</Typography>
+                    <Typography variant="caption" display="block">새 Chunk ID: {appliedInfo.mergedChunkId}</Typography>
+                    <Typography variant="caption" display="block">청크 개수 변화: {appliedInfo.beforeChunkCount}개 → {appliedInfo.afterChunkCount}개</Typography>
+                    <Typography variant="caption" display="block">
+                      상태: {isPolling ? "RAG 재색인 진행 중..." : pollingError ? `오류: ${pollingError}` : appliedInfo.reindexed ? "RAG 재색인 완료" : "병합 적용됨 (재색인 미실행)"}
+                    </Typography>
+                  </Box>
+                  {appliedInfo.mergedFromChunkIds && appliedInfo.mergedFromChunkIds.length > 0 && (
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      disabled={isApplyLoading}
+                      onClick={async () => {
+                        const ok = window.confirm("이 병합 건을 되돌리시겠습니까? 원본 청크들이 복원됩니다.");
+                        if (!ok) return;
+                        setIsApplyLoading(true);
+                        try {
+                          const res = await reactMarkdownDocumentApi.mergeUndo(documentId, revisionId, {
+                            mergedChunkId: appliedInfo.mergedChunkId,
+                            planFingerprint: preview?.planFingerprint || "dummy-fingerprint",
+                            runRagIndex: true,
+                            embeddingProfileId,
+                          });
+                          toast.success("병합 되돌리기 성공! RAG 재색인이 시작되었습니다.");
+                          setAppliedInfo(null);
+                          setProgress(null);
+                          setIsPolling(true);
+                          refetchSummary();
+                          if (onMergeApplied) {
+                            onMergeApplied(true);
+                          }
+                        } catch (err: any) {
+                          console.error(err);
+                          toast.error(err?.response?.data?.message || err?.message || "되돌리기 실패");
+                        } finally {
+                          setIsApplyLoading(false);
+                        }
+                      }}
+                      sx={{ fontSize: 8.5, py: 0, px: 0.5, height: 18 }}
+                    >
+                      되돌리기 (Undo)
+                    </Button>
+                  )}
+                </Stack>
 
                 {/* 원본 청크 요약 */}
                 {appliedInfo.mergedFromChunkIds && appliedInfo.mergedFromChunkIds.length > 0 && (
