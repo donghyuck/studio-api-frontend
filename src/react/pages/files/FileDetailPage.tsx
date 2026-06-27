@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
   Box,
@@ -6,7 +7,6 @@ import {
   Chip,
   CircularProgress,
   Divider,
-  Drawer,
   IconButton,
   MenuItem,
   Stack,
@@ -28,6 +28,7 @@ import {
   Grid,
   Select,
   Switch,
+  Container,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -39,7 +40,7 @@ import {
   DownloadOutlined,
   CheckCircle,
   Cancel,
-  HourglassEmpty,
+  ArrowBackIosNewOutlined,
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import { useAuthStore } from "@/react/auth/store";
@@ -60,22 +61,15 @@ import {
   type MarkdownPipelineExecutionDto,
   type MarkdownRagReindexRequest,
 } from "@/react/pages/files/api";
-import { skillGraphApi } from "@/react/pages/ai/skillgraph/api";
-import type { AttachmentDto } from "@/types/studio/files";
-import type { RagIndexJobStatus, RagIndexJobStep } from "@/types/studio/ai";
+import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { resolveAxiosError } from "@/utils/helpers";
+import type { AttachmentDto } from "@/types/studio/files";
 import { DocumentConvertDialog, getDocumentFormat, getFriendlyErrorMessage } from "./DocumentConvertDialog";
 import { IdeaBlockSummaryPanel } from "./IdeaBlockSummaryPanel";
 import { EpubReaderDialog } from "./EpubReaderDialog";
 import { PdfReaderDialog } from "./PdfReaderDialog";
 import { useMarkdownDocumentPolling } from "./hooks/useMarkdownDocumentPolling";
 import { getCachedThumbnailUrl, requestThumbnail, invalidateThumbnail } from "./thumbnailCache";
-
-interface Props {
-  open: boolean;
-  onClose: () => void;
-  attachmentId: number;
-}
 
 function formatFileSize(size?: number | null) {
   if (size == null) return "";
@@ -97,10 +91,12 @@ function normalizeExtractedText(value: string) {
     .trim();
 }
 
-
-
-export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
+export function FileDetailPage() {
+  const { attachmentId: paramAttachmentId } = useParams<{ attachmentId: string }>();
+  const attachmentId = Number(paramAttachmentId);
+  const navigate = useNavigate();
   const toast = useToast();
+  
   const [file, setFile] = useState<AttachmentDto | null>(null);
   const [ragIndexed, setRagIndexed] = useState(false);
   const [ragMetadata, setRagMetadata] = useState<Record<string, unknown> | null>(null);
@@ -134,7 +130,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [chunkUnit, setChunkUnit] = useState<string>("TOKEN");
   const [chunkConfig, setChunkConfig] = useState<RagChunkConfigResponseDto | null>(null);
 
-  // RAG Configuration — unified EmbeddingOption (profileId 있으면 profile 방식, 없으면 직접 방식)
+  // RAG Configuration
   const [selectedEmbeddingOption, setSelectedEmbeddingOption] = useState<EmbeddingOption | null>(null);
   const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
 
@@ -185,19 +181,18 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
 
-  // Load embedding options and chunking config on open
+  // Load embedding options and chunking config on mount
   const loadEmbeddingOptions = useCallback(async () => {
     try {
       const res = await reactAiApi.getEmbeddingOptions();
       const opts = res.options ?? [];
       setEmbeddingOptions(opts);
-      // Set default: prefer defaultProfile option, else defaultProvider, else first
       const defaultOpt = opts.find((o) => o.defaultProfile) ?? opts.find((o) => o.defaultProvider) ?? opts[0];
       if (defaultOpt) {
         setSelectedEmbeddingOption(defaultOpt);
       }
     } catch {
-      // Ignore - fall back to manual input
+      // Ignore
     }
   }, []);
 
@@ -205,13 +200,12 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     try {
       const res = await reactAiApi.getRagChunkConfig();
       setChunkConfig(res);
-      // Set default strategy from server config if not already set
       const defaultStrategy = res.chunking.previewStrategy || res.chunking.strategy;
       if (defaultStrategy) {
         setChunkingStrategy(defaultStrategy);
       }
     } catch {
-      // Ignore - fall back to hardcoded values
+      // Ignore
     }
   }, []);
 
@@ -232,14 +226,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }, []);
 
   useEffect(() => {
-    if (open) {
+    if (attachmentId) {
       void loadEmbeddingOptions();
       void loadChunkConfig();
       void loadProviders();
     }
-  }, [open, loadEmbeddingOptions, loadChunkConfig, loadProviders]);
+  }, [attachmentId, loadEmbeddingOptions, loadChunkConfig, loadProviders]);
 
-  // Derived: available chunking strategies
   const availableStrategies = useMemo(() => {
     const serverStrategies = chunkConfig?.chunking.availableStrategies ?? ["fixed-size", "recursive", "structure-based"];
     if (!serverStrategies.includes("blockify")) {
@@ -255,13 +248,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     "blockify": "Blockify / IdeaBlock",
   };
 
-  // Derived: embedding option value key (same pattern as RagPage/RagChatPage)
   const embeddingOptionKey = (opt: EmbeddingOption) => opt.profileId || `${opt.provider}:${opt.model}`;
   const embeddingOptionLabel = (opt: EmbeddingOption) =>
     opt.profileId
       ? `${opt.profileId} (${opt.provider} – ${opt.model})`
       : `${opt.provider} – ${opt.model} (${opt.dimension}d)`;
-
 
   useEffect(() => {
     if (markdownStatus === "COMPLETED" && documentId) {
@@ -291,11 +282,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }, [markdownStatus, documentId]);
 
   useEffect(() => {
-    if (open && latestRagJob?.jobId && latestRagJob.status === "SUCCEEDED" && (chunkingStrategy === "blockify" || latestRagJob.chunkingStrategy === "blockify")) {
+    if (latestRagJob?.jobId && latestRagJob.status === "SUCCEEDED" && (chunkingStrategy === "blockify" || latestRagJob.chunkingStrategy === "blockify")) {
       let active = true;
       const validateBlockify = async () => {
         try {
-          // Fetch up to 1000 chunks to compute accurate statistics on the client side
           const res = await reactAiApi.getRagJobChunks(latestRagJob.jobId, 0, 1000);
           if (!active) return;
           const chunks = res.content ?? [];
@@ -319,7 +309,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
               }
             }
 
-            // Stat calculation
             const chunkType = chunk.chunkType || meta.chunkType;
             const actualStrat = meta.actualChunkingStrategy || (chunk as any).actualChunkingStrategy;
             const reqStrat = meta.requestedChunkingStrategy || (chunk as any).requestedChunkingStrategy;
@@ -347,7 +336,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             fallbackReasons,
           });
         } catch (err) {
-          console.error("Failed to fetch job chunks for blockify validation and stats", err);
+          console.error("Failed to fetch job chunks for blockify validation", err);
           if (active) {
             setBlockifyValidationResult(null);
             setBlockifyStats(null);
@@ -362,7 +351,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setBlockifyValidationResult(null);
       setBlockifyStats(null);
     }
-  }, [open, latestRagJob?.jobId, latestRagJob?.status, latestRagJob?.chunkingStrategy, chunkingStrategy]);
+  }, [latestRagJob?.jobId, latestRagJob?.status, latestRagJob?.chunkingStrategy, chunkingStrategy]);
 
   const getStageFailureState = (stage: "EXTRACT" | "MARKDOWN" | "CHUNKING" | "EMBEDDING" | "INDEXING" | "SKILL_EXTRACTION") => {
     const isPipelineFailed = markdownStatus === "FAILED" || pipelineExecution?.status === "FAILED" || pipelineProgress?.status === "FAILED";
@@ -401,7 +390,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   };
 
   useEffect(() => {
-    if (open && attachmentId) {
+    if (attachmentId) {
       let ignored = false;
       const checkMarkdownDocument = async () => {
         try {
@@ -422,7 +411,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                 setMarkdownDocument(doc);
               }
             } catch (err) {
-              // Ignore 404
+              // Ignore
             }
           }
 
@@ -475,7 +464,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             setMarkdownError(null);
             stopPolling();
 
-            // Fetch RAG Jobs once since markdown document doesn't exist but RAG jobs might
             try {
               const jobsRes = await reactAiApi.listRagJobs({
                 objectType: "attachment",
@@ -491,11 +479,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                 setLatestRagJob(content[0] || null);
               }
             } catch (err) {
-              console.error("Failed to load initial RAG jobs:", err);
+              console.error("Failed to load RAG jobs:", err);
             }
           }
         } catch (err) {
-          console.error("Failed to load initial metadata:", err);
+          console.error("Failed to load metadata:", err);
         }
       };
       void checkMarkdownDocument();
@@ -503,31 +491,20 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         ignored = true;
         stopPolling();
       };
-    } else {
-      setDocumentId(null);
-      setMarkdownDocument(null);
-      setLatestRevision(null);
-      setPipelineExecution(null);
-      setPipelineProgress(null);
-      setMarkdownStatus(null);
-      setMarkdownError(null);
-      setReused(null);
-      stopPolling();
     }
-  }, [open, attachmentId, startPolling, stopPolling, setLatestRevision, setPipelineExecution, setPipelineProgress, setMarkdownStatus, setMarkdownError, setLatestRagJob, setRagJobs, toast]);
+  }, [attachmentId, startPolling, stopPolling, setLatestRevision, setPipelineExecution, setPipelineProgress, setMarkdownStatus, setMarkdownError, setLatestRagJob, setRagJobs, toast]);
 
-  // Restore form state from latestRevision.optionsJson when a processed revision is loaded
+  // Restore options on load
   useEffect(() => {
     let opts: Record<string, unknown> | null = null;
     if (latestRevision?.optionsJson) {
       try {
         opts = JSON.parse(latestRevision.optionsJson) as Record<string, unknown>;
       } catch {
-        // Ignore JSON parse errors
+        // Ignore
       }
     }
 
-    // Restore pipeline toggles
     if (opts) {
       if (typeof opts.runChunking === "boolean") setRunChunking(opts.runChunking);
       if (typeof opts.runRagIndex === "boolean") setRunRagIndex(opts.runRagIndex);
@@ -539,7 +516,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       }
     }
 
-    // Restore chunking settings
     let strategy = opts && typeof opts.chunkingStrategy === "string" && opts.chunkingStrategy ? opts.chunkingStrategy : null;
     let maxSize = opts && opts.chunkMaxSize != null ? Number(opts.chunkMaxSize) : null;
     let overlap = opts && opts.chunkOverlap != null ? Number(opts.chunkOverlap) : null;
@@ -555,7 +531,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     if (overlap !== null) setChunkOverlap(overlap);
     if (unit) setChunkUnit(unit);
 
-    // Restore blockify settings
     let llmProvider = opts && typeof opts.blockifyLlmProvider === "string" ? opts.blockifyLlmProvider : null;
     let llmModel = opts && typeof opts.blockifyLlmModel === "string" ? opts.blockifyLlmModel : null;
     let piiMasking = opts && typeof opts.blockifyPiiMaskingEnabled === "boolean" ? opts.blockifyPiiMaskingEnabled : null;
@@ -574,7 +549,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setBlockifyPiiMaskingEnabled(true);
     }
 
-    // Restore embedding option
     let profileId = opts && typeof opts.embeddingProfileId === "string" ? opts.embeddingProfileId : null;
     let provider = opts && typeof opts.embeddingProvider === "string" ? opts.embeddingProvider : null;
     let model = opts && typeof opts.embeddingModel === "string" ? opts.embeddingModel : null;
@@ -646,37 +620,24 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     setTextExtracted(false);
     clearThumbnail();
 
-    if (!open || !attachmentId) {
-      return;
-    }
+    if (!attachmentId) return;
 
     let ignored = false;
-    const requestedId = attachmentId;
-
     async function loadDetail() {
       setLoading(true);
       try {
-        const nextFile = await reactFilesApi.getById(requestedId);
-        if (ignored || nextFile.attachmentId !== requestedId) {
-          return;
-        }
+        const nextFile = await reactFilesApi.getById(attachmentId);
+        if (ignored) return;
 
         setFile(nextFile);
-        setExtractedText("");
-        setTextExtracted(false);
-
         const ragState = await loadRagState(nextFile);
-        if (ignored) {
-          return;
-        }
+        if (ignored) return;
 
         setRagIndexed(ragState.indexed);
         setRagMetadata(ragState.metadata);
       } catch (error) {
         if (!ignored) {
           toast.error(resolveAxiosError(error));
-          setRagIndexed(false);
-          setRagMetadata(null);
         }
       } finally {
         if (!ignored) {
@@ -686,13 +647,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
 
     void loadDetail();
-
     return () => {
       ignored = true;
     };
-  }, [open, attachmentId, toast]);
+  }, [attachmentId, toast]);
 
-  // Refresh RAG metadata when pipeline completes successfully
   useEffect(() => {
     if (pipelineExecution && file && pipelineExecution.status === "COMPLETED") {
       let active = true;
@@ -706,10 +665,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         active = false;
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pipelineExecution?.status]);
+  }, [pipelineExecution?.status, file]);
 
-  // Sync markdownDocument state when polling finishes or when latestRevision status updates
   useEffect(() => {
     if (attachmentId && !markdownIsPolling) {
       let active = true;
@@ -720,7 +677,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           }
         })
         .catch((err) => {
-          console.debug("Failed to sync markdown document:", err);
+          console.debug("Failed to sync markdown:", err);
         });
       return () => {
         active = false;
@@ -729,16 +686,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   }, [attachmentId, markdownIsPolling, latestRevision?.status]);
 
   useEffect(() => {
-    if (!open || !attachmentId) {
+    if (!attachmentId) {
       clearThumbnail();
       return;
     }
 
     let ignored = false;
-    const requestedId = attachmentId;
-
-    // Check cache first
-    const cached = getCachedThumbnailUrl(requestedId);
+    const cached = getCachedThumbnailUrl(attachmentId);
     if (cached !== undefined) {
       if (cached) {
         setThumbnailUrl(cached);
@@ -750,10 +704,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       return;
     }
 
-    requestThumbnail(requestedId, 256).then((url) => {
-      if (ignored || requestedId !== attachmentId) {
-        return;
-      }
+    requestThumbnail(attachmentId, 256).then((url) => {
+      if (ignored) return;
       if (url) {
         setThumbnailUrl(url);
         setThumbnailAvailable(true);
@@ -766,18 +718,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     return () => {
       ignored = true;
     };
-  }, [open, attachmentId, thumbnailReloadKey]);
+  }, [attachmentId, thumbnailReloadKey]);
 
   async function refreshDetail() {
     if (!attachmentId) return;
-    if (!file) {
-      setFile(null);
-      setRagIndexed(false);
-      setRagMetadata(null);
-      setExtractedText("");
-      setTextExtracted(false);
-      clearThumbnail();
-    }
     invalidateThumbnail(attachmentId);
     setThumbnailReloadKey((current) => current + 1);
     setLoading(true);
@@ -800,7 +744,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             setMarkdownDocument(doc);
           }
         } catch (err) {
-          // Ignore 404
+          // Ignore
         }
       }
 
@@ -814,29 +758,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
             setMarkdownDocument(doc);
           } catch (err) {
             // Ignore
-          }
-        } else {
-          try {
-            const doc = await reactMarkdownDocumentApi.getByAttachment(attachmentId);
-            if (doc && doc.documentId) {
-              setDocumentId(doc.documentId);
-              localStorage.setItem(`markdown_doc_id_${attachmentId}`, doc.documentId);
-              startPolling(doc.documentId, attachmentId);
-              setMarkdownDocument(doc);
-            }
-          } catch (err: any) {
-            const status = err?.response?.status ?? err?.status;
-            if (status === 404 || status === 500) {
-              setDocumentId(null);
-              setMarkdownDocument(null);
-              setLatestRevision(null);
-              setPipelineExecution(null);
-              setPipelineProgress(null);
-              setMarkdownStatus(null);
-              setMarkdownError(null);
-            } else {
-              toast.error("Markdown 문서 조회 실패: " + resolveAxiosError(err));
-            }
           }
         }
       } else {
@@ -862,7 +783,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
           setRagJobs(content);
           setLatestRagJob(content[0] || null);
         } catch (err) {
-          console.error("Failed to load initial RAG jobs in refreshDetail:", err);
+          console.error("Failed to refresh RAG jobs:", err);
         }
       }
     } catch (error) {
@@ -895,17 +816,15 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       toast.warning("복사할 텍스트가 없습니다.");
       return;
     }
-
     if (!navigator.clipboard?.writeText) {
-      toast.error("현재 브라우저에서는 클립보드 복사를 지원하지 않습니다.");
+      toast.error("브라우저 환경이 클립보드 복사를 지원하지 않습니다.");
       return;
     }
-
     try {
       await navigator.clipboard.writeText(text);
       toast.success("클립보드에 복사했습니다.");
     } catch {
-      toast.error("클립보드에 복사할 수 없습니다. 브라우저 권한을 확인해 주세요.");
+      toast.error("클립보드 복사에 실패했습니다.");
     }
   }
 
@@ -915,7 +834,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       return "Blockify 청킹이 서버에서 비활성화되어 있습니다. 서버 설정 studio.chunking.blockify.enabled=true 적용 후 다시 시도하세요.";
     }
     if (msg.includes("Invalid blockify chunk metadata") || msg.includes("Blockify chunking produced no chunks")) {
-      return "Blockify 결과 검증에 실패했습니다. IdeaBlock 필수 metadata가 생성되지 않아 잘못된 성공 저장을 차단했습니다.";
+      return "Blockify 결과 검증에 실패했습니다. IdeaBlock 필수 metadata가 생성되지 않았습니다.";
     }
     return msg
       .replace(/(Signature|Expires|AWSAccessKeyId|token|access_token|key)=[^&\s]+/gi, '$1=***')
@@ -1009,21 +928,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
   };
 
   function getErrorMessageByStatus(status: number, originalMsg: string): string {
-    if (status === 400) {
-      return `옵션 조합 또는 값 오류: ${originalMsg}`;
-    }
-    if (status === 401 || status === 403) {
-      return `인증 실패 또는 Markdown 변환 권한이 부족합니다.`;
-    }
-    if (status === 404) {
-      return `첨부파일 또는 Markdown 문서를 찾을 수 없습니다.`;
-    }
-    if (status === 409) {
-      return `상태 충돌이 발생했습니다. (이미 처리 중이거나 완료됨)`;
-    }
-    if (status >= 500) {
-      return `서버, Pandoc Worker 또는 후속 파이프라인 장애가 발생했습니다.`;
-    }
+    if (status === 400) return `옵션 조합 오류: ${originalMsg}`;
+    if (status === 401 || status === 403) return `권한이 부족합니다.`;
+    if (status === 404) return `대상을 찾을 수 없습니다.`;
+    if (status === 409) return `상태 충돌 발생 (처리 중이거나 이미 완료됨)`;
+    if (status >= 500) return `서버 또는 파이프라인 장애 발생.`;
     return originalMsg;
   }
 
@@ -1054,7 +963,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
         let estimateRes;
         if (!markdownDocument?.currentRevisionId) {
-          estimateRes = await reactMarkdownDocumentApi.estimatePipelineByAttachment(attachmentId!, estimateReq);
+          estimateRes = await reactMarkdownDocumentApi.estimatePipelineByAttachment(attachmentId, estimateReq);
         } else {
           estimateRes = await reactMarkdownDocumentApi.estimatePipeline(markdownDocument.documentId, estimateReq);
         }
@@ -1097,12 +1006,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         const data = err?.response?.data;
         const code = data?.code || data?.message;
         if (code === "markdown.source.too-large" || status === 413) {
-          toast.error("첨부파일이 Markdown 처리 허용 크기를 초과했습니다.");
+          toast.error("허용 크기를 초과했습니다.");
           return;
-        } else if (code === "markdown.pipeline.estimate-unavailable" || status === 409) {
-          toast.error("Markdown 생성 완료 전에는 문서 기준 estimate를 사용할 수 없습니다. 첨부파일 기준 estimate를 사용합니다.");
         } else {
-          toast.error("부하 추산에 실패했습니다: " + resolveAxiosError(err));
+          toast.error("부하 추산 실패: " + resolveAxiosError(err));
         }
       } finally {
         setIsExtracting(false);
@@ -1132,17 +1039,16 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
       let estimateRes;
       if (!markdownDocument?.currentRevisionId) {
-        estimateRes = await reactMarkdownDocumentApi.estimatePipelineByAttachment(attachmentId!, estimateReq);
+        estimateRes = await reactMarkdownDocumentApi.estimatePipelineByAttachment(attachmentId, estimateReq);
       } else {
         estimateRes = await reactMarkdownDocumentApi.estimatePipeline(markdownDocument.documentId, estimateReq);
       }
 
       if (estimateRes) {
         const recommended = estimateRes.recommended || {};
-        let resultMsg = `[부하 추산 결과]\n` +
-          `- 위험도 (Risk Level): ${estimateRes.riskLevel}\n`;
+        let resultMsg = `[부하 추산 결과]\n- 위험도 (Risk Level): ${estimateRes.riskLevel}\n`;
         if (estimateRes.reason) {
-          resultMsg += `- 사유 (Reason): ${estimateRes.reason}\n`;
+          resultMsg += `- 사유: ${estimateRes.reason}\n`;
         }
 
         if (recommended.chunkingStrategy) setChunkingStrategy(recommended.chunkingStrategy);
@@ -1162,17 +1068,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         window.alert(resultMsg + `\n추천 설정이 적용되었습니다.`);
       }
     } catch (err: any) {
-      console.error("Pipeline manual estimation failed:", err);
-      const status = err?.response?.status;
-      const data = err?.response?.data;
-      const code = data?.code || data?.message;
-      if (code === "markdown.source.too-large" || status === 413) {
-        toast.error("첨부파일이 Markdown 처리 허용 크기를 초과했습니다.");
-      } else if (code === "markdown.pipeline.estimate-unavailable" || status === 409) {
-        toast.error("Markdown 생성 완료 전에는 문서 기준 estimate를 사용할 수 없습니다. 첨부파일 기준 estimate를 사용합니다.");
-      } else {
-        toast.error("부하 추산에 실패했습니다: " + resolveAxiosError(err));
-      }
+      toast.error("부하 추산 실패: " + resolveAxiosError(err));
     } finally {
       setIsExtracting(false);
     }
@@ -1237,7 +1133,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       setMarkdownDocument(res.document);
       localStorage.setItem(`markdown_doc_id_${attachmentId}`, newDocId);
       setReused(res.reused);
-      toast.success("Markdown 지식 파이프라인 작업이 다시 시작되었습니다.");
+      toast.success("Markdown 지식 파이프라인 작업이 재개되었습니다.");
       startPolling(newDocId, attachmentId);
     } catch (err: any) {
       toast.error("Markdown 다시 생성 실패: " + resolveAxiosError(err));
@@ -1282,7 +1178,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
   async function handleCancelMarkdown() {
     if (!documentId) return;
-    const ok = window.confirm("진행 중인 변환 및 RAG 색인 작업을 취소하시겠습니까?");
+    const ok = window.confirm("진행 중인 작업을 취소하시겠습니까?");
     if (!ok) return;
 
     setIsCanceling(true);
@@ -1291,17 +1187,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       stopPolling();
       setMarkdownStatus("CANCELED");
       if (latestRevision) {
-        setLatestRevision({
-          ...latestRevision,
-          status: "CANCELED"
-        });
+        setLatestRevision({ ...latestRevision, status: "CANCELED" });
       }
       toast.success("작업이 취소되었습니다.");
     } catch (err: any) {
-      const status = err?.response?.status;
-      const rawMsg = resolveAxiosError(err);
-      const errMsg = sanitizeErrorMessage(getErrorMessageByStatus(status, rawMsg));
-      toast.error("작업 취소 실패: " + errMsg);
+      toast.error("작업 취소 실패: " + resolveAxiosError(err));
     } finally {
       setIsCanceling(false);
     }
@@ -1318,7 +1208,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     if (!documentId) return;
     storeLastFailedMessage();
     if (markdownStatus !== "COMPLETED") {
-      toast.error("Markdown 변환이 성공적으로 완료된 상태에서만 작업을 재개할 수 있습니다. 실패한 경우 '새로 재추출 실행'을 이용해 주세요.");
+      toast.error("Markdown 변환이 성공적으로 완료된 상태에서만 작업을 재개할 수 있습니다.");
       return;
     }
     
@@ -1338,7 +1228,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       });
       toast.success(
         res.resumedPhase === "COMPLETED"
-          ? "이미 모든 작업이 완료되었습니다."
+          ? "이미 완료된 단계입니다."
           : `작업이 [${res.resumedFrom}] 단계부터 재개되었습니다.`
       );
       startPolling(documentId, attachmentId);
@@ -1360,18 +1250,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       }
     } catch (err: any) {
       toast.error("RAG 색인 취소 실패: " + resolveAxiosError(err));
-    }
-  }
-
-  async function handleRetryRagJob(jobId: string) {
-    try {
-      await reactAiApi.retryRagJob(jobId);
-      toast.success("RAG 색인 작업을 재시도합니다.");
-      if (documentId) {
-        startPolling(documentId, attachmentId);
-      }
-    } catch (err: any) {
-      toast.error("RAG 색인 재시도 실패: " + resolveAxiosError(err));
     }
   }
 
@@ -1418,7 +1296,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
   }
 
-  // 1. Extract 단계 상태
   const getExtractStepStatus = () => {
     const failState = getStageFailureState("EXTRACT");
     if (failState) return failState;
@@ -1429,14 +1306,12 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     return "PENDING";
   };
 
-  // 2. Markdown 생성 단계 상태
   const getMarkdownStepStatus = () => {
     const failState = getStageFailureState("MARKDOWN");
     if (failState) return failState;
     return getExtractStepStatus();
   };
 
-  // 3. Chunking 단계 상태
   const getChunkingStepStatus = () => {
     if (!runChunking) return "DISABLED";
     const failState = getStageFailureState("CHUNKING");
@@ -1459,7 +1334,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     return "PENDING";
   };
 
-  // 4. Vector Embedding 단계 상태
   const getEmbeddingStepStatus = () => {
     if (!runRagIndex) return "DISABLED";
     const failState = getStageFailureState("EMBEDDING");
@@ -1495,7 +1369,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     return "PENDING";
   };
 
-  // 5. DB Indexing 단계 상태
   const getIndexingStepStatus = () => {
     if (!runRagIndex) return "DISABLED";
     const failState = getStageFailureState("INDEXING");
@@ -1529,7 +1402,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     return "PENDING";
   };
 
-  // 6. Skill 추출 단계 상태
   const getSkillStepStatus = () => {
     if (!runSkillExtraction) return "DISABLED";
     const failState = getStageFailureState("SKILL_EXTRACTION");
@@ -1758,7 +1630,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     mr: 2,
                     flexShrink: 0,
                     boxShadow: isRunning ? "0 0 0 3px rgba(25, 118, 210, 0.15)" : "none",
-                    transition: "all 0.3s ease",
                   }}
                 >
                   {isRunning ? (
@@ -1835,7 +1706,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
       if (latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") {
         return (
           <Alert severity="info" sx={{ mt: 2, py: 0.5, px: 1.5, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
-            Blockify PoC 진단: 파이프라인 완료 후 메타데이터 검증을 시작합니다.
+            Blockify 진단: 파이프라인 완료 후 메타데이터 검증을 시작합니다.
           </Alert>
         );
       }
@@ -1866,7 +1737,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         <Box sx={{ mt: 0.5, pl: 1, fontSize: 11 }}>
           • 누락된 필드: {missingFields.join(", ")}
           <br />
-          • 원인: 서버 설정 `studio.chunking.blockify.enabled=true` 비활성화 또는 Fallback 동작으로 인해 `structure-based` 청킹이 실행되었을 수 있습니다.
+          • 원인: 서버 설정 및 Fallback 동작을 확인하십시오.
         </Box>
       </Alert>
     );
@@ -1878,7 +1749,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
         <Typography variant="caption" color="text.secondary" display="block">
           {label}
         </Typography>
-        <Typography variant="body2" sx={{ mt: 0.25, overflowWrap: "anywhere" }}>
+        <Typography variant="body2" sx={{ mt: 0.25, overflowWrap: "anywhere", fontWeight: 500 }}>
           {value || "-"}
         </Typography>
       </Box>
@@ -1894,118 +1765,99 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
     }
   };
 
+  const [activeSection, setActiveSection] = useState<string>("info");
+
+  if (loading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!file) {
+    return (
+      <Alert severity="warning" sx={{ mt: 2 }}>
+        파일 정보를 찾을 수 없거나 불러오지 못했습니다.
+      </Alert>
+    );
+  }
+
   return (
-    <Drawer
-      anchor="right"
-      open={open}
-      onClose={onClose}
-      PaperProps={{
-        sx: {
-          width: { xs: "100%", sm: 520 },
-          maxWidth: "100%",
-          height: "100%",
-          maxHeight: "100vh",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        },
-      }}
-    >
+    <Stack spacing={2}>
+      <PageToolbar
+        divider={true}
+        breadcrumbs={["서비스 관리", "자원 관리", "파일", file.name]}
+        label="파일의 변환 내역 및 RAG 파이프라인 처리 상태를 정밀 진단하고 조작합니다."
+        previous
+        onPrevious={() => navigate("/application/files")}
+        onRefresh={refreshDetail}
+      />
       <Box
-          sx={{
-            minHeight: 56,
-            px: 2,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 2,
-            flexShrink: 0,
-          }}
-        >
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" noWrap>
-              {file?.name ?? "파일 상세"}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" noWrap>
-              {file ? (file.properties?.objectTypeName || file.properties?.objectType || `#${file.attachmentId}`) : ""}
-            </Typography>
-          </Box>
-          <Stack direction="row" spacing={0} alignItems="center" flexShrink={0}>
-            <Tooltip title="새로고침">
-              <IconButton size="small" onClick={() => void refreshDetail()}>
-                <RefreshOutlined fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <IconButton size="small" onClick={onClose}>
-              <CloseOutlined fontSize="small" />
-            </IconButton>
-          </Stack>
-        </Box>
-        <Divider />
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 200px" },
+          gap: { xs: 0, lg: 3 },
+        }}
+      >
+        <Stack spacing={2}>
+          {/* 1. 기본 정보 상시 노출 */}
+          <Container maxWidth="md" disableGutters>
+            <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
+                파일 기본 정보
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 6 }}>{renderDetail("이름", file.name)}</Grid>
+                <Grid size={{ xs: 6, md: 3 }}>{renderDetail("콘텐츠 종류", file.contentType)}</Grid>
+                <Grid size={{ xs: 6, md: 3 }}>{renderDetail("크기", formatFileSize(file.size))}</Grid>
+                <Grid size={{ xs: 6, md: 6 }}>{renderDetail("수정일", formatDate(file.updatedAt || file.createdAt))}</Grid>
+              </Grid>
 
-        <Box
-          sx={{
-            p: 2,
-            flex: "1 1 0%",
-            minHeight: 0,
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: 2,
-          }}
-        >
-          {file ? (
-            <>
-              {/* 기본 정보 상시 노출 (박스 및 타이틀 없이 수직 나열) */}
-              <Stack spacing={2} sx={{ mb: 2, flexShrink: 0 }}>
-                {renderDetail("이름", file.name)}
-                {renderDetail("콘텐츠 종류", file.contentType)}
-                {renderDetail("크기", formatFileSize(file.size))}
-                {renderDetail("수정일", formatDate(file.updatedAt || file.createdAt))}
-
-                {thumbnailAvailable && thumbnailUrl ? (
-                  <Box sx={{ mt: 1 }}>
-                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
-                      썸네일 프리뷰
-                    </Typography>
-                    <Box
-                      component="img"
-                      src={thumbnailUrl}
-                      alt={file.name}
-                      sx={{
-                        width: "100%",
-                        maxHeight: 180,
-                        objectFit: "contain",
-                      }}
-                    />
-                  </Box>
-                ) : null}
-              </Stack>
-
-              {/* Accordion Group Container (No Rounding) */}
-              <Box
-                sx={{
-                  flexShrink: 0,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  borderRadius: 0,
-                  overflow: "hidden",
-                  "& .MuiAccordion-root": {
-                    border: "none",
-                    borderRadius: 0,
-                    "&:not(:last-child)": {
-                      borderBottom: "1px solid",
+              {thumbnailAvailable && thumbnailUrl && (
+                <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    썸네일 프리뷰
+                  </Typography>
+                  <Box
+                    component="img"
+                    src={thumbnailUrl}
+                    alt={file.name}
+                    sx={{
+                      maxHeight: 180,
+                      objectFit: "contain",
+                      borderRadius: 1,
+                      border: "1px solid",
                       borderColor: "divider",
-                    },
-                    "&:before": {
-                      display: "none",
-                    },
+                    }}
+                  />
+                </Box>
+              )}
+            </Paper>
+
+            {/* Accordion Group */}
+            <Box
+              sx={{
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: 1,
+                overflow: "hidden",
+                "& .MuiAccordion-root": {
+                  border: "none",
+                  borderRadius: 0,
+                  "&:not(:last-child)": {
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
                   },
-                }}
-              >
-                {/* Card 2: Text Extraction Accordion */}
-                <Accordion disableGutters square elevation={0} onChange={handleAccordionChange}>
-                <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
+                  "&:before": {
+                    display: "none",
+                  },
+                },
+              }}
+            >
+              {/* Card 2: Text Extraction Accordion */}
+              <Accordion disableGutters square elevation={0} onChange={handleAccordionChange}>
+                <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     텍스트 추출 결과
                   </Typography>
@@ -2016,34 +1868,19 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                       추출 텍스트 관리
                     </Typography>
                     {!textExtracted ? (
-                      <Tooltip title="콘텐츠에서 텍스트를 추출합니다.">
-                        <span>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<TextSnippetOutlined fontSize="small" />}
-                            disabled={textExtracting}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleExtractText();
-                            }}
-                          >
-                            텍스트 추출
-                          </Button>
-                        </span>
-                      </Tooltip>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={<TextSnippetOutlined fontSize="small" />}
+                        disabled={textExtracting}
+                        onClick={handleExtractText}
+                      >
+                        텍스트 추출
+                      </Button>
                     ) : (
-                      <Tooltip title="클립보드에 복사">
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleCopyExtractedText();
-                          }}
-                        >
-                          <ContentCopyOutlined fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      <IconButton size="small" onClick={handleCopyExtractedText}>
+                        <ContentCopyOutlined fontSize="small" />
+                      </IconButton>
                     )}
                   </Stack>
                   {textExtracted ? (
@@ -2051,16 +1888,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                       component="pre"
                       sx={{
                         m: 0,
-                        maxHeight: 200,
+                        maxHeight: 250,
                         overflow: "auto",
                         whiteSpace: "pre-wrap",
-                        overflowWrap: "anywhere",
-                        wordBreak: "break-word",
                         border: "1px solid",
                         borderColor: "divider",
                         borderRadius: 1,
                         bgcolor: "background.default",
-                        color: "text.primary",
                         p: 1.5,
                         fontFamily: "monospace",
                         fontSize: 12,
@@ -2071,7 +1905,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     </Box>
                   ) : (
                     <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
-                      추출된 텍스트가 없습니다. 버튼을 눌러 추출을 시작하세요.
+                      텍스트가 추출되지 않았습니다.
                     </Typography>
                   )}
                 </AccordionDetails>
@@ -2079,15 +1913,15 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
 
               {/* Card 3: Markdown 지식 파이프라인 Accordion */}
               <Accordion defaultExpanded disableGutters square elevation={0} onChange={handleAccordionChange}>
-                <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
+                <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                     Markdown 지식 파이프라인
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
                   {documentId && (
-                    <Box sx={{ mb: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover" }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13, mb: 1, display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <Box sx={{ mb: 2, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover" }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13.5, mb: 1.5, display: "flex", alignItems: "center", gap: 0.5 }}>
                         <TimelineOutlined fontSize="small" color="primary" /> 파이프라인 및 RAG 상태 요약
                       </Typography>
                       <Grid container spacing={1.5}>
@@ -2167,7 +2001,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           <Typography variant="body2" sx={{ fontWeight: 500, fontSize: 12 }}>
                             {latestRagJob ? (
                               latestRagJob.status === "SUCCEEDED" ? (
-                                <span style={{ color: "#2e7d32" }}>완료 (또는 스킵)</span>
+                                <span style={{ color: "#2e7d32" }}>완료</span>
                               ) : latestRagJob.status === "FAILED" && latestRagJob.currentStep === "EXTRACTING" ? (
                                 <span style={{ color: "#d32f2f" }}>실패</span>
                               ) : (
@@ -2208,91 +2042,29 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         </Grid>
                       </Grid>
 
-                      {/* Blockify/Chunking 집계 표시 영역 */}
-                      {(() => {
-                        const chunking = pipelineProgress?.chunking;
-                        
-                        // 집계 데이터 획득 (서버 응답 chunking을 우선하되, 없으면 기존 blockifyStats fallback)
-                        const stats = chunking ? {
-                          totalChunks: chunking.chunkCount,
-                          ideaBlockCount: chunking.ideaBlockCount,
-                          fallbackCount: chunking.fallbackCount,
-                          fallbackReasons: chunking.fallbackReasonCounts || {},
-                          sourceBlockCoverage: chunking.sourceBlockCoverage,
-                          averageConfidence: chunking.averageConfidence,
-                          sourceBlockTargetCount: chunking.sourceBlockTargetCount,
-                        } : blockifyStats ? {
-                          totalChunks: blockifyStats.totalChunks,
-                          ideaBlockCount: blockifyStats.ideaBlockCount,
-                          fallbackCount: blockifyStats.fallbackCount,
-                          fallbackReasons: blockifyStats.fallbackReasons || {},
-                          sourceBlockCoverage: undefined,
-                          averageConfidence: undefined,
-                          sourceBlockTargetCount: undefined,
-                        } : null;
-
-                        const blockifyApplied = stats ? (stats.totalChunks > 0 && (stats.ideaBlockCount > 0 || stats.fallbackCount > 0)) : false;
-                        const blockifyEffective = stats ? (stats.ideaBlockCount > 0) : false;
-
-                        let blockifyStatusText = "청킹 결과 대기 중";
-                        let blockifyStatusColor = "text.secondary";
-                        if (stats) {
-                          if (stats.totalChunks === 0) {
-                            blockifyStatusText = "청킹 결과 없음";
-                            blockifyStatusColor = "text.secondary";
-                          } else if (blockifyEffective) {
-                            blockifyStatusText = "IdeaBlock 생성됨";
-                            blockifyStatusColor = "success.main";
-                          } else if (blockifyApplied) {
-                            blockifyStatusText = "전체 Fallback 처리됨";
-                            blockifyStatusColor = "warning.main";
-                          }
-                        }
-
-                        // Coverage 경고 메시지 결정
-                        let coverageSeverity: "success" | "warning" | "error" | null = null;
-                        let coverageMessage = "";
-                        const coverageVal = stats?.sourceBlockCoverage;
-                        const targetCount = stats?.sourceBlockTargetCount ?? 0;
-
-                        if (stats && coverageVal !== undefined && targetCount > 0) {
-                          if (coverageVal >= 0.95) {
-                            coverageSeverity = "success";
-                            coverageMessage = "Source block coverage 양호";
-                          } else if (coverageVal >= 0.8) {
-                            coverageSeverity = "warning";
-                            coverageMessage = "일부 source block이 fallback 또는 누락되었을 수 있습니다.";
-                          } else {
-                            coverageSeverity = "error";
-                            coverageMessage = "IdeaBlock coverage가 낮습니다. structure-based 또는 hybrid 검색을 권장합니다.";
-                          }
-                        }
-
-                        if (!latestRevision?.documentId || !latestRevision?.revisionId) return null;
-                        return (
-                          <IdeaBlockSummaryPanel 
-                            documentId={latestRevision.documentId}
-                            revisionId={latestRevision.revisionId} 
-                            revisionStatus={latestRevision?.status}
-                            attachmentId={attachmentId}
-                            chunkingStrategy={latestRagJob?.chunkingStrategy || (ragMetadata as any)?.chunkingStrategy || chunkingStrategy}
-                            llmProvider={blockifyLlmProvider}
-                            llmModel={blockifyLlmModel}
-                            embeddingProfileId={selectedEmbeddingOption?.profileId}
-                            useLlmKeywordExtraction={true}
-                            disabled={controlsDisabled}
-                            onMergeApplied={(runRagIndex) => {
-                              if (runRagIndex) {
-                                startPolling(latestRevision.documentId, attachmentId);
-                              }
-                            }}
-                          />
-                        );
-                      })()}
+                      {latestRevision?.documentId && latestRevision?.revisionId && (
+                        <IdeaBlockSummaryPanel 
+                          documentId={latestRevision.documentId}
+                          revisionId={latestRevision.revisionId} 
+                          revisionStatus={latestRevision?.status}
+                          attachmentId={attachmentId}
+                          chunkingStrategy={latestRagJob?.chunkingStrategy || (ragMetadata as any)?.chunkingStrategy || chunkingStrategy}
+                          llmProvider={blockifyLlmProvider}
+                          llmModel={blockifyLlmModel}
+                          embeddingProfileId={selectedEmbeddingOption?.profileId}
+                          useLlmKeywordExtraction={true}
+                          disabled={controlsDisabled}
+                          onMergeApplied={(runRagIndex) => {
+                            if (runRagIndex) {
+                              startPolling(latestRevision.documentId, attachmentId);
+                            }
+                          }}
+                        />
+                      )}
                     </Box>
                   )}
                   
-                  {/* Pipeline Options */}
+                  {/* Pipeline Step Checklist */}
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, fontWeight: 600 }}>
                     파이프라인 단계 선택
                   </Typography>
@@ -2379,23 +2151,14 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                               <MenuItem key={s} value={s}>{strategyLabels[s] || s}</MenuItem>
                             ))}
                           </Select>
-                          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block", fontSize: 10 }}>
-                            {chunkingStrategy === "structure-based" && "Markdown heading/block 구조 기반 chunk"}
-                            {chunkingStrategy === "blockify" && "source block 단위 질문·답변 IdeaBlock 생성"}
-                          </Typography>
                         </Grid>
                         {chunkingStrategy === "blockify" && (
-                          <Grid size={{ xs: 12 }}>
-                            <Alert severity="info" sx={{ fontSize: 11, py: 1, whiteSpace: "pre-wrap" }}>
-                              <strong>Blockify / IdeaBlock 안내:</strong>{"\n"}
-                              Blockify는 문서의 조항, 항, 호, 표 row, 예외 조건 단위로 IdeaBlock을 생성합니다.{"\n"}
-                              각 IdeaBlock은 critical question, trusted answer, source evidence를 포함합니다.{"\n"}
-                              누락되거나 검증 실패한 source block은 structure-based fallback chunk로 보존됩니다.
-                            </Alert>
-                          </Grid>
-                        )}
-                        {chunkingStrategy === "blockify" && (
                           <>
+                            <Grid size={{ xs: 12 }}>
+                              <Alert severity="info" sx={{ fontSize: 11, py: 1 }}>
+                                Blockify는 질문·답변 형태의 IdeaBlock을 생성합니다.
+                              </Alert>
+                            </Grid>
                             <Grid size={{ xs: 6 }}>
                               <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
                                 Blockify LLM Provider
@@ -2451,17 +2214,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                     disabled={controlsDisabled || isCanceledRevision}
                                   />
                                 }
-                                label={
-                                  <Typography variant="body2" sx={{ fontSize: 13 }}>
-                                    개인정보 마스킹 (Presidio PII) 활성화
-                                  </Typography>
-                                }
+                                label={<Typography variant="body2" sx={{ fontSize: 13 }}>개인정보 마스킹 활성화</Typography>}
                               />
-                              {!blockifyPiiMaskingEnabled && (
-                                <Alert severity="error" sx={{ fontSize: 11, mt: 1, py: 0.5 }}>
-                                  [주의] 외부 LLM 사용 전 개인정보 마스킹 비활성화 시 민감 정보 누출 위험이 있습니다.
-                                </Alert>
-                              )}
                             </Grid>
                           </>
                         )}
@@ -2489,9 +2243,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             value={chunkMaxSize}
                             onChange={(e) => setChunkMaxSize(e.target.value)}
                             disabled={controlsDisabled || isCanceledRevision}
-                            placeholder="800 (기본값)"
-                            helperText="양수"
-                            FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
                           />
                         </Grid>
                         <Grid size={{ xs: 6 }}>
@@ -2503,9 +2254,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             value={chunkOverlap}
                             onChange={(e) => setChunkOverlap(e.target.value)}
                             disabled={controlsDisabled || isCanceledRevision}
-                            placeholder="100 (기본값)"
-                            helperText="0 이상, 최대 크기 미만"
-                            FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
                           />
                         </Grid>
                       </Grid>
@@ -2518,7 +2266,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                       <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, fontSize: 13 }}>
                         RAG 색인 설정
                       </Typography>
-
                       {embeddingOptions.length > 0 ? (
                         <TextField
                           select
@@ -2534,9 +2281,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           helperText={
                             selectedEmbeddingOption?.profileId
                               ? `Profile 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
-                              : selectedEmbeddingOption
-                              ? `직접 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
-                              : "서버에 등록된 임베딩 옵션을 선택합니다."
+                              : `직접 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
                           }
                           FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
                         >
@@ -2548,7 +2293,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                         </TextField>
                       ) : (
                         <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>
-                          임베딩 옵션 로딩 중...
+                          임베딩 모델 로딩 중...
                         </Typography>
                       )}
                     </Box>
@@ -2577,8 +2322,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     </Box>
                   )}
 
-
-                  {/* Actions & Global Status */}
+                  {/* Actions Trigger Panel */}
                   <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                       {markdownStatus ? (
@@ -2589,14 +2333,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             isCanceledRevision ? "default" :
                             markdownStatus === "COMPLETED" ? "success" :
                             (markdownStatus === "RUNNING" || markdownStatus === "PENDING") ? "primary" :
-                            markdownStatus === "FAILED" ? "error" :
-                            "default"
+                            markdownStatus === "FAILED" ? "error" : "default"
                           }
                           sx={{ height: 24, fontWeight: 500 }}
                         />
                       ) : (
                         <Typography variant="caption" color="text.secondary">
-                          변환 이력이 없습니다.
+                          파이프라인 이력이 없습니다.
                         </Typography>
                       )}
                       {reused && markdownStatus === "COMPLETED" && (
@@ -2610,10 +2353,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           size="small"
                           variant="contained"
                           disabled={controlsDisabled}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleExtractMarkdown();
-                          }}
+                          onClick={handleExtractMarkdown}
                         >
                           Markdown 변환
                         </Button>
@@ -2621,10 +2361,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           size="small"
                           variant="outlined"
                           disabled={controlsDisabled}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void handleManualEstimate();
-                          }}
+                          onClick={handleManualEstimate}
                         >
                           부하 추산
                         </Button>
@@ -2636,31 +2373,21 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
                               Markdown 생성 취소됨
                             </Typography>
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
-                              이전 Markdown 변환이 취소되었습니다. 작업을 완료하려면 다시 생성해야 합니다.
-                            </Typography>
                             <Button
                               size="small"
                               variant="contained"
                               color="primary"
                               disabled={controlsDisabled}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleRecreateMarkdownFromCanceled();
-                              }}
+                              onClick={handleRecreateMarkdownFromCanceled}
                             >
                               Markdown 다시 생성
                             </Button>
                           </Box>
                         ) : (
                           <>
-                            {/* 1. Reextract option (Create New Revision) */}
                             <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
                               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
                                 신규 재추출 (Reextract)
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
-                                기존 이력과 관계없이 새로운 리비전(문서 버전)을 생성하여 처음부터 모든 파이프라인 단계를 다시 수행합니다.
                               </Typography>
                               <Stack direction="row" spacing={1}>
                                 <Button
@@ -2668,10 +2395,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                   variant="contained"
                                   color="warning"
                                   disabled={controlsDisabled}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void handleReextractMarkdown();
-                                  }}
+                                  onClick={handleReextractMarkdown}
                                 >
                                   새로 재추출 실행
                                 </Button>
@@ -2680,33 +2404,23 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                   variant="outlined"
                                   color="warning"
                                   disabled={controlsDisabled}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void handleManualEstimate();
-                                  }}
+                                  onClick={handleManualEstimate}
                                 >
                                   부하 추산
                                 </Button>
                               </Stack>
                             </Box>
 
-                            {/* 2. Resume Options (Continue Existing Revision) */}
                             <Box sx={{ p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
                               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
                                 작업 재개 (Resume)
-                              </Typography>
-                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1, lineHeight: 1.4 }}>
-                                기존 리비전 상태를 유지하면서 지정한 단계부터 후속 처리를 이어서 진행합니다.
                               </Typography>
                               <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ gap: 1 }}>
                                 <Button
                                   size="small"
                                   variant="outlined"
                                   disabled={controlsDisabled || markdownStatus !== "COMPLETED" || pipelineExecution?.status === "COMPLETED"}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void handleResume(null);
-                                  }}
+                                  onClick={() => void handleResume(null)}
                                 >
                                   이어서 진행
                                 </Button>
@@ -2714,10 +2428,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                   size="small"
                                   variant="outlined"
                                   disabled={controlsDisabled || markdownStatus !== "COMPLETED"}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void handleResume("CHUNKING");
-                                  }}
+                                  onClick={() => void handleResume("CHUNKING")}
                                 >
                                   청킹부터 재실행
                                 </Button>
@@ -2725,10 +2436,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                   size="small"
                                   variant="outlined"
                                   disabled={controlsDisabled || markdownStatus !== "COMPLETED" || !selectedEmbeddingOption}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void handleReindexRag();
-                                  }}
+                                  onClick={handleReindexRag}
                                 >
                                   RAG 색인부터 재실행
                                 </Button>
@@ -2736,19 +2444,11 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                   size="small"
                                   variant="outlined"
                                   disabled={controlsDisabled || markdownStatus !== "COMPLETED"}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void handleResume("SKILL_EXTRACTION");
-                                  }}
+                                  onClick={() => void handleResume("SKILL_EXTRACTION")}
                                 >
                                   Skill 추출부터 재실행
                                 </Button>
                               </Stack>
-                              {markdownStatus !== "COMPLETED" && (
-                                <Alert severity="info" sx={{ mt: 1.5, py: 0.5, px: 1, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
-                                  Markdown 변환이 완료되지 않았거나 실패하여 작업을 재개할 수 없습니다. 상단의 '새로 재추출'을 먼저 실행해 주십시오.
-                                </Alert>
-                              )}
                             </Box>
                           </>
                         )}
@@ -2756,79 +2456,60 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     )}
                   </Stack>
 
-                  {/* Pipeline Status Dashboard */}
                   {renderPipelineStatusDashboard()}
 
-                  {/* Polling Progress */}
                   {isPendingOrRunning && (
                     <Box sx={{ mt: 1.5, mb: 1.5, bgcolor: "action.hover", p: 1.5, borderRadius: 1.5, border: "1px dashed", borderColor: "primary.main" }}>
-                      <Stack direction="column" spacing={1} width="100%">
-                        <Stack direction="row" spacing={1.5} alignItems="center" width="100%">
-                          <CircularProgress size={16} />
-                          <Typography variant="caption" color="text.secondary">
-                            {(() => {
-                              if (pipelineProgress) {
-                                const pipeline = pipelineProgress;
-                                const rag = pipeline.rag;
-                                if (pipeline.status === "RUNNING" && pipeline.currentStage === "CHUNKING") {
-                                  return "청킹 중";
-                                }
-                                if (pipeline.status === "RUNNING" && pipeline.currentStage === "RAG_INDEX") {
-                                  if (rag?.currentStep === "EMBEDDING") {
-                                    return `임베딩 중 ${rag.embeddedCount ?? 0} / ${rag.chunkCount ?? 0}`;
-                                  } else if (rag?.currentStep === "INDEXING") {
-                                    return `벡터 저장 중 ${rag.indexedCount ?? 0} / ${rag.chunkCount ?? 0}`;
-                                  }
-                                }
-                                if (pipeline.status === "FAILED") {
-                                  return `실패: ${pipeline.errorCode}`;
+                      <Stack direction="row" spacing={1.5} alignItems="center" width="100%">
+                        <CircularProgress size={16} />
+                        <Typography variant="caption" color="text.secondary">
+                          {(() => {
+                            if (pipelineProgress) {
+                              const pipeline = pipelineProgress;
+                              const rag = pipeline.rag;
+                              if (pipeline.status === "RUNNING" && pipeline.currentStage === "CHUNKING") return "청킹 중";
+                              if (pipeline.status === "RUNNING" && pipeline.currentStage === "RAG_INDEX") {
+                                if (rag?.currentStep === "EMBEDDING") {
+                                  return `임베딩 중 ${rag.embeddedCount ?? 0} / ${rag.chunkCount ?? 0}`;
+                                } else if (rag?.currentStep === "INDEXING") {
+                                  return `벡터 저장 중 ${rag.indexedCount ?? 0} / ${rag.chunkCount ?? 0}`;
                                 }
                               }
-                              // Fallback to legacy check
-                              if (latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") {
-                                return `RAG 색인 진행 중... (${latestRagJob.currentStep})`;
-                              }
-                              if (markdownStatus === "COMPLETED" && pipelineExecution?.status === "RUNNING" && pipelineExecution?.currentStage === "RAG_INDEX") {
-                                return "Markdown 생성 완료, RAG 색인 진행 중...";
-                              }
-                              return "Markdown 지식 파이프라인 진행 중...";
-                            })()}
-                          </Typography>
-                          {(latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") && (
-                            <Button
-                              size="small"
-                              color="error"
-                              variant="text"
-                              sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleCancelRagJob(latestRagJob.jobId);
-                              }}
-                            >
-                              색인 취소
-                            </Button>
-                          )}
-                          {(markdownStatus === "RUNNING" || markdownStatus === "PENDING") && (
-                            <Button
-                              size="small"
-                              color="error"
-                              variant="text"
-                              sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
-                              disabled={isCanceling}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleCancelMarkdown();
-                              }}
-                            >
-                              {isCanceling ? "취소 중..." : "변환 취소"}
-                            </Button>
-                          )}
-                        </Stack>
+                              if (pipeline.status === "FAILED") return `실패: ${pipeline.errorCode}`;
+                            }
+                            if (latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") {
+                              return `RAG 색인 진행 중... (${latestRagJob.currentStep})`;
+                            }
+                            return "Markdown 지식 파이프라인 진행 중...";
+                          })()}
+                        </Typography>
+                        {(latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") && (
+                          <Button
+                            size="small"
+                            color="error"
+                            variant="text"
+                            sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
+                            onClick={() => void handleCancelRagJob(latestRagJob.jobId)}
+                          >
+                            색인 취소
+                          </Button>
+                        )}
+                        {(markdownStatus === "RUNNING" || markdownStatus === "PENDING") && (
+                          <Button
+                            size="small"
+                            color="error"
+                            variant="text"
+                            sx={{ minWidth: 0, p: 0, ml: "auto", fontSize: 11 }}
+                            disabled={isCanceling}
+                            onClick={handleCancelMarkdown}
+                          >
+                            {isCanceling ? "취소 중..." : "변환 취소"}
+                          </Button>
+                        )}
                       </Stack>
                     </Box>
                   )}
 
-                  {/* FAILED message */}
                   {(() => {
                     const isFailedState = markdownStatus === "FAILED" || pipelineExecution?.status === "FAILED" || pipelineProgress?.status === "FAILED";
                     if (!isFailedState) return null;
@@ -2851,7 +2532,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     else if (step === "INDEXING") stepStr = "벡터 저장";
 
                     const stageStepLabel = stageStr && stepStr ? `${stageStr} > ${stepStr}` : (stageStr || "-");
-                    
                     const isSameError = errMessage && lastFailedMessage && errMessage === lastFailedMessage;
 
                     return (
@@ -2867,8 +2547,8 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           )}
                         </Stack>
                         {isSameError && (
-                          <Alert severity="warning" sx={{ mt: 1, mb: 1.5, color: "warning.dark", py: 0.5, px: 1, "& .MuiAlert-message": { fontSize: 11, lineHeight: 1.4 } }}>
-                            이전 실행과 동일한 오류가 발생했습니다. 재시도 전 서버 설정(예: KURE 임베딩 서버 batch size, Blockify 활성화 여부 등)이 변경 및 반영되었는지 꼭 확인해 주세요.
+                          <Alert severity="warning" sx={{ mt: 1, mb: 1.5, color: "warning.dark", py: 0.5, px: 1 }}>
+                            이전 실행과 동일한 오류가 발생했습니다.
                           </Alert>
                         )}
                         <Stack direction="row" spacing={1.5}>
@@ -2876,15 +2556,10 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             size="small"
                             variant="contained"
                             color="warning"
-                            sx={{ textTransform: "none", fontSize: 11, py: 0.5 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            sx={{ textTransform: "none", fontSize: 11 }}
+                            onClick={() => {
                               const failedStage = pipelineProgress?.currentStage || pipelineExecution?.currentStage;
-                              if (failedStage) {
-                                void handleResume(failedStage);
-                              } else {
-                                void handleResume(null);
-                              }
+                              void handleResume(failedStage || null);
                             }}
                           >
                             실패 단계부터 재개
@@ -2893,12 +2568,9 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             size="small"
                             variant="outlined"
                             color="inherit"
-                            sx={{ textTransform: "none", fontSize: 11, py: 0.5 }}
+                            sx={{ textTransform: "none", fontSize: 11 }}
                             disabled={!selectedEmbeddingOption}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleReindexRag();
-                            }}
+                            onClick={handleReindexRag}
                           >
                             RAG 다시 실행
                           </Button>
@@ -2907,27 +2579,23 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                     );
                   })()}
 
-                  {/* Metadata Table (Visible whenever documentId exists) */}
+                  {/* Metadata Table */}
                   {documentId && (
                     <Stack spacing={2} sx={{ mt: 2 }}>
                       <Box>
                         <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
-                          변환 및 파이프라인 상세 메타데이터
+                          상세 메타데이터
                         </Typography>
                         <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
-                          <Table size="small" sx={{ "& tr td:first-of-type": { borderRight: "1px solid", borderColor: "divider" } }}>
+                          <Table size="small">
                             <TableBody>
                               <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "32%", fontSize: 11 }}>원본 Attachment ID</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{attachmentId || "-"}</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>1. Markdown Document ID</TableCell>
-                                <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>{documentId}</TableCell>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "32%", fontSize: 11 }}>1. Markdown Document ID</TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>{documentId}</TableCell>
                               </TableRow>
                               <TableRow>
                                 <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>2. Revision ID</TableCell>
-                                <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>{latestRevision?.revisionId || "-"}</TableCell>
+                                <TableCell sx={{ fontSize: 11 }}>{latestRevision?.revisionId || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
                                 <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>3. 추출 상태 (Revision status)</TableCell>
@@ -2942,32 +2610,6 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                               <TableRow>
                                 <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>5. 마지막 성공 단계</TableCell>
                                 <TableCell sx={{ fontSize: 11 }}>{pipelineExecution?.lastCompletedStage || "-"}</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>6. 실행 횟수 (Attempt Count)</TableCell>
-                                <TableCell sx={{ fontSize: 11 }}>{pipelineExecution?.attemptCount ?? "-"}</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>7. 오류 코드 및 메시지</TableCell>
-                                <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>
-                                  {pipelineExecution?.errorCode || latestRevision?.errorCode
-                                    ? `[${pipelineExecution?.errorCode || latestRevision?.errorCode}] `
-                                    : ""}
-                                  {pipelineExecution?.errorMessage || latestRevision?.errorMessage || markdownError || "-"}
-                                </TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>8. 시각 정보 (생성/시작/완료/갱신)</TableCell>
-                                <TableCell sx={{ fontSize: 11, whiteSpace: "pre-wrap" }}>
-                                  {`생성: ${formatDate(latestRevision?.createdAt) || "-"}\n` +
-                                   `시작: ${formatDate(pipelineExecution?.startedAt) || "-"}\n` +
-                                   `완료: ${formatDate(pipelineExecution?.completedAt || latestRevision?.completedAt) || "-"}\n` +
-                                   `갱신: ${formatDate(pipelineExecution?.updatedAt) || "-"}`}
-                                </TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>9. Document Convert Job ID</TableCell>
-                                <TableCell sx={{ fontSize: 11, wordBreak: "break-all" }}>{latestRevision?.documentConvertJobId || "-"}</TableCell>
                               </TableRow>
                               <TableRow>
                                 <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 11 }}>적용된 파이프라인 옵션</TableCell>
@@ -3010,7 +2652,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             <TableBody>
                               {revisions.map((rev) => (
                                 <TableRow key={rev.revisionId} hover>
-                                  <TableCell sx={{ fontSize: 10, fontFamily: "monospace" }}>{rev.revisionId.substring(0, 8)}</TableCell>
+                                  <TableCell sx={{ fontSize: 10 }}>{rev.revisionId.substring(0, 8)}</TableCell>
                                   <TableCell sx={{ fontSize: 10 }}>
                                     <Chip
                                       label={rev.status}
@@ -3020,22 +2662,13 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                         rev.status === "FAILED" ? "error" :
                                         rev.status === "CANCELED" ? "default" : "primary"
                                       }
-                                      sx={{ height: 16, fontSize: 8.5, borderRadius: "3px" }}
+                                      sx={{ height: 16, fontSize: 8.5 }}
                                     />
                                   </TableCell>
                                   <TableCell sx={{ fontSize: 10 }}>{formatDate(rev.createdAt)}</TableCell>
-                                  <TableCell sx={{ fontSize: 10, color: "error.main", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {rev.errorMessage || "-"}
-                                  </TableCell>
+                                  <TableCell sx={{ fontSize: 10, color: "error.main" }}>{rev.errorMessage || "-"}</TableCell>
                                 </TableRow>
                               ))}
-                              {revisions.length === 0 && (
-                                <TableRow>
-                                  <TableCell colSpan={4} align="center" sx={{ fontSize: 10, py: 2, color: "text.secondary" }}>
-                                    이력이 없습니다.
-                                  </TableCell>
-                                </TableRow>
-                              )}
                             </TableBody>
                           </Table>
                         </TableContainer>
@@ -3059,9 +2692,7 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                             <TableBody>
                               {ragJobs.map((job) => (
                                 <TableRow key={job.jobId} hover>
-                                  <TableCell sx={{ fontSize: 10, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {job.embeddingModel || "-"}
-                                  </TableCell>
+                                  <TableCell sx={{ fontSize: 10 }}>{job.embeddingModel || "-"}</TableCell>
                                   <TableCell sx={{ fontSize: 10 }}>
                                     <Chip
                                       label={job.status}
@@ -3071,283 +2702,103 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                                         job.status === "FAILED" ? "error" :
                                         job.status === "CANCELLED" ? "default" : "primary"
                                       }
-                                      sx={{ height: 16, fontSize: 8.5, borderRadius: "3px" }}
+                                      sx={{ height: 16, fontSize: 8.5 }}
                                     />
                                   </TableCell>
-                                  <TableCell sx={{ fontSize: 10 }}>
-                                    {job.indexedCount} / {job.chunkCount}
-                                  </TableCell>
-                                  <TableCell sx={{ fontSize: 10, color: "error.main", maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {job.errorMessage || "-"}
-                                  </TableCell>
+                                  <TableCell sx={{ fontSize: 10 }}>{job.indexedCount} / {job.chunkCount}</TableCell>
+                                  <TableCell sx={{ fontSize: 10, color: "error.main" }}>{job.errorMessage || "-"}</TableCell>
                                 </TableRow>
                               ))}
-                              {ragJobs.length === 0 && (
-                                <TableRow>
-                                  <TableCell colSpan={4} align="center" sx={{ fontSize: 10, py: 2, color: "text.secondary" }}>
-                                    이력이 없습니다.
-                                  </TableCell>
-                                </TableRow>
-                              )}
                             </TableBody>
                           </Table>
                         </TableContainer>
                       </Box>
-                      {latestRevision?.status === "COMPLETED" && (
-                        <>
-                          {latestRevision?.markdownText && (
-                        <Box>
-                          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 0.5 }}>
-                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                              추출된 Markdown 본문
-                            </Typography>
-                            <IconButton
-                              size="small"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (latestRevision?.markdownText) {
-                                  await navigator.clipboard.writeText(latestRevision.markdownText);
-                                  toast.success("클립보드에 복사했습니다.");
-                                }
-                              }}
-                            >
-                              <ContentCopyOutlined fontSize="inherit" />
-                            </IconButton>
-                          </Stack>
-                          <Box
-                            component="pre"
-                            sx={{
-                              m: 0,
-                              maxHeight: 200,
-                              overflow: "auto",
-                              whiteSpace: "pre-wrap",
-                              overflowWrap: "anywhere",
-                              wordBreak: "break-word",
-                              border: "1px solid",
-                              borderColor: "divider",
-                              borderRadius: 1,
-                              bgcolor: "background.default",
-                              color: "text.primary",
-                              p: 1.5,
-                              fontFamily: "monospace",
-                              fontSize: 12,
-                              lineHeight: 1.6,
-                            }}
-                          >
-                            {latestRevision.markdownText}
-                          </Box>
-                        </Box>
-                      )}
-
-                      {/* Locators Section */}
-                      {locators.length > 0 && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
-                            목차 및 위치 정보 (Locators)
-                          </Typography>
-                          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 180, overflow: "auto", borderRadius: 1 }}>
-                            <Table size="small" stickyHeader>
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>Level</TableCell>
-                                  <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>제목 (Title)</TableCell>
-                                  <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>오프셋 (Offset)</TableCell>
-                                  <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>페이지</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {locators.map((loc) => (
-                                  <TableRow key={loc.locatorId} hover>
-                                    <TableCell sx={{ fontSize: 10 }}>L{loc.level}</TableCell>
-                                    <TableCell sx={{ fontSize: 10, fontWeight: 500 }}>{loc.title}</TableCell>
-                                    <TableCell sx={{ fontSize: 10, color: "text.secondary" }}>{loc.startOffset} ~ {loc.endOffset}</TableCell>
-                                    <TableCell sx={{ fontSize: 10 }}>{loc.pageNumber ?? "-"}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        </Box>
-                      )}
-
-                      {/* Resources Section */}
-                      {resources.length > 0 && (
-                        <Box>
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
-                            추출 리소스 목록 (Resources)
-                          </Typography>
-                          <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 180, overflow: "auto", borderRadius: 1 }}>
-                            <Table size="small" stickyHeader>
-                              <TableHead>
-                                <TableRow>
-                                  <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>리소스명</TableCell>
-                                  <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>유형 / 형식</TableCell>
-                                  <TableCell sx={{ fontSize: 10, fontWeight: 600 }}>크기</TableCell>
-                                  <TableCell sx={{ fontSize: 10, fontWeight: 600, textAlign: "right" }}>작업</TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {resources.map((res) => (
-                                  <TableRow key={res.resourceId} hover>
-                                    <TableCell sx={{ fontSize: 10, fontWeight: 500, wordBreak: "break-all" }}>{res.name}</TableCell>
-                                    <TableCell sx={{ fontSize: 10, color: "text.secondary" }}>
-                                      {res.resourceType} ({res.contentType})
-                                    </TableCell>
-                                    <TableCell sx={{ fontSize: 10 }}>{formatFileSize(res.sizeBytes)}</TableCell>
-                                    <TableCell sx={{ fontSize: 10, textAlign: "right" }}>
-                                      <IconButton
-                                        size="small"
-                                        color="primary"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          window.location.assign(`/api/mgmt/files/${encodeURIComponent(res.attachmentId)}/download`);
-                                        }}
-                                      >
-                                        <DownloadOutlined fontSize="inherit" />
-                                      </IconButton>
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        </Box>
-                      )}
-
-                      {latestRevision?.resultAttachmentId && (
-                        <Button
-                          size="small"
-                          variant="contained"
-                          color="success"
-                          fullWidth
-                          startIcon={<DownloadOutlined />}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.location.assign(`/api/mgmt/files/${encodeURIComponent(latestRevision.resultAttachmentId!)}/download`);
-                          }}
-                        >
-                          변환 결과 파일 다운로드
-                        </Button>
-                      )}
-                    </>
+                    </Stack>
                   )}
-                </Stack>
-              )}
                 </AccordionDetails>
               </Accordion>
-
-              {/* Card 4: RAG Metadata Accordion */}
-              {metadataEntries.length > 0 ? (
-                <Accordion disableGutters square elevation={0} onChange={handleAccordionChange}>
-                  <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40, "& .MuiAccordionSummary-content": { my: 1 } }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                      RAG Metadata
-                    </Typography>
-                  </AccordionSummary>
-                  <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
-                    <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
-                      <Table size="small">
-                        <TableBody>
-                          {metadataEntries.map(([key, value]) => (
-                            <TableRow key={key}>
-                              <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "35%", fontSize: 11, verticalAlign: "top" }}>{key}</TableCell>
-                              <TableCell sx={{ fontSize: 11, overflowWrap: "anywhere", wordBreak: "break-all" }}>
-                                {typeof value === "object" && value !== null ? (
-                                  <Box component="pre" sx={{ m: 0, fontFamily: "monospace", fontSize: 10, whiteSpace: "pre-wrap", overflowWrap: "anywhere", bgcolor: "action.hover", p: 1, borderRadius: 0.5 }}>
-                                    {JSON.stringify(value, null, 2)}
-                                  </Box>
-                                ) : (
-                                  String(value)
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </TableContainer>
-                  </AccordionDetails>
-                </Accordion>
-              ) : null}
-              </Box>
-            </>
-          ) : (
-            <Typography color="text.secondary">데이터 없음</Typography>
-          )}
-        </Box>
-
-        <Divider />
-        <Stack direction="row" spacing={1} justifyContent="space-between" alignItems="center" sx={{ p: 2, flexShrink: 0 }}>
-          <Stack direction="row" spacing={1}>
-            {file && getDocumentFormat(file.name, file.contentType) && (
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => setConvertDialogOpen(true)}
-              >
-                문서 변환
-              </Button>
-            )}
-            {isEpub && (
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => setEpubReaderOpen(true)}
-              >
-                미리보기 (EPUB)
-              </Button>
-            )}
-            {isPdf && (
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => setPdfReaderOpen(true)}
-              >
-                미리보기 (PDF)
-              </Button>
-            )}
-          </Stack>
-          <Button onClick={onClose}>닫기</Button>
+            </Box>
+          </Container>
         </Stack>
 
-        {loading || textExtracting || isExtracting || isCanceling ? (
-          <Box
-            sx={{
-              position: "absolute",
-              inset: 0,
-              bgcolor: "rgba(255, 255, 255, 0.56)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1300,
-            }}
-          >
-            <CircularProgress />
-          </Box>
-        ) : null}
+        {/* 2. TOC contents aside panel */}
+        <Box
+          component="aside"
+          sx={{
+            display: { xs: "none", lg: "block" },
+            position: "sticky",
+            top: 16,
+            alignSelf: "start",
+            borderLeft: "1px solid",
+            borderColor: "divider",
+            pl: 2,
+            py: 1,
+          }}
+        >
+          <Typography variant="caption" color="text.secondary" fontWeight={700} sx={{ letterSpacing: 0.2 }}>
+            Contents
+          </Typography>
+          <Stack spacing={0.5} sx={{ mt: 1 }}>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "info" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "info" ? 700 : 400,
+                borderLeft: activeSection === "info" ? "2px solid" : "2px solid transparent",
+                borderColor: activeSection === "info" ? "primary.main" : "transparent",
+                pl: 1,
+              }}
+              onClick={() => setActiveSection("info")}
+            >
+              기본 정보
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "pipeline" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "pipeline" ? 700 : 400,
+                borderLeft: activeSection === "pipeline" ? "2px solid" : "2px solid transparent",
+                borderColor: activeSection === "pipeline" ? "primary.main" : "transparent",
+                pl: 1,
+              }}
+              onClick={() => setActiveSection("pipeline")}
+            >
+              지식 파이프라인
+            </Button>
+          </Stack>
+        </Box>
+      </Box>
 
-      {file && convertDialogOpen && (
-        <DocumentConvertDialog
-          open={convertDialogOpen}
-          onClose={() => setConvertDialogOpen(false)}
-          file={file}
-        />
+      {/* Reader / Convert Dialogs */}
+      {file && (
+        <>
+          <DocumentConvertDialog
+            open={convertDialogOpen}
+            onClose={() => setConvertDialogOpen(false)}
+            file={file}
+          />
+          {isEpub && (
+            <EpubReaderDialog
+              open={epubReaderOpen}
+              onClose={() => setEpubReaderOpen(false)}
+              url={`/api/mgmt/files/${file.attachmentId}/download`}
+              filename={file.name}
+            />
+          )}
+          {isPdf && (
+            <PdfReaderDialog
+              open={pdfReaderOpen}
+              onClose={() => setPdfReaderOpen(false)}
+              url={`/api/mgmt/files/${file.attachmentId}/download`}
+              filename={file.name}
+            />
+          )}
+        </>
       )}
-      {file && epubReaderOpen && (
-        <EpubReaderDialog
-          open={epubReaderOpen}
-          onClose={() => setEpubReaderOpen(false)}
-          url={`/api/mgmt/files/${file.attachmentId}/download`}
-          filename={file.name}
-        />
-      )}
-      {file && pdfReaderOpen && (
-        <PdfReaderDialog
-          open={pdfReaderOpen}
-          onClose={() => setPdfReaderOpen(false)}
-          url={`/api/mgmt/files/${file.attachmentId}/download`}
-          filename={file.name}
-        />
-      )}
-    </Drawer>
+    </Stack>
   );
 }

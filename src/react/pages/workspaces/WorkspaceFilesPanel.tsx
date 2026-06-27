@@ -18,9 +18,9 @@ import type { ColDef, SelectionChangedEvent } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import type { GridContentHandle } from "@/react/components/ag-grid/types";
 import { useConfirm, useToast } from "@/react/feedback";
+import { useNavigate } from "react-router-dom";
 import { reactFilesApi } from "@/react/pages/files/api";
 import { FileUploadDialog } from "@/react/pages/files/FileUploadDialog";
-import { FileDetailDialog } from "@/react/pages/files/FileDetailDialog";
 import type { AttachmentDto } from "@/types/studio/files";
 import { resolveAxiosError } from "@/utils/helpers";
 
@@ -239,13 +239,13 @@ interface Props {
 }
 
 export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
+  const navigate = useNavigate();
   const toast = useToast();
   const confirm = useConfirm();
   const gridRef = useRef<GridContentHandle<AttachmentDto>>(null);
   const [files, setFiles] = useState<AttachmentDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [selectedFileId, setSelectedFileId] = useState<number | null>(null);
   const [selectedCount, setSelectedCount] = useState(0);
   const [selectedRows, setSelectedRows] = useState<AttachmentDto[]>([]);
   const [displayedCount, setDisplayedCount] = useState(0);
@@ -368,7 +368,7 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
           params.data ? (
             <FileNameCell
               file={params.data}
-              onOpen={(attachmentId) => setSelectedFileId(attachmentId)}
+              onOpen={(attachmentId) => navigate("/application/files/" + attachmentId)}
             />
           ) : null,
       },
@@ -486,12 +486,6 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
           setUploadOpen(false);
           void loadFiles();
         }}
-      />
-
-      <FileDetailDialog
-        open={selectedFileId !== null}
-        attachmentId={selectedFileId ?? 0}
-        onClose={() => setSelectedFileId(null)}
       />
     </Stack>
   );

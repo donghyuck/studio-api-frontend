@@ -6,12 +6,12 @@ import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutl
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import type { SelectionChangedEvent } from "ag-grid-community";
+import { useNavigate } from "react-router-dom";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { reactFilesApi } from "@/react/pages/files/api";
-import { FileDetailDialog } from "@/react/pages/files/FileDetailDialog";
 import { FileUploadDialog } from "@/react/pages/files/FileUploadDialog";
 import { filesQueryKeys } from "@/react/pages/files/queryKeys";
 import type { AttachmentDto } from "@/types/studio/files";
@@ -240,6 +240,7 @@ function toggleDisplayedRows(
 }
 
 export function FilesPage() {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const gridRef = useRef<PageableGridContentHandle<AttachmentDto>>(null);
   const dataSource = useMemo(() => new FilesDataSource(), []);
@@ -247,7 +248,6 @@ export function FilesPage() {
   const [objectType, setObjectType] = useState("");
   const [objectId, setObjectId] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [detailAttachmentId, setDetailAttachmentId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [displayedCount, setDisplayedCount] = useState(0);
@@ -341,7 +341,7 @@ export function FilesPage() {
           params.data ? (
             <FileNameCell
               file={params.data}
-              onOpen={(attachmentId) => setDetailAttachmentId(attachmentId)}
+              onOpen={(attachmentId) => navigate("/application/files/" + attachmentId)}
             />
           ) : null,
       },
@@ -552,13 +552,6 @@ export function FilesPage() {
           gridRef.current?.refresh();
         }}
       />
-      {detailAttachmentId ? (
-        <FileDetailDialog
-          open={detailAttachmentId !== null}
-          onClose={() => setDetailAttachmentId(null)}
-          attachmentId={detailAttachmentId}
-        />
-      ) : null}
     </>
   );
 }
