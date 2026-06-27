@@ -1835,90 +1835,64 @@ export function FileDetailPage() {
               )}
             </Paper>
 
-            {/* Accordion Group */}
-            <Box
-              sx={{
-                border: "1px solid",
-                borderColor: "divider",
-                borderRadius: 1,
-                overflow: "hidden",
-                "& .MuiAccordion-root": {
-                  border: "none",
-                  borderRadius: 0,
-                  "&:not(:last-child)": {
-                    borderBottom: "1px solid",
+            {/* Card 2: Text Extraction Panel */}
+            <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
+                텍스트 추출 결과
+              </Typography>
+              <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+                <Typography variant="body2" color="text.secondary">
+                  추출 텍스트 관리
+                </Typography>
+                {!textExtracted ? (
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<TextSnippetOutlined fontSize="small" />}
+                    disabled={textExtracting}
+                    onClick={handleExtractText}
+                  >
+                    텍스트 추출
+                  </Button>
+                ) : (
+                  <IconButton size="small" onClick={handleCopyExtractedText}>
+                    <ContentCopyOutlined fontSize="small" />
+                  </IconButton>
+                )}
+              </Stack>
+              {textExtracted ? (
+                <Box
+                  component="pre"
+                  sx={{
+                    m: 0,
+                    maxHeight: 250,
+                    overflow: "auto",
+                    whiteSpace: "pre-wrap",
+                    border: "1px solid",
                     borderColor: "divider",
-                  },
-                  "&:before": {
-                    display: "none",
-                  },
-                },
-              }}
-            >
-              {/* Card 2: Text Extraction Accordion */}
-              <Accordion disableGutters square elevation={0} onChange={handleAccordionChange}>
-                <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    텍스트 추출 결과
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
-                  <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      추출 텍스트 관리
-                    </Typography>
-                    {!textExtracted ? (
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        startIcon={<TextSnippetOutlined fontSize="small" />}
-                        disabled={textExtracting}
-                        onClick={handleExtractText}
-                      >
-                        텍스트 추출
-                      </Button>
-                    ) : (
-                      <IconButton size="small" onClick={handleCopyExtractedText}>
-                        <ContentCopyOutlined fontSize="small" />
-                      </IconButton>
-                    )}
-                  </Stack>
-                  {textExtracted ? (
-                    <Box
-                      component="pre"
-                      sx={{
-                        m: 0,
-                        maxHeight: 250,
-                        overflow: "auto",
-                        whiteSpace: "pre-wrap",
-                        border: "1px solid",
-                        borderColor: "divider",
-                        borderRadius: 1,
-                        bgcolor: "background.default",
-                        p: 1.5,
-                        fontFamily: "monospace",
-                        fontSize: 12,
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      {extractedText || "-"}
-                    </Box>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
-                      텍스트가 추출되지 않았습니다.
-                    </Typography>
-                  )}
-                </AccordionDetails>
-              </Accordion>
+                    borderRadius: 1,
+                    bgcolor: "background.default",
+                    p: 1.5,
+                    fontFamily: "monospace",
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {extractedText || "-"}
+                </Box>
+              ) : (
+                <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
+                  텍스트가 추출되지 않았습니다.
+                </Typography>
+              )}
+            </Paper>
 
-              {/* Card 3: Markdown 지식 파이프라인 Accordion */}
-              <Accordion defaultExpanded disableGutters square elevation={0} onChange={handleAccordionChange}>
-                <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ bgcolor: "action.hover", borderBottom: "1px solid", borderColor: "divider", minHeight: 40 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                    Markdown 지식 파이프라인
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails sx={{ p: 2, bgcolor: "background.paper" }}>
+              {/* Card 3: Markdown 지식 파이프라인 Panel */}
+              <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
+                  Markdown 지식 파이프라인
+                </Typography>
+                <Box sx={{ mt: 2 }}>
                   {documentId && (
                     <Box sx={{ mb: 2, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover" }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13.5, mb: 1.5, display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -2715,9 +2689,8 @@ export function FileDetailPage() {
                       </Box>
                     </Stack>
                   )}
-                </AccordionDetails>
-              </Accordion>
-            </Box>
+                </Box>
+              </Paper>
           </Container>
         </Stack>
 
