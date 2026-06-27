@@ -58,7 +58,7 @@ export function IdeaBlockSummaryPanel({
   disabled,
   onMergeApplied,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<string>("samples");
+  const [activeTab, setActiveTab] = useState<string>("evaluation");
 
   const { data: summary, isLoading, error, refetch } = useQuery({
     queryKey: ["ideablock-summary", documentId, revisionId],
@@ -66,6 +66,14 @@ export function IdeaBlockSummaryPanel({
     enabled: !!documentId && !!revisionId,
     retry: false,
   });
+
+  useEffect(() => {
+    if (summary) {
+      setActiveTab("samples");
+    } else {
+      setActiveTab("evaluation");
+    }
+  }, [summary]);
 
   if (isLoading) {
     return (
@@ -76,23 +84,10 @@ export function IdeaBlockSummaryPanel({
     );
   }
 
-  if (error || !summary) {
-    return (
-      <Box sx={{ mt: 2, pt: 1.5, borderTop: "1px dashed", borderColor: "divider" }}>
-        <Alert severity="error" sx={{ fontSize: 11, py: 0, px: 1 }}>
-          IdeaBlock 품질 리포트를 불러올 수 없습니다.
-        </Alert>
-      </Box>
-    );
-  }
+  const hasSummary = !!summary;
+  const noEmbedding = hasSummary && summary.embeddingMergeCandidateCount === 0 && summary.embeddingSimilarityClusterCount === 0 && (!summary.embeddingCandidateClusters || summary.embeddingCandidateClusters.length === 0);
 
-  const noEmbedding = summary.embeddingMergeCandidateCount === 0 && summary.embeddingSimilarityClusterCount === 0 && (!summary.embeddingCandidateClusters || summary.embeddingCandidateClusters.length === 0);
-
-  // Check screen entry condition for IdeaBlock merge UI:
-  // - Markdown revision is 'COMPLETED'
-  // - Chunking strategy is 'blockify'
-  // - Has at least one merge candidate cluster (lexical or embedding)
-  const showMergeUI = revisionStatus === "COMPLETED" && chunkingStrategy === "blockify" && (
+  const showMergeUI = hasSummary && revisionStatus === "COMPLETED" && chunkingStrategy === "blockify" && (
     (summary.mergeCandidateClusters && summary.mergeCandidateClusters.length > 0) ||
     (summary.embeddingCandidateClusters && summary.embeddingCandidateClusters.length > 0)
   );
@@ -106,77 +101,83 @@ export function IdeaBlockSummaryPanel({
       </Stack>
 
       {/* Summary Card */}
-      <Grid container spacing={1} sx={{ mb: 2 }}>
-        <Grid size={{ xs: 6, sm: 4 }}>
-          <Typography variant="caption" color="text.secondary" display="block">Coverage</Typography>
-          <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
-            {summary.coverage !== undefined ? `${(summary.coverage * 100).toFixed(1)}%` : "N/A"}
-          </Typography>
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4 }}>
-          <Typography variant="caption" color="text.secondary" display="block">IdeaBlock</Typography>
-          <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, color: "success.main" }}>
-            {summary.ideaBlockCount ?? 0}
-          </Typography>
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4 }}>
-          <Typography variant="caption" color="text.secondary" display="block">Fallback</Typography>
-          <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, color: "warning.main" }}>
-            {summary.fallbackCount ?? 0}
-          </Typography>
-        </Grid>
-
-        <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
-          <Typography variant="caption" color="text.secondary" display="block">Lexical merge candidates</Typography>
-          <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
-            {summary.mergeCandidateCount ?? 0} / {summary.similarityClusterCount ?? 0} clusters
-          </Typography>
-        </Grid>
-
-        <Grid size={{ xs: 12 }}>
-          <Stack direction="row" spacing={0.5} alignItems="center">
-            <Typography variant="caption" color="text.secondary" display="block">Embedding merge candidates</Typography>
-            {noEmbedding && (
-              <Tooltip title="Embedding cluster는 서버 embedding provider가 구성된 경우에만 계산됩니다.">
-                <InfoOutlined sx={{ fontSize: 14, color: "text.disabled", cursor: "help" }} />
-              </Tooltip>
-            )}
-          </Stack>
-          {noEmbedding ? (
-            <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, color: "text.disabled" }}>
-              Embedding 후보 없음
-            </Typography>
-          ) : (
+      {hasSummary && summary ? (
+        <Grid container spacing={1} sx={{ mb: 2 }}>
+          <Grid size={{ xs: 6, sm: 4 }}>
+            <Typography variant="caption" color="text.secondary" display="block">Coverage</Typography>
             <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
-              {summary.embeddingMergeCandidateCount ?? 0} / {summary.embeddingSimilarityClusterCount ?? 0} clusters
-            </Typography>
-          )}
-        </Grid>
-
-        {summary.embeddingSimilarityThreshold !== undefined && (
-          <Grid size={{ xs: 12 }}>
-            <Typography variant="caption" color="text.secondary" display="block">Embedding threshold</Typography>
-            <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
-              {summary.embeddingSimilarityThreshold.toFixed(2)}
+              {summary.coverage !== undefined ? `${(summary.coverage * 100).toFixed(1)}%` : "N/A"}
             </Typography>
           </Grid>
-        )}
-      </Grid>
+          <Grid size={{ xs: 6, sm: 4 }}>
+            <Typography variant="caption" color="text.secondary" display="block">IdeaBlock</Typography>
+            <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, color: "success.main" }}>
+              {summary.ideaBlockCount ?? 0}
+            </Typography>
+          </Grid>
+          <Grid size={{ xs: 6, sm: 4 }}>
+            <Typography variant="caption" color="text.secondary" display="block">Fallback</Typography>
+            <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, color: "warning.main" }}>
+              {summary.fallbackCount ?? 0}
+            </Typography>
+          </Grid>
+
+          <Grid size={{ xs: 12 }} sx={{ mt: 1 }}>
+            <Typography variant="caption" color="text.secondary" display="block">Lexical merge candidates</Typography>
+            <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
+              {summary.mergeCandidateCount ?? 0} / {summary.similarityClusterCount ?? 0} clusters
+            </Typography>
+          </Grid>
+
+          <Grid size={{ xs: 12 }}>
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <Typography variant="caption" color="text.secondary" display="block">Embedding merge candidates</Typography>
+              {noEmbedding && (
+                <Tooltip title="Embedding cluster는 서버 embedding provider가 구성된 경우에만 계산됩니다.">
+                  <InfoOutlined sx={{ fontSize: 14, color: "text.disabled", cursor: "help" }} />
+                </Tooltip>
+              )}
+            </Stack>
+            {noEmbedding ? (
+              <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, color: "text.disabled" }}>
+                Embedding 후보 없음
+              </Typography>
+            ) : (
+              <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
+                {summary.embeddingMergeCandidateCount ?? 0} / {summary.embeddingSimilarityClusterCount ?? 0} clusters
+              </Typography>
+            )}
+          </Grid>
+
+          {summary.embeddingSimilarityThreshold !== undefined && (
+            <Grid size={{ xs: 12 }}>
+              <Typography variant="caption" color="text.secondary" display="block">Embedding threshold</Typography>
+              <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
+                {summary.embeddingSimilarityThreshold.toFixed(2)}
+              </Typography>
+            </Grid>
+          )}
+        </Grid>
+      ) : (
+        <Alert severity="info" sx={{ fontSize: 10, py: 0.5, px: 1, mb: 1.5 }}>
+          일반 RAG 대상 리비전 (RAG 검색 전략/품질 대시보드 평가만 수행 가능합니다)
+        </Alert>
+      )}
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 36, "& .MuiTab-root": { minHeight: 36, fontSize: 11, fontWeight: 600, px: 2, py: 0.5 } }}>
-          <Tab value="samples" label="Samples" />
-          <Tab value="fallbacks" label="Fallbacks" />
-          {showMergeUI && <Tab value="lexical" label="Lexical Merge Candidates" />}
-          {showMergeUI && <Tab value="embedding" label="Embedding Merge Candidates" />}
+          {hasSummary && <Tab value="samples" label="Samples" />}
+          {hasSummary && <Tab value="fallbacks" label="Fallbacks" />}
+          {hasSummary && showMergeUI && <Tab value="lexical" label="Lexical Merge Candidates" />}
+          {hasSummary && showMergeUI && <Tab value="embedding" label="Embedding Merge Candidates" />}
           <Tab value="evaluation" label="Evaluation Dashboard" />
         </Tabs>
       </Box>
 
       {/* Tab Panels */}
       <Box sx={{ pt: 1.5, maxHeight: 350, overflowY: "auto" }}>
-        {activeTab === "samples" && (
+        {hasSummary && summary && activeTab === "samples" && (
           <SamplesTab
             samples={summary.samples || []}
             documentId={documentId}
@@ -186,8 +187,8 @@ export function IdeaBlockSummaryPanel({
             refetchSummary={refetch}
           />
         )}
-        {activeTab === "fallbacks" && <FallbacksTab summary={summary} />}
-        {showMergeUI && activeTab === "lexical" && (
+        {hasSummary && summary && activeTab === "fallbacks" && <FallbacksTab summary={summary} />}
+        {hasSummary && summary && showMergeUI && activeTab === "lexical" && (
           <ClusterListTab
             clusters={summary.mergeCandidateClusters || []}
             type="lexical"
@@ -202,7 +203,7 @@ export function IdeaBlockSummaryPanel({
             refetchSummary={refetch}
           />
         )}
-        {showMergeUI && activeTab === "embedding" && (
+        {hasSummary && summary && showMergeUI && activeTab === "embedding" && (
           <ClusterListTab
             clusters={summary.embeddingCandidateClusters || []}
             type="embedding"
