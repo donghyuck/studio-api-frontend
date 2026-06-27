@@ -483,6 +483,57 @@ function ClusterListTab({
   onMergeApplied?: (runRagIndex: boolean) => void;
   refetchSummary: () => void;
 }) {
+  const toast = useToast();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [previewsMap, setPreviewsMap] = useState<Record<string, MergePreviewCluster>>({});
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [isBatchLoading, setIsBatchLoading] = useState(false);
+  const [batchResult, setBatchResult] = useState<any>(null);
+  const [batchRunRagIndex, setBatchRunRagIndex] = useState(true);
+  const [batchError, setBatchError] = useState<string | null>(null);
+
+  // Polling for batch RAG indexing
+  const [progress, setProgress] = useState<any>(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const [pollingError, setPollingError] = useState<string | null>(null);
+
+  const isDevMode = import.meta.env.DEV;
+
+  useEffect(() => {
+    if (!isPolling || !documentId) return;
+
+    let active = true;
+    const fetchProgress = async () => {
+      try {
+        const res = await reactMarkdownDocumentApi.getProgress(documentId);
+        if (!active) return;
+        setProgress(res);
+
+        const isCompleted = res.status === "COMPLETED";
+        const isFailed = res.status === "FAILED";
+        const ragStatus = res.rag?.status;
+        const isRagFinished = ragStatus === "SUCCEEDED" || ragStatus === "FAILED" || ragStatus === "WARNING";
+
+        if (isCompleted || isFailed || isRagFinished) {
+          setIsPolling(false);
+          if (isFailed || ragStatus === "FAILED") {
+            setPollingError(res.rag?.errorMessage || res.errorMessage || "일괄 재색인 중 실패했습니다.");
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    void fetchProgress();
+    const timer = setInterval(fetchProgress, 3000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [isPolling, documentId]);
+
   if (noEmbedding) {
     return <Typography variant="caption" color="text.secondary">Embedding 후보 없음</Typography>;
   }
@@ -490,6 +541,115 @@ function ClusterListTab({
   if (clusters.length === 0) {
     return <Typography variant="caption" color="text.secondary">병합 후보(Cluster)가 없습니다.</Typography>;
   }
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(clusters.map((c) => c.clusterId));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleToggleSelect = (clusterId: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(clusterId) ? prev.filter((id) => id !== clusterId) : [...prev, clusterId]
+    );
+  };
+
+  const handlePreviewGenerated = (clusterId: string, preview: MergePreviewCluster | null) => {
+    setPreviewsMap((prev) => {
+      const next = { ...prev };
+      if (preview) {
+        next[clusterId] = preview;
+      } else {
+        delete next[clusterId];
+      }
+      return next;
+    });
+  };
+
+  const handleOpenBatchDialog = (rag: boolean) => {
+    setBatchRunRagIndex(rag);
+    setBatchResult(null);
+    setBatchError(null);
+    setPollingError(null);
+    setBatchDialogOpen(true);
+  };
+
+  const handleApplyBatchMerge = async () => {
+    setIsBatchLoading(true);
+    setBatchError(null);
+    setPollingError(null);
+
+    const applicableItems = clusters
+      .filter((c) => selectedIds.includes(c.clusterId) && previewsMap[c.clusterId]?.applicable)
+      .map((c) => ({
+        clusterId: c.clusterId,
+        preferEmbeddingClusters: type === "embedding",
+        llmProvider: llmProvider || "google-ai-gemini",
+        llmModel: llmModel || "gemini-2.5-flash",
+        maxClusters: 1,
+        planFingerprint: previewsMap[c.clusterId].planFingerprint,
+      }));
+
+    if (applicableItems.length === 0) {
+      setBatchError("적용 가능한 미리보기(Preview)가 준비된 후보가 없습니다.");
+      setIsBatchLoading(false);
+      return;
+    }
+
+    try {
+      const res = await reactMarkdownDocumentApi.mergeApplyBatch(documentId, revisionId, {
+        items: applicableItems,
+        runRagIndex: batchRunRagIndex,
+        embeddingProfileId: embeddingProfileId || "retrieval-ko-kure",
+      });
+
+      setBatchResult(res);
+
+      if (batchRunRagIndex && res.pipelineResult) {
+        setProgress(null);
+        setIsPolling(true);
+      }
+
+      toast.success("일괄 병합 요청을 전송했습니다.");
+      refetchSummary();
+      if (onMergeApplied) {
+        onMergeApplied(batchRunRagIndex);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setBatchError(err?.response?.data?.message || err?.message || "일괄 병합 실패");
+    } finally {
+      setIsBatchLoading(false);
+    }
+  };
+
+  const handleResumeRag = async () => {
+    setIsBatchLoading(true);
+    setPollingError(null);
+    try {
+      await reactMarkdownDocumentApi.resume(documentId, {
+        fromStage: "RAG_INDEX",
+      });
+      setProgress(null);
+      setIsPolling(true);
+      if (onMergeApplied) {
+        onMergeApplied(true);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setPollingError(err?.response?.data?.message || err?.message || "RAG 재시도 실패");
+    } finally {
+      setIsBatchLoading(false);
+    }
+  };
+
+  const selectedApplicableCount = clusters.filter(
+    (c) => selectedIds.includes(c.clusterId) && previewsMap[c.clusterId]?.applicable
+  ).length;
+
+  const totalSelectedCount = selectedIds.length;
 
   return (
     <Stack spacing={1}>
@@ -501,6 +661,51 @@ function ClusterListTab({
           현재 RAG 색인 또는 파이프라인이 진행 중이므로 추가 병합을 적용할 수 없습니다.
         </Alert>
       )}
+
+      {/* Batch controls */}
+      <Paper variant="outlined" sx={{ p: 1, bgcolor: "action.hover", borderRadius: 1 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center">
+          <FormControlLabel
+            control={
+              <Checkbox
+                size="small"
+                checked={selectedIds.length === clusters.length && clusters.length > 0}
+                indeterminate={selectedIds.length > 0 && selectedIds.length < clusters.length}
+                onChange={(e) => handleSelectAll(e.target.checked)}
+              />
+            }
+            label={
+              <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                전체 선택 ({selectedIds.length} / {clusters.length})
+              </Typography>
+            }
+          />
+          <Stack direction="row" spacing={1}>
+            {isDevMode && (
+              <Button
+                variant="outlined"
+                size="small"
+                disabled={totalSelectedCount === 0 || disabled}
+                onClick={() => handleOpenBatchDialog(false)}
+                sx={{ fontSize: 10, py: 0.25 }}
+              >
+                일괄 적용 (Stage만)
+              </Button>
+            )}
+            <Button
+              variant="contained"
+              size="small"
+              disabled={totalSelectedCount === 0 || disabled}
+              onClick={() => handleOpenBatchDialog(true)}
+              sx={{ fontSize: 10, py: 0.25 }}
+            >
+              일괄 적용 후 RAG 재색인
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
+
+      {/* Candidates List */}
       {clusters.map((c) => (
         <ClusterItem
           key={c.clusterId}
@@ -515,8 +720,176 @@ function ClusterListTab({
           disabled={disabled}
           onMergeApplied={onMergeApplied}
           refetchSummary={refetchSummary}
+          isSelected={selectedIds.includes(c.clusterId)}
+          onToggleSelect={() => handleToggleSelect(c.clusterId)}
+          onPreviewGenerated={(preview) => handlePreviewGenerated(c.clusterId, preview)}
         />
       ))}
+
+      {/* Batch Confirmation/Result Dialog */}
+      <Dialog open={batchDialogOpen} onClose={() => !isBatchLoading && setBatchDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontSize: 14, fontWeight: 600 }}>
+          {batchResult ? "일괄 병합 처리 결과" : "일괄 병합 적용 확인"}
+        </DialogTitle>
+        <DialogContent>
+          {!batchResult ? (
+            <Stack spacing={1.5}>
+              <DialogContentText sx={{ fontSize: 12 }}>
+                선택한 {totalSelectedCount}개의 병합 후보들을 일괄 적용하시겠습니까?
+              </DialogContentText>
+              <Alert severity="info" sx={{ fontSize: 10, py: 0.5 }}>
+                병합 적용은 **미리보기(Preview) 생성이 완료되고 "적용 가능" 판정을 받은 후보**만 최종 일괄 반영됩니다. (선택 건 중 준비 완료: {selectedApplicableCount}건)
+              </Alert>
+
+              {batchError && (
+                <Alert severity="error" sx={{ fontSize: 10, py: 0.5 }}>
+                  {batchError}
+                </Alert>
+              )}
+
+              <Box sx={{ bgcolor: "action.hover", p: 1, borderRadius: 1 }}>
+                <Typography variant="caption" display="block">
+                  <strong>동작 모드:</strong> {batchRunRagIndex ? "일괄 병합 적용 + RAG 재색인" : "일괄 병합 적용 (Stage만 변경)"}
+                </Typography>
+                {batchRunRagIndex && (
+                  <Typography variant="caption" display="block" color="warning.main" sx={{ mt: 0.5 }}>
+                    ※ RAG 재색인이 일괄 수행되며 완료될 때까지 시간이 걸릴 수 있습니다.
+                  </Typography>
+                )}
+              </Box>
+
+              <Box>
+                <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
+                  일괄 적용 대상 클러스터 ({selectedApplicableCount}건):
+                </Typography>
+                <Box sx={{ maxHeight: 150, overflowY: "auto", border: "1px solid", borderColor: "divider", p: 1, borderRadius: 1 }}>
+                  {clusters
+                    .filter((c) => selectedIds.includes(c.clusterId))
+                    .map((c) => {
+                      const hasPreview = !!previewsMap[c.clusterId];
+                      const applicable = previewsMap[c.clusterId]?.applicable;
+                      return (
+                        <Stack key={c.clusterId} direction="row" justifyContent="space-between" sx={{ borderBottom: "1px solid", borderColor: "divider", py: 0.5 }}>
+                          <Typography variant="caption">{c.clusterId} (Size: {c.size})</Typography>
+                          <Chip
+                            label={!hasPreview ? "Preview 미생성" : applicable ? "적용 가능" : "적용 불가"}
+                            color={!hasPreview ? "default" : applicable ? "success" : "error"}
+                            size="small"
+                            sx={{ height: 16, fontSize: 8 }}
+                          />
+                        </Stack>
+                      );
+                    })}
+                </Box>
+              </Box>
+            </Stack>
+          ) : (
+            <Stack spacing={1.5}>
+              <Alert severity="success" icon={<CheckCircleOutlined sx={{ fontSize: 16 }} />} sx={{ fontSize: 10, py: 0.5 }}>
+                일괄 병합 요청 처리가 완료되었습니다.
+              </Alert>
+
+              {batchResult.applied && batchResult.applied.length > 0 && (
+                <Box>
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: "success.main", display: "block", mb: 0.5 }}>
+                    성공한 병합안 ({batchResult.applied.length}건):
+                  </Typography>
+                  <Box sx={{ border: "1px solid", borderColor: "success.light", p: 1, borderRadius: 1, bgcolor: "background.paper" }}>
+                    {batchResult.applied.map((item: any) => (
+                      <Box key={item.planId} sx={{ borderBottom: "1px dashed", borderColor: "divider", pb: 0.5, mb: 0.5 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>
+                          Plan ID: {item.planId}
+                        </Typography>
+                        <Typography variant="caption" display="block">
+                          새 Chunk ID: {item.mergedChunkId}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {batchResult.failed && batchResult.failed.length > 0 && (
+                <Box>
+                  <Typography variant="caption" sx={{ fontWeight: 600, color: "error.main", display: "block", mb: 0.5 }}>
+                    실패한 병합안 ({batchResult.failed.length}건):
+                  </Typography>
+                  <Box sx={{ border: "1px solid", borderColor: "error.light", p: 1, borderRadius: 1, bgcolor: "background.paper" }}>
+                    {batchResult.failed.map((item: any, idx: number) => (
+                      <Box key={idx} sx={{ borderBottom: "1px dashed", borderColor: "divider", pb: 0.5, mb: 0.5 }}>
+                        <Typography variant="caption" sx={{ fontWeight: 600, display: "block", wordBreak: "break-all" }}>
+                          Fingerprint: {item.planFingerprint}
+                        </Typography>
+                        <Typography variant="caption" color="error.main" display="block">
+                          오류: {item.errorMessage}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {isPolling && progress && (
+                <Box sx={{ p: 1, bgcolor: "action.hover", borderRadius: 1, border: "1px dashed", borderColor: "primary.main" }}>
+                  <Stack spacing={0.5}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <CircularProgress size={10} />
+                      <Typography variant="caption" sx={{ fontWeight: 600 }}>RAG 재색인 진행 현황</Typography>
+                    </Stack>
+                    <Typography variant="caption" color="text.secondary">
+                      상태: {progress.status} / 현재 단계: {progress.currentStage}
+                    </Typography>
+                  </Stack>
+                </Box>
+              )}
+
+              {pollingError && (
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="caption" color="error.main" sx={{ flexGrow: 1 }}>
+                    재색인 실패: {pollingError}
+                  </Typography>
+                  <Button variant="outlined" color="error" size="small" onClick={handleResumeRag} sx={{ fontSize: 9, py: 0.2 }}>
+                    RAG 재시도
+                  </Button>
+                </Stack>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {!batchResult ? (
+            <>
+              <Button onClick={() => setBatchDialogOpen(false)} disabled={isBatchLoading} size="small" sx={{ fontSize: 11 }}>
+                취소
+              </Button>
+              <Button
+                onClick={handleApplyBatchMerge}
+                disabled={isBatchLoading || selectedApplicableCount === 0}
+                variant="contained"
+                color="primary"
+                size="small"
+                sx={{ fontSize: 11 }}
+              >
+                {isBatchLoading ? <CircularProgress size={10} color="inherit" /> : "일괄 적용"}
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={() => {
+                setBatchDialogOpen(false);
+                setSelectedIds([]);
+                setPreviewsMap({});
+                setBatchResult(null);
+              }}
+              variant="contained"
+              size="small"
+              sx={{ fontSize: 11 }}
+            >
+              닫기
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
@@ -553,6 +926,9 @@ function ClusterItem({
   disabled,
   onMergeApplied,
   refetchSummary,
+  isSelected,
+  onToggleSelect,
+  onPreviewGenerated,
 }: {
   cluster: MergeCandidateCluster;
   type: "lexical" | "embedding";
@@ -565,6 +941,9 @@ function ClusterItem({
   disabled: boolean;
   onMergeApplied?: (runRagIndex: boolean) => void;
   refetchSummary: () => void;
+  isSelected: boolean;
+  onToggleSelect: () => void;
+  onPreviewGenerated: (preview: MergePreviewCluster | null) => void;
 }) {
   const toast = useToast();
   const [preview, setPreview] = useState<MergePreviewCluster | null>(null);
@@ -589,7 +968,6 @@ function ClusterItem({
 
   const isDevMode = import.meta.env.DEV;
 
-  // Effect to handle RAG index polling
   useEffect(() => {
     if (!isPolling || !documentId) return;
 
@@ -639,13 +1017,16 @@ function ClusterItem({
       });
       if (res.clusters && res.clusters.length > 0) {
         setPreview(res.clusters[0]);
+        onPreviewGenerated(res.clusters[0]);
       } else {
         setErrorMsg("미리보기 데이터를 받지 못했습니다.");
+        onPreviewGenerated(null);
       }
     } catch (err: any) {
       console.error(err);
       const errMsg = err?.response?.data?.message || err?.message || "미리보기 생성 실패";
       setErrorMsg(errMsg);
+      onPreviewGenerated(null);
     } finally {
       setIsPreviewLoading(false);
     }
@@ -684,14 +1065,13 @@ function ClusterItem({
         mergedFromChunkIds: preview.mergedFromChunkIds,
       });
 
-      // Start polling if reindexing was requested and pipelineResult is present
       if (runRagIndex && res.pipelineResult) {
         setProgress(null);
         setIsPolling(true);
       }
 
-      // refetch summary to update candidate list
       refetchSummary();
+      onPreviewGenerated(null);
 
       if (onMergeApplied) {
         onMergeApplied(runRagIndex);
@@ -699,7 +1079,6 @@ function ClusterItem({
     } catch (err: any) {
       console.error(err);
       const errMsg = err?.response?.data?.message || err?.message || "병합 적용 실패";
-      // mapping errors
       if (errMsg.includes("planFingerprint is required")) {
         setErrorMsg("승인 토큰이 만료되었거나 누락되었습니다. 미리보기를 다시 생성해주세요.");
       } else if (errMsg.includes("stale") || errMsg.includes("not found")) {
@@ -744,6 +1123,15 @@ function ClusterItem({
       <Accordion key={cluster.clusterId} disableGutters square elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
         <AccordionSummary expandIcon={<ExpandMoreOutlined sx={{ fontSize: 16 }} />} sx={{ minHeight: 40, px: 1, bgcolor: "action.hover" }}>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "100%", mr: 1 }} onClick={(e) => e.stopPropagation()}>
+            <Checkbox
+              size="small"
+              checked={isSelected}
+              onChange={(e) => {
+                e.stopPropagation();
+                onToggleSelect();
+              }}
+              onClick={(e) => e.stopPropagation()}
+            />
             <Typography sx={{ fontSize: 11, fontWeight: 600 }}>{cluster.clusterId}</Typography>
             <Chip label={`Size: ${cluster.size}`} size="small" sx={{ height: 16, fontSize: 9 }} />
             {cluster.maxScore !== undefined && (
@@ -819,6 +1207,7 @@ function ClusterItem({
                           setProgress(null);
                           setIsPolling(true);
                           refetchSummary();
+                          onPreviewGenerated(null);
                           if (onMergeApplied) {
                             onMergeApplied(true);
                           }
@@ -938,7 +1327,7 @@ function ClusterItem({
                   )}
 
                   <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                    {isDevMode ? (
+                    {isDevMode && (
                       <Button
                         variant="outlined"
                         color="primary"
@@ -947,20 +1336,19 @@ function ClusterItem({
                         onClick={() => handleOpenConfirm(false)}
                         sx={{ fontSize: 10, py: 0.5, flex: 1 }}
                       >
-                        병합 적용 (Stage만)
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        size="small"
-                        disabled={!preview.applicable || isApplyLoading || isPendingPipeline}
-                        onClick={() => handleOpenConfirm(true)}
-                        sx={{ fontSize: 10, py: 0.5, flex: 1 }}
-                      >
-                        병합 적용 후 RAG 재색인
+                        병합 적용
                       </Button>
                     )}
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      size="small"
+                      disabled={!preview.applicable || isApplyLoading || isPendingPipeline}
+                      onClick={() => handleOpenConfirm(true)}
+                      sx={{ fontSize: 10, py: 0.5, flex: 1 }}
+                    >
+                      병합 적용 후 RAG 재색인
+                    </Button>
                   </Stack>
                 </Stack>
               </Paper>
