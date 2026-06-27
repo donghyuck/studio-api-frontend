@@ -58,7 +58,7 @@ export function IdeaBlockSummaryPanel({
   disabled,
   onMergeApplied,
 }: Props) {
-  const [tabIndex, setTabIndex] = useState(0);
+  const [activeTab, setActiveTab] = useState<string>("samples");
 
   const { data: summary, isLoading, error, refetch } = useQuery({
     queryKey: ["ideablock-summary", documentId, revisionId],
@@ -165,18 +165,18 @@ export function IdeaBlockSummaryPanel({
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tabs value={tabIndex} onChange={(_, v) => setTabIndex(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 36, "& .MuiTab-root": { minHeight: 36, fontSize: 11, fontWeight: 600, px: 2, py: 0.5 } }}>
-          <Tab label="Samples" />
-          <Tab label="Fallbacks" />
-          {showMergeUI && <Tab label="Lexical Merge Candidates" />}
-          {showMergeUI && <Tab label="Embedding Merge Candidates" />}
-          <Tab label="Evaluation Dashboard" />
+        <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} variant="scrollable" scrollButtons="auto" sx={{ minHeight: 36, "& .MuiTab-root": { minHeight: 36, fontSize: 11, fontWeight: 600, px: 2, py: 0.5 } }}>
+          <Tab value="samples" label="Samples" />
+          <Tab value="fallbacks" label="Fallbacks" />
+          {showMergeUI && <Tab value="lexical" label="Lexical Merge Candidates" />}
+          {showMergeUI && <Tab value="embedding" label="Embedding Merge Candidates" />}
+          <Tab value="evaluation" label="Evaluation Dashboard" />
         </Tabs>
       </Box>
 
       {/* Tab Panels */}
       <Box sx={{ pt: 1.5, maxHeight: 350, overflowY: "auto" }}>
-        {tabIndex === 0 && (
+        {activeTab === "samples" && (
           <SamplesTab
             samples={summary.samples || []}
             documentId={documentId}
@@ -186,8 +186,8 @@ export function IdeaBlockSummaryPanel({
             refetchSummary={refetch}
           />
         )}
-        {tabIndex === 1 && <FallbacksTab summary={summary} />}
-        {showMergeUI && tabIndex === 2 && (
+        {activeTab === "fallbacks" && <FallbacksTab summary={summary} />}
+        {showMergeUI && activeTab === "lexical" && (
           <ClusterListTab
             clusters={summary.mergeCandidateClusters || []}
             type="lexical"
@@ -202,7 +202,7 @@ export function IdeaBlockSummaryPanel({
             refetchSummary={refetch}
           />
         )}
-        {showMergeUI && tabIndex === 3 && (
+        {showMergeUI && activeTab === "embedding" && (
           <ClusterListTab
             clusters={summary.embeddingCandidateClusters || []}
             type="embedding"
@@ -218,7 +218,7 @@ export function IdeaBlockSummaryPanel({
             refetchSummary={refetch}
           />
         )}
-        {tabIndex === 4 && (
+        {activeTab === "evaluation" && (
           <RagEvaluationDashboard
             documentId={documentId}
             attachmentId={attachmentId || 1}
