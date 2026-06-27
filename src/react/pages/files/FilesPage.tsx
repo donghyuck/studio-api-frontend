@@ -13,6 +13,7 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { reactFilesApi } from "@/react/pages/files/api";
 import { FileUploadDialog } from "@/react/pages/files/FileUploadDialog";
+import { FileDetailDialog } from "@/react/pages/files/FileDetailDialog";
 import { filesQueryKeys } from "@/react/pages/files/queryKeys";
 import type { AttachmentDto } from "@/types/studio/files";
 import { API_BASE_URL } from "@/config/backend";
@@ -248,6 +249,7 @@ export function FilesPage() {
   const [objectType, setObjectType] = useState("");
   const [objectId, setObjectId] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedAttachmentId, setSelectedAttachmentId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [displayedCount, setDisplayedCount] = useState(0);
@@ -341,7 +343,7 @@ export function FilesPage() {
           params.data ? (
             <FileNameCell
               file={params.data}
-              onOpen={(attachmentId) => navigate("/application/files/" + attachmentId)}
+              onOpen={(attachmentId) => setSelectedAttachmentId(attachmentId)}
             />
           ) : null,
       },
@@ -551,6 +553,11 @@ export function FilesPage() {
           await queryClient.invalidateQueries({ queryKey: filesQueryKeys.all });
           gridRef.current?.refresh();
         }}
+      />
+      <FileDetailDialog
+        open={selectedAttachmentId !== null}
+        attachmentId={selectedAttachmentId || 0}
+        onClose={() => setSelectedAttachmentId(null)}
       />
     </>
   );

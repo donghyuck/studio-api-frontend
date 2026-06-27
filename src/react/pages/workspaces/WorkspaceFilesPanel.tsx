@@ -21,6 +21,7 @@ import { useConfirm, useToast } from "@/react/feedback";
 import { useNavigate } from "react-router-dom";
 import { reactFilesApi } from "@/react/pages/files/api";
 import { FileUploadDialog } from "@/react/pages/files/FileUploadDialog";
+import { FileDetailDialog } from "@/react/pages/files/FileDetailDialog";
 import type { AttachmentDto } from "@/types/studio/files";
 import { resolveAxiosError } from "@/utils/helpers";
 
@@ -246,6 +247,7 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
   const [files, setFiles] = useState<AttachmentDto[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [selectedAttachmentId, setSelectedAttachmentId] = useState<number | null>(null);
   const [selectedCount, setSelectedCount] = useState(0);
   const [selectedRows, setSelectedRows] = useState<AttachmentDto[]>([]);
   const [displayedCount, setDisplayedCount] = useState(0);
@@ -368,7 +370,7 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
           params.data ? (
             <FileNameCell
               file={params.data}
-              onOpen={(attachmentId) => navigate("/application/files/" + attachmentId)}
+              onOpen={(attachmentId) => setSelectedAttachmentId(attachmentId)}
             />
           ) : null,
       },
@@ -486,6 +488,11 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
           setUploadOpen(false);
           void loadFiles();
         }}
+      />
+      <FileDetailDialog
+        open={selectedAttachmentId !== null}
+        attachmentId={selectedAttachmentId || 0}
+        onClose={() => setSelectedAttachmentId(null)}
       />
     </Stack>
   );

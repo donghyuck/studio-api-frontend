@@ -39,7 +39,6 @@ const VectorVisualizationPage = lazy(() => import("@/react/pages/ai/VectorVisual
 const DocumentListPage = lazy(() => import("@/react/pages/documents/DocumentListPage").then(m => ({ default: m.DocumentListPage })));
 const DocumentEditorPage = lazy(() => import("@/react/pages/documents/DocumentEditorPage").then(m => ({ default: m.DocumentEditorPage })));
 const FilesPage = lazy(() => import("@/react/pages/files/FilesPage").then(m => ({ default: m.FilesPage })));
-const FileDetailPage = lazy(() => import("@/react/pages/files/FileDetailPage").then(m => ({ default: m.FileDetailPage })));
 const LoginPage = lazy(() => import("@/react/pages/LoginPage").then(m => ({ default: m.LoginPage })));
 const MailInboxPage = lazy(() => import("@/react/pages/mail/MailInboxPage").then(m => ({ default: m.MailInboxPage })));
 const MailPage = lazy(() => import("@/react/pages/mail/MailPage").then(m => ({ default: m.MailPage })));
@@ -87,7 +86,6 @@ export function AppRouter() {
             <Route index element={<DashboardPage />} />
             {profileRoutes}
             <Route path="application/files" element={<FilesPage />} />
-            <Route path="application/files/:attachmentId" element={<FileDetailPage />} />
             <Route path="application/workspaces" element={<WorkspaceListPage />} />
             <Route
               path="application/workspaces/:workspaceId"

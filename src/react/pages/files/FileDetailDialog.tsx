@@ -29,6 +29,7 @@ import {
   Select,
   Switch,
   Container,
+  Drawer,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -91,10 +92,13 @@ function normalizeExtractedText(value: string) {
     .trim();
 }
 
-export function FileDetailPage() {
-  const { attachmentId: paramAttachmentId } = useParams<{ attachmentId: string }>();
-  const attachmentId = Number(paramAttachmentId);
-  const navigate = useNavigate();
+interface Props {
+  open: boolean;
+  attachmentId: number;
+  onClose: () => void;
+}
+
+export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const toast = useToast();
   
   const [file, setFile] = useState<AttachmentDto | null>(null);
@@ -226,12 +230,12 @@ export function FileDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (attachmentId) {
+    if (open && attachmentId) {
       void loadEmbeddingOptions();
       void loadChunkConfig();
       void loadProviders();
     }
-  }, [attachmentId, loadEmbeddingOptions, loadChunkConfig, loadProviders]);
+  }, [open, attachmentId, loadEmbeddingOptions, loadChunkConfig, loadProviders]);
 
   const availableStrategies = useMemo(() => {
     const serverStrategies = chunkConfig?.chunking.availableStrategies ?? ["fixed-size", "recursive", "structure-based"];
@@ -390,7 +394,7 @@ export function FileDetailPage() {
   };
 
   useEffect(() => {
-    if (attachmentId) {
+    if (open && attachmentId) {
       let ignored = false;
       const checkMarkdownDocument = async () => {
         try {
@@ -491,8 +495,17 @@ export function FileDetailPage() {
         ignored = true;
         stopPolling();
       };
+    } else {
+      setDocumentId(null);
+      setMarkdownDocument(null);
+      setLatestRevision(null);
+      setPipelineExecution(null);
+      setPipelineProgress(null);
+      setMarkdownStatus(null);
+      setMarkdownError(null);
+      stopPolling();
     }
-  }, [attachmentId, startPolling, stopPolling, setLatestRevision, setPipelineExecution, setPipelineProgress, setMarkdownStatus, setMarkdownError, setLatestRagJob, setRagJobs, toast]);
+  }, [open, attachmentId, startPolling, stopPolling, setLatestRevision, setPipelineExecution, setPipelineProgress, setMarkdownStatus, setMarkdownError, setLatestRagJob, setRagJobs, toast]);
 
   // Restore options on load
   useEffect(() => {
@@ -1760,52 +1773,63 @@ export function FileDetailPage() {
     setActiveSection(section);
     const element = document.getElementById(`section-${section}`);
     if (element) {
-      const elementPosition = element.getBoundingClientRect().top + window.scrollY;
-      const offsetPosition = elementPosition - 20;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: "smooth"
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
       });
     }
   };
 
   const [activeSection, setActiveSection] = useState<string>("info");
 
-  if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (!file) {
-    return (
-      <Alert severity="warning" sx={{ mt: 2 }}>
-        파일 정보를 찾을 수 없거나 불러오지 못했습니다.
-      </Alert>
-    );
-  }
-
   return (
-    <Stack spacing={2}>
-      <PageToolbar
-        divider={true}
-        breadcrumbs={["서비스 관리", "자원 관리", "파일", file.name]}
-        label="파일의 변환 내역 및 RAG 파이프라인 처리 상태를 정밀 진단하고 조작합니다."
-        previous
-        onPrevious={() => navigate("/application/files")}
-        onRefresh={refreshDetail}
-      />
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 200px" },
-          gap: { xs: 0, lg: 3 },
-        }}
-      >
-        <Stack spacing={2}>
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      sx={{
+        "& .MuiDrawer-paper": {
+          width: "70vw",
+          p: 0,
+          display: "flex",
+          flexDirection: "column",
+        },
+      }}
+    >
+      <Box sx={{ p: 2, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid", borderColor: "divider", flexShrink: 0 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: 16 }}>
+            {file ? `${file.name} 상세 정보` : "파일 상세 정보"}
+          </Typography>
+        </Stack>
+        <Stack direction="row" spacing={1}>
+          <IconButton size="small" onClick={refreshDetail}>
+            <RefreshOutlined fontSize="small" />
+          </IconButton>
+          <IconButton size="small" onClick={onClose}>
+            <CloseOutlined fontSize="small" />
+          </IconButton>
+        </Stack>
+      </Box>
+
+      <Box sx={{ p: 3, flexGrow: 1, overflow: "auto" }}>
+        {loading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
+            <CircularProgress />
+          </Box>
+        ) : !file ? (
+          <Alert severity="warning">
+            파일 정보를 찾을 수 없거나 불러오지 못했습니다.
+          </Alert>
+        ) : (
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1fr) 200px" },
+              gap: { xs: 0, lg: 3 },
+            }}
+          >
+            <Stack spacing={2}>
           {/* 1. 기본 정보 상시 노출 */}
           <Container maxWidth="md" disableGutters>
             <Paper id="section-info" variant="outlined" sx={{ p: 2.5, mb: 2 }}>
@@ -2847,6 +2871,8 @@ export function FileDetailPage() {
           </Stack>
         </Box>
       </Box>
+    )}
+      </Box>
 
       {/* Reader / Convert Dialogs */}
       {file && (
@@ -2874,6 +2900,6 @@ export function FileDetailPage() {
           )}
         </>
       )}
-    </Stack>
+    </Drawer>
   );
 }
