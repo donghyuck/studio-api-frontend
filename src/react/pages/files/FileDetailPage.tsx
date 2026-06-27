@@ -1756,12 +1756,17 @@ export function FileDetailPage() {
     );
   }
 
-  const handleAccordionChange = (event: React.SyntheticEvent, isExpanded: boolean) => {
-    if (isExpanded) {
-      const target = event.currentTarget as HTMLElement;
-      setTimeout(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      }, 240);
+  const handleScrollToSection = (section: string) => {
+    setActiveSection(section);
+    const element = document.getElementById(`section-${section}`);
+    if (element) {
+      const elementPosition = element.getBoundingClientRect().top + window.scrollY;
+      const offsetPosition = elementPosition - 20;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth"
+      });
     }
   };
 
@@ -1803,7 +1808,7 @@ export function FileDetailPage() {
         <Stack spacing={2}>
           {/* 1. 기본 정보 상시 노출 */}
           <Container maxWidth="md" disableGutters>
-            <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
+            <Paper id="section-info" variant="outlined" sx={{ p: 2.5, mb: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
                 파일 기본 정보
               </Typography>
@@ -1836,7 +1841,7 @@ export function FileDetailPage() {
             </Paper>
 
             {/* Card 2: Text Extraction Panel */}
-            <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
+            <Paper id="section-textExtract" variant="outlined" sx={{ p: 2.5, mb: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
                 텍스트 추출 결과
               </Typography>
@@ -1888,7 +1893,7 @@ export function FileDetailPage() {
             </Paper>
 
               {/* Card 3: Markdown 지식 파이프라인 Panel */}
-              <Paper variant="outlined" sx={{ p: 2.5, mb: 2 }}>
+              <Paper id="section-pipeline" variant="outlined" sx={{ p: 2.5, mb: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
                   Markdown 지식 파이프라인
                 </Typography>
@@ -2723,9 +2728,24 @@ export function FileDetailPage() {
                 borderColor: activeSection === "info" ? "primary.main" : "transparent",
                 pl: 1,
               }}
-              onClick={() => setActiveSection("info")}
+              onClick={() => handleScrollToSection("info")}
             >
               기본 정보
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "textExtract" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "textExtract" ? 700 : 400,
+                borderLeft: activeSection === "textExtract" ? "2px solid" : "2px solid transparent",
+                borderColor: activeSection === "textExtract" ? "primary.main" : "transparent",
+                pl: 1,
+              }}
+              onClick={() => handleScrollToSection("textExtract")}
+            >
+              텍스트 추출 결과
             </Button>
             <Button
               size="small"
@@ -2738,7 +2758,7 @@ export function FileDetailPage() {
                 borderColor: activeSection === "pipeline" ? "primary.main" : "transparent",
                 pl: 1,
               }}
-              onClick={() => setActiveSection("pipeline")}
+              onClick={() => handleScrollToSection("pipeline")}
             >
               지식 파이프라인
             </Button>
