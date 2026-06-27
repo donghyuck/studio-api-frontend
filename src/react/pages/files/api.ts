@@ -743,3 +743,81 @@ export type RagEvaluationJobResponse = {
   runId?: string | null;
   errorMessage?: string | null;
 };
+
+// ==========================================
+// RAG 검색 운영 정책 (RAG Retrieval Policy)
+// ==========================================
+
+export interface RetrievalOptions {
+  structureTopK?: number;
+  ideaBlockTopK?: number;
+  finalTopK?: number;
+  minScore?: number;
+  dedupe?: boolean;
+  distilledScoreBoost?: number;
+}
+
+export interface RetrievalPolicyDto {
+  objectType: string;
+  objectId: string;
+  retrievalStrategy: string;
+  retrievalOptions?: RetrievalOptions;
+  questionSetId?: string;
+  evaluationRunId?: string;
+}
+
+export interface RetrievalPolicyUsageDto {
+  usageId: string;
+  objectType: string;
+  objectId: string;
+  retrievalStrategy: string;
+  questionSetId?: string;
+  evaluationRunId?: string;
+  topK?: number;
+  minScore?: number;
+  resultCount?: number;
+  skippedChat?: boolean;
+  elapsedMs?: number;
+  createdAt: string;
+}
+
+export interface RetrievalPolicySummaryDto {
+  objectType: string;
+  objectId: string;
+  usageCount: number;
+  averageResultCount: number;
+  averageElapsedMs: number;
+  skippedChatCount: number;
+  latestStrategy?: string;
+}
+
+export interface ApplyRecommendationRequest {
+  questionSetId: string;
+  objectType: string;
+  objectId: string;
+}
+
+export const reactRetrievalPolicyApi = {
+  async getList(): Promise<RetrievalPolicyDto[]> {
+    return apiRequest<RetrievalPolicyDto[]>("get", "/api/ai/chat/rag/retrieval-policies");
+  },
+  async getPolicy(objectType: string, objectId: string | number): Promise<RetrievalPolicyDto> {
+    return apiRequest<RetrievalPolicyDto>("get", `/api/ai/chat/rag/retrieval-policies/${objectType}/${objectId}`);
+  },
+  async savePolicy(policy: RetrievalPolicyDto): Promise<RetrievalPolicyDto> {
+    return apiRequest<RetrievalPolicyDto>("put", "/api/ai/chat/rag/retrieval-policies", {
+      data: policy,
+    });
+  },
+  async applyRecommendation(request: ApplyRecommendationRequest): Promise<void> {
+    await apiRequest("post", "/api/ai/chat/rag/retrieval-policies/apply-recommendation", {
+      data: request,
+    });
+  },
+  async getUsage(objectType: string, objectId: string | number): Promise<RetrievalPolicyUsageDto[]> {
+    return apiRequest<RetrievalPolicyUsageDto[]>("get", `/api/ai/chat/rag/retrieval-policies/${objectType}/${objectId}/usage`);
+  },
+  async getSummary(objectType: string, objectId: string | number): Promise<RetrievalPolicySummaryDto> {
+    return apiRequest<RetrievalPolicySummaryDto>("get", `/api/ai/chat/rag/retrieval-policies/${objectType}/${objectId}/usage/summary`);
+  },
+};

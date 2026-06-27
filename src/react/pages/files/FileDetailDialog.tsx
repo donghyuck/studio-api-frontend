@@ -52,6 +52,7 @@ import {
   reactFilesApi,
   reactDocumentConvertApi,
   reactMarkdownDocumentApi,
+  reactRetrievalPolicyApi,
   type DocumentConvertStatus,
   type DocumentConvertJob,
   type MarkdownDocumentDto,
@@ -61,6 +62,9 @@ import {
   type MarkdownPipelineStage,
   type MarkdownPipelineExecutionDto,
   type MarkdownRagReindexRequest,
+  type RetrievalPolicyDto,
+  type RetrievalPolicyUsageDto,
+  type RetrievalPolicySummaryDto,
 } from "@/react/pages/files/api";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { resolveAxiosError } from "@/utils/helpers";
@@ -114,6 +118,22 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [epubReaderOpen, setEpubReaderOpen] = useState(false);
   const [pdfReaderOpen, setPdfReaderOpen] = useState(false);
+
+  // RAG Retrieval Policy States
+  const [retrievalPolicy, setRetrievalPolicy] = useState<RetrievalPolicyDto | null>(null);
+  const [policyUsageSummary, setPolicyUsageSummary] = useState<RetrievalPolicySummaryDto | null>(null);
+  const [policyUsages, setPolicyUsages] = useState<RetrievalPolicyUsageDto[]>([]);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [policySaving, setPolicySaving] = useState(false);
+
+  // Policy Form Fields (For manual editing)
+  const [policyStrategy, setPolicyStrategy] = useState<string>("hybrid");
+  const [policyStructureTopK, setPolicyStructureTopK] = useState<number | string>(5);
+  const [policyIdeaBlockTopK, setPolicyIdeaBlockTopK] = useState<number | string>(5);
+  const [policyFinalTopK, setPolicyFinalTopK] = useState<number | string>(5);
+  const [policyMinScore, setPolicyMinScore] = useState<number | string>(0.6);
+  const [policyDedupe, setPolicyDedupe] = useState<boolean>(true);
+  const [policyDistilledBoost, setPolicyDistilledBoost] = useState<number | string>(0.03);
 
   // Markdown Document Pipeline States
   const [documentId, setDocumentId] = useState<string | null>(null);
@@ -184,6 +204,108 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [blockifyPiiMaskingEnabled, setBlockifyPiiMaskingEnabled] = useState<boolean>(true);
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
+
+  const loadPolicyInfo = useCallback(async () => {
+    if (!attachmentId) return;
+    setPolicyLoading(true);
+    try {
+      let currentPolicy: RetrievalPolicyDto | null = null;
+      try {
+        currentPolicy = await reactRetrievalPolicyApi.getPolicy("attachment", attachmentId);
+        setRetrievalPolicy(currentPolicy);
+      } catch (err: any) {
+        const status = err?.response?.status ?? err?.status;
+        if (status === 404) {
+          setRetrievalPolicy(null);
+        } else {
+          console.error("Failed to load retrieval policy", err);
+        }
+      }
+
+      if (currentPolicy) {
+        setPolicyStrategy(currentPolicy.retrievalStrategy);
+        const opts = currentPolicy.retrievalOptions || {};
+        setPolicyStructureTopK(opts.structureTopK ?? 5);
+        setPolicyIdeaBlockTopK(opts.ideaBlockTopK ?? 5);
+        setPolicyFinalTopK(opts.finalTopK ?? 5);
+        setPolicyMinScore(opts.minScore ?? 0.6);
+        setPolicyDedupe(opts.dedupe !== false);
+        setPolicyDistilledBoost(opts.distilledScoreBoost ?? 0.03);
+      }
+
+      try {
+        const summary = await reactRetrievalPolicyApi.getSummary("attachment", attachmentId);
+        setPolicyUsageSummary(summary);
+      } catch {
+        setPolicyUsageSummary(null);
+      }
+
+      try {
+        const usages = await reactRetrievalPolicyApi.getUsage("attachment", attachmentId);
+        setPolicyUsages(usages);
+      } catch {
+        setPolicyUsages([]);
+      }
+    } finally {
+      setPolicyLoading(false);
+    }
+  }, [attachmentId]);
+
+  const handleSavePolicy = async () => {
+    setPolicySaving(true);
+    try {
+      const payload: RetrievalPolicyDto = {
+        objectType: "attachment",
+        objectId: String(attachmentId),
+        retrievalStrategy: policyStrategy,
+        retrievalOptions: {
+          structureTopK: Number(policyStructureTopK),
+          ideaBlockTopK: Number(policyIdeaBlockTopK),
+          finalTopK: Number(policyFinalTopK),
+          minScore: Number(policyMinScore),
+          dedupe: policyDedupe,
+          distilledScoreBoost: Number(policyDistilledBoost),
+        },
+        questionSetId: retrievalPolicy?.questionSetId,
+        evaluationRunId: retrievalPolicy?.evaluationRunId,
+      };
+      await reactRetrievalPolicyApi.savePolicy(payload);
+      toast.success("RAG 검색 운영 정책을 성공적으로 저장했습니다.");
+      void loadPolicyInfo();
+    } catch (err) {
+      toast.error("정책 저장 실패: " + resolveAxiosError(err));
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
+  const handleApplyRecommendation = async (questionSetId: string) => {
+    setPolicySaving(true);
+    try {
+      const payload = {
+        questionSetId,
+        objectType: "attachment",
+        objectId: String(attachmentId),
+      };
+      await reactRetrievalPolicyApi.applyRecommendation(payload);
+      toast.success("최적 평가 추천 전략을 검색 운영 정책으로 저장했습니다.");
+      void loadPolicyInfo();
+    } catch (err) {
+      toast.error("추천 전략 반영 실패: " + resolveAxiosError(err));
+    } finally {
+      setPolicySaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (open && attachmentId) {
+      void loadPolicyInfo();
+    } else {
+      setRetrievalPolicy(null);
+      setPolicyUsageSummary(null);
+      setPolicyUsages([]);
+    }
+  }, [open, attachmentId, loadPolicyInfo]);
 
   // Load embedding options and chunking config on mount
   const loadEmbeddingOptions = useCallback(async () => {
@@ -2721,6 +2843,214 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                   )}
                 </Box>
               </Paper>
+
+              {/* Card 4: RAG 검색 운영 정책 Panel */}
+              <Paper id="section-retrievalPolicy" variant="outlined" sx={{ p: 2.5, mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
+                  RAG 검색 운영 정책
+                </Typography>
+
+                <Stack spacing={3.5}>
+                  {/* Section A: 수동 저장 및 편집 */}
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 1.5, fontWeight: 700, fontSize: 13.5 }}>
+                      운영 정책 설정 및 편집
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 6 }}>
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                          검색 전략 (Strategy)
+                        </Typography>
+                        <Select
+                          size="small"
+                          fullWidth
+                          value={policyStrategy}
+                          onChange={(e) => setPolicyStrategy(e.target.value)}
+                          disabled={policySaving || policyLoading}
+                        >
+                          <MenuItem value="hybrid">Hybrid</MenuItem>
+                          <MenuItem value="structure">Structure</MenuItem>
+                          <MenuItem value="ideaBlock">IdeaBlock</MenuItem>
+                        </Select>
+                      </Grid>
+                      <Grid size={{ xs: 6 }}>
+                        <TextField
+                          label="최종 반환 수 (finalTopK)"
+                          size="small"
+                          type="number"
+                          fullWidth
+                          value={policyFinalTopK}
+                          onChange={(e) => setPolicyFinalTopK(e.target.value)}
+                          disabled={policySaving || policyLoading}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 4 }}>
+                        <TextField
+                          label="구조 Top K"
+                          size="small"
+                          type="number"
+                          fullWidth
+                          value={policyStructureTopK}
+                          onChange={(e) => setPolicyStructureTopK(e.target.value)}
+                          disabled={policySaving || policyLoading}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 4 }}>
+                        <TextField
+                          label="아이디어 블록 Top K"
+                          size="small"
+                          type="number"
+                          fullWidth
+                          value={policyIdeaBlockTopK}
+                          onChange={(e) => setPolicyIdeaBlockTopK(e.target.value)}
+                          disabled={policySaving || policyLoading}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 4 }}>
+                        <TextField
+                          label="최소 점수 (minScore)"
+                          size="small"
+                          type="number"
+                          inputProps={{ step: "0.1" }}
+                          fullWidth
+                          value={policyMinScore}
+                          onChange={(e) => setPolicyMinScore(e.target.value)}
+                          disabled={policySaving || policyLoading}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 6 }}>
+                        <TextField
+                          label="정제 부스트 (distilledScoreBoost)"
+                          size="small"
+                          type="number"
+                          inputProps={{ step: "0.01" }}
+                          fullWidth
+                          value={policyDistilledBoost}
+                          onChange={(e) => setPolicyDistilledBoost(e.target.value)}
+                          disabled={policySaving || policyLoading}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 6 }} sx={{ display: "flex", alignItems: "center" }}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={policyDedupe}
+                              onChange={(e) => setPolicyDedupe(e.target.checked)}
+                              disabled={policySaving || policyLoading}
+                            />
+                          }
+                          label={<Typography variant="body2" sx={{ fontSize: 13 }}>중복 제거 (dedupe)</Typography>}
+                        />
+                      </Grid>
+                    </Grid>
+
+                    <Stack direction="row" spacing={1.5} sx={{ mt: 2 }} justifyContent="flex-end">
+                      {retrievalPolicy?.questionSetId && (
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="secondary"
+                          onClick={() => void handleApplyRecommendation(retrievalPolicy.questionSetId!)}
+                          disabled={policySaving || policyLoading}
+                        >
+                          평가 최적 추천 전략 적용
+                        </Button>
+                      )}
+                      <Button
+                        size="small"
+                        variant="contained"
+                        onClick={handleSavePolicy}
+                        disabled={policySaving || policyLoading}
+                      >
+                        {policySaving ? "저장 중..." : "수동 정책 저장"}
+                      </Button>
+                    </Stack>
+                  </Box>
+
+                  <Divider />
+
+                  {/* Section B: 정책 사용 요약 */}
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 1.5, fontWeight: 700, fontSize: 13.5 }}>
+                      정책 사용 요약 (Usage Summary)
+                    </Typography>
+                    {policyUsageSummary ? (
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 3 }}>
+                          <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", bgcolor: "action.hover" }}>
+                            <Typography variant="caption" color="text.secondary" display="block">총 사용 횟수</Typography>
+                            <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600, fontSize: 16 }}>{policyUsageSummary.usageCount}회</Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid size={{ xs: 3 }}>
+                          <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", bgcolor: "action.hover" }}>
+                            <Typography variant="caption" color="text.secondary" display="block">평균 결과 수</Typography>
+                            <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600, fontSize: 16 }}>{policyUsageSummary.averageResultCount?.toFixed(1) ?? "-"}개</Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid size={{ xs: 3 }}>
+                          <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", bgcolor: "action.hover" }}>
+                            <Typography variant="caption" color="text.secondary" display="block">평균 지연시간</Typography>
+                            <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600, fontSize: 16 }}>{policyUsageSummary.averageElapsedMs?.toFixed(1) ?? "-"}ms</Typography>
+                          </Paper>
+                        </Grid>
+                        <Grid size={{ xs: 3 }}>
+                          <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", bgcolor: "action.hover" }}>
+                            <Typography variant="caption" color="text.secondary" display="block">no-context 건수</Typography>
+                            <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600, fontSize: 16, color: "warning.main" }}>{policyUsageSummary.skippedChatCount}회</Typography>
+                          </Paper>
+                        </Grid>
+                      </Grid>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 1.5 }}>
+                        정책 사용 통계 내역이 없습니다.
+                      </Typography>
+                    )}
+                  </Box>
+
+                  <Divider />
+
+                  {/* Section C: 정책 사용 이력 */}
+                  <Box>
+                    <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 1.5, fontWeight: 700, fontSize: 13.5 }}>
+                      최근 정책 사용 이력 (Recent Policy Usage)
+                    </Typography>
+                    {policyUsages.length > 0 ? (
+                      <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200, borderRadius: 1 }}>
+                        <Table size="small" stickyHeader>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>사용 ID</TableCell>
+                              <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>적용 전략</TableCell>
+                              <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>결과 수</TableCell>
+                              <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>지연시간</TableCell>
+                              <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>사용 시각</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {policyUsages.map((usage) => (
+                              <TableRow key={usage.usageId} hover>
+                                <TableCell sx={{ fontSize: 12 }}>{usage.usageId.substring(0, 8)}</TableCell>
+                                <TableCell sx={{ fontSize: 12 }}>
+                                  <Chip label={usage.retrievalStrategy} size="small" color="primary" sx={{ height: 18, fontSize: 10 }} />
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 12 }}>{usage.resultCount ?? 0}개</TableCell>
+                                <TableCell sx={{ fontSize: 12 }}>{usage.elapsedMs ?? "-"} ms</TableCell>
+                                <TableCell sx={{ fontSize: 12 }}>{formatDate(usage.createdAt)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    ) : (
+                      <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
+                        최근 사용 이력이 존재하지 않습니다.
+                      </Typography>
+                    )}
+                  </Box>
+                </Stack>
+              </Paper>
           </Container>
         </Stack>
 
@@ -2867,6 +3197,24 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
               onClick={() => handleScrollToSection("ragJobHistory")}
             >
               RAG Job 이력
+            </Button>
+            <Button
+              size="small"
+              variant="text"
+              sx={{
+                justifyContent: "flex-start",
+                color: activeSection === "retrievalPolicy" ? "primary.main" : "text.secondary",
+                fontWeight: activeSection === "retrievalPolicy" ? 700 : 500,
+                borderLeft: activeSection === "retrievalPolicy" ? "2.5px solid" : "2.5px solid transparent",
+                borderColor: activeSection === "retrievalPolicy" ? "primary.main" : "transparent",
+                pl: 1.5,
+                py: 0.6,
+                fontSize: 13.5,
+                textTransform: "none",
+              }}
+              onClick={() => handleScrollToSection("retrievalPolicy")}
+            >
+              RAG 검색 운영 정책
             </Button>
           </Stack>
         </Box>
