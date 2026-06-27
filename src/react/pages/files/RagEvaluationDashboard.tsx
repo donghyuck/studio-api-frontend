@@ -385,12 +385,12 @@ export function RagEvaluationDashboard({
       <Card variant="outlined" sx={{ borderLeft: "4px solid", borderLeftColor: "primary.main" }}>
         <CardContent sx={{ p: 1.5 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="caption" sx={{ fontWeight: 600 }}>RAG 평가 질문 프리셋</Typography>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>RAG 평가 질문 프리셋</Typography>
             <Stack direction="row" spacing={1}>
-              <Button variant="outlined" size="small" onClick={() => handleApplyPreset("fast")} sx={{ fontSize: 9.5, height: 22 }}>
+              <Button variant="outlined" size="small" onClick={() => handleApplyPreset("fast")} sx={{ fontSize: 12, height: 28 }}>
                 빠른 비교 Preset (5문항)
               </Button>
-              <Button variant="outlined" size="small" color="secondary" onClick={() => handleApplyPreset("boost")} sx={{ fontSize: 9.5, height: 22 }}>
+              <Button variant="outlined" size="small" color="secondary" onClick={() => handleApplyPreset("boost")} sx={{ fontSize: 12, height: 28 }}>
                 Boost 실험 Preset (3문항)
               </Button>
             </Stack>
@@ -401,7 +401,7 @@ export function RagEvaluationDashboard({
       {/* 1. Evaluation Run Section */}
       <Card variant="outlined">
         <CardContent sx={{ p: 1.5 }}>
-          <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
             새 RAG 검색 성능 평가 실행
           </Typography>
           <Grid container spacing={1.5}>
@@ -414,7 +414,7 @@ export function RagEvaluationDashboard({
                 value={queriesInput}
                 onChange={(e) => setQueriesInput(e.target.value)}
                 variant="outlined"
-                sx={{ "& .MuiInputBase-root": { fontSize: 11 } }}
+                sx={{ "& .MuiInputBase-root": { fontSize: 13 } }}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -436,7 +436,7 @@ export function RagEvaluationDashboard({
                           }}
                         />
                       }
-                      label={<Typography variant="caption">{strategy}</Typography>}
+                      label={<Typography variant="body2">{strategy}</Typography>}
                     />
                   ))}
                 </Stack>
@@ -447,7 +447,7 @@ export function RagEvaluationDashboard({
                     size="small"
                     value={topK}
                     onChange={(e) => setTopK(Number(e.target.value))}
-                    sx={{ "& .MuiInputBase-root": { fontSize: 11 } }}
+                    sx={{ "& .MuiInputBase-root": { fontSize: 13 } }}
                   />
                   <TextField
                     label="Min Score"
@@ -456,7 +456,7 @@ export function RagEvaluationDashboard({
                     value={minScore}
                     onChange={(e) => setMinScore(Number(e.target.value))}
                     inputProps={{ step: 0.1 }}
-                    sx={{ "& .MuiInputBase-root": { fontSize: 11 } }}
+                    sx={{ "& .MuiInputBase-root": { fontSize: 13 } }}
                   />
                   <TextField
                     label="Boost"
@@ -465,7 +465,7 @@ export function RagEvaluationDashboard({
                     value={distilledBoost}
                     onChange={(e) => setDistilledBoost(Number(e.target.value))}
                     inputProps={{ step: 0.01 }}
-                    sx={{ "& .MuiInputBase-root": { fontSize: 11 } }}
+                    sx={{ "& .MuiInputBase-root": { fontSize: 13 } }}
                   />
                 </Stack>
 
@@ -511,7 +511,7 @@ export function RagEvaluationDashboard({
                   onClick={handleCreateEvaluation}
                   disabled={isCreating}
                   startIcon={isCreating ? <CircularProgress size={12} color="inherit" /> : <PlayArrowOutlined />}
-                  sx={{ fontSize: 10.5, py: 0.5 }}
+                  sx={{ fontSize: 13, py: 1 }}
                 >
                   평가 실행 및 이력 저장
                 </Button>
@@ -524,7 +524,7 @@ export function RagEvaluationDashboard({
       {/* 2. Baseline vs Candidate Attachment Comparison Card */}
       <Card variant="outlined" sx={{ bgcolor: "action.hover" }}>
         <CardContent sx={{ p: 1.5 }}>
-          <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
             이중 Attachment 대조군 비교 (Baseline vs Candidate)
           </Typography>
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1.5 }}>
@@ -534,16 +534,16 @@ export function RagEvaluationDashboard({
               type="number"
               value={baselineAttachmentId}
               onChange={(e) => setBaselineAttachmentId(e.target.value)}
-              sx={{ "& .MuiInputBase-root": { fontSize: 11, bgcolor: "background.paper" }, flex: 1 }}
+              sx={{ "& .MuiInputBase-root": { fontSize: 13, bgcolor: "background.paper" }, flex: 1 }}
             />
-            <Typography variant="caption" color="text.secondary">vs</Typography>
+            <Typography variant="body2" color="text.secondary">vs</Typography>
             <TextField
               label="Candidate Attachment ID"
               size="small"
               type="number"
               value={candidateAttachmentId}
               onChange={(e) => setCandidateAttachmentId(e.target.value)}
-              sx={{ "& .MuiInputBase-root": { fontSize: 11, bgcolor: "background.paper" }, flex: 1 }}
+              sx={{ "& .MuiInputBase-root": { fontSize: 13, bgcolor: "background.paper" }, flex: 1 }}
             />
             <Button
               variant="contained"
@@ -551,7 +551,7 @@ export function RagEvaluationDashboard({
               color="secondary"
               disabled={isDualLoading || !baselineAttachmentId || !candidateAttachmentId}
               onClick={handleFetchDualAttachmentRuns}
-              sx={{ height: 32, fontSize: 10.5 }}
+              sx={{ height: 36, fontSize: 13 }}
             >
               대조 비교 실행
             </Button>
@@ -565,7 +565,7 @@ export function RagEvaluationDashboard({
               <Grid size={{ xs: 12, sm: 6 }}>
                 <Card variant="outlined">
                   <CardContent sx={{ p: 1 }}>
-                    <Typography variant="caption" color="primary.main" sx={{ fontWeight: 600 }}>
+                    <Typography variant="body2" color="primary.main" sx={{ fontWeight: 600 }}>
                       Baseline (ID: {baselineAttachmentId}) {baselineRun ? `[Run: ${baselineRun.runId.substring(0, 8)}]` : "이력 없음"}
                     </Typography>
                     {baselineRun && (
@@ -573,10 +573,10 @@ export function RagEvaluationDashboard({
                         <TableBody>
                           {baselineRun.strategies.map((s) => (
                             <TableRow key={s.strategy}>
-                              <TableCell sx={{ fontSize: 9.5, p: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
-                              <TableCell sx={{ fontSize: 9.5, p: 0.5 }}>Hit@K: {(s.hitRate * 100).toFixed(0)}%</TableCell>
-                              <TableCell sx={{ fontSize: 9.5, p: 0.5 }}>MRR: {s.mrr.toFixed(3)}</TableCell>
-                              <TableCell sx={{ fontSize: 9.5, p: 0.5, textAlign: "right" }}>{s.averageElapsedMs.toFixed(0)}ms</TableCell>
+                              <TableCell sx={{ fontSize: 13, p: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
+                              <TableCell sx={{ fontSize: 13, p: 0.5 }}>Hit@K: {(s.hitRate * 100).toFixed(0)}%</TableCell>
+                              <TableCell sx={{ fontSize: 13, p: 0.5 }}>MRR: {s.mrr.toFixed(3)}</TableCell>
+                              <TableCell sx={{ fontSize: 13, p: 0.5, textAlign: "right" }}>{s.averageElapsedMs.toFixed(0)}ms</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -590,7 +590,7 @@ export function RagEvaluationDashboard({
               <Grid size={{ xs: 12, sm: 6 }}>
                 <Card variant="outlined">
                   <CardContent sx={{ p: 1 }}>
-                    <Typography variant="caption" color="secondary.main" sx={{ fontWeight: 600 }}>
+                    <Typography variant="body2" color="secondary.main" sx={{ fontWeight: 600 }}>
                       Candidate (ID: {candidateAttachmentId}) {candidateRun ? `[Run: ${candidateRun.runId.substring(0, 8)}]` : "이력 없음"}
                     </Typography>
                     {candidateRun && (
@@ -598,10 +598,10 @@ export function RagEvaluationDashboard({
                         <TableBody>
                           {candidateRun.strategies.map((s) => (
                             <TableRow key={s.strategy}>
-                              <TableCell sx={{ fontSize: 9.5, p: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
-                              <TableCell sx={{ fontSize: 9.5, p: 0.5 }}>Hit@K: {(s.hitRate * 100).toFixed(0)}%</TableCell>
-                              <TableCell sx={{ fontSize: 9.5, p: 0.5 }}>MRR: {s.mrr.toFixed(3)}</TableCell>
-                              <TableCell sx={{ fontSize: 9.5, p: 0.5, textAlign: "right" }}>{s.averageElapsedMs.toFixed(0)}ms</TableCell>
+                              <TableCell sx={{ fontSize: 13, p: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
+                              <TableCell sx={{ fontSize: 13, p: 0.5 }}>Hit@K: {(s.hitRate * 100).toFixed(0)}%</TableCell>
+                              <TableCell sx={{ fontSize: 13, p: 0.5 }}>MRR: {s.mrr.toFixed(3)}</TableCell>
+                              <TableCell sx={{ fontSize: 13, p: 0.5, textAlign: "right" }}>{s.averageElapsedMs.toFixed(0)}ms</TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -620,29 +620,29 @@ export function RagEvaluationDashboard({
         <Grid size={{ xs: 12, md: 5 }}>
           <Card variant="outlined" sx={{ height: "100%" }}>
             <CardContent sx={{ p: 1.5 }}>
-              <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
                 평가 실행 이력 ({evaluations.length}건)
               </Typography>
               {isLoading ? (
                 <CircularProgress size={20} sx={{ my: 2, display: "block", mx: "auto" }} />
               ) : evaluations.length === 0 ? (
-                <Typography variant="caption" color="text.secondary">이력이 없습니다.</Typography>
+                <Typography variant="body2" color="text.secondary">이력이 없습니다.</Typography>
               ) : (
                 <TableContainer>
                   <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ fontSize: 10, py: 0.5 }}>Run ID</TableCell>
-                        <TableCell sx={{ fontSize: 10, py: 0.5 }}>시각</TableCell>
-                        <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "right" }}>작업</TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5 }}>Run ID</TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5 }}>시각</TableCell>
+                        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "right" }}>작업</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {evaluations.map((run) => (
                         <TableRow key={run.runId} hover selected={selectedRunId === run.runId}>
-                          <TableCell sx={{ fontSize: 9.5, py: 0.5 }}>{run.runId.substring(0, 8)}...</TableCell>
-                          <TableCell sx={{ fontSize: 9.5, py: 0.5 }}>{new Date(run.createdAt).toLocaleString("ko-KR", { hour12: false })}</TableCell>
-                          <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "right" }}>
+                          <TableCell sx={{ fontSize: 13, py: 0.5 }}>{run.runId.substring(0, 8)}...</TableCell>
+                          <TableCell sx={{ fontSize: 13, py: 0.5 }}>{new Date(run.createdAt).toLocaleString("ko-KR", { hour12: false })}</TableCell>
+                          <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "right" }}>
                             <Button
                               size="small"
                               variant="outlined"
@@ -650,7 +650,7 @@ export function RagEvaluationDashboard({
                                 setSelectedRunId(run.runId);
                                 void handleViewDetail(run.runId);
                               }}
-                              sx={{ fontSize: 8.5, py: 0.1, px: 0.5 }}
+                              sx={{ fontSize: 12, py: 0.3, px: 0.75 }}
                             >
                               상세
                             </Button>
@@ -668,16 +668,16 @@ export function RagEvaluationDashboard({
         <Grid size={{ xs: 12, md: 7 }}>
           <Card variant="outlined" sx={{ height: "100%" }}>
             <CardContent sx={{ p: 1.5 }}>
-              <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
                 선택된 Run 상세 메트릭 ({selectedRunId || "선택 없음"})
               </Typography>
               {isDetailLoading ? (
                 <CircularProgress size={20} sx={{ my: 2, display: "block", mx: "auto" }} />
               ) : !selectedRunDetail ? (
-                <Typography variant="caption" color="text.secondary">좌측 리스트에서 상세를 조회해 주세요.</Typography>
+                <Typography variant="body2" color="text.secondary">좌측 리스트에서 상세를 조회해 주세요.</Typography>
               ) : (
                 <Stack spacing={1}>
-                  <Typography variant="caption" color="text.secondary" display="block">
+                  <Typography variant="body2" color="text.secondary" display="block">
                     Embedding Profile: {selectedRunDetail.embeddingProfileId} | TopK: {selectedRunDetail.topK} | MinScore: {selectedRunDetail.minScore}
                   </Typography>
 
@@ -686,23 +686,23 @@ export function RagEvaluationDashboard({
                     <Table size="small">
                       <TableHead>
                         <TableRow sx={{ bgcolor: "action.hover" }}>
-                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600 }}>Strategy</TableCell>
-                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Questions</TableCell>
-                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Hit</TableCell>
-                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Hit@K</TableCell>
-                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>MRR</TableCell>
-                          <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Avg ms</TableCell>
+                          <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600 }}>Strategy</TableCell>
+                          <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>Questions</TableCell>
+                          <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>Hit</TableCell>
+                          <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>Hit@K</TableCell>
+                          <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>MRR</TableCell>
+                          <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>Avg ms</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {selectedRunDetail.strategies.map((s) => (
                           <TableRow key={s.strategy} hover selected={activeDetailStrategy === s.strategy} onClick={() => setActiveDetailStrategy(s.strategy)} sx={{ cursor: "pointer" }}>
-                            <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
-                            <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.questionCount}</TableCell>
-                            <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.hitCount}</TableCell>
-                            <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{(s.hitRate * 100).toFixed(0)}%</TableCell>
-                            <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.mrr.toFixed(3)}</TableCell>
-                            <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.averageElapsedMs.toFixed(0)}</TableCell>
+                            <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
+                            <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.questionCount}</TableCell>
+                            <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.hitCount}</TableCell>
+                            <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{(s.hitRate * 100).toFixed(0)}%</TableCell>
+                            <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.mrr.toFixed(3)}</TableCell>
+                            <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.averageElapsedMs.toFixed(0)}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
@@ -711,17 +711,17 @@ export function RagEvaluationDashboard({
 
                   {/* Active Strategy Details (Questions breakdown) */}
                   <Box sx={{ mt: 1 }}>
-                    <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.5, display: "block" }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, display: "block" }}>
                       전략 질문 상세 분석 ({activeDetailStrategy})
                     </Typography>
                     <TableContainer component={Paper} variant="outlined">
                       <Table size="small">
                         <TableHead sx={{ bgcolor: "action.hover" }}>
                           <TableRow>
-                            <TableCell sx={{ fontSize: 9.5, py: 0.5 }}>Query</TableCell>
-                            <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center" }}>Hit</TableCell>
-                            <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center" }}>First Rank</TableCell>
-                            <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center" }}>Result Count</TableCell>
+                            <TableCell sx={{ fontSize: 13, py: 0.5 }}>Query</TableCell>
+                            <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>Hit</TableCell>
+                            <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>First Rank</TableCell>
+                            <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>Result Count</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
@@ -742,7 +742,7 @@ export function RagEvaluationDashboard({
       {/* 4. Before/After Delta Compare */}
       <Card variant="outlined">
         <CardContent sx={{ p: 1.5 }}>
-          <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, display: "block", mb: 1 }}>
             병합 전후 RAG 검색 성능 대조 (Delta Compare)
           </Typography>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1.5 }}>
@@ -751,11 +751,11 @@ export function RagEvaluationDashboard({
               value={beforeRunId}
               onChange={(e) => setBeforeRunId(e.target.value)}
               displayEmpty
-              sx={{ fontSize: 11, flex: 1 }}
+              sx={{ fontSize: 13, flex: 1 }}
             >
               <MenuItem value="">Before Run 선택 (병합 전)</MenuItem>
               {evaluations.map((run) => (
-                <MenuItem key={run.runId} value={run.runId} sx={{ fontSize: 11 }}>
+                <MenuItem key={run.runId} value={run.runId} sx={{ fontSize: 13 }}>
                   {run.runId.substring(0, 8)}... ({new Date(run.createdAt).toLocaleTimeString()})
                 </MenuItem>
               ))}
@@ -768,11 +768,11 @@ export function RagEvaluationDashboard({
               value={afterRunId}
               onChange={(e) => setAfterRunId(e.target.value)}
               displayEmpty
-              sx={{ fontSize: 11, flex: 1 }}
+              sx={{ fontSize: 13, flex: 1 }}
             >
               <MenuItem value="">After Run 선택 (병합 후)</MenuItem>
               {evaluations.map((run) => (
-                <MenuItem key={run.runId} value={run.runId} sx={{ fontSize: 11 }}>
+                <MenuItem key={run.runId} value={run.runId} sx={{ fontSize: 13 }}>
                   {run.runId.substring(0, 8)}... ({new Date(run.createdAt).toLocaleTimeString()})
                 </MenuItem>
               ))}
@@ -783,7 +783,7 @@ export function RagEvaluationDashboard({
               size="small"
               onClick={handleCompare}
               disabled={isComparing || !beforeRunId || !afterRunId}
-              sx={{ fontSize: 10.5, py: 0.5 }}
+              sx={{ fontSize: 13, py: 0.5 }}
             >
               {isComparing ? <CircularProgress size={12} color="inherit" /> : "Delta 비교 실행"}
             </Button>
@@ -794,35 +794,35 @@ export function RagEvaluationDashboard({
               <Table size="small">
                 <TableHead>
                   <TableRow sx={{ bgcolor: "action.hover" }}>
-                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600 }}>RAG 전략</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Before HitRate</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>After HitRate</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>HitRate Delta</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Before MRR</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>After MRR</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>MRR Delta</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Before Avg ms</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>After Avg ms</TableCell>
-                    <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 600, textAlign: "center" }}>Avg ms Delta</TableCell>
+                    <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600 }}>RAG 전략</TableCell>
+                    <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>Before HitRate</TableCell>
+                    <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>After HitRate</TableCell>
+                    <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>HitRate Delta</TableCell>
+                    <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>Before MRR</TableCell>
+                    <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>After MRR</TableCell>
+                    <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>MRR Delta</TableCell>
+                    <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>Before Avg ms</TableCell>
+                    <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>After Avg ms</TableCell>
+                    <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 600, textAlign: "center" }}>Avg ms Delta</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {compareResult.strategies.map((s) => (
                     <TableRow key={s.strategy} hover>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{(s.beforeHitRate * 100).toFixed(0)}%</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{(s.afterHitRate * 100).toFixed(0)}%</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>
+                      <TableCell sx={{ fontSize: 13, py: 0.5, fontWeight: 500 }}>{s.strategy}</TableCell>
+                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{(s.beforeHitRate * 100).toFixed(0)}%</TableCell>
+                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{(s.afterHitRate * 100).toFixed(0)}%</TableCell>
+                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>
                         {renderDeltaMetric(s.hitRateDelta)}
                       </TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.beforeMrr.toFixed(3)}</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.afterMrr.toFixed(3)}</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>
+                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.beforeMrr.toFixed(3)}</TableCell>
+                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.afterMrr.toFixed(3)}</TableCell>
+                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>
                         {renderDeltaMetric(s.mrrDelta)}
                       </TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.beforeAverageElapsedMs.toFixed(0)}ms</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>{s.afterAverageElapsedMs.toFixed(0)}ms</TableCell>
-                      <TableCell sx={{ fontSize: 10, py: 0.5, textAlign: "center" }}>
+                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.beforeAverageElapsedMs.toFixed(0)}ms</TableCell>
+                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{s.afterAverageElapsedMs.toFixed(0)}ms</TableCell>
+                      <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>
                         {renderDeltaMetric(s.averageElapsedMsDelta, true)}
                       </TableCell>
                     </TableRow>
@@ -843,22 +843,22 @@ function QuestionRow({ question, strategy }: { question: any; strategy: string }
   return (
     <>
       <TableRow hover onClick={() => setOpen(!open)} sx={{ cursor: "pointer" }}>
-        <TableCell sx={{ fontSize: 9.5, py: 0.5 }}>{question.query}</TableCell>
-        <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center", color: question.hit ? "success.main" : "error.main", fontWeight: 600 }}>
+        <TableCell sx={{ fontSize: 13, py: 0.5 }}>{question.query}</TableCell>
+        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center", color: question.hit ? "success.main" : "error.main", fontWeight: 600 }}>
           {String(question.hit)}
         </TableCell>
-        <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center" }}>{question.firstRank ?? "-"}</TableCell>
-        <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "center" }}>{question.resultCount}</TableCell>
+        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{question.firstRank ?? "-"}</TableCell>
+        <TableCell sx={{ fontSize: 13, py: 0.5, textAlign: "center" }}>{question.resultCount}</TableCell>
       </TableRow>
       {open && (
         <TableRow>
           <TableCell colSpan={4} sx={{ bgcolor: "action.hover", p: 1 }}>
             <Box sx={{ pl: 2 }}>
-              <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
                 검색된 결과 청크 리스트 (Metadata 포함)
               </Typography>
               {(!question.chunks || question.chunks.length === 0) ? (
-                <Typography variant="caption" color="text.secondary">반환된 청크가 없습니다.</Typography>
+                <Typography variant="body2" color="text.secondary">반환된 청크가 없습니다.</Typography>
               ) : (
                 <Stack spacing={0.5}>
                   {question.chunks.map((c: any, index: number) => {
@@ -866,53 +866,53 @@ function QuestionRow({ question, strategy }: { question: any; strategy: string }
                     return (
                       <Box key={index} sx={{ borderBottom: "1px dashed", borderColor: "divider", pb: 0.5, mb: 0.5 }}>
                         <Stack direction="row" spacing={1} alignItems="center">
-                          <Chip label={`Rank ${index + 1}`} size="small" sx={{ height: 16, fontSize: 8 }} />
-                          <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                          <Chip label={`Rank ${index + 1}`} size="small" sx={{ height: 18, fontSize: 10 }} />
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {c.chunkId}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="body2" color="text.secondary">
                             (Score: {c.score?.toFixed(3)})
                           </Typography>
                           {meta.ideaBlockDistilled && (
-                            <Chip label="🌟 Distilled" size="small" color="primary" sx={{ height: 14, fontSize: 8 }} />
+                            <Chip label="🌟 Distilled" size="small" color="primary" sx={{ height: 16, fontSize: 10 }} />
                           )}
                         </Stack>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 9, mt: 0.5, whiteSpace: "pre-wrap", bgcolor: "background.paper", p: 0.5, borderRadius: 0.5 }}>
+                        <Typography variant="body2" color="text.secondary" display="block" sx={{ fontSize: 12, mt: 0.5, whiteSpace: "pre-wrap", bgcolor: "background.paper", p: 0.5, borderRadius: 0.5 }}>
                           {c.text || "(텍스트 본문 없음)"}
                         </Typography>
                         {/* Metadata grid */}
                         <Grid container spacing={0.5} sx={{ mt: 0.5 }}>
                           <Grid size={{ xs: 6, sm: 4 }}>
-                            <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>Strategy: {strategy}</Typography>
+                            <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>Strategy: {strategy}</Typography>
                           </Grid>
                           {meta.chunkType && (
                             <Grid size={{ xs: 6, sm: 4 }}>
-                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>Type: {meta.chunkType}</Typography>
+                              <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>Type: {meta.chunkType}</Typography>
                             </Grid>
                           )}
                           {meta.actualChunkingStrategy && (
                             <Grid size={{ xs: 6, sm: 4 }}>
-                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>Chunking: {meta.actualChunkingStrategy}</Typography>
+                              <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>Chunking: {meta.actualChunkingStrategy}</Typography>
                             </Grid>
                           )}
                           {meta.sectionTitle && (
                             <Grid size={{ xs: 6, sm: 4 }}>
-                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>Section: {meta.sectionTitle}</Typography>
+                              <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>Section: {meta.sectionTitle}</Typography>
                             </Grid>
                           )}
                           {meta.markdownDocumentId && (
                             <Grid size={{ xs: 6, sm: 4 }}>
-                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>DocID: {meta.markdownDocumentId.substring(0, 8)}...</Typography>
+                              <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>DocID: {meta.markdownDocumentId.substring(0, 8)}...</Typography>
                             </Grid>
                           )}
                           {meta.markdownRevisionId && (
                             <Grid size={{ xs: 6, sm: 4 }}>
-                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>RevID: {meta.markdownRevisionId.substring(0, 8)}...</Typography>
+                              <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>RevID: {meta.markdownRevisionId.substring(0, 8)}...</Typography>
                             </Grid>
                           )}
                           {meta.ideaBlockDistillationFingerprint && (
                             <Grid size={{ xs: 12 }}>
-                              <Typography variant="caption" sx={{ fontSize: 8, color: "text.disabled" }}>Fingerprint: {meta.ideaBlockDistillationFingerprint}</Typography>
+                              <Typography variant="caption" sx={{ fontSize: 11, color: "text.disabled" }}>Fingerprint: {meta.ideaBlockDistillationFingerprint}</Typography>
                             </Grid>
                           )}
                         </Grid>
