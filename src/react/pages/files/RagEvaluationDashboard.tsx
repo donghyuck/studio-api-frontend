@@ -628,7 +628,7 @@ export function RagEvaluationDashboard({
               ) : evaluations.length === 0 ? (
                 <Typography variant="caption" color="text.secondary">이력이 없습니다.</Typography>
               ) : (
-                <TableContainer sx={{ maxHeight: 250 }}>
+                <TableContainer>
                   <Table size="small" stickyHeader>
                     <TableHead>
                       <TableRow>
@@ -640,7 +640,7 @@ export function RagEvaluationDashboard({
                     <TableBody>
                       {evaluations.map((run) => (
                         <TableRow key={run.runId} hover selected={selectedRunId === run.runId}>
-                          <TableCell sx={{ fontSize: 9.5, py: 0.5, fontFamily: "monospace" }}>{run.runId.substring(0, 8)}...</TableCell>
+                          <TableCell sx={{ fontSize: 9.5, py: 0.5 }}>{run.runId.substring(0, 8)}...</TableCell>
                           <TableCell sx={{ fontSize: 9.5, py: 0.5 }}>{new Date(run.createdAt).toLocaleString("ko-KR", { hour12: false })}</TableCell>
                           <TableCell sx={{ fontSize: 9.5, py: 0.5, textAlign: "right" }}>
                             <Button
@@ -714,7 +714,7 @@ export function RagEvaluationDashboard({
                     <Typography variant="caption" sx={{ fontWeight: 600, mb: 0.5, display: "block" }}>
                       전략 질문 상세 분석 ({activeDetailStrategy})
                     </Typography>
-                    <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200 }}>
+                    <TableContainer component={Paper} variant="outlined">
                       <Table size="small">
                         <TableHead sx={{ bgcolor: "action.hover" }}>
                           <TableRow>
@@ -867,7 +867,7 @@ function QuestionRow({ question, strategy }: { question: any; strategy: string }
                       <Box key={index} sx={{ borderBottom: "1px dashed", borderColor: "divider", pb: 0.5, mb: 0.5 }}>
                         <Stack direction="row" spacing={1} alignItems="center">
                           <Chip label={`Rank ${index + 1}`} size="small" sx={{ height: 16, fontSize: 8 }} />
-                          <Typography variant="caption" sx={{ fontWeight: 600, fontFamily: "monospace" }}>
+                          <Typography variant="caption" sx={{ fontWeight: 600 }}>
                             {c.chunkId}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
