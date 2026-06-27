@@ -467,6 +467,14 @@ export const reactMarkdownDocumentApi = {
       data: request,
     });
   },
+  async createEvaluationJob(request: RagEvaluationRequest): Promise<RagEvaluationJobResponse> {
+    return apiRequest<RagEvaluationJobResponse>("post", "/api/ai/chat/rag/evaluations/jobs", {
+      data: request,
+    });
+  },
+  async getEvaluationJobStatus(jobId: string): Promise<RagEvaluationJobResponse> {
+    return apiRequest<RagEvaluationJobResponse>("get", `/api/ai/chat/rag/evaluations/jobs/${encodeURIComponent(jobId)}`);
+  },
 };
 
 export interface MarkdownPipelineEstimateRequest {
@@ -716,3 +724,16 @@ export type RagEvaluationCompareResponse = {
 };
 
 export type RagEvaluationDetailResponse = RagEvaluationRunResponse;
+
+export type RagEvaluationJobResponse = {
+  jobId: string;
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  totalQuestions: number;
+  completedQuestions: number;
+  totalStrategies: number;
+  completedStrategies: number;
+  currentStrategy?: string | null;
+  currentQuestion?: string | null;
+  runId?: string | null;
+  errorMessage?: string | null;
+};

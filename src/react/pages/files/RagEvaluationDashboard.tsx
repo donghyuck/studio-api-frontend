@@ -24,9 +24,7 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  Divider,
   Chip,
-  IconButton,
 } from "@mui/material";
 import {
   ExpandMoreOutlined,
@@ -35,12 +33,12 @@ import {
   CheckCircleOutline,
   TrendingUp,
   TrendingDown,
-  InfoOutlined,
 } from "@mui/icons-material";
 import {
   reactMarkdownDocumentApi,
   type RagEvaluationRunResponse,
   type RagEvaluationCompareResponse,
+  type RagEvaluationJobResponse,
 } from "./api";
 import { useToast } from "@/react/feedback";
 
@@ -99,6 +97,10 @@ export function RagEvaluationDashboard({
   const [isCreating, setIsCreating] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
 
+  // Async Job states
+  const [activeJob, setActiveJob] = useState<RagEvaluationJobResponse | null>(null);
+  const [jobPollingError, setJobPollingError] = useState<string | null>(null);
+
   // Detail strategy selection
   const [activeDetailStrategy, setActiveDetailStrategy] = useState<string>("hybrid");
 
@@ -121,6 +123,66 @@ export function RagEvaluationDashboard({
       void loadHistory();
     }
   }, [attachmentId]);
+
+  // Dynamic polling effect for the evaluation job
+  useEffect(() => {
+    if (!activeJob || activeJob.status === "COMPLETED" || activeJob.status === "FAILED") {
+      return;
+    }
+
+    let active = true;
+    let accumulatedTime = 0;
+    let currentInterval = 2000; // 2 seconds initially
+    let timerId: NodeJS.Timeout;
+
+    const poll = async () => {
+      try {
+        const statusRes = await reactMarkdownDocumentApi.getEvaluationJobStatus(activeJob.jobId);
+        if (!active) return;
+
+        setActiveJob(statusRes);
+
+        if (statusRes.status === "COMPLETED") {
+          setIsCreating(false);
+          toast.success("비동기 RAG 평가 작업이 정상 완료되었습니다!");
+          if (statusRes.runId) {
+            setSelectedRunId(statusRes.runId);
+            void handleViewDetail(statusRes.runId);
+          }
+          void loadHistory();
+          return;
+        }
+
+        if (statusRes.status === "FAILED") {
+          setIsCreating(false);
+          setJobPollingError(statusRes.errorMessage || "평가 작업 진행 도중 서버에서 실패했습니다.");
+          return;
+        }
+
+        // Adjust interval dynamically after 30 seconds
+        accumulatedTime += currentInterval;
+        if (accumulatedTime >= 30000 && currentInterval === 2000) {
+          currentInterval = 5000; // Switch to 5 seconds
+          toast.info("정밀 평가가 장시간 진행 중이므로, 갱신 주기를 5초로 늘려 진행률을 추적합니다.");
+        }
+
+        // Schedule next poll
+        timerId = setTimeout(poll, currentInterval);
+      } catch (err: any) {
+        console.error("Job status polling error:", err);
+        // Continue scheduling next poll in case of temporary network glitches
+        timerId = setTimeout(poll, currentInterval);
+      }
+    };
+
+    // Schedule initial poll
+    timerId = setTimeout(poll, currentInterval);
+
+    return () => {
+      active = false;
+      clearTimeout(timerId);
+    };
+  }, [activeJob?.jobId]);
 
   const handleHttpError = (err: any, actionName: string) => {
     const status = err?.response?.status ?? err?.status;
@@ -168,39 +230,55 @@ export function RagEvaluationDashboard({
       return;
     }
 
-    if (questions.length > 10) {
-      const ok = window.confirm("질문 수가 10개를 초과하면 동기 평가 특성상 시간이 다소 오래 걸릴 수 있습니다. 진행할까요?");
-      if (!ok) return;
-    }
+    // Determine whether to use sync or async job API
+    const useJobApi = questions.length >= 10 || selectedStrategies.length >= 2;
 
     setIsCreating(true);
-    try {
-      const res = await reactMarkdownDocumentApi.createEvaluation({
-        strategies: selectedStrategies,
-        objectType: "attachment",
-        objectId: String(attachmentId),
-        embeddingProfileId: embeddingProfileId || "retrieval-ko-kure",
-        topK,
-        minScore,
-        retrievalOptions: {
-          structureTopK: topK,
-          ideaBlockTopK: topK,
-          finalTopK: topK,
-          dedupe: true,
-          distilledScoreBoost: distilledBoost,
-        },
-        questions,
-      });
+    setJobPollingError(null);
+    setActiveJob(null);
 
-      toast.success("RAG 평가 실행이 정상 완료되었습니다.");
-      await loadHistory();
-      setSelectedRunId(res.runId);
-      void handleViewDetail(res.runId);
-    } catch (err: any) {
-      console.error(err);
-      handleHttpError(err, "평가 실행");
-    } finally {
-      setIsCreating(false);
+    const requestPayload = {
+      strategies: selectedStrategies,
+      objectType: "attachment",
+      objectId: String(attachmentId),
+      embeddingProfileId: embeddingProfileId || "retrieval-ko-kure",
+      topK,
+      minScore,
+      retrievalOptions: {
+        structureTopK: topK,
+        ideaBlockTopK: topK,
+        finalTopK: topK,
+        dedupe: true,
+        distilledScoreBoost: distilledBoost,
+      },
+      questions,
+    };
+
+    if (useJobApi) {
+      // Async Job API
+      try {
+        const job = await reactMarkdownDocumentApi.createEvaluationJob(requestPayload);
+        setActiveJob(job);
+        toast.info("평가 문항/전략이 대량으로 검출되어 비동기 Job으로 백그라운드 평가를 시작합니다.");
+      } catch (err: any) {
+        console.error(err);
+        handleHttpError(err, "평가 Job 생성");
+        setIsCreating(false);
+      }
+    } else {
+      // Sync API
+      try {
+        const res = await reactMarkdownDocumentApi.createEvaluation(requestPayload);
+        toast.success("RAG 평가 실행이 정상 완료되었습니다.");
+        await loadHistory();
+        setSelectedRunId(res.runId);
+        void handleViewDetail(res.runId);
+        setIsCreating(false);
+      } catch (err: any) {
+        console.error(err);
+        handleHttpError(err, "평가 실행");
+        setIsCreating(false);
+      }
     }
   };
 
@@ -211,7 +289,6 @@ export function RagEvaluationDashboard({
       const res = await reactMarkdownDocumentApi.getEvaluationDetail(runId);
       setSelectedRunDetail(res);
       if (res.strategies && res.strategies.length > 0) {
-        // set first strategy as active detail
         setActiveDetailStrategy(res.strategies[0].strategy);
       }
     } catch (err: any) {
@@ -252,7 +329,6 @@ export function RagEvaluationDashboard({
     setCandidateRun(null);
     try {
       const list = await reactMarkdownDocumentApi.getEvaluations();
-      // find latest run for each
       const baseRuns = list
         .filter((r) => String(r.objectId) === String(baselineAttachmentId))
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -261,19 +337,19 @@ export function RagEvaluationDashboard({
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       if (baseRuns.length === 0) {
-        toast.warning(`Baseline Attachment (ID: ${baselineAttachmentId})의 최근 평가 이력이 없습니다. 새로 평가를 먼저 수행하세요.`);
+        toast.warning(`Baseline Attachment (ID: ${baselineAttachmentId})의 최근 평가 이력이 없습니다.`);
       } else {
         const detail = await reactMarkdownDocumentApi.getEvaluationDetail(baseRuns[0].runId);
         setBaselineRun(detail);
       }
 
       if (candRuns.length === 0) {
-        toast.warning(`Candidate Attachment (ID: ${candidateAttachmentId})의 최근 평가 이력이 없습니다. 새로 평가를 먼저 수행하세요.`);
+        toast.warning(`Candidate Attachment (ID: ${candidateAttachmentId})의 최근 평가 이력이 없습니다.`);
       } else {
         const detail = await reactMarkdownDocumentApi.getEvaluationDetail(candRuns[0].runId);
         setCandidateRun(detail);
       }
-      toast.success("이중 Attachment 대조군 데이터를 성공적으로 매핑했습니다.");
+      toast.success("이중 Attachment 대조군 데이터를 로드했습니다.");
     } catch (err: any) {
       console.error(err);
       handleHttpError(err, "대조 이력 로드");
@@ -393,9 +469,39 @@ export function RagEvaluationDashboard({
                   />
                 </Stack>
 
-                {isCreating && (
+                {/* Loading state and Progress feedback */}
+                {isCreating && activeJob && (
+                  <Box sx={{ p: 1, bgcolor: "action.hover", borderRadius: 1, border: "1px dashed", borderColor: "primary.main" }}>
+                    <Stack spacing={0.5}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <CircularProgress size={10} />
+                        <Typography variant="caption" sx={{ fontWeight: 600 }}>RAG 백그라운드 평가 진행률 ({activeJob.status})</Typography>
+                      </Stack>
+                      <Typography variant="caption" color="text.secondary">
+                        평가 상태: {activeJob.completedQuestions} / {activeJob.totalQuestions} 문항 완료 (전략: {activeJob.currentStrategy || "-"})
+                      </Typography>
+                      {activeJob.currentQuestion && (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic", fontSize: 9.5 }}>
+                          현재 검증 중: "{activeJob.currentQuestion}"
+                        </Typography>
+                      )}
+                    </Stack>
+                  </Box>
+                )}
+
+                {isCreating && !activeJob && (
                   <Alert severity="info" sx={{ fontSize: 9.5, py: 0.2 }}>
-                    RAG 검색 및 메트릭 평가 중입니다. 문항 및 검색 전략 수가 많을수록 처리 속도가 길어집니다.
+                    RAG 검색 및 동기식 성능 검증 중입니다...
+                  </Alert>
+                )}
+
+                {jobPollingError && (
+                  <Alert severity="error" sx={{ fontSize: 10, py: 0.5 }}>
+                    <Typography variant="caption" display="block" sx={{ fontWeight: 600 }}>비동기 평가 진행 실패</Typography>
+                    <Typography variant="caption" display="block">{jobPollingError}</Typography>
+                    <Button variant="outlined" color="error" size="small" onClick={handleCreateEvaluation} sx={{ fontSize: 9, py: 0.1, mt: 0.5 }}>
+                      동일 조건으로 평가 재실행
+                    </Button>
                   </Alert>
                 )}
 
