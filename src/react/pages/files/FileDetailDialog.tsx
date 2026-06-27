@@ -65,6 +65,7 @@ import type { AttachmentDto } from "@/types/studio/files";
 import type { RagIndexJobStatus, RagIndexJobStep } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 import { DocumentConvertDialog, getDocumentFormat, getFriendlyErrorMessage } from "./DocumentConvertDialog";
+import { IdeaBlockSummaryPanel } from "./IdeaBlockSummaryPanel";
 import { EpubReaderDialog } from "./EpubReaderDialog";
 import { PdfReaderDialog } from "./PdfReaderDialog";
 import { useMarkdownDocumentPolling } from "./hooks/useMarkdownDocumentPolling";
@@ -2267,98 +2268,24 @@ export function FileDetailDialog({ open, onClose, attachmentId }: Props) {
                           }
                         }
 
+                        if (!latestRevision?.documentId || !latestRevision?.revisionId) return null;
                         return (
-                          <Box sx={{ mt: 2, pt: 1.5, borderTop: "1px dashed", borderColor: "divider" }}>
-                            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                              <Typography variant="caption" sx={{ fontWeight: 600, color: "primary.main" }}>
-                                IdeaBlock 분할 및 청킹 통계
-                              </Typography>
-                              <Typography variant="caption" sx={{ fontWeight: 600, color: blockifyStatusColor }}>
-                                {blockifyStatusText}
-                              </Typography>
-                            </Stack>
-                            <Grid container spacing={1}>
-                              <Grid size={{ xs: 6 }}>
-                                <Typography variant="caption" color="text.secondary" display="block">전체 Chunk 수</Typography>
-                                <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
-                                  {stats.totalChunks}개
-                                </Typography>
-                              </Grid>
-                              <Grid size={{ xs: 6 }}>
-                                <Typography variant="caption" color="text.secondary" display="block">IdeaBlock 수</Typography>
-                                <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, color: "success.main" }}>
-                                  {stats.ideaBlockCount}개
-                                </Typography>
-                              </Grid>
-                              <Grid size={{ xs: 6 }}>
-                                <Typography variant="caption" color="text.secondary" display="block">Fallback Chunk 수</Typography>
-                                <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500, color: "warning.main" }}>
-                                  {stats.fallbackCount}개
-                                </Typography>
-                              </Grid>
-                              <Grid size={{ xs: 6 }}>
-                                <Typography variant="caption" color="text.secondary" display="block">Source Block Coverage</Typography>
-                                <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
-                                  {stats.sourceBlockCoverage !== undefined ? `${(stats.sourceBlockCoverage * 100).toFixed(1)}%` : "상세 조회 필요"}
-                                </Typography>
-                              </Grid>
-                              {stats.averageConfidence !== undefined && (
-                                <Grid size={{ xs: 6 }}>
-                                  <Typography variant="caption" color="text.secondary" display="block">평균 신뢰도</Typography>
-                                  <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 500 }}>
-                                    {stats.averageConfidence.toFixed(2)}
-                                  </Typography>
-                                </Grid>
-                              )}
-                              {coverageSeverity && coverageMessage && (
-                                <Grid size={{ xs: 12 }} sx={{ mt: 0.5 }}>
-                                  <Alert severity={coverageSeverity} sx={{ py: 0.25, px: 1, "& .MuiAlert-message": { fontSize: 10, lineHeight: 1.4 } }}>
-                                    {coverageMessage}
-                                  </Alert>
-                                </Grid>
-                              )}
-                              {stats.fallbackCount > 0 && (
-                                <Grid size={{ xs: 12 }}>
-                                  <Accordion disableGutters square elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, mt: 0.5 }}>
-                                    <AccordionSummary expandIcon={<ExpandMoreOutlined sx={{ fontSize: 16 }} />} sx={{ minHeight: 28, height: 28, px: 1, bgcolor: "action.hover" }}>
-                                      <Typography sx={{ fontSize: 11, fontWeight: 600 }}>
-                                        Fallback 상세 ({stats.fallbackCount}건)
-                                      </Typography>
-                                    </AccordionSummary>
-                                    <AccordionDetails sx={{ p: 1, bgcolor: "background.paper" }}>
-                                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontSize: 10.5 }}>
-                                        일부 source block은 IdeaBlock 생성 조건을 만족하지 않아 structure-based chunk로 보존되었습니다.
-                                      </Typography>
-                                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 0.5 }}>
-                                        {Object.entries(stats.fallbackReasons).map(([reason, count]) => {
-                                          const labels: Record<string, string> = {
-                                            ANSWER_TOO_SHORT: "생성 답변이 너무 짧음",
-                                            ANSWER_HAS_NO_BODY: "답변 본문 없음",
-                                            ANSWER_EQUALS_TITLE: "답변이 제목만 반복",
-                                            HEADING_ONLY: "제목만 있는 block",
-                                            EVIDENCE_NOT_FOUND: "원문 evidence 없음",
-                                            TRUSTED_ANSWER_FACT_MISMATCH: "팩트 불일치",
-                                            GENERIC_QUESTION: "질문이 너무 일반적",
-                                            TABLE_SECTION: "표 섹션 fallback",
-                                            COVERAGE_GAP: "누락 보존 fallback",
-                                          };
-                                          return (
-                                            <Chip
-                                              key={reason}
-                                              size="small"
-                                              variant="outlined"
-                                              label={`${labels[reason] || reason}: ${count}개`}
-                                              sx={{ fontSize: 9.5, height: 18 }}
-                                            />
-                                          );
-                                        })}
-                                      </Box>
-                                    </AccordionDetails>
-                                  </Accordion>
-                                </Grid>
-                              )}
-                            </Grid>
-                          </Box>
+                          <IdeaBlockSummaryPanel 
+                            documentId={latestRevision.documentId}
+                            revisionId={latestRevision.revisionId} 
+                            revisionStatus={latestRevision?.status}
+                            chunkingStrategy={latestRagJob?.chunkingStrategy || (ragMetadata as any)?.chunkingStrategy || chunkingStrategy}
+                            llmProvider={blockifyLlmProvider}
+                            llmModel={blockifyLlmModel}
+                            embeddingProfileId={selectedEmbeddingOption?.profileId}
+                            useLlmKeywordExtraction={true}
+                            disabled={controlsDisabled}
+                            onMergeApplied={(runRagIndex) => {
+                              if (runRagIndex) {
+                                startPolling(latestRevision.documentId, attachmentId);
+                              }
+                            }}
+                          />
                         );
                       })()}
                     </Box>

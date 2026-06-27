@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { apiRequest } from "@/react/query/fetcher";
 import { apiClient } from "@/react/api/client";
 import type { RagIndexRequestDto } from "@/types/studio/ai";
@@ -308,7 +309,74 @@ export interface MarkdownRagReindexRequest {
   skillExtractionMode?: 'regex' | 'llm' | null;
 }
 
+
+export type MergeCandidateCluster = {
+  clusterId: string;
+  size: number;
+  maxScore?: number;
+  chunkIds: string[];
+};
+
+export type SampleIdeaBlock = {
+  chunkId: string;
+  name?: string;
+  criticalQuestion?: string;
+  trustedAnswer?: string;
+  tags?: string[];
+  keywords?: string[];
+  entityName?: string;
+  entityType?: string;
+  sourceEvidence?: unknown;
+  sourceBlockRange?: unknown;
+  sourceSectionId?: string;
+  confidence?: number;
+  generatorModel?: string;
+  promptVersion?: string;
+  fingerprint?: string;
+
+  mergeCandidate?: boolean;
+  similarityClusterId?: string;
+  similarityClusterSize?: number;
+  similarityMaxScore?: number;
+  mergePolicy?: string;
+
+  embeddingMergeCandidate?: boolean;
+  embeddingSimilarityClusterId?: string;
+  embeddingSimilarityClusterSize?: number;
+  embeddingSimilarityMaxScore?: number;
+  embeddingMergePolicy?: string;
+};
+
+export type IdeaBlockSummaryDto = {
+  documentId: string;
+  revisionId: string;
+  coverage: number;
+  chunkCount: number;
+  ideaBlockCount: number;
+  fallbackCount: number;
+
+  mergeCandidateCount?: number;
+  similarityClusterCount?: number;
+  mergeCandidateClusters?: MergeCandidateCluster[];
+
+  embeddingMergeCandidateCount?: number;
+  embeddingSimilarityClusterCount?: number;
+  embeddingSimilarityThreshold?: number;
+  embeddingCandidateClusters?: MergeCandidateCluster[];
+
+  fallbackReasonCounts: Record<string, number>;
+  missingSourceBlocks: number[];
+  rejectedReasons: string[];
+  samples: SampleIdeaBlock[];
+};
+
 export const reactMarkdownDocumentApi = {
+
+  async getIdeaBlockSummary(documentId: string, revisionId: string): Promise<IdeaBlockSummaryDto> {
+    const { data } = await axios.get(`/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/ideablocks/summary`);
+    return data;
+  },
+
   async extractFromAttachment(request: MarkdownDocumentFromAttachmentRequest): Promise<MarkdownDocumentFromAttachmentResponse> {
     return apiRequest<MarkdownDocumentFromAttachmentResponse>("post", "/api/markdown-documents/from-attachment", {
       data: request,
@@ -362,6 +430,16 @@ export const reactMarkdownDocumentApi = {
   },
   async getResources(documentId: string): Promise<MarkdownResourceDto[]> {
     return apiRequest<MarkdownResourceDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/resources`);
+  },
+  async mergePreview(documentId: string, revisionId: string, request: IdeaBlockMergePreviewRequest): Promise<IdeaBlockMergePreviewResponse> {
+    return apiRequest<IdeaBlockMergePreviewResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/ideablocks/merge-preview`, {
+      data: request,
+    });
+  },
+  async mergeApply(documentId: string, revisionId: string, request: IdeaBlockMergeApplyRequest): Promise<IdeaBlockMergeApplyResponse> {
+    return apiRequest<IdeaBlockMergeApplyResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/ideablocks/merge-apply`, {
+      data: request,
+    });
   },
 };
 
@@ -423,3 +501,60 @@ export interface MarkdownPipelineProgressResponseDto {
     errorMessage?: string | null;
   } | null;
 }
+
+export type IdeaBlockMergePreviewRequest = {
+  clusterId: string;
+  preferEmbeddingClusters: boolean;
+  llmProvider: string;
+  llmModel: string;
+  maxClusters: number;
+};
+
+export type MergePreviewCluster = {
+  clusterId: string;
+  clusterType: 'lexical' | 'embedding' | string;
+  status: string;
+  reason: string;
+  criticalQuestion?: string;
+  trustedAnswer?: string;
+  sourceEvidence?: any[];
+  sourceBlockRanges?: any[];
+  previewText?: string;
+  planId: string;
+  planFingerprint: string;
+  applicable: boolean;
+  validationWarnings: string[];
+  mergedFromChunkIds: string[];
+};
+
+export type IdeaBlockMergePreviewResponse = {
+  clusters: MergePreviewCluster[];
+};
+
+export type IdeaBlockMergeApplyRequest = {
+  clusterId: string;
+  preferEmbeddingClusters: boolean;
+  llmProvider: string;
+  llmModel: string;
+  maxClusters: number;
+  planFingerprint: string;
+  runRagIndex?: boolean;
+  runSkillExtraction?: boolean;
+  embeddingProfileId?: string;
+  useLlmKeywordExtraction?: boolean;
+};
+
+export type IdeaBlockMergeApplyResponse = {
+  documentId: string;
+  revisionId: string;
+  planId: string;
+  planFingerprint: string;
+  mergedChunkId: string;
+  mergedFromChunkIds: string[];
+  beforeChunkCount: number;
+  afterChunkCount: number;
+  pipelineResult?: {
+    resumedPhase: string;
+    resumedFrom: string;
+  } | null;
+};
