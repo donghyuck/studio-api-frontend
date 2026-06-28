@@ -59,6 +59,19 @@ export function IdeaBlockSummaryPanel({
   onMergeApplied,
 }: Props) {
   const [activeTab, setActiveTab] = useState<string>("evaluation");
+  const toast = useToast();
+
+  // Auto Merge States
+  const [autoDialogOpen, setAutoDialogOpen] = useState(false);
+  const [isAutoLoading, setIsAutoLoading] = useState(false);
+  const [autoResult, setAutoResult] = useState<any>(null);
+  const [autoRunRagIndex, setAutoRunRagIndex] = useState(true);
+  const [autoError, setAutoError] = useState<string | null>(null);
+
+  // Polling for Auto Merge RAG indexing
+  const [autoProgress, setAutoProgress] = useState<any>(null);
+  const [isAutoPolling, setIsAutoPolling] = useState(false);
+  const [autoPollingError, setAutoPollingError] = useState<string | null>(null);
 
   const { data: summary, isLoading, error, refetch } = useQuery({
     queryKey: ["ideablock-summary", documentId, revisionId],
@@ -66,6 +79,82 @@ export function IdeaBlockSummaryPanel({
     enabled: !!documentId && !!revisionId,
     retry: false,
   });
+
+  useEffect(() => {
+    if (!isAutoPolling || !documentId) return;
+
+    let active = true;
+    const fetchProgress = async () => {
+      try {
+        const res = await reactMarkdownDocumentApi.getProgress(documentId);
+        if (!active) return;
+        setAutoProgress(res);
+
+        const isCompleted = res.status === "COMPLETED";
+        const isFailed = res.status === "FAILED";
+        const ragStatus = res.rag?.status;
+        const isRagFinished = ragStatus === "SUCCEEDED" || ragStatus === "FAILED" || ragStatus === "WARNING";
+
+        if (isCompleted || isFailed || isRagFinished) {
+          setIsAutoPolling(false);
+          if (isFailed || ragStatus === "FAILED") {
+            setAutoPollingError(res.rag?.errorMessage || res.errorMessage || "자동 재색인 진행 중 실패했습니다.");
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    void fetchProgress();
+    const timer = setInterval(fetchProgress, 3000);
+
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [isAutoPolling, documentId]);
+
+  const handleOpenAutoDialog = () => {
+    setAutoResult(null);
+    setAutoError(null);
+    setAutoPollingError(null);
+    setAutoDialogOpen(true);
+  };
+
+  const handleApplyAutoMerge = async () => {
+    setIsAutoLoading(true);
+    setAutoError(null);
+    setAutoPollingError(null);
+    try {
+      const res = await reactMarkdownDocumentApi.mergeAutoApply(documentId, revisionId, {
+        preferEmbeddingClusters: true,
+        llmProvider: llmProvider || "google-ai-gemini",
+        llmModel: llmModel || "gemini-2.5-flash",
+        maxClusters: 5,
+        runRagIndex: autoRunRagIndex,
+        embeddingProfileId: embeddingProfileId || "retrieval-ko-kure",
+      });
+
+      setAutoResult(res);
+
+      if (autoRunRagIndex && res.pipelineResult) {
+        setAutoProgress(null);
+        setIsAutoPolling(true);
+      }
+
+      toast.success("자동 병합 요청이 완료되었습니다.");
+      refetch();
+      if (onMergeApplied) {
+        onMergeApplied(autoRunRagIndex);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAutoError(err?.response?.data?.message || err?.message || "자동 병합 적용 실패");
+    } finally {
+      setIsAutoLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (summary) {
@@ -98,6 +187,17 @@ export function IdeaBlockSummaryPanel({
         <Typography variant="caption" sx={{ fontWeight: 600, color: "primary.main" }}>
           IdeaBlock 품질
         </Typography>
+        {showMergeUI && (
+          <Button
+            variant="outlined"
+            color="secondary"
+            size="small"
+            onClick={handleOpenAutoDialog}
+            sx={{ fontSize: 10, py: 0.25, height: 24, textTransform: "none" }}
+          >
+            자동 병합 적용 (고급)
+          </Button>
+        )}
       </Stack>
 
       {/* Summary Card */}
@@ -227,6 +327,130 @@ export function IdeaBlockSummaryPanel({
           />
         )}
       </Box>
+
+      {/* 자동 병합 Dialog */}
+      <Dialog open={autoDialogOpen} onClose={() => !isAutoLoading && setAutoDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontSize: 14, fontWeight: 700 }}>IdeaBlock 자동 병합 및 정제 (고급/실험)</DialogTitle>
+        <DialogContent dividers>
+          {!autoResult ? (
+            <Stack spacing={2}>
+              <Typography variant="body2" sx={{ fontSize: 12.5 }}>
+                서버에서 LLM 검증 검사기를 실행해 오류 경고(Warning)가 없고 
+                <code>applicable=true</code>인 모든 후보 cluster를 안전하게 일괄 병합합니다.
+              </Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, bgcolor: "action.hover" }}>
+                <Typography variant="caption" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
+                  병합 대상 후보 수
+                </Typography>
+                <Grid container spacing={1}>
+                  <Grid size={{ xs: 6 }}>
+                    <Typography variant="caption" color="text.secondary">Lexical 병합 후보:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {summary?.mergeCandidateClusters?.length || 0}개 Cluster
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <Typography variant="caption" color="text.secondary">Embedding 병합 후보:</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      {summary?.embeddingCandidateClusters?.length || 0}개 Cluster
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Paper>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={autoRunRagIndex}
+                    onChange={(e) => setAutoRunRagIndex(e.target.checked)}
+                    disabled={isAutoLoading}
+                  />
+                }
+                label={
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                    자동 병합 완료 후 RAG 재색인(Reindexing) 기동
+                  </Typography>
+                }
+              />
+              {autoError && <Alert severity="error" sx={{ fontSize: 11 }}>{autoError}</Alert>}
+            </Stack>
+          ) : (
+            <Stack spacing={2}>
+              <Alert severity="success" sx={{ fontSize: 12, py: 0.5 }}>
+                자동 병합 요청을 처리했습니다!
+              </Alert>
+
+              <Typography variant="subtitle2" sx={{ fontSize: 12, fontWeight: 700 }}>
+                적용 성공 ({autoResult.applied?.length || 0}개)
+              </Typography>
+              {autoResult.applied && autoResult.applied.length > 0 ? (
+                <Box sx={{ maxHeight: 150, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1 }}>
+                  {autoResult.applied.map((item: any, idx: number) => (
+                    <Typography key={idx} variant="caption" display="block" sx={{ wordBreak: "break-all", mb: 0.5 }}>
+                      • {item.planId} ➔ 새 Chunk: {item.mergedChunkId} (소스 청크 {item.mergedFromChunkIds?.length || 0}개 병합됨)
+                    </Typography>
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="caption" color="text.secondary">성공한 병합이 없습니다.</Typography>
+              )}
+
+              <Typography variant="subtitle2" sx={{ fontSize: 12, fontWeight: 700, color: "error.main" }}>
+                적용 실패 ({autoResult.failed?.length || 0}개)
+              </Typography>
+              {autoResult.failed && autoResult.failed.length > 0 ? (
+                <Box sx={{ maxHeight: 150, overflowY: "auto", border: "1px solid", borderColor: "divider", borderRadius: 1, p: 1 }}>
+                  {autoResult.failed.map((item: any, idx: number) => (
+                    <Typography key={idx} variant="caption" display="block" color="error" sx={{ wordBreak: "break-all", mb: 0.5 }}>
+                      • {item.planFingerprint ? `${item.planFingerprint.substring(0, 12)}...` : "N/A"}: {item.errorMessage}
+                    </Typography>
+                  ))}
+                </Box>
+              ) : (
+                <Typography variant="caption" color="text.secondary">실패한 병합이 없습니다.</Typography>
+              )}
+
+              {isAutoPolling && autoProgress && (
+                <Paper variant="outlined" sx={{ p: 1.5, bgcolor: "action.hover", border: "1px dashed", borderColor: "primary.main" }}>
+                  <Typography variant="subtitle2" sx={{ fontSize: 11, fontWeight: 700, mb: 0.5 }}>
+                    RAG 재색인 파이프라인 진행 상태 (Polling)
+                  </Typography>
+                  <CircularProgress size={12} sx={{ mr: 1, verticalAlign: "middle" }} />
+                  <Typography variant="caption" color="text.secondary">
+                    상태: {autoProgress.status} | 현단계: {autoProgress.rag?.currentStep || autoProgress.currentStage || "-"}
+                  </Typography>
+                  <Box sx={{ mt: 1 }}>
+                    <Typography variant="caption" display="block" color="text.secondary">
+                      청크 수: {autoProgress.rag?.chunkCount || 0} | 임베딩 완료: {autoProgress.rag?.embeddedCount || 0} | 색인 완료: {autoProgress.rag?.indexedCount || 0}
+                    </Typography>
+                  </Box>
+                </Paper>
+              )}
+              {autoPollingError && (
+                <Alert severity="error" sx={{ fontSize: 11 }}>
+                  {autoPollingError}
+                </Alert>
+              )}
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {!autoResult ? (
+            <>
+              <Button size="small" onClick={() => setAutoDialogOpen(false)} disabled={isAutoLoading}>
+                취소
+              </Button>
+              <Button size="small" variant="contained" color="secondary" onClick={handleApplyAutoMerge} disabled={isAutoLoading}>
+                {isAutoLoading ? <CircularProgress size={16} color="inherit" /> : "자동 병합 실행"}
+              </Button>
+            </>
+          ) : (
+            <Button size="small" variant="contained" onClick={() => setAutoDialogOpen(false)} disabled={isAutoPolling}>
+              닫기
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -1005,6 +1229,8 @@ function ClusterItem({
 
   const handleCreatePreview = async (e: React.MouseEvent) => {
     e.stopPropagation(); // prevent accordion toggle
+    setPreview(null);
+    onPreviewGenerated(null);
     setIsPreviewLoading(true);
     setErrorMsg(null);
     try {

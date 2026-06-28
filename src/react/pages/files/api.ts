@@ -345,6 +345,7 @@ export type SampleIdeaBlock = {
   embeddingSimilarityClusterSize?: number;
   embeddingSimilarityMaxScore?: number;
   embeddingMergePolicy?: string;
+  ideaBlockDistillationSourceChunks?: string[];
 };
 
 export type IdeaBlockSummaryDto = {
@@ -448,6 +449,11 @@ export const reactMarkdownDocumentApi = {
   },
   async mergeApplyBatch(documentId: string, revisionId: string, request: IdeaBlockMergeApplyBatchRequest): Promise<IdeaBlockMergeApplyBatchResponse> {
     return apiRequest<IdeaBlockMergeApplyBatchResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/ideablocks/merge-apply-batch`, {
+      data: request,
+    });
+  },
+  async mergeAutoApply(documentId: string, revisionId: string, request: IdeaBlockMergeAutoApplyRequest): Promise<IdeaBlockMergeApplyBatchResponse> {
+    return apiRequest<IdeaBlockMergeApplyBatchResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/ideablocks/merge-auto-apply`, {
       data: request,
     });
   },
@@ -650,6 +656,15 @@ export type IdeaBlockMergeApplyBatchRequest = {
     maxClusters: number;
     planFingerprint: string;
   }[];
+  runRagIndex?: boolean;
+  embeddingProfileId?: string;
+};
+
+export type IdeaBlockMergeAutoApplyRequest = {
+  preferEmbeddingClusters: boolean;
+  llmProvider: string;
+  llmModel: string;
+  maxClusters: number;
   runRagIndex?: boolean;
   embeddingProfileId?: string;
 };
