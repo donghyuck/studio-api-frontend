@@ -797,6 +797,7 @@ export interface RetrievalOptions {
   minScore?: number;
   dedupe?: boolean;
   distilledScoreBoost?: number;
+  queryExpansionEnabled?: boolean;
 }
 
 export interface RetrievalPolicyDto {
@@ -806,6 +807,10 @@ export interface RetrievalPolicyDto {
   retrievalOptions?: RetrievalOptions;
   questionSetId?: string;
   evaluationRunId?: string;
+  score?: number;
+  hitRate?: number;
+  mrr?: number;
+  averageElapsedMs?: number;
 }
 
 export interface RetrievalPolicyUsageDto {
@@ -873,6 +878,8 @@ export interface RagStrategyAnalysis {
   mrr: number;
   averageElapsedMs: number;
   failedQuestionCount: number;
+  minScore?: number;
+  runIds?: string[];
 }
 
 export interface RagQuestionAnalysis {

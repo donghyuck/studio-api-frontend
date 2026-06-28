@@ -98,7 +98,7 @@ export function RagEvaluationDashboard({
   const [queriesInput, setQueriesInput] = useState<string>(PRESET_QUERIES_FAST.join("\n"));
   const [selectedStrategies, setSelectedStrategies] = useState<string[]>(["structure", "ideaBlock", "hybrid"]);
   const [topK, setTopK] = useState<number>(5);
-  const [minScore, setMinScore] = useState<number>(0.2);
+  const [minScore, setMinScore] = useState<number>(0.0);
   const [distilledBoost, setDistilledBoost] = useState<number>(0.05);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -180,6 +180,13 @@ export function RagEvaluationDashboard({
         objectType: "attachment",
         objectId: String(attachmentId),
         embeddingProfileId: embeddingProfileId,
+        retrievalOptions: {
+          structureTopK: topK,
+          ideaBlockTopK: topK,
+          finalTopK: topK,
+          dedupe: true,
+          queryExpansionEnabled: false,
+        },
       });
       setActiveJob(job);
       toast.success("질문 세트 RAG 평가 재실행 작업이 등록되었습니다.");
@@ -197,9 +204,30 @@ export function RagEvaluationDashboard({
         objectType: "attachment",
         objectId: String(attachmentId),
       });
-      toast.success("평가 추천 전략이 이 파일의 RAG 검색 정책으로 저장되었습니다!");
+      const recommendedStr = bestStrategyName || "추천 전략";
+      toast.success(`운영 검색 전략이 ${recommendedStr}으로 적용되었습니다!`);
     } catch (err: any) {
-      toast.error("추천 전략 적용 실패: " + resolveAxiosError(err));
+      const status = err?.response?.status ?? err?.status;
+      const errorCode = err?.response?.data?.code || err?.response?.data?.error || "";
+      const errorMsg = err?.response?.data?.message || "";
+      
+      if (
+        status === 409 ||
+        errorCode.includes("RETRIEVAL_RECOMMENDATION_QUALITY_TOO_LOW") ||
+        errorMsg.includes("RETRIEVAL_RECOMMENDATION_QUALITY_TOO_LOW")
+      ) {
+        toast.warning(
+          "추천 전략의 품질 기준이 낮아 운영 정책으로 적용하지 않았습니다. 평가 질문 또는 검색 옵션을 조정한 뒤 다시 평가하세요."
+        );
+      } else if (
+        status === 409 ||
+        errorCode.includes("NO_EVALUATION_RUNS_FOR_QUESTION_SET") ||
+        errorMsg.includes("NO_EVALUATION_RUNS_FOR_QUESTION_SET")
+      ) {
+        toast.error("이 첨부파일에 대한 평가 결과가 없습니다. 먼저 평가를 실행하세요.");
+      } else {
+        toast.error("추천 전략 적용 실패: " + resolveAxiosError(err));
+      }
     }
   };
 
@@ -381,9 +409,40 @@ export function RagEvaluationDashboard({
   const handleCreateEvaluation = async () => {
     const questions = queriesInput
       .split("\n")
-      .map((q) => q.trim())
+      .map((line) => line.trim())
       .filter(Boolean)
-      .map((q) => ({ query: q }));
+      .map((line) => {
+        if (line.startsWith("{") && line.endsWith("}")) {
+          try {
+            const parsed = JSON.parse(line);
+            if (parsed.query) {
+              return {
+                query: String(parsed.query),
+                expectedContentContains: Array.isArray(parsed.expectedContentContains)
+                  ? parsed.expectedContentContains.map(String)
+                  : parsed.expectedContentContains
+                  ? [String(parsed.expectedContentContains)]
+                  : undefined,
+              };
+            }
+          } catch (e) {
+            // fallback
+          }
+        }
+        if (line.includes("||")) {
+          const parts = line.split("||");
+          const queryPart = parts[0].trim();
+          const containsPart = parts[1].trim();
+          const expectedContentContains = containsPart
+            ? containsPart.split(",").map((k) => k.trim()).filter(Boolean)
+            : undefined;
+          return {
+            query: queryPart,
+            expectedContentContains,
+          };
+        }
+        return { query: line };
+      });
 
     if (questions.length === 0) {
       toast.warning("최소 한 개 이상의 질문을 입력하세요.");
@@ -410,6 +469,7 @@ export function RagEvaluationDashboard({
         finalTopK: topK,
         dedupe: true,
         distilledScoreBoost: distilledBoost,
+        queryExpansionEnabled: false,
       },
       questions,
     };
@@ -583,8 +643,12 @@ export function RagEvaluationDashboard({
                 value={queriesInput}
                 onChange={(e) => setQueriesInput(e.target.value)}
                 variant="outlined"
-                sx={{ "& .MuiInputBase-root": { fontSize: 13 } }}
+                sx={{ "& .MuiInputBase-root": { fontSize: 13 }, mb: 0.5 }}
               />
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: 9.5, lineHeight: 1.3 }}>
+                ※ 줄바꿈 구분 질문 또는 <code>질문 || 기대단어1, 기대단어2</code> 포맷, 
+                또는 JSON 형식(예: <code>{"{"}"query": "...", "expectedContentContains": ["..."]{"}"}</code>)을 입력하여 품질 기준을 설정할 수 있습니다.
+              </Typography>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <Stack spacing={1.5}>
@@ -1060,6 +1124,41 @@ export function RagEvaluationDashboard({
             </CardContent>
           </Card>
 
+          {selectedQuestionSetId && analysisData && analysisData.runCount > 0 && (
+            <Card variant="outlined" sx={{ bgcolor: "rgba(2, 136, 209, 0.08)", p: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: 12.5, mb: 1, color: "info.main" }}>
+                [운영 RAG 정책 매핑 요약]
+              </Typography>
+              <Grid container spacing={1}>
+                <Grid size={{ xs: 6, sm: 4 }}>
+                  <Typography variant="caption" color="text.secondary" display="block">대상 objectType</Typography>
+                  <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 600 }}>attachment</Typography>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 4 }}>
+                  <Typography variant="caption" color="text.secondary" display="block">대상 objectId</Typography>
+                  <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 600 }}>{attachmentId}</Typography>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 4 }}>
+                  <Typography variant="caption" color="text.secondary" display="block">질문 세트 ID</Typography>
+                  <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 600, wordBreak: "break-all" }}>{selectedQuestionSetId}</Typography>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 4 }}>
+                  <Typography variant="caption" color="text.secondary" display="block">추천 전략</Typography>
+                  <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 700, color: "primary.main" }}>{bestStrategyName || "-"}</Typography>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 8 }}>
+                  <Typography variant="caption" color="text.secondary" display="block">대표 evaluationRunId</Typography>
+                  <Typography variant="body2" sx={{ fontSize: 11, fontWeight: 600, wordBreak: "break-all" }}>
+                    {analysisData.strategies.find(s => s.strategy === bestStrategyName)?.runIds?.[0] || "-"}
+                  </Typography>
+                </Grid>
+              </Grid>
+              <Typography variant="caption" display="block" color="warning.main" sx={{ mt: 1, fontWeight: 500, fontSize: 9.5 }}>
+                ※ 서버는 정책 계산 시 대상 파일(attachment/{attachmentId})에 대해 생성된 평가 런들의 데이터만 독립적으로 계산하여 적용합니다.
+              </Typography>
+            </Card>
+          )}
+
           {isCreating && activeJob && (
             <Card variant="outlined" sx={{ p: 2, bgcolor: "action.hover" }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
@@ -1103,6 +1202,8 @@ export function RagEvaluationDashboard({
                           <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>MRR</TableCell>
                           <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>평균 지연</TableCell>
                           <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>실패 질문 수</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>Min Score</TableCell>
+                          <TableCell sx={{ fontSize: 13, fontWeight: 700, textAlign: "center" }}>최근 Run ID</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -1132,6 +1233,12 @@ export function RagEvaluationDashboard({
                                 }}
                               >
                                 {s.failedQuestionCount}개
+                              </TableCell>
+                              <TableCell sx={{ fontSize: 13, textAlign: "center" }}>
+                                {s.minScore !== undefined ? s.minScore.toFixed(2) : "0.00"}
+                              </TableCell>
+                              <TableCell sx={{ fontSize: 11, textAlign: "center", fontFamily: "monospace", maxWidth: 100, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {s.runIds && s.runIds.length > 0 ? s.runIds[0] : "-"}
                               </TableCell>
                             </TableRow>
                           );

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   MenuItem,
   Paper,
@@ -55,9 +57,16 @@ export function RagChatPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelAnchorEl, setModelAnchorEl] = useState<HTMLElement | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [topK, setTopK] = useState("2");
-  const [minScore, setMinScore] = useState("0.6");
-  const [debug, setDebug] = useState(false);
+  const [topK, setTopK] = useState("5"); // changed default topK to 5
+  const [minScore, setMinScore] = useState("0.35");
+  const [debug, setDebug] = useState(true); // changed default debug to true for leg visualization
+  const [retrievalStrategy, setRetrievalStrategy] = useState("hybrid");
+  const [structureTopK, setStructureTopK] = useState("5");
+  const [ideaBlockTopK, setIdeaBlockTopK] = useState("5");
+  const [finalTopK, setFinalTopK] = useState("5");
+  const [dedupe, setDedupe] = useState(true);
+  const [includeDebugChunks, setIncludeDebugChunks] = useState(true);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false); // advanced toggle
   const [inputHistory, setInputHistory] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -162,6 +171,15 @@ export function RagChatPage() {
         ragTopK: numericTopK,
         topK: numericTopK,
         minScore: numericMinScore,
+        retrievalStrategy: retrievalStrategy || undefined,
+        retrievalOptions: {
+          structureTopK: numberOrUndefined(structureTopK) ?? 5,
+          ideaBlockTopK: numberOrUndefined(ideaBlockTopK) ?? 5,
+          finalTopK: numberOrUndefined(finalTopK) ?? 5,
+          minScore: numericMinScore ?? 0.35,
+          dedupe,
+          includeDebugChunks,
+        },
         debug,
       };
       if (selectedOption) {
@@ -363,6 +381,28 @@ export function RagChatPage() {
               </Typography>
             ) : null}
             <TextField label="System Prompt" value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} multiline minRows={2} size="small" fullWidth />
+            <TextField
+              select
+              label="RAG 검색 전략 (retrievalStrategy)"
+              value={retrievalStrategy}
+              onChange={(e) => setRetrievalStrategy(e.target.value)}
+              size="small"
+              fullWidth
+              helperText={
+                retrievalStrategy === "hybrid" ? "구조 기반 chunk와 IdeaBlock을 병합/dedupe하여 최종 전달합니다. (권장 기본)" :
+                retrievalStrategy === "structure" ? "Structure-Based chunk만 RAG 후보군으로 검색합니다." :
+                retrievalStrategy === "ideaBlock" ? "IdeaBlock chunk만 RAG 후보군으로 검색합니다. (비교/실험용)" :
+                retrievalStrategy === "auto" ? "서버에서 질의에 맞춰 최적의 검색 방식을 판단합니다." :
+                "기존 RAG 기본 검색 파이프라인을 사용합니다."
+              }
+            >
+              <MenuItem value="hybrid">Hybrid (구조 + IdeaBlock 병합)</MenuItem>
+              <MenuItem value="structure">Structure (구조 기반 단독)</MenuItem>
+              <MenuItem value="ideaBlock">IdeaBlock (질답형 블록 단독)</MenuItem>
+              <MenuItem value="auto">Auto (자동 라우팅)</MenuItem>
+              <MenuItem value="default">Default (기존 검색)</MenuItem>
+            </TextField>
+
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
                 label="topK"
@@ -385,6 +425,57 @@ export function RagChatPage() {
                 fullWidth
               />
             </Stack>
+
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>고급 RAG 검색 옵션 표시</Typography>
+              <Switch checked={showAdvancedSettings} onChange={(e) => setShowAdvancedSettings(e.target.checked)} />
+            </Stack>
+
+            {showAdvancedSettings && (
+              <Box sx={{ border: "1px dashed", borderColor: "divider", borderRadius: 1.5, p: 1.5, bgcolor: "action.hover" }}>
+                <Stack spacing={1.5}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>
+                    Retrieval Options 상세 구성
+                  </Typography>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                    <TextField
+                      label="structureTopK"
+                      value={structureTopK}
+                      onChange={(e) => setStructureTopK(e.target.value)}
+                      size="small"
+                      type="number"
+                      fullWidth
+                    />
+                    <TextField
+                      label="ideaBlockTopK"
+                      value={ideaBlockTopK}
+                      onChange={(e) => setIdeaBlockTopK(e.target.value)}
+                      size="small"
+                      type="number"
+                      fullWidth
+                    />
+                    <TextField
+                      label="finalTopK"
+                      value={finalTopK}
+                      onChange={(e) => setFinalTopK(e.target.value)}
+                      size="small"
+                      type="number"
+                      fullWidth
+                    />
+                  </Stack>
+                  <Stack direction="row" spacing={2}>
+                    <FormControlLabel
+                      control={<Switch size="small" checked={dedupe} onChange={(e) => setDedupe(e.target.checked)} />}
+                      label={<Typography variant="body2" sx={{ fontSize: 12 }}>중복 제거 (dedupe)</Typography>}
+                    />
+                    <FormControlLabel
+                      control={<Switch size="small" checked={includeDebugChunks} onChange={(e) => setIncludeDebugChunks(e.target.checked)} />}
+                      label={<Typography variant="body2" sx={{ fontSize: 12 }}>디버그용 chunk 포함</Typography>}
+                    />
+                  </Stack>
+                </Stack>
+              </Box>
+            )}
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
               <Stack spacing={0} sx={{ flex: 1 }}>
                 <Typography variant="body2">Debug 응답</Typography>
