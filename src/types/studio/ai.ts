@@ -635,6 +635,7 @@ export interface RagContextSimulationRequestDto {
   includeParentChunk?: boolean;
   embeddingProvider?: string;
   embeddingModel?: string;
+  minScore?: number;
 }
 
 export interface RagContextSimulationChunkDto extends SearchResultDto {

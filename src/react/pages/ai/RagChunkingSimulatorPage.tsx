@@ -264,6 +264,7 @@ export function RagChunkingSimulatorPage() {
   const [contextBudgetTokens, setContextBudgetTokens] = useState("4000");
   const [includeNeighborChunks, setIncludeNeighborChunks] = useState(true);
   const [includeParentChunk, setIncludeParentChunk] = useState(false);
+  const [minScore, setMinScore] = useState("0.0");
   const [contextLoading, setContextLoading] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
   const [contextResponse, setContextResponse] = useState<RagContextSimulationResponseDto | null>(null);
@@ -438,6 +439,7 @@ export function RagChunkingSimulatorPage() {
         includeParentChunk,
         embeddingProvider: embeddingProvider.trim() || undefined,
         embeddingModel: embeddingModel.trim() || undefined,
+        minScore: numberValue(minScore),
       });
       setContextResponse(response);
       setSelectedContextChunk((response.chunks ?? response.retrievedChunks ?? [])[0] ?? null);
@@ -831,13 +833,20 @@ export function RagChunkingSimulatorPage() {
                 fullWidth
                 helperText="사용자가 실제로 질문할 문장을 입력합니다."
               />
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" }, gap: 1 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", md: "repeat(5, 1fr)" }, gap: 1 }}>
                 <TextField
                   label="topK"
                   size="small"
                   value={topK}
                   onChange={(event) => setTopK(event.target.value)}
                   helperText="검색 후보로 가져올 Chunk 수입니다."
+                />
+                <TextField
+                  label="minScore"
+                  size="small"
+                  value={minScore}
+                  onChange={(event) => setMinScore(event.target.value)}
+                  helperText="검색 필터링을 적용할 유사도 최소 점수입니다."
                 />
                 <TextField
                   label="contextBudgetTokens"
