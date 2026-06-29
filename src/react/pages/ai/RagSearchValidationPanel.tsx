@@ -551,7 +551,7 @@ function ReferenceDocuments({
       >
         {references.map((row, index) => {
           const color = referenceColor(index);
-          const active = activeReferenceIndex === index;
+          const active = activeReferenceIndex === index || expandedReferenceIndex === index;
           const scorePercent =
             typeof row.score === "number" ? Math.max(0, Math.min(100, row.score * 100)) : 0;
           return (
