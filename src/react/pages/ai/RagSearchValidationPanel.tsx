@@ -12,6 +12,7 @@ import {
   CardContent,
   Chip,
   CircularProgress,
+  Divider,
   MenuItem,
   Stack,
   Switch,
@@ -225,56 +226,103 @@ function parseAnswerBlocks(content: string): AnswerBlock[] {
 
 function CitationBadge({
   index,
+  reference,
   onReferenceHover,
 }: {
   index: number;
+  reference?: any;
   onReferenceHover: (index: number | null) => void;
 }) {
   const color = referenceColor(index);
   const scrollToReference = () => {
-    document.getElementById(`rag-reference-${index}`)?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
+    onReferenceHover(index);
+    setTimeout(() => {
+      document.getElementById(`rag-reference-${index}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 80);
   };
+
+  const content = reference?.content?.trim() || "내용 없음";
+  const sourceName = reference ? resultSourceName(reference) : "알 수 없는 문서";
+  const score = reference?.score;
+
+  const tooltipContent = (
+    <Box sx={{ p: 0.5, maxWidth: 360 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: 11, color: "#fff", mb: 0.5 }}>
+        [근거 {index + 1}] {sourceName}
+      </Typography>
+      {score != null && (
+        <Typography variant="caption" sx={{ display: "block", color: "rgba(255, 255, 255, 0.7)", mb: 0.75, fontSize: 9.5 }}>
+          유사도 점수: {score.toFixed(4)}
+        </Typography>
+      )}
+      <Divider sx={{ borderColor: "rgba(255,255,255,0.15)", my: 0.5 }} />
+      <Typography variant="caption" sx={{ display: "block", fontSize: 10.5, lineHeight: 1.5, whiteSpace: "pre-wrap", maxHeight: 180, overflow: "auto", color: "#E2E8F0" }}>
+        {content}
+      </Typography>
+    </Box>
+  );
+
   return (
-    <Box
-      component="span"
-      onMouseEnter={() => onReferenceHover(index)}
-      onMouseLeave={() => onReferenceHover(null)}
-      onClick={scrollToReference}
-      sx={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 0.2,
-        mx: 0.18,
-        px: 0.52,
-        py: 0.02,
-        borderRadius: 999,
-        border: 1,
-        borderColor: "transparent",
-        bgcolor: "rgba(237, 233, 254, 0.72)",
-        color: "#4C1D95",
-        fontSize: 10.5,
-        fontWeight: 700,
-        lineHeight: 1.35,
-        verticalAlign: "super",
-        cursor: "pointer",
-        transition: "background-color 140ms ease, border-color 140ms ease, color 140ms ease",
-        "&:hover": {
-          borderColor: CITATION_PRIMARY,
-          bgcolor: CITATION_BACKGROUND,
-          color: "#3B0764",
-        },
+    <Tooltip
+      title={tooltipContent}
+      arrow
+      placement="top"
+      enterDelay={200}
+      leaveDelay={150}
+      componentsProps={{
+        tooltip: {
+          sx: {
+            bgcolor: "rgba(15, 23, 42, 0.96)",
+            boxShadow: "0 10px 25px -5px rgba(0,0,0,0.3)",
+            borderRadius: 1.5,
+            border: "1px solid rgba(255,255,255,0.1)",
+            maxHeight: 240,
+            overflow: "hidden"
+          }
+        }
       }}
     >
-      <DescriptionOutlined sx={{ fontSize: 11, color: color.main }} />
-      ({index + 1})
-    </Box>
+      <Box
+        component="span"
+        onMouseEnter={() => onReferenceHover(index)}
+        onMouseLeave={() => onReferenceHover(null)}
+        onClick={scrollToReference}
+        sx={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 0.2,
+          mx: 0.18,
+          px: 0.52,
+          py: 0.02,
+          borderRadius: 999,
+          border: 1,
+          borderColor: "transparent",
+          bgcolor: "rgba(237, 233, 254, 0.72)",
+          color: "#4C1D95",
+          fontSize: 10.5,
+          fontWeight: 700,
+          lineHeight: 1.35,
+          verticalAlign: "super",
+          cursor: "pointer",
+          transition: "background-color 140ms ease, border-color 140ms ease, color 140ms ease",
+          "&:hover": {
+            borderColor: CITATION_PRIMARY,
+            bgcolor: CITATION_BACKGROUND,
+            color: "#3B0764",
+          },
+        }}
+      >
+        <DescriptionOutlined sx={{ fontSize: 11, color: color.main }} />
+        ({index + 1})
+      </Box>
+    </Tooltip>
   );
 }
 
-function renderTextWithCitations(text: string, onReferenceHover: (index: number | null) => void) {
+function renderTextWithCitations(text: string, onReferenceHover: (index: number | null) => void, references?: any[]) {
   const parts = text.split(/(\[근거\s*\d+[^\]]*\]|\(근거\s*\d+[^\)]*\))/g);
   return parts.map((part, index) => {
     const referenceIndex = parseCitationIndex(part);
@@ -285,6 +333,7 @@ function renderTextWithCitations(text: string, onReferenceHover: (index: number 
       <CitationBadge
         key={`${part}-${index}`}
         index={referenceIndex}
+        reference={references?.[referenceIndex]}
         onReferenceHover={onReferenceHover}
       />
     );
@@ -300,9 +349,11 @@ function stripCitationLabels(text: string) {
 
 function CitationGroup({
   indices,
+  references,
   onReferenceHover,
 }: {
   indices: number[];
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   if (indices.length === 0) {
@@ -311,7 +362,12 @@ function CitationGroup({
   return (
     <Box component="span" sx={{ whiteSpace: "nowrap" }}>
       {indices.map((index) => (
-        <CitationBadge key={index} index={index} onReferenceHover={onReferenceHover} />
+        <CitationBadge
+          key={index}
+          index={index}
+          reference={references?.[index]}
+          onReferenceHover={onReferenceHover}
+        />
       ))}
     </Box>
   );
@@ -333,10 +389,12 @@ function renderInlineMarkdown(text: string) {
 function MarkdownText({
   text,
   citationIndices,
+  references,
   onReferenceHover,
 }: {
   text: string;
   citationIndices: number[];
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   const lines = text.split(/\r?\n/).filter((line) => line.trim());
@@ -351,7 +409,7 @@ function MarkdownText({
             {index === lines.length - 1 ? (
               <>
                 {" "}
-                <CitationGroup indices={citationIndices} onReferenceHover={onReferenceHover} />
+                <CitationGroup indices={citationIndices} references={references} onReferenceHover={onReferenceHover} />
               </>
             ) : null}
           </Box>
@@ -368,7 +426,7 @@ function MarkdownText({
           {index === lines.length - 1 ? (
             <>
               {" "}
-              <CitationGroup indices={citationIndices} onReferenceHover={onReferenceHover} />
+              <CitationGroup indices={citationIndices} references={references} onReferenceHover={onReferenceHover} />
             </>
           ) : null}
         </Box>
@@ -696,9 +754,11 @@ function ReferenceDocuments({
 
 function AnswerTextBlock({
   text,
+  references,
   onReferenceHover,
 }: {
   text: string;
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   const indices = extractCitationIndices(text);
@@ -718,6 +778,7 @@ function AnswerTextBlock({
         <MarkdownText
           text={cleanText}
           citationIndices={indices}
+          references={references}
           onReferenceHover={onReferenceHover}
         />
       </Typography>
@@ -727,9 +788,11 @@ function AnswerTextBlock({
 
 function AnswerTable({
   rows,
+  references,
   onReferenceHover,
 }: {
   rows: string[][];
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   const [header, ...bodyRows] = rows;
@@ -755,7 +818,7 @@ function AnswerTable({
                   borderColor: "divider",
                 }}
               >
-                {renderTextWithCitations(cell, onReferenceHover)}
+                {renderTextWithCitations(cell, onReferenceHover, references)}
               </Box>
             ))}
           </Box>
@@ -777,7 +840,7 @@ function AnswerTable({
                     color: "text.secondary",
                   }}
                 >
-                  {renderTextWithCitations(row[cellIndex] ?? "", onReferenceHover)}
+                  {renderTextWithCitations(row[cellIndex] ?? "", onReferenceHover, references)}
                 </Box>
               ))}
             </Box>
@@ -790,9 +853,11 @@ function AnswerTable({
 
 function AnswerRenderer({
   content,
+  references,
   onReferenceHover,
 }: {
   content: string;
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   const blocks = parseAnswerBlocks(content);
@@ -800,9 +865,9 @@ function AnswerRenderer({
     <Stack spacing={1.25}>
       {blocks.map((block, index) =>
         block.type === "table" ? (
-          <AnswerTable key={`table-${index}`} rows={block.rows} onReferenceHover={onReferenceHover} />
+          <AnswerTable key={`table-${index}`} rows={block.rows} references={references} onReferenceHover={onReferenceHover} />
         ) : (
-          <AnswerTextBlock key={`text-${index}`} text={block.text} onReferenceHover={onReferenceHover} />
+          <AnswerTextBlock key={`text-${index}`} text={block.text} references={references} onReferenceHover={onReferenceHover} />
         )
       )}
     </Stack>
@@ -812,10 +877,12 @@ function AnswerRenderer({
 function AnswerPanel({
   messages,
   referencesCount,
+  references,
   onReferenceHover,
 }: {
   messages: ChatMessageDto[];
   referencesCount: number;
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   return (
@@ -867,7 +934,7 @@ function AnswerPanel({
               p: 1.5,
             }}
           >
-            <AnswerRenderer content={message.content} onReferenceHover={onReferenceHover} />
+            <AnswerRenderer content={message.content} references={references} onReferenceHover={onReferenceHover} />
           </Box>
         ))}
       </Stack>
@@ -1650,6 +1717,7 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
                     <AnswerPanel
                       messages={messages}
                       referencesCount={Math.min(ragRows.length, topKNumber)}
+                      references={ragRows}
                       onReferenceHover={setActiveReferenceIndex}
                     />
                     <ReferenceDocuments
