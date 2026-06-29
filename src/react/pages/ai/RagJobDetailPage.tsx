@@ -1391,9 +1391,18 @@ export function RagJobDetailPage() {
               }}
               onClick={(e) => {
                 e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
                 if (params.data) {
                   setSelectedChunk(params.data);
                 }
+              }}
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
+              }}
+              onMouseUp={(e) => {
+                e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
               }}
             >
               {value}
@@ -1825,7 +1834,8 @@ export function RagJobDetailPage() {
                       datasource={dataSource}
                       height={640}
                       onRowClicked={(event: any) => {
-                        if (event.column?.getColId() === "headingPath") {
+                        const target = event.event?.target as HTMLElement | null;
+                        if (target && target.closest('[col-id="headingPath"]')) {
                           return;
                         }
                         const typedEvent = event as { data?: RagIndexChunkDto };
@@ -1840,8 +1850,11 @@ export function RagJobDetailPage() {
                   <Drawer
                     anchor="right"
                     open={Boolean(selectedChunk)}
-                    variant="persistent"
+                    variant="temporary"
                     onClose={() => setSelectedChunk(null)}
+                    ModalProps={{
+                      hideBackdrop: true,
+                    }}
                     PaperProps={{
                       sx: {
                         width: { xs: "78vw", sm: 520, lg: 600, xl: 680 },
