@@ -39,6 +39,7 @@ import {
   RefreshOutlined,
   ReplayOutlined,
   SearchOutlined,
+  InfoOutlined,
   WarningAmberOutlined,
 } from "@mui/icons-material";
 import type { ColDef, GridOptions } from "ag-grid-community";
@@ -1376,37 +1377,55 @@ export function RagJobDetailPage() {
         tooltipValueGetter: (params) => describeChunk(params.data),
         cellRenderer: (params: { data?: RagIndexChunkDto }) => {
           const value = chunkPosition(params.data);
+          if (!value || value === "-") {
+            return <Typography variant="body2" color="text.secondary">-</Typography>;
+          }
+          
+          let displayLabel = value;
+          const hashIdx = value.indexOf("#");
+          if (hashIdx >= 0) {
+            const partStr = value.substring(hashIdx + 1);
+            const cleanPart = partStr.replace("part-", "파트 ");
+            displayLabel = `📁 위치 (${cleanPart})`;
+          } else if (value.length > 20) {
+            displayLabel = `📁 위치 (${value.substring(0, 8)}...)`;
+          }
+
           return (
-            <Typography
-              variant="body2"
-              sx={{
-                color: "primary.main",
-                cursor: "pointer",
-                textDecoration: "underline",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-                display: "inline-block",
-                width: "100%",
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                e.nativeEvent.stopImmediatePropagation();
-                if (params.data) {
-                  setSelectedChunk(params.data);
-                }
-              }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                e.nativeEvent.stopImmediatePropagation();
-              }}
-              onMouseUp={(e) => {
-                e.stopPropagation();
-                e.nativeEvent.stopImmediatePropagation();
-              }}
-            >
-              {value}
-            </Typography>
+            <Tooltip title={`클릭하여 상세 정보 보기: ${value}`} arrow>
+              <Chip
+                label={displayLabel}
+                size="small"
+                clickable
+                sx={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  height: 22,
+                  borderRadius: 1,
+                  borderColor: "primary.light",
+                  color: "primary.main",
+                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
+                  "&:hover": {
+                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
+                  }
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.nativeEvent.stopImmediatePropagation();
+                  if (params.data) {
+                    setSelectedChunk(params.data);
+                  }
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.nativeEvent.stopImmediatePropagation();
+                }}
+                onMouseUp={(e) => {
+                  e.stopPropagation();
+                  e.nativeEvent.stopImmediatePropagation();
+                }}
+              />
+            </Tooltip>
           );
         },
       },
@@ -1807,6 +1826,20 @@ export function RagJobDetailPage() {
                       </IconButton>
                     </Tooltip>
                   </Box>
+                  <Alert 
+                    severity="info" 
+                    variant="outlined" 
+                    icon={<InfoOutlined fontSize="small" />}
+                    sx={{ 
+                      borderRadius: 1.5, 
+                      borderColor: "info.light", 
+                      bgcolor: (theme) => alpha(theme.palette.info.main, 0.02),
+                      py: 0.5,
+                      "& .MuiAlert-message": { fontSize: 12, fontWeight: 500 }
+                    }}
+                  >
+                    색인 결과 표의 <strong>📁 위치 (파트 X)</strong> 태그 칩을 클릭하시면, 해당 청크 조각의 상세 본문, 연결 관계 및 벡터 유사도 분석 등 고급 디버깅을 즉시 확인할 수 있습니다.
+                  </Alert>
                   <Box
                     sx={{
                       minWidth: 0,
@@ -1852,9 +1885,6 @@ export function RagJobDetailPage() {
                     open={Boolean(selectedChunk)}
                     variant="temporary"
                     onClose={() => setSelectedChunk(null)}
-                    ModalProps={{
-                      hideBackdrop: true,
-                    }}
                     PaperProps={{
                       sx: {
                         width: { xs: "78vw", sm: 520, lg: 600, xl: 680 },
