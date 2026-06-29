@@ -1120,6 +1120,45 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
   const [lastAnswerKey, setLastAnswerKey] = useState<string | null>(null);
   const [activeReferenceIndex, setActiveReferenceIndex] = useState<number | null>(null);
 
+  const resolvedReferences = useMemo(() => {
+    const refs = lastMetadata?.ragReferences;
+    if (!refs || refs.length === 0) {
+      return ragRows;
+    }
+    const maxIdx = Math.max(...refs.map((r: any) => r.index), ragRows.length);
+    const list = new Array(maxIdx).fill(null);
+    refs.forEach((refItem: any) => {
+      const idx = refItem.index - 1;
+      if (idx < 0) return;
+      const matchedChunk = ragRows.find((row) =>
+        row.documentId === refItem.chunkId ||
+        row.metadata?.chunkId === refItem.chunkId ||
+        row.metadata?.id === refItem.chunkId
+      );
+      list[idx] = {
+        documentId: refItem.documentId,
+        chunkId: refItem.chunkId,
+        content: matchedChunk?.content || "내용 없음 (본문이 RAG 검색 대상에서 제외되었습니다)",
+        score: refItem.score ?? matchedChunk?.score ?? 0.0,
+        metadata: {
+          ...(matchedChunk?.metadata || {}),
+          sourceName: refItem.sourceName || matchedChunk?.metadata?.sourceName,
+        },
+      };
+    });
+    for (let i = 0; i < list.length; i++) {
+      if (!list[i]) {
+        list[i] = ragRows[i] || {
+          documentId: "",
+          content: "제공된 RAG 문서 개수 범위를 벗어난 가상의 근거 번호입니다 (AI 모델의 환각 현상).",
+          score: 0.0,
+          metadata: {},
+        };
+      }
+    }
+    return list;
+  }, [lastMetadata?.ragReferences, ragRows]);
+
   const provider = aiInfo?.defaultProvider ?? "";
   const model = aiInfo?.providers.find((item) => item.name === provider)?.chat.model ?? "";
   const topKNumber = Math.max(1, Number(topK) || 5);
@@ -1720,7 +1759,7 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
                     <AnswerPanel
                       messages={messages}
                       referencesCount={Math.min(ragRows.length, topKNumber)}
-                      references={ragRows}
+                      references={resolvedReferences}
                       onReferenceHover={setActiveReferenceIndex}
                     />
                     <ReferenceDocuments
