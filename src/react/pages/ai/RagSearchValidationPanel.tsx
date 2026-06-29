@@ -28,6 +28,7 @@ import TagOutlined from "@mui/icons-material/TagOutlined";
 import type { ColDef } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
+import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import type {
   AiInfoResponse,
   ChatMessageDto,
@@ -1100,7 +1101,21 @@ function inferAttachmentIdFromJob(job: RagIndexJobDto) {
 
 export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }) {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
+  const [chatProvider, setChatProvider] = useState("");
+  const [chatModel, setChatModel] = useState("");
   const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+
+  useEffect(() => {
+    if (aiInfo) {
+      if (!chatProvider) {
+        setChatProvider(aiInfo.defaultProvider ?? "");
+      }
+      if (!chatModel && aiInfo.defaultProvider) {
+        const match = aiInfo.providers.find((item) => item.name === aiInfo.defaultProvider);
+        setChatModel(match?.chat.model ?? "");
+      }
+    }
+  }, [aiInfo, chatProvider, chatModel]);
   const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState("2");
@@ -1161,8 +1176,8 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
     return list;
   }, [lastMetadata?.ragReferences, ragRows]);
 
-  const provider = aiInfo?.defaultProvider ?? "";
-  const model = aiInfo?.providers.find((item) => item.name === provider)?.chat.model ?? "";
+  const provider = chatProvider;
+  const model = chatModel;
   const topKNumber = Math.max(1, Number(topK) || 5);
   const minScoreNumber = minScore.trim() === "" ? undefined : Number(minScore);
   const jobAttachmentId = job ? inferAttachmentIdFromJob(job) : undefined;
@@ -1539,6 +1554,30 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
                     })}
                   </TextField>
                 ) : null}
+              </Box>
+            </Box>
+
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                gap: 2,
+                alignItems: "center",
+                mb: 0.5,
+              }}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                  답변 생성 Chat 모델
+                </Typography>
+                <AiProviderSelect
+                  provider={chatProvider}
+                  model={chatModel}
+                  onChange={(p, m) => {
+                    setChatProvider(p);
+                    setChatModel(m);
+                  }}
+                />
               </Box>
             </Box>
 
