@@ -506,7 +506,7 @@ function ChunkLengthCell({ chunk, maxSize }: { chunk?: RagIndexChunkDto; maxSize
   return (
     <Stack spacing={0} justifyContent="center" sx={{ height: "100%" }}>
       <Stack direction="row" spacing={0} alignItems="center">
-        <Typography variant="caption" sx={{ lineHeight: 1 }}>
+        <Typography variant="body2" sx={{ lineHeight: 1, fontSize: "13px" }}>
           {value.toLocaleString()}
         </Typography>
         {short ? (
@@ -1398,9 +1398,9 @@ export function RagJobDetailPage() {
                 size="small"
                 clickable
                 sx={{
-                  fontSize: 11,
+                  fontSize: "13px",
                   fontWeight: 600,
-                  height: 22,
+                  height: 24,
                   borderRadius: 1,
                   borderColor: "primary.light",
                   color: "primary.main",
