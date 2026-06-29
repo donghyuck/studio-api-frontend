@@ -1824,7 +1824,10 @@ export function RagJobDetailPage() {
                       options={chunkGridOptions}
                       datasource={dataSource}
                       height={640}
-                      onRowClicked={(event) => {
+                      onRowClicked={(event: any) => {
+                        if (event.column?.getColId() === "headingPath") {
+                          return;
+                        }
                         const typedEvent = event as { data?: RagIndexChunkDto };
                         if (typedEvent.data) {
                           setSelectedChunk((prev) =>
