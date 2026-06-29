@@ -19,10 +19,15 @@ export function AiProviderSelect({ provider, model, onChange, size = "small" }: 
     reactAiApi
       .fetchProviders()
       .then((data) => {
-        setProviders(data.providers);
+        const chatEnabledProviders = data.providers.filter((p) => p.chat?.enabled);
+        setProviders(chatEnabledProviders);
         if (!provider && data.defaultProvider) {
-          const match = data.providers.find((p) => p.name === data.defaultProvider);
-          onChange(data.defaultProvider, match?.chat.model ?? "");
+          const match = chatEnabledProviders.find((p) => p.name === data.defaultProvider);
+          if (match) {
+            onChange(data.defaultProvider, match.chat.model ?? "");
+          } else if (chatEnabledProviders.length > 0) {
+            onChange(chatEnabledProviders[0].name, chatEnabledProviders[0].chat.model ?? "");
+          }
         }
       })
       .catch(() => setError(true))
