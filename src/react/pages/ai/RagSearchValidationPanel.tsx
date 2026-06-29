@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Accordion,
   AccordionDetails,
@@ -503,11 +503,13 @@ function ReferenceDocuments({
 }) {
   const references = rows.slice(0, Math.max(1, topK));
   const [expandedReferenceIndex, setExpandedReferenceIndex] = useState<number | false>(0);
+  const lastActiveRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (activeReferenceIndex != null) {
+    if (activeReferenceIndex != null && activeReferenceIndex !== lastActiveRef.current) {
       setExpandedReferenceIndex(activeReferenceIndex);
     }
+    lastActiveRef.current = activeReferenceIndex;
   }, [activeReferenceIndex]);
 
   if (references.length === 0) {
