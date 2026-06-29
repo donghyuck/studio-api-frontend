@@ -244,8 +244,11 @@ function CitationBadge({
     }, 80);
   };
 
-  const content = reference?.content?.trim() || "내용 없음";
-  const sourceName = reference ? resultSourceName(reference) : "알 수 없는 문서";
+  const content = reference?.content?.trim() 
+    || (reference === undefined 
+        ? "제공된 RAG 문서 개수 범위를 벗어난 가상의 근거 번호입니다 (AI 모델의 환각 현상)." 
+        : "내용 없음");
+  const sourceName = reference ? resultSourceName(reference) : "존재하지 않는 근거 문서";
   const score = reference?.score;
 
   const tooltipContent = (
