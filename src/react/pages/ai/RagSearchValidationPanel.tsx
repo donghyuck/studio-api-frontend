@@ -252,10 +252,21 @@ function CitationBadge({
   const sourceName = reference ? resultSourceName(reference) : "존재하지 않는 근거 문서";
   const score = reference?.score;
 
+  const page = reference?.metadata?.page || reference?.metadata?.pageNumber;
+  const chunkOrder = reference?.metadata?.chunkOrder;
+  const locationText = [
+    page != null ? `p.${page}` : "",
+    chunkOrder != null ? `청크 #${chunkOrder}` : "",
+  ].filter(Boolean).join(", ");
+
+  const displayTitle = locationText 
+    ? `${sourceName} (${locationText})`
+    : sourceName;
+
   const tooltipContent = (
     <Box sx={{ p: 0.5, maxWidth: 360 }}>
       <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: 11, color: "#fff", mb: 0.5 }}>
-        [근거 {index + 1}] {sourceName}
+        [근거 {index + 1}] {displayTitle}
       </Typography>
       {score != null && (
         <Typography variant="caption" sx={{ display: "block", color: "rgba(255, 255, 255, 0.7)", mb: 0.75, fontSize: 9.5 }}>
@@ -1153,13 +1164,16 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
         row.metadata?.id === refItem.chunkId
       );
       list[idx] = {
-        documentId: refItem.documentId,
+        documentId: refItem.documentId || matchedChunk?.documentId,
         chunkId: refItem.chunkId,
-        content: matchedChunk?.content || "내용 없음 (본문이 RAG 검색 대상에서 제외되었습니다)",
+        content: matchedChunk?.content || refItem.content || "내용 없음 (본문이 RAG 검색 대상에서 제외되었습니다)",
         score: refItem.score ?? matchedChunk?.score ?? 0.0,
         metadata: {
           ...(matchedChunk?.metadata || {}),
-          sourceName: refItem.sourceName || matchedChunk?.metadata?.sourceName,
+          ...(refItem.metadata || {}),
+          sourceName: refItem.sourceName || refItem.metadata?.sourceName || matchedChunk?.metadata?.sourceName,
+          page: refItem.page ?? refItem.pageNumber ?? refItem.metadata?.page ?? matchedChunk?.metadata?.page,
+          chunkOrder: refItem.chunkOrder ?? refItem.metadata?.chunkOrder ?? matchedChunk?.metadata?.chunkOrder,
         },
       };
     });
