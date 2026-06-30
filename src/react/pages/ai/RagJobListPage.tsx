@@ -502,10 +502,7 @@ export function RagJobListPage() {
                 const isCurrentlySelected = typedEvent.node?.isSelected?.();
                 typedEvent.node?.setSelected?.(!isCurrentlySelected);
 
-                setSelectedGroup((prev) => {
-                  const isSame = prev?.objectType === row.objectType && prev?.objectId === row.objectId;
-                  return isSame ? null : row;
-                });
+                setSelectedGroup(row);
               }}
             />
           </Box>
@@ -558,12 +555,15 @@ export function RagJobListPage() {
                             cursor: "pointer",
                             bgcolor: isSelected
                               ? (theme) =>
-                                  alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.15 : 0.08)
+                                  alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.12 : 0.06)
                               : "transparent",
                             borderLeft: 4,
                             borderLeftColor: isSelected ? "primary.main" : "transparent",
                             "&:hover": {
-                              bgcolor: (theme) => alpha(theme.palette.action.hover, 0.8),
+                              bgcolor: (theme) =>
+                                isSelected
+                                  ? alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.2 : 0.1)
+                                  : theme.palette.action.hover,
                             },
                           }}
                         >
@@ -575,7 +575,7 @@ export function RagJobListPage() {
                               icon={statusIcon(job.status)}
                               sx={{ height: 20, "& .MuiChip-label": { px: 1, fontSize: 11 } }}
                             />
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" color={isSelected ? "text.primary" : "text.secondary"}>
                               {formatDateTime(job.createdAt)}
                             </Typography>
                           </Stack>
@@ -587,10 +587,10 @@ export function RagJobListPage() {
                             sx={{ mt: 1 }}
                           >
                             <Box sx={{ minWidth: 0, flex: 1 }}>
-                              <Typography variant="body2" color="text.secondary" noWrap>
+                              <Typography variant="body2" color={isSelected ? "text.primary" : "text.secondary"} sx={{ fontWeight: isSelected ? 600 : 400 }} noWrap>
                                 단계: {job.currentStep ?? "-"} | Chunk: {job.chunkCount ?? 0}
                               </Typography>
-                              <Typography variant="caption" color="text.disabled" display="block" noWrap>
+                              <Typography variant="caption" color={isSelected ? "text.secondary" : "text.disabled"} display="block" noWrap>
                                 ID: {job.jobId}
                               </Typography>
                             </Box>
