@@ -1926,7 +1926,41 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
             {file ? `${file.name} 상세 정보` : "파일 상세 정보"}
           </Typography>
         </Stack>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          {file && (
+            <>
+              {isPdf && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setPdfReaderOpen(true)}
+                  sx={{ height: 28, fontSize: 12 }}
+                >
+                  미리보기 (PDF)
+                </Button>
+              )}
+              {isEpub && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setEpubReaderOpen(true)}
+                  sx={{ height: 28, fontSize: 12 }}
+                >
+                  미리보기 (EPUB)
+                </Button>
+              )}
+              <Button
+                size="small"
+                variant="outlined"
+                component="a"
+                href={`/api/mgmt/files/${file.attachmentId}/download`}
+                download={file.name}
+                sx={{ height: 28, fontSize: 12 }}
+              >
+                다운로드
+              </Button>
+            </>
+          )}
           <IconButton size="small" onClick={refreshDetail}>
             <RefreshOutlined fontSize="small" />
           </IconButton>
