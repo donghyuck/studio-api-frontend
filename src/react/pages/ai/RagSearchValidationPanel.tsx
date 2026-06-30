@@ -1147,6 +1147,55 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
   const [lastRagKey, setLastRagKey] = useState<string | null>(null);
   const [lastAnswerKey, setLastAnswerKey] = useState<string | null>(null);
   const [activeReferenceIndex, setActiveReferenceIndex] = useState<number | null>(null);
+  const [chunkCache, setChunkCache] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const refs = lastMetadata?.ragReferences;
+    if (!refs || refs.length === 0) return;
+
+    const missingRefs = refs.filter((ref) => {
+      if (!ref.chunkId) return false;
+      if (chunkCache[ref.chunkId]) return false;
+      const inRagRows = ragRows.some((row) =>
+        row.documentId === ref.chunkId ||
+        row.metadata?.chunkId === ref.chunkId ||
+        row.metadata?.id === ref.chunkId
+      );
+      return !inRagRows;
+    });
+
+    if (missingRefs.length === 0) return;
+
+    if (job?.jobId) {
+      reactAiApi.getRagJobChunks(job.jobId, 0, 1000)
+        .then((res) => {
+          const newCache: Record<string, string> = {};
+          res.content.forEach((chunk) => {
+            if (chunk.chunkId && chunk.content) {
+              newCache[chunk.chunkId] = chunk.content;
+            }
+          });
+          setChunkCache((prev) => ({ ...prev, ...newCache }));
+        })
+        .catch((err) => console.error("Failed to fetch job chunks for validation", err));
+    } else {
+      const docIds = Array.from(new Set(missingRefs.map((r) => r.documentId).filter(Boolean)));
+      docIds.forEach((docId) => {
+        const type = job?.objectType || "attachment";
+        reactAiApi.getRagObjectChunksPage(type, docId!, 0, 500)
+          .then((res) => {
+            const newCache: Record<string, string> = {};
+            res.content.forEach((chunk) => {
+              if (chunk.chunkId && chunk.content) {
+                newCache[chunk.chunkId] = chunk.content;
+              }
+            });
+            setChunkCache((prev) => ({ ...prev, ...newCache }));
+          })
+          .catch((err) => console.error(`Failed to fetch object chunks for doc ${docId}`, err));
+      });
+    }
+  }, [lastMetadata?.ragReferences, ragRows, job?.jobId, chunkCache]);
 
   const resolvedReferences = useMemo(() => {
     const refs = lastMetadata?.ragReferences;
@@ -1166,7 +1215,7 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
       list[idx] = {
         documentId: refItem.documentId || matchedChunk?.documentId,
         chunkId: refItem.chunkId,
-        content: matchedChunk?.content || refItem.content || "내용 없음 (본문이 RAG 검색 대상에서 제외되었습니다)",
+        content: matchedChunk?.content || chunkCache[refItem.chunkId || ""] || refItem.content || "내용 없음 (본문이 RAG 검색 대상에서 제외되었습니다)",
         score: refItem.score ?? matchedChunk?.score ?? 0.0,
         metadata: {
           ...(matchedChunk?.metadata || {}),
@@ -1188,7 +1237,7 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
       }
     }
     return list;
-  }, [lastMetadata?.ragReferences, ragRows]);
+  }, [lastMetadata?.ragReferences, ragRows, chunkCache]);
 
   const provider = chatProvider;
   const model = chatModel;
