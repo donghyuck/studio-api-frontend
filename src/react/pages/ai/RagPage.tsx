@@ -56,6 +56,11 @@ import {
 } from "@mui/icons-material";
 import type { ColDef, GridOptions, ICellRendererParams } from "ag-grid-community";
 import { GridContent, PageableGridContent } from "@/react/components/ag-grid";
+import {
+  getChunkStrategyDisplay,
+  getChunkQualityIssueText,
+  formatStrategyName
+} from "./chunkMetaHelper";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
@@ -385,34 +390,58 @@ function SummaryStatusCard({
 function SearchResultDetail({
   title,
   content,
-  metadata,
+  metadata = {},
 }: {
   title: string;
   content?: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, any>;
 }) {
+  const requested = metadata.requestedChunkingStrategy;
+  const actual = metadata.actualChunkingStrategy ?? metadata.strategy;
+  const strategyDisplay = getChunkStrategyDisplay(metadata as any);
+
+  const isStrategyFallback = metadata.fallbackStatus === "APPLIED";
+  const isBlockifyFallback = metadata.validationStatus === "FALLBACK";
+
+  const qualityStatus = metadata.chunkQualityStatus;
+  const qualityIssues: string[] = Array.isArray(metadata.chunkQualityIssues) ? metadata.chunkQualityIssues : [];
+
   const specialFields = [
-    { key: "requestedChunkingStrategy", label: "Requested Strategy" },
-    { key: "actualChunkingStrategy", label: "Actual Strategy" },
-    { key: "validationStatus", label: "Validation Status" },
-    { key: "fallbackReason", label: "Fallback Reason" },
-    { key: "blockifyFingerprint", label: "Blockify Fingerprint" },
-    { key: "promptVersion", label: "Prompt Version" },
-    { key: "generatorModel", label: "Generator Model" },
-    { key: "sourceEvidence", label: "Source Evidence" },
-  ];
-
-  const hasSpecialFields = metadata && specialFields.some(({ key }) => metadata[key] !== undefined && metadata[key] !== null);
-
-  const isFallback = metadata && (
-    metadata.fallbackReason || 
-    (metadata.requestedChunkingStrategy === "blockify" && metadata.actualChunkingStrategy === "structure-based")
-  );
+    { key: "strategyDisplay", label: "적용 전략", value: strategyDisplay !== "-" ? strategyDisplay : undefined },
+    { key: "requestedChunkingStrategy", label: "요청 전략", value: requested ? formatStrategyName(requested) : undefined },
+    { key: "actualChunkingStrategy", label: "실제 전략", value: actual ? formatStrategyName(actual) : undefined },
+    { key: "fallbackStatus", label: "Strategy Fallback 여부", value: metadata.fallbackStatus },
+    { key: "fallbackFrom", label: "Fallback 시작 전략", value: metadata.fallbackFrom ? formatStrategyName(metadata.fallbackFrom) : undefined },
+    { key: "fallbackTo", label: "Fallback 대상 전략", value: metadata.fallbackTo ? formatStrategyName(metadata.fallbackTo) : undefined },
+    { key: "fallbackReason", label: "Fallback 사유", value: metadata.fallbackReason },
+    { key: "chunkQualityStatus", label: "품질 검증 상태", value: qualityStatus },
+    { key: "blockifyFingerprint", label: "Blockify Fingerprint", value: metadata.blockifyFingerprint },
+    { key: "promptVersion", label: "Prompt Version", value: metadata.promptVersion },
+    { key: "generatorModel", label: "Generator Model", value: metadata.generatorModel },
+    { key: "sourceEvidence", label: "Source Evidence", value: metadata.sourceEvidence },
+  ].filter(f => f.value !== undefined && f.value !== null && f.value !== "");
 
   return (
     <Box sx={{ border: 1, borderColor: "divider", borderRadius: 2, p: 1.25 }}>
       <Stack spacing={1}>
-        <Typography variant="subtitle2">{title}</Typography>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+          <Typography variant="subtitle2">{title}</Typography>
+          <Stack direction="row" spacing={0.5}>
+            {isStrategyFallback && (
+              <Chip size="small" color="warning" variant="outlined" label="Strategy Fallback" sx={{ height: 20, fontSize: 10 }} />
+            )}
+            {isBlockifyFallback && (
+              <Chip size="small" color="warning" variant="outlined" label="Blockify Fallback" sx={{ height: 20, fontSize: 10 }} />
+            )}
+            {qualityStatus === "VALID" && (
+              <Chip size="small" color="success" label="Valid" sx={{ height: 20, fontSize: 10 }} />
+            )}
+            {qualityStatus === "REVIEW_REQUIRED" && (
+              <Chip size="small" color="error" label="Review required" sx={{ height: 20, fontSize: 10 }} />
+            )}
+          </Stack>
+        </Stack>
+
         <Box
           component="pre"
           sx={{
@@ -431,18 +460,26 @@ function SearchResultDetail({
         >
           {content?.trim() || "검색 결과 row를 선택하면 전체 콘텐츠가 여기에 표시됩니다."}
         </Box>
-        {hasSpecialFields && metadata ? (
+
+        {qualityIssues.length > 0 && (
+          <Alert severity="warning" sx={{ py: 0.5, px: 1, fontSize: 11.5 }}>
+            <Typography variant="caption" fontWeight={700} display="block">품질 이슈 감지됨:</Typography>
+            {qualityIssues.map((issue) => (
+              <Box key={issue} component="div" sx={{ mt: 0.25 }}>
+                • <strong>{issue}</strong>: {getChunkQualityIssueText(issue)}
+              </Box>
+            ))}
+          </Alert>
+        )}
+
+        {specialFields.length > 0 && (
           <TableContainer component={Paper} variant="outlined" sx={{ overflow: "hidden", mt: 1 }}>
             <Table size="small">
               <TableBody>
-                {specialFields.map(({ key, label }) => {
-                  const val = metadata[key];
-                  if (val === undefined || val === null) return null;
-                  const displayVal = typeof val === "object" ? JSON.stringify(val) : String(val);
-                  
+                {specialFields.map(({ key, label, value }) => {
                   const shouldUnderline = 
-                    (key === "fallbackReason" && isFallback) ||
-                    (key === "actualChunkingStrategy" && metadata.requestedChunkingStrategy === "blockify" && metadata.actualChunkingStrategy === "structure-based");
+                    (key === "fallbackReason" && isStrategyFallback) ||
+                    (key === "strategyDisplay" && requested !== actual);
 
                   return (
                     <TableRow key={key}>
@@ -456,7 +493,7 @@ function SearchResultDetail({
                           color: shouldUnderline ? "error.main" : "text.primary"
                         }}
                       >
-                        {displayVal}
+                        {String(value)}
                       </TableCell>
                     </TableRow>
                   );
@@ -464,7 +501,7 @@ function SearchResultDetail({
               </TableBody>
             </Table>
           </TableContainer>
-        ) : null}
+        )}
         {metadata ? (
           (() => {
             const remaining = { ...metadata };

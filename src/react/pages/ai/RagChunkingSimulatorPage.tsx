@@ -32,6 +32,12 @@ import { GridContent } from "@/react/components/ag-grid";
 import { ObjectTypeSelect } from "@/react/components/objecttype/ObjectTypeSelect";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { reactAiApi } from "@/react/pages/ai/api";
+import {
+  getChunkStrategyDisplay,
+  getChunkQualityIssueText,
+  hasChunkProvenance,
+  formatStrategyName
+} from "./chunkMetaHelper";
 import type {
   AiInfoResponse,
   RagChunkPreviewItemDto,
@@ -807,9 +813,47 @@ export function RagChunkingSimulatorPage() {
                   {selectedChunk?.content ?? "Chunk row를 선택하세요."}
                 </Box>
                 {selectedChunk?.metadata ? (
-                  <Box component="pre" sx={{ m: 0, height: 160, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "text.secondary", fontSize: 12 }}>
-                    {JSON.stringify(selectedChunk.metadata, null, 2)}
-                  </Box>
+                  <Stack spacing={1} sx={{ mt: 1, borderTop: "1px solid", borderColor: "divider", pt: 1.5 }}>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                      <Typography variant="caption" color="text.secondary" fontWeight={700}>청킹 전략 및 품질 분석</Typography>
+                      <Stack direction="row" spacing={0.5}>
+                        {selectedChunk.metadata.fallbackStatus === "APPLIED" && (
+                          <Chip size="small" color="warning" variant="outlined" label="Strategy Fallback" sx={{ height: 18, fontSize: 9.5 }} />
+                        )}
+                        {selectedChunk.metadata.chunkQualityStatus === "VALID" && (
+                          <Chip size="small" color="success" label="Valid" sx={{ height: 18, fontSize: 9.5 }} />
+                        )}
+                        {selectedChunk.metadata.chunkQualityStatus === "REVIEW_REQUIRED" && (
+                          <Chip size="small" color="error" label="Review required" sx={{ height: 18, fontSize: 9.5 }} />
+                        )}
+                        {hasChunkProvenance(selectedChunk) ? (
+                          <Chip size="small" variant="outlined" label="Provenance" sx={{ height: 18, fontSize: 9.5 }} />
+                        ) : (
+                          <Chip size="small" variant="outlined" color="error" label="No Provenance" sx={{ height: 18, fontSize: 9.5 }} />
+                        )}
+                      </Stack>
+                    </Stack>
+
+                    <Stack spacing={0.5} sx={{ pl: 1, borderLeft: "2px solid", borderColor: "divider" }}>
+                      <Typography variant="caption" color="text.secondary">
+                        <strong>적용 전략</strong>: {getChunkStrategyDisplay(selectedChunk.metadata)}
+                      </Typography>
+                      {selectedChunk.metadata.fallbackStatus === "APPLIED" && (
+                        <Typography variant="caption" color="warning.main">
+                          <strong>Fallback</strong>: {formatStrategyName(selectedChunk.metadata.fallbackFrom as string)} -&gt; {formatStrategyName(selectedChunk.metadata.fallbackTo as string)} ({String(selectedChunk.metadata.fallbackReason)})
+                        </Typography>
+                      )}
+                      {Array.isArray(selectedChunk.metadata.chunkQualityIssues) && (selectedChunk.metadata.chunkQualityIssues as string[]).map((issue) => (
+                        <Typography key={issue} variant="caption" color="error.main" display="block">
+                          • <strong>{issue}</strong>: {getChunkQualityIssueText(issue)}
+                        </Typography>
+                      ))}
+                    </Stack>
+
+                    <Box component="pre" sx={{ m: 0, height: 120, overflow: "auto", whiteSpace: "pre-wrap", wordBreak: "break-word", color: "text.secondary", fontSize: 11, bgcolor: "action.hover", p: 1, borderRadius: 0.5 }}>
+                      {JSON.stringify(selectedChunk.metadata, null, 2)}
+                    </Box>
+                  </Stack>
                 ) : null}
               </Stack>
             </Paper>

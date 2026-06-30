@@ -48,6 +48,12 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
+import {
+  getChunkStrategyDisplay,
+  getChunkQualityIssueText,
+  hasChunkProvenance,
+  formatStrategyName
+} from "./chunkMetaHelper";
 import { useQuery } from "@tanstack/react-query";
 import { IdeaBlockSummaryPanel } from "@/react/pages/files/IdeaBlockSummaryPanel";
 import { reactMarkdownDocumentApi } from "@/react/pages/files/api";
@@ -748,17 +754,24 @@ function ChunkInspector({
 
               {/* 신규 요구사항 뱃지 추가 */}
               {chunk.chunkType === "ideaBlock" && (
-                <Chip size="small" color="secondary" label="IdeaBlock" />
+                <Chip size="small" color="secondary" label="IdeaBlock" sx={{ height: 20 }} />
               )}
-              {metadataValue(chunk.metadata, ["actualChunkingStrategy", "actual_chunking_strategy"]) === "structure-based" &&
-               metadataValue(chunk.metadata, ["requestedChunkingStrategy", "requested_chunking_strategy"]) === "blockify" && (
-                <Chip size="small" color="warning" label="Fallback" />
+              {metadataValue(chunk.metadata, ["fallbackStatus"]) === "APPLIED" && (
+                <Chip size="small" color="warning" variant="outlined" label="Strategy Fallback" sx={{ height: 20 }} />
               )}
-              {metadataValue(chunk.metadata, ["validationStatus", "validation_status"]) === "RULE_VALIDATED" && (
-                <Chip size="small" color="success" label="Validated" />
+              {metadataValue(chunk.metadata, ["validationStatus"]) === "FALLBACK" && (
+                <Chip size="small" color="warning" variant="outlined" label="Blockify Fallback" sx={{ height: 20 }} />
               )}
-              {metadataValue(chunk.metadata, ["validationStatus", "validation_status"]) === "REVIEW_REQUIRED" && (
-                <Chip size="small" color="error" label="Review" />
+              {metadataValue(chunk.metadata, ["chunkQualityStatus"]) === "VALID" && (
+                <Chip size="small" color="success" label="Valid" sx={{ height: 20 }} />
+              )}
+              {metadataValue(chunk.metadata, ["chunkQualityStatus"]) === "REVIEW_REQUIRED" && (
+                <Chip size="small" color="error" label="Review required" sx={{ height: 20 }} />
+              )}
+              {hasChunkProvenance(chunk) ? (
+                <Chip size="small" variant="outlined" label="Provenance" sx={{ height: 20 }} />
+              ) : (
+                <Chip size="small" variant="outlined" color="error" label="No Provenance" sx={{ height: 20 }} />
               )}
             </Stack>
 
@@ -906,6 +919,26 @@ function ChunkInspector({
                   <DetailRow label="model" value={metadataText(chunk, ["embeddingModel"])} />
                   <DetailRow label="dimension" value={metadataText(chunk, ["embeddingDimension"])} />
                   <DetailRow label="indexedAt" value={formatDateTime(chunk.indexedAt ?? (metadataValue(chunk.metadata, ["indexedAt"]) as string | undefined))} />
+                </Stack>
+
+                <Stack spacing={0.75}>
+                  <Typography variant="subtitle2" color="primary">청킹 전략 및 품질</Typography>
+                  <DetailRow label="적용 전략" value={getChunkStrategyDisplay(chunk.metadata)} />
+                  <DetailRow label="요청 전략" value={metadataValue(chunk.metadata, ["requestedChunkingStrategy"]) ? formatStrategyName(metadataValue(chunk.metadata, ["requestedChunkingStrategy"]) as string) : undefined} />
+                  <DetailRow label="실제 전략" value={metadataValue(chunk.metadata, ["actualChunkingStrategy"]) ? formatStrategyName(metadataValue(chunk.metadata, ["actualChunkingStrategy"]) as string) : undefined} />
+                  <DetailRow label="Strategy Fallback" value={metadataValue(chunk.metadata, ["fallbackStatus"]) === "APPLIED" ? `Fallback 적용됨 (${formatStrategyName(metadataValue(chunk.metadata, ["fallbackFrom"]) as string)} -> ${formatStrategyName(metadataValue(chunk.metadata, ["fallbackTo"]) as string)})` : "적용되지 않음"} />
+                  {metadataValue(chunk.metadata, ["fallbackReason"]) && (
+                    <DetailRow label="Fallback 사유" value={metadataValue(chunk.metadata, ["fallbackReason"]) as string} />
+                  )}
+                  <DetailRow label="품질 상태" value={metadataValue(chunk.metadata, ["chunkQualityStatus"]) as string} />
+                  {Array.isArray(metadataValue(chunk.metadata, ["chunkQualityIssues"])) && (metadataValue(chunk.metadata, ["chunkQualityIssues"]) as string[]).length > 0 && (
+                    <DetailRow
+                      label="품질 이슈"
+                      value={(metadataValue(chunk.metadata, ["chunkQualityIssues"]) as string[])
+                        .map((issue) => `${issue}: ${getChunkQualityIssueText(issue)}`)
+                        .join(", ")}
+                    />
+                  )}
                 </Stack>
 
                 {(() => {
