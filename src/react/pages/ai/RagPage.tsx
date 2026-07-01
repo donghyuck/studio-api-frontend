@@ -69,7 +69,10 @@ import {
   getProvenanceBadges,
   hasProvenance,
   summarizeChunkQuality,
-  recommendChunkingActions
+  recommendChunkingActions,
+  getChunkNormalizationBadge,
+  hasNormalizedChunkInput,
+  getNormalizationSourceLabel
 } from "./chunkMetaHelper";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
@@ -425,6 +428,9 @@ function SearchResultDetail({
     { key: "fallbackTo", label: "Fallback 대상 전략", value: metadata.fallbackTo ? formatStrategyName(metadata.fallbackTo) : undefined },
     { key: "fallbackReason", label: "Fallback 사유", value: metadata.fallbackReason },
     { key: "chunkQualityStatus", label: "품질 검증 상태", value: qualityStatus },
+    { key: "normalizedSnapshotUsed", label: "정규화 블록 사용 여부 (Normalized input)", value: metadata.normalizedSnapshotUsed != null ? (metadata.normalizedSnapshotUsed ? "True (Normalized blocks)" : "False (Markdown fallback)") : undefined },
+    { key: "normalizationStatus", label: "정규화 품질 상태 (Normalization status)", value: metadata.normalizationStatus },
+    { key: "normalizationSource", label: "정규화 경로 (Normalization source)", value: getNormalizationSourceLabel(metadata.normalizationSource) },
     { key: "blockifyFingerprint", label: "Blockify Fingerprint", value: metadata.blockifyFingerprint },
     { key: "promptVersion", label: "Prompt Version", value: metadata.promptVersion },
     { key: "generatorModel", label: "Generator Model", value: metadata.generatorModel },
@@ -448,6 +454,24 @@ function SearchResultDetail({
             )}
             {qualityStatus === "REVIEW_REQUIRED" && (
               <Chip size="small" color="error" label="Review required" sx={{ height: 20, fontSize: 10 }} />
+            )}
+            {getChunkNormalizationBadge(metadata) && (
+              <Chip
+                size="small"
+                color={metadata.normalizedSnapshotUsed === true ? "success" : "default"}
+                variant="outlined"
+                label={getChunkNormalizationBadge(metadata)}
+                sx={{ height: 20, fontSize: 10 }}
+              />
+            )}
+            {metadata.normalizationStatus === "REVIEW_REQUIRED" && (
+              <Chip
+                size="small"
+                color="warning"
+                variant="filled"
+                label="Normalization review"
+                sx={{ height: 20, fontSize: 10 }}
+              />
             )}
           </Stack>
         </Stack>

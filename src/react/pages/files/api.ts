@@ -235,6 +235,7 @@ export interface MarkdownResourceDto {
   contentType: string;
   sizeBytes: number;
   resourceType: string;
+  metadataJson?: any;
 }
 
 export interface MarkdownDocumentFromAttachmentResponse {

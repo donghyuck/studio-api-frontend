@@ -77,6 +77,7 @@ import { EpubReaderDialog } from "./EpubReaderDialog";
 import { PdfReaderDialog } from "./PdfReaderDialog";
 import { useMarkdownDocumentPolling } from "./hooks/useMarkdownDocumentPolling";
 import { getCachedThumbnailUrl, requestThumbnail, invalidateThumbnail } from "./thumbnailCache";
+import { findNormalizedDocumentResource, getNormalizationBadge, getNormalizationSourceLabel } from "../ai/chunkMetaHelper";
 
 const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
 const THUMBNAIL_RETRY_LIMIT = 8;
@@ -307,6 +308,20 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   // Locators & Resources
   const [locators, setLocators] = useState<MarkdownLocatorDto[]>([]);
   const [resources, setResources] = useState<MarkdownResourceDto[]>([]);
+
+  const normalizedRes = findNormalizedDocumentResource(resources);
+  const normalizedMeta = (() => {
+    if (!normalizedRes) return null;
+    let meta = normalizedRes.metadataJson;
+    if (typeof meta === "string") {
+      try {
+        meta = JSON.parse(meta);
+      } catch {
+        return null;
+      }
+    }
+    return meta;
+  })();
 
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
   const [isCanceling, setIsCanceling] = useState<boolean>(false);
@@ -1890,6 +1905,82 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     return "PENDING";
   };
 
+  function renderInternalPipelineProgressSteps() {
+    const stage = pipelineProgress?.currentStage || pipelineExecution?.currentStage || (markdownStatus === "RUNNING" ? "MARKDOWN" : "");
+    const step = pipelineProgress?.rag?.currentStep || latestRagJob?.currentStep;
+    
+    // Determine active stage name
+    let activeStage: "origin" | "extract" | "normalization" | "markdown" | "chunking" | "embedding" | "indexing" | null = null;
+    if (isPendingOrRunning) {
+      if (markdownStatus === "RUNNING" || markdownStatus === "PENDING" || String(stage) === "EXTRACT") {
+        activeStage = "extract";
+      } else if (stage === "MARKDOWN") {
+        activeStage = "markdown";
+      } else if (stage === "CHUNKING") {
+        activeStage = "chunking";
+      } else if (stage === "RAG_INDEX") {
+        if (step === "EMBEDDING") activeStage = "embedding";
+        else if (step === "INDEXING") activeStage = "indexing";
+        else activeStage = "embedding";
+      } else if (latestRagJob?.status === "RUNNING") {
+        if (latestRagJob.currentStep === "EMBEDDING") activeStage = "embedding";
+        else if (latestRagJob.currentStep === "INDEXING") activeStage = "indexing";
+      }
+    }
+    
+    // Check if normalized document resource exists
+    const normalizedRes = findNormalizedDocumentResource(resources);
+    const hasNormalized = normalizedRes !== null;
+
+    const stepsList = [
+      { key: "origin", label: "원본", active: activeStage === "origin" || !isPendingOrRunning },
+      { key: "extract", label: "추출", active: activeStage === "extract" },
+      { key: "normalization", label: "정규화", active: activeStage === "normalization", isNeutral: !hasNormalized },
+      { key: "markdown", label: "Markdown", active: activeStage === "markdown" },
+      { key: "chunking", label: "청킹", active: activeStage === "chunking" },
+      { key: "embedding", label: "임베딩", active: activeStage === "embedding" },
+      { key: "indexing", label: "벡터 저장", active: activeStage === "indexing" },
+    ];
+
+    return (
+      <Box sx={{ mt: 1.5, mb: 1, p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "background.paper" }}>
+        <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap sx={{ gap: 0.5 }}>
+          {stepsList.map((stepItem, index) => {
+            const isLast = index === stepsList.length - 1;
+            let chipColor: "default" | "primary" | "warning" | "success" = "default";
+            if (stepItem.active) {
+              chipColor = "primary";
+            } else if (stepItem.key === "normalization" && hasNormalized) {
+              const meta = normalizedRes.metadataJson;
+              const status = typeof meta === "string" ? (JSON.parse(meta)?.normalizationStatus) : meta?.normalizationStatus;
+              chipColor = status === "REVIEW_REQUIRED" ? "warning" : "success";
+            }
+            return (
+              <Box key={stepItem.key} sx={{ display: "flex", alignItems: "center" }}>
+                <Chip
+                  size="small"
+                  label={stepItem.label}
+                  color={chipColor}
+                  variant={stepItem.active ? "filled" : "outlined"}
+                  sx={{
+                    height: 22,
+                    fontSize: 10.5,
+                    fontWeight: stepItem.active ? 700 : 500,
+                  }}
+                />
+                {!isLast && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mx: 0.4, fontWeight: 700 }}>
+                    →
+                  </Typography>
+                )}
+              </Box>
+            );
+          })}
+        </Stack>
+      </Box>
+    );
+  }
+
   function renderPipelineStatusDashboard() {
     if (!documentId) return null;
 
@@ -3022,6 +3113,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                     )}
                   </Stack>
 
+                  {renderInternalPipelineProgressSteps()}
                   {renderPipelineStatusDashboard()}
 
                   {isPendingOrRunning && (
@@ -3030,22 +3122,43 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                         <CircularProgress size={16} />
                         <Typography variant="caption" color="text.secondary">
                           {(() => {
-                            if (pipelineProgress) {
-                              const pipeline = pipelineProgress;
-                              const rag = pipeline.rag;
-                              if (pipeline.status === "RUNNING" && pipeline.currentStage === "CHUNKING") return "청킹 중";
-                              if (pipeline.status === "RUNNING" && pipeline.currentStage === "RAG_INDEX") {
-                                if (rag?.currentStep === "EMBEDDING") {
-                                  return `임베딩 중 ${rag.embeddedCount ?? 0} / ${rag.chunkCount ?? 0}`;
-                                } else if (rag?.currentStep === "INDEXING") {
-                                  return `벡터 저장 중 ${rag.indexedCount ?? 0} / ${rag.chunkCount ?? 0}`;
-                                }
+                            if (latestRevision) {
+                              if (latestRevision.status === "RUNNING" || latestRevision.status === "PENDING") {
+                                return "추출/Markdown 생성 중";
                               }
-                              if (pipeline.status === "FAILED") return `실패: ${pipeline.errorCode}`;
+                              if (latestRevision.status === "FAILED") {
+                                return `실패: ${latestRevision.errorCode || "Markdown 생성 실패"}`;
+                              }
+                              if (latestRevision.status === "COMPLETED") {
+                                if (pipelineProgress) {
+                                  const pipeline = pipelineProgress;
+                                  const rag = pipeline.rag;
+                                  if (pipeline.status === "RUNNING" && pipeline.currentStage === "CHUNKING") return "청킹 중";
+                                  if (pipeline.status === "RUNNING" && pipeline.currentStage === "RAG_INDEX") {
+                                    if (rag?.currentStep === "EMBEDDING") {
+                                      return `임베딩 중 ${rag.embeddedCount ?? 0} / ${rag.chunkCount ?? 0}`;
+                                    } else if (rag?.currentStep === "INDEXING") {
+                                      return `벡터 저장 중 ${rag.indexedCount ?? 0} / ${rag.chunkCount ?? 0}`;
+                                    }
+                                  }
+                                  if (pipeline.status === "FAILED") return `실패: ${pipeline.errorCode}`;
+                                }
+                                if (latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") {
+                                  return `RAG 색인 진행 중... (${latestRagJob.currentStep})`;
+                                }
+                                const normalizedRes = findNormalizedDocumentResource(resources);
+                                if (normalizedRes) {
+                                  let meta = normalizedRes.metadataJson;
+                                  if (typeof meta === "string") {
+                                    try { meta = JSON.parse(meta); } catch {}
+                                  }
+                                  const status = meta?.normalizationStatus;
+                                  return status === "REVIEW_REQUIRED" ? "정규화 검토 필요" : "정규화 완료";
+                                }
+                                return "정규화 정보 없음";
+                              }
                             }
-                            if (latestRagJob?.status === "RUNNING" || latestRagJob?.status === "PENDING") {
-                              return `RAG 색인 진행 중... (${latestRagJob.currentStep})`;
-                            }
+                            if (pipelineProgress?.status === "FAILED") return `실패: ${pipelineProgress.errorCode}`;
                             return "Markdown 지식 파이프라인 진행 중...";
                           })()}
                         </Typography>
@@ -3178,6 +3291,45 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                 <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>5. 마지막 성공 단계</TableCell>
                                 <TableCell sx={{ fontSize: 12.5 }}>{pipelineExecution?.lastCompletedStage || "-"}</TableCell>
                               </TableRow>
+                              
+                              {/* 정규화 요약 정보 추가 */}
+                              <TableRow>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>6. 정규화 상태</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>
+                                  <Chip
+                                    size="small"
+                                    label={getNormalizationBadge(normalizedRes)}
+                                    color={
+                                      !normalizedRes ? "default" :
+                                      normalizedMeta?.normalizationStatus === "VALID" ? "success" : "warning"
+                                    }
+                                    sx={{ height: 20, fontSize: 11 }}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>7. 정규화 경로</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>
+                                  {getNormalizationSourceLabel(normalizedMeta?.normalizationSource)}
+                                </TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>8. 정규화 Block 수</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>{normalizedMeta?.blockCount != null ? `${normalizedMeta.blockCount}개` : "-"}</TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>9. 정규화 Table 수</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>{normalizedMeta?.tableCount != null ? `${normalizedMeta.tableCount}개` : "-"}</TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>10. 정규화 Image 수</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>{normalizedMeta?.imageCount != null ? `${normalizedMeta.imageCount}개` : "-"}</TableCell>
+                              </TableRow>
+                              <TableRow>
+                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>11. 정규화 Page 수</TableCell>
+                                <TableCell sx={{ fontSize: 12.5 }}>{normalizedMeta?.pageCount != null ? `${normalizedMeta.pageCount}개` : "-"}</TableCell>
+                              </TableRow>
+
                               <TableRow>
                                 <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>적용된 파이프라인 옵션</TableCell>
                                 <TableCell sx={{ fontSize: 12.5, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
@@ -3199,6 +3351,26 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                             </TableBody>
                           </Table>
                         </TableContainer>
+
+                        {/* 정규화 이슈 상세 목록 아코디언 */}
+                        {normalizedMeta?.normalizationIssues && normalizedMeta.normalizationIssues.length > 0 && (
+                          <Accordion disableGutters variant="outlined" sx={{ mt: 1.5, borderRadius: 1, overflow: "hidden" }}>
+                            <AccordionSummary expandIcon={<ExpandMoreOutlined fontSize="small" />}>
+                              <Typography variant="caption" sx={{ fontWeight: 600, color: "warning.main", display: "flex", alignItems: "center", gap: 0.5 }}>
+                                ⚠️ 정규화 이슈 감지됨 ({normalizedMeta.normalizationIssues.length}개)
+                              </Typography>
+                            </AccordionSummary>
+                            <AccordionDetails sx={{ pt: 0, pb: 1 }}>
+                              <Stack spacing={0.5}>
+                                {normalizedMeta.normalizationIssues.map((issue: string, idx: number) => (
+                                  <Typography key={`${issue}-${idx}`} variant="caption" color="text.secondary" display="block">
+                                    • {issue}
+                                  </Typography>
+                                ))}
+                              </Stack>
+                            </AccordionDetails>
+                          </Accordion>
+                        )}
                       </Box>
 
                       {/* Revision 이력 Table */}

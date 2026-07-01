@@ -33,7 +33,9 @@ import {
   getChunkStrategyDisplay,
   getChunkQualityIssueText,
   getProvenanceBadges,
-  formatStrategyName
+  formatStrategyName,
+  getChunkNormalizationBadge,
+  getNormalizationSourceLabel
 } from "./chunkMetaHelper";
 import type {
   AiInfoResponse,
@@ -789,6 +791,23 @@ function ReferenceDocuments({
                       {row.metadata.chunkQualityStatus === "REVIEW_REQUIRED" && (
                         <Chip size="small" color="error" label="Review required" sx={{ height: 16, fontSize: 8.5 }} />
                       )}
+                      {getChunkNormalizationBadge(row.metadata) && (
+                        <Chip
+                          size="small"
+                          color={row.metadata.normalizedSnapshotUsed === true ? "success" : "default"}
+                          variant="outlined"
+                          label={getChunkNormalizationBadge(row.metadata)}
+                          sx={{ height: 16, fontSize: 8.5 }}
+                        />
+                      )}
+                      {row.metadata.normalizationStatus === "REVIEW_REQUIRED" && (
+                        <Chip
+                          size="small"
+                          color="warning"
+                          label="Normalization review"
+                          sx={{ height: 16, fontSize: 8.5 }}
+                        />
+                      )}
                     </Stack>
 
                     <Box sx={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px", mt: 0.5 }}>
@@ -816,6 +835,26 @@ function ReferenceDocuments({
                           <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>
                             {String(row.metadata.fallbackStatus)} {row.metadata.fallbackReason ? `(${String(row.metadata.fallbackReason)})` : ""}
                           </Typography>
+                        </>
+                      )}
+                      {row.metadata.normalizedSnapshotUsed != null && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Normalized Input:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>
+                            {row.metadata.normalizedSnapshotUsed ? "True (Normalized blocks)" : "False (Markdown fallback)"}
+                          </Typography>
+                        </>
+                      )}
+                      {row.metadata.normalizationStatus && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Normalization Status:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>{String(row.metadata.normalizationStatus)}</Typography>
+                        </>
+                      )}
+                      {row.metadata.normalizationSource && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Normalization Source:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>{getNormalizationSourceLabel(row.metadata.normalizationSource as string)}</Typography>
                         </>
                       )}
                       {row.metadata.chunkQualityIssues && (row.metadata.chunkQualityIssues as string[]).length > 0 && (
