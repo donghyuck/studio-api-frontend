@@ -17,6 +17,10 @@ import type {
   QueryRewriteResponseDto,
   RagChunkingSimulationRequestDto,
   RagChunkingSimulationResponseDto,
+  ProjectionCreateRequest,
+  ProjectionCreateResponse,
+  ProjectionListResponse,
+  ProjectionPointsResponse,
   RagChunkConfigResponseDto,
   RagChunkPreviewRequestDto,
   RagChunkPreviewResponseDto,
@@ -31,7 +35,11 @@ import type {
   RagIndexJobStatus,
   SearchRequestDto,
   SearchResponseDto,
+  SearchVisualizationRequest,
+  SearchVisualizationResponse,
   RegenerateRequestDto,
+  VectorItemDetail,
+  VectorProjection,
   VectorSearchRequestDto,
   VectorSearchResultDto,
   VectorItemDetailDto,
@@ -185,10 +193,8 @@ export const reactAiApi = {
     return apiRequest<VectorSearchResultDto[]>("post", `${MGMT_BASE}/vectors/search`, { data: req });
   },
 
-  listVectorProjections(params?: { limit?: number; offset?: number }) {
-    return apiRequest<VectorProjectionListResponseDto>("get", `${MGMT_BASE}/vectors/projections`, {
-      params,
-    });
+  createVectorProjection(req: ProjectionCreateRequest) {
+    return apiRequest<ProjectionCreateResponse>("post", `${MGMT_BASE}/vectors/projections`, { data: req });
   },
 
   estimateVectorProjection(payload: VectorProjectionEstimateRequest) {
@@ -199,19 +205,13 @@ export const reactAiApi = {
     );
   },
 
-  createVectorProjection(payload: VectorProjectionCreateRequestDto) {
-    return apiRequest<VectorProjectionCreateResponseDto>(
-      "post",
-      `${MGMT_BASE}/vectors/projections`,
-      { data: payload }
-    );
+  async listVectorProjections(params?: { limit?: number; offset?: number }) {
+    const response = await apiRequest<ProjectionListResponse>("get", `${MGMT_BASE}/vectors/projections`, { params });
+    return response.items ?? [];
   },
 
   getVectorProjection(projectionId: string) {
-    return apiRequest<VectorProjectionDetailDto>(
-      "get",
-      `${MGMT_BASE}/vectors/projections/${encodeURIComponent(projectionId)}`
-    );
+    return apiRequest<VectorProjection>("get", `${MGMT_BASE}/vectors/projections/${encodeURIComponent(projectionId)}`);
   },
 
   deleteVectorProjection(projectionId: string) {
@@ -232,7 +232,7 @@ export const reactAiApi = {
       offset?: number;
     }
   ) {
-    return apiRequest<VectorProjectionPointsResponseDto>(
+    return apiRequest<ProjectionPointsResponse>(
       "get",
       `${MGMT_BASE}/vectors/projections/${encodeURIComponent(projectionId)}/points`,
       { params }
@@ -240,16 +240,11 @@ export const reactAiApi = {
   },
 
   getVectorItem(vectorItemId: string) {
-    return apiRequest<VectorItemDetailDto>(
-      "get",
-      `${MGMT_BASE}/vectors/items/${encodeURIComponent(vectorItemId)}`
-    );
+    return apiRequest<VectorItemDetail>("get", `${MGMT_BASE}/vectors/items/${encodeURIComponent(vectorItemId)}`);
   },
 
-  searchVectorVisualization(req: VectorSearchVisualizationRequestDto) {
-    return apiRequest<VectorSearchVisualizationResponseDto>("post", `${MGMT_BASE}/vectors/search-visualization`, {
-      data: req,
-    });
+  searchVectorVisualization(req: SearchVisualizationRequest) {
+    return apiRequest<SearchVisualizationResponse>("post", `${MGMT_BASE}/vectors/search-visualization`, { data: req });
   },
 
   async searchRag(req: SearchRequestDto) {
@@ -286,6 +281,17 @@ export const reactAiApi = {
     return apiRequest<RagIndexJobDto>("post", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/cancel`);
   },
 
+  deleteRagJob(jobId: string) {
+    return apiRequest<void>("delete", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}`);
+  },
+
+  deleteRagObject(objectType: string, objectId: string) {
+    return apiRequest<void>(
+      "delete",
+      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}`
+    );
+  },
+
   getRagJobLogs(jobId: string) {
     return apiRequest<RagIndexJobLogDto[]>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/logs`);
   },
@@ -311,12 +317,6 @@ export const reactAiApi = {
     );
   },
 
-  deleteRagObject(objectType: string, objectId: string) {
-    return apiRequest<void>(
-      "delete",
-      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}`
-    );
-  },
 
   getRagChunkConfig() {
     return apiRequest<RagChunkConfigResponseDto>("get", `${MGMT_BASE}/rag/chunks/config`);

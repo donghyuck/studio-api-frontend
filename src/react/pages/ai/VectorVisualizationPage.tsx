@@ -1088,8 +1088,8 @@ export function VectorVisualizationPage() {
         limit: DEFAULT_LIMIT,
         offset: 0,
       });
-      const next = response.items ?? [];
-      setProjections(next);
+      const next = response ?? [];
+      setProjections(next as any[]);
       setSelectedProjectionId((current) => {
         if (current && next.some((item) => item.projectionId === current)) {
           return current;
@@ -1167,7 +1167,7 @@ export function VectorVisualizationPage() {
     setProjectionError(null);
     try {
       const response = await reactAiApi.getVectorProjection(projectionId);
-      setProjectionDetail(response);
+      setProjectionDetail(response as any);
     } catch (error) {
       setProjectionDetail(null);
       setProjectionError(resolveAxiosError(error));
@@ -1199,7 +1199,7 @@ export function VectorVisualizationPage() {
           },
         );
         const next = response.items ?? [];
-        setProjectionPoints(next);
+        setProjectionPoints(next as any[]);
         setSelectedVectorItemId(null);
         setDetailOpen(false);
       } catch (error) {
@@ -1298,7 +1298,7 @@ export function VectorVisualizationPage() {
     setDetailError(null);
     reactAiApi
       .getVectorItem(selectedPoint.vectorItemId)
-      .then(setDetail)
+      .then((res) => setDetail(res as any))
       .catch((error) => {
         setDetail(null);
         setDetailError(resolveAxiosError(error));

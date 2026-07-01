@@ -32,14 +32,17 @@ import {
   CancelOutlined,
   CheckCircleOutline,
   ChevronRight,
+  DeleteOutline,
   ErrorOutline,
   History,
+  HubOutlined,
   HourglassEmptyOutlined,
   WarningAmberOutlined,
 } from "@mui/icons-material";
-import type { ColDef, GridOptions, ICellRendererParams } from "ag-grid-community";
+import type { ColDef, GridOptions, ICellRendererParams, RowClickedEvent, RowDoubleClickedEvent } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import { RagChunkSimulationDialog } from "@/react/pages/ai/RagChunkSimulationDialog";
 import { RagSearchValidationPanel } from "@/react/pages/ai/RagSearchValidationPanel";
 import { reactAiApi } from "@/react/pages/ai/api";
 import { reactObjectTypeApi } from "@/react/pages/objecttype/api";
@@ -108,7 +111,10 @@ export function RagJobListPage() {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [chunkSimulationOpen, setChunkSimulationOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [selectedJob, setSelectedJob] = useState<RagIndexJobDto | null>(null);
   const [objectTypes, setObjectTypes] = useState<ObjectTypeDto[]>([]);
   const [sourceMode, setSourceMode] = useState<SourceMode>("attachment");
@@ -312,6 +318,25 @@ export function RagJobListPage() {
     }
   }
 
+  async function handleDeleteSelectedRagObject() {
+    const job = selectedJob;
+    if (!job) {
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      await reactAiApi.deleteRagObject(job.objectType, job.objectId);
+      setDeleteOpen(false);
+      setCurrentSelectedJob(null);
+      await loadJobs();
+    } catch (deleteError) {
+      setError(resolveAxiosError(deleteError));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const groupColumns = useMemo<ColDef<RagObjectGroup>[]>(
     () => [
       { field: "objectType", headerName: "객체 유형", width: 120, filter: false },
@@ -387,16 +412,47 @@ export function RagJobListPage() {
         onSearch={setSearch}
         onRefresh={() => void loadJobs()}
         actions={
-          <Tooltip title="새 색인 작업을 생성합니다. 생성 후 상세 화면으로 이동합니다.">
-            <IconButton
-              size="small"
-              color="primary"
-              aria-label="새 색인 작업"
-              onClick={() => setCreateOpen(true)}
+          <>
+            <Tooltip title="청킹 시뮬레이션을 실행합니다. 색인 전 텍스트가 어떤 Chunk로 나뉘는지 확인합니다.">
+              <IconButton
+                size="small"
+                color="primary"
+                aria-label="청킹 시뮬레이션"
+                onClick={() => setChunkSimulationOpen(true)}
+              >
+                <HubOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip
+              title={
+                selectedJob
+                  ? "선택한 색인 대상의 RAG 데이터와 종료된 색인 이력 삭제를 요청합니다. 삭제 전 확인 절차가 표시됩니다."
+                  : "삭제할 색인 작업을 먼저 선택하세요."
+              }
             >
-              <AddOutlined fontSize="small" />
-            </IconButton>
-          </Tooltip>
+              <span>
+                <IconButton
+                  size="small"
+                  color="error"
+                  aria-label="선택한 RAG 색인 데이터 삭제"
+                  disabled={!selectedJob || selectedJob.status === "PENDING" || selectedJob.status === "RUNNING"}
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <DeleteOutline fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="새 색인 작업을 생성합니다. 생성 후 상세 화면으로 이동합니다.">
+              <IconButton
+                size="small"
+                color="primary"
+                aria-label="새 색인 작업"
+                onClick={() => setCreateOpen(true)}
+              >
+                <AddOutlined fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </>
         }
       />
 
@@ -791,6 +847,70 @@ export function RagJobListPage() {
           </Button>
         </DialogActions>
       </Dialog>
+      <Dialog
+        open={deleteOpen && Boolean(selectedJob)}
+        onClose={() => (deleting ? undefined : setDeleteOpen(false))}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>RAG 색인 데이터 삭제</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+            <Alert severity="warning">
+              이 작업은 선택한 객체의 RAG Chunk, Vector, Metadata와 종료된 색인 이력 삭제를 요청합니다. 삭제 후 해당 문서는 RAG 검색 결과와 이력 목록에서 제외될 수 있습니다.
+            </Alert>
+            <Box
+              component="dl"
+              sx={{
+                m: 0,
+                display: "grid",
+                gridTemplateColumns: "120px 1fr",
+                gap: 1,
+              }}
+            >
+              <Typography component="dt" variant="caption" color="text.secondary">
+                대상
+              </Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: "anywhere" }}>
+                {selectedJob ? sourceDisplayName(selectedJob) : "-"}
+              </Typography>
+              <Typography component="dt" variant="caption" color="text.secondary">
+                objectType
+              </Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0 }}>
+                {selectedJob?.objectType ?? "-"}
+              </Typography>
+              <Typography component="dt" variant="caption" color="text.secondary">
+                objectId
+              </Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0 }}>
+                {selectedJob?.objectId ?? "-"}
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              서버 삭제 API가 준비되어 있지 않으면 요청은 실패합니다. 실패 시 데이터는 변경되지 않습니다.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteOpen(false)} disabled={deleting}>
+            취소
+          </Button>
+          <Button
+            color="error"
+            variant="contained"
+            disabled={!selectedJob || deleting}
+            startIcon={deleting ? <CircularProgress size={16} color="inherit" /> : <DeleteOutline />}
+            onClick={() => void handleDeleteSelectedRagObject()}
+          >
+            삭제
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <RagChunkSimulationDialog
+        open={chunkSimulationOpen}
+        onClose={() => setChunkSimulationOpen(false)}
+      />
     </Stack>
   );
 }

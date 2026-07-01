@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -22,9 +25,6 @@ import {
   Checkbox,
   FormControlLabel,
   Paper,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   Grid,
   Select,
   Switch,
@@ -34,10 +34,11 @@ import {
 import {
   CloseOutlined,
   ContentCopyOutlined,
+  ExpandMoreOutlined,
+  LinkOutlined,
   RefreshOutlined,
   TextSnippetOutlined,
   TimelineOutlined,
-  ExpandMoreOutlined,
   DownloadOutlined,
   CheckCircle,
   Cancel,
@@ -77,6 +78,58 @@ import { PdfReaderDialog } from "./PdfReaderDialog";
 import { useMarkdownDocumentPolling } from "./hooks/useMarkdownDocumentPolling";
 import { getCachedThumbnailUrl, requestThumbnail, invalidateThumbnail } from "./thumbnailCache";
 
+const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
+const THUMBNAIL_RETRY_LIMIT = 8;
+
+function shouldRetryThumbnail(status?: string) {
+  return !status || status === "pending";
+}
+
+function isImageContent(contentType?: string | null) {
+  return Boolean(contentType?.toLowerCase().startsWith("image/"));
+}
+
+function isReadyThumbnail(status?: string) {
+  return status !== "pending" && status !== "unavailable";
+}
+
+interface Props {
+  open: boolean;
+  onClose: () => void;
+  attachmentId: number;
+}
+
+function ragObjectScopes(file: AttachmentDto | null, fallbackAttachmentId: number) {
+  const attachmentObjectId = String(fallbackAttachmentId);
+  const scopes: Array<{ objectType: string; objectId: string }> = [];
+  const append = (objectType?: string | number | null, objectId?: string | number | null) => {
+    const type = objectType == null ? "" : String(objectType).trim();
+    const id = objectId == null ? "" : String(objectId).trim();
+    if (!type || !id) {
+      return;
+    }
+    if (!scopes.some((scope) => scope.objectType === type && scope.objectId === id)) {
+      scopes.push({ objectType: type, objectId: id });
+    }
+  };
+
+  append(file?.objectType, attachmentObjectId);
+  append(file?.objectType, file?.objectId);
+  append("attachment", attachmentObjectId);
+
+  return scopes.length > 0 ? scopes : [{ objectType: "attachment", objectId: attachmentObjectId }];
+}
+
+function metadataMatchesAttachment(metadata: Record<string, unknown>, attachmentId: number) {
+  const expected = String(attachmentId);
+  const candidates = [
+    metadata.attachmentId,
+    metadata.sourceDocumentId,
+    metadata.documentId,
+  ];
+  return candidates.some((c) => c != null && String(c) === expected);
+}
+
 function formatFileSize(size?: number | null) {
   if (size == null) return "";
   if (size < 1024) return `${size} B`;
@@ -103,6 +156,90 @@ interface Props {
   onClose: () => void;
 }
 
+function formatMetadataValue(value: unknown) {
+  if (value == null) {
+    return "-";
+  }
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
+function RagMetadataAccordion({ entries }: { entries: Array<[string, unknown]> }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <Accordion
+      disableGutters
+      elevation={0}
+      expanded={expanded}
+      onChange={(_, nextExpanded) => setExpanded(nextExpanded)}
+      square
+      sx={{
+        bgcolor: "transparent",
+        border: 0,
+        boxShadow: "none",
+        "&:before": { display: "none" },
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreOutlined fontSize="small" />}
+        sx={{
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          minHeight: 36,
+          px: 0,
+          "& .MuiAccordionSummary-content": {
+            my: 0.75,
+            alignItems: "center",
+          },
+        }}
+      >
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
+          RAG Metadata
+        </Typography>
+      </AccordionSummary>
+      {expanded ? (
+        <AccordionDetails sx={{ px: 0, pt: 0, pb: 0.5 }}>
+          <Box
+            component="dl"
+            sx={{
+              m: 0,
+              display: "grid",
+              gridTemplateColumns: "minmax(104px, 32%) minmax(0, 1fr)",
+              rowGap: 0,
+              columnGap: 1.5,
+            }}
+          >
+            {entries.map(([key, value]) => (
+              <Box
+                component="div"
+                key={key}
+                sx={{
+                  display: "contents",
+                  "& > dt, & > dd": {
+                    py: 0.85,
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
+                  },
+                }}
+              >
+                <Typography component="dt" variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                  {key}
+                </Typography>
+                <Typography component="dd" variant="body2" sx={{ m: 0, overflowWrap: "anywhere" }}>
+                  {formatMetadataValue(value)}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </AccordionDetails>
+      ) : null}
+    </Accordion>
+  );
+}
+
 export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const toast = useToast();
   
@@ -113,12 +250,19 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [textExtracted, setTextExtracted] = useState(false);
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
   const [thumbnailAvailable, setThumbnailAvailable] = useState(false);
+  const [thumbnailLoading, setThumbnailLoading] = useState(false);
+  const [thumbnailUnavailable, setThumbnailUnavailable] = useState(false);
   const [thumbnailReloadKey, setThumbnailReloadKey] = useState(0);
   const [loading, setLoading] = useState(false);
   const [textExtracting, setTextExtracting] = useState(false);
+  const [ragJobId, setRagJobId] = useState<string | null>(null);
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [epubReaderOpen, setEpubReaderOpen] = useState(false);
   const [pdfReaderOpen, setPdfReaderOpen] = useState(false);
+  const [ragIndexing, setRagIndexing] = useState(false);
+  const [downloadLinkIssuing, setDownloadLinkIssuing] = useState(false);
+  const [downloadLinkUrl, setDownloadLinkUrl] = useState<string | null>(null);
+  const [downloadLinkExpiresAt, setDownloadLinkExpiresAt] = useState<string | null>(null);
 
   // RAG Retrieval Policy States
   const [retrievalPolicy, setRetrievalPolicy] = useState<RetrievalPolicyDto | null>(null);
@@ -206,6 +350,18 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [blockifyPiiMaskingEnabled, setBlockifyPiiMaskingEnabled] = useState<boolean>(true);
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
+
+  function clearThumbnail() {
+    setThumbnailAvailable(false);
+    setThumbnailLoading(false);
+    setThumbnailUnavailable(false);
+    setThumbnailUrl((currentUrl) => {
+      if (currentUrl) {
+        URL.revokeObjectURL(currentUrl);
+      }
+      return null;
+    });
+  }
 
   const loadPolicyInfo = useCallback(async () => {
     if (!attachmentId) return;
@@ -729,33 +885,43 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     (!markdownDocument || markdownDocument.currentRevisionId === null || markdownDocument.currentRevisionId === undefined) &&
     latestRevision?.status === "CANCELED";
 
-  function clearThumbnail() {
-    setThumbnailAvailable(false);
-    setThumbnailUrl(null);
-  }
 
   async function loadRagState(nextFile: AttachmentDto) {
-    try {
-      const metadata = await reactFilesApi.ragMetadata(nextFile.attachmentId);
+    const indexed = await reactFilesApi.hasEmbedding(nextFile.attachmentId);
+    if (!indexed) {
       return {
-        indexed: Boolean(metadata?.indexed),
-        metadata,
+        indexed,
+        metadata: null,
+      };
+    }
+
+    try {
+      return {
+        indexed,
+        metadata: await reactFilesApi.ragMetadata(nextFile.attachmentId),
       };
     } catch {
       return {
-        indexed: false,
+        indexed,
         metadata: null,
       };
     }
   }
 
-  useEffect(() => {
+  function resetDetailState() {
     setFile(null);
     setRagIndexed(false);
     setRagMetadata(null);
     setExtractedText("");
     setTextExtracted(false);
+    setRagJobId(null);
+    setDownloadLinkUrl(null);
+    setDownloadLinkExpiresAt(null);
     clearThumbnail();
+  }
+
+  useEffect(() => {
+    resetDetailState();
 
     if (!attachmentId) return;
 
@@ -820,7 +986,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         active = false;
       };
     }
-  }, [attachmentId, markdownIsPolling, latestRevision?.status]);
+  }, [attachmentId, markdownIsPolling]);
 
   useEffect(() => {
     if (!attachmentId) {
@@ -829,7 +995,98 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     }
 
     let ignored = false;
-    const cached = getCachedThumbnailUrl(attachmentId);
+    let timer: number | undefined;
+    const requestedId = attachmentId;
+    setThumbnailLoading(true);
+    setThumbnailUnavailable(false);
+
+    function showUnavailable() {
+      setThumbnailLoading(false);
+      setThumbnailUrl((currentUrl) => {
+        if (!currentUrl) {
+          setThumbnailAvailable(false);
+          setThumbnailUnavailable(true);
+        }
+        return currentUrl;
+      });
+    }
+
+    function loadOriginalImageFallback() {
+      if (!isImageContent(file?.contentType)) {
+        showUnavailable();
+        return;
+      }
+
+      reactFilesApi
+        .downloadBlob(requestedId)
+        .then((blob) => {
+          if (ignored || requestedId !== attachmentId) {
+            return;
+          }
+          if (blob.size === 0) {
+            showUnavailable();
+            return;
+          }
+          const objectUrl = URL.createObjectURL(blob);
+          setThumbnailUrl((currentUrl) => {
+            if (currentUrl) {
+              URL.revokeObjectURL(currentUrl);
+            }
+            return objectUrl;
+          });
+          setThumbnailAvailable(true);
+          setThumbnailLoading(false);
+          setThumbnailUnavailable(false);
+        })
+        .catch(() => {
+          if (!ignored) {
+            showUnavailable();
+          }
+        });
+    }
+
+    function loadThumbnail(attempt: number) {
+      reactFilesApi
+        .fetchThumbnail(requestedId, 512)
+        .then(({ blob, status, retryAfterMs }) => {
+          if (ignored || requestedId !== attachmentId) {
+            return;
+          }
+          if (blob.size > 0) {
+            const objectUrl = URL.createObjectURL(blob);
+            setThumbnailUrl((currentUrl) => {
+              if (currentUrl) {
+                URL.revokeObjectURL(currentUrl);
+              }
+              return objectUrl;
+            });
+            setThumbnailAvailable(true);
+            setThumbnailUnavailable(false);
+            if (isReadyThumbnail(status)) {
+              setThumbnailLoading(false);
+              return;
+            }
+          }
+          if (shouldRetryThumbnail(status) && attempt < THUMBNAIL_RETRY_LIMIT) {
+            setThumbnailLoading(true);
+            timer = window.setTimeout(() => loadThumbnail(attempt + 1), retryAfterMs ?? THUMBNAIL_RETRY_INTERVAL_MS);
+          } else {
+            loadOriginalImageFallback();
+          }
+        })
+        .catch(() => {
+          if (ignored) {
+            return;
+          }
+          if (attempt < THUMBNAIL_RETRY_LIMIT) {
+            timer = window.setTimeout(() => loadThumbnail(attempt + 1), THUMBNAIL_RETRY_INTERVAL_MS);
+          } else {
+            loadOriginalImageFallback();
+          }
+        });
+    }
+
+    const cached = getCachedThumbnailUrl(requestedId);
     if (cached !== undefined) {
       if (cached) {
         setThumbnailUrl(cached);
@@ -838,28 +1095,30 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         setThumbnailUrl(null);
         setThumbnailAvailable(false);
       }
-      return;
+      setThumbnailLoading(false);
+    } else {
+      loadThumbnail(0);
     }
-
-    requestThumbnail(attachmentId, 256).then((url) => {
-      if (ignored) return;
-      if (url) {
-        setThumbnailUrl(url);
-        setThumbnailAvailable(true);
-      } else {
-        setThumbnailUrl(null);
-        setThumbnailAvailable(false);
-      }
-    });
 
     return () => {
       ignored = true;
+      if (timer) {
+        window.clearTimeout(timer);
+      }
     };
-  }, [attachmentId, thumbnailReloadKey]);
+  }, [open, attachmentId, file?.contentType, thumbnailReloadKey]);
 
   async function refreshDetail() {
     if (!attachmentId) return;
     invalidateThumbnail(attachmentId);
+    setFile(null);
+    setRagIndexed(false);
+    setRagMetadata(null);
+    setExtractedText("");
+    setTextExtracted(false);
+    setRagJobId(null);
+    setDownloadLinkUrl(null);
+    setDownloadLinkExpiresAt(null);
     setThumbnailReloadKey((current) => current + 1);
     setLoading(true);
     try {
@@ -979,6 +1238,74 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       .replace(/(s3|gs):\/\/[a-zA-Z0-9.\-_]+(\/[a-zA-Z0-9.\-_]+)*/gi, '[SENSITIVE_STORAGE_PATH]');
   }
 
+  async function handleIssueDownloadLink() {
+    if (!attachmentId || !file) return;
+
+    setDownloadLinkIssuing(true);
+    try {
+      const issued = await reactFilesApi.issueDownloadUrl(attachmentId, { ttlSeconds: 300 });
+      setDownloadLinkUrl(issued.url);
+      setDownloadLinkExpiresAt(issued.expiresAt);
+      if (!navigator.clipboard?.writeText) {
+        toast.warning("다운로드 링크를 생성했습니다. 클립보드 복사는 브라우저에서 지원하지 않습니다.");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(issued.url);
+        toast.success("다운로드 링크를 생성하고 클립보드에 복사했습니다.");
+      } catch {
+        toast.warning("다운로드 링크를 생성했습니다. 아래 링크를 다시 복사해 주세요.");
+      }
+    } catch (error) {
+      toast.error(resolveAxiosError(error));
+    } finally {
+      setDownloadLinkIssuing(false);
+    }
+  }
+
+  async function handleCopyDownloadLink() {
+    if (!downloadLinkUrl) {
+      toast.warning("복사할 다운로드 링크가 없습니다.");
+      return;
+    }
+    if (!navigator.clipboard?.writeText) {
+      toast.error("현재 브라우저에서는 클립보드 복사를 지원하지 않습니다.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(downloadLinkUrl);
+      toast.success("다운로드 링크를 클립보드에 복사했습니다.");
+    } catch {
+      toast.error("클립보드에 복사할 수 없습니다. 브라우저 권한을 확인해 주세요.");
+    }
+  }
+
+  async function handleRagIndex() {
+    if (!attachmentId || !file || ragIndexed) return;
+
+    setRagIndexing(true);
+    try {
+      const [scope] = ragObjectScopes(file, attachmentId);
+      const job = await reactAiApi.createRagJob({
+        objectType: scope.objectType,
+        objectId: scope.objectId,
+        documentId: String(attachmentId),
+        sourceType: "attachment",
+        metadata: {
+          attachmentId: String(attachmentId),
+        },
+        forceReindex: true,
+        useLlmKeywordExtraction: true,
+      });
+      setRagJobId(job.jobId);
+      toast.success(`${file.name} 파일의 RAG 색인 작업이 생성되었습니다.`);
+    } catch (error) { 
+      toast.error(resolveAxiosError(error));
+    } finally {
+      setRagIndexing(false);
+    }
+  }
+
   const handleRunChunkingChange = (checked: boolean) => {
     setRunChunking(checked);
     if (!checked) {
@@ -986,6 +1313,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       setRunSkillExtraction(false);
     }
   };
+
 
   const handleRunRagIndexChange = (checked: boolean) => {
     setRunRagIndex(checked);
@@ -2001,11 +2329,54 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                 <Grid size={{ xs: 6, md: 6 }}>{renderDetail("수정일", formatDate(file.updatedAt || file.createdAt))}</Grid>
               </Grid>
 
-              {thumbnailAvailable && thumbnailUrl && (
-                <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-                    썸네일 프리뷰
+              <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
+                <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                  <Typography variant="caption" color="text.secondary">
+                    다운로드 링크
                   </Typography>
+                  <Tooltip title="5분 동안 사용할 수 있는 다운로드 링크를 생성하고 복사합니다.">
+                    <span>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        startIcon={downloadLinkIssuing ? <CircularProgress size={14} /> : <LinkOutlined fontSize="small" />}
+                        disabled={downloadLinkIssuing}
+                        onClick={() => void handleIssueDownloadLink()}
+                      >
+                        링크 생성
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Stack>
+                {downloadLinkExpiresAt ? (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                    최근 생성 링크 만료: {formatDate(downloadLinkExpiresAt)}
+                  </Typography>
+                ) : null}
+                {downloadLinkUrl ? (
+                  <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mt: 1 }}>
+                    <TextField
+                      size="small"
+                      value={downloadLinkUrl}
+                      InputProps={{ readOnly: true }}
+                      fullWidth
+                    />
+                    <Tooltip title="다운로드 링크 복사">
+                      <IconButton size="small" onClick={() => void handleCopyDownloadLink()}>
+                        <ContentCopyOutlined fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                ) : null}
+              </Box>
+              {thumbnailAvailable && thumbnailUrl ? (
+                <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
+                  <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      썸네일 프리뷰
+                    </Typography>
+                    {thumbnailLoading ? <CircularProgress size={14} thickness={4} /> : null}
+                  </Stack>
                   <Box
                     component="img"
                     src={thumbnailUrl}
@@ -2016,8 +2387,42 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                       borderRadius: 1,
                       border: "1px solid",
                       borderColor: "divider",
+                      opacity: thumbnailLoading ? 0.72 : 1,
+                      transition: "opacity 120ms ease",
                     }}
                   />
+                </Box>
+              ) : thumbnailLoading ? (
+                <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    썸네일 프리뷰
+                  </Typography>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    alignItems="center"
+                    sx={{
+                      minHeight: 72,
+                      color: "text.secondary",
+                    }}
+                  >
+                    <CircularProgress size={18} thickness={4} />
+                    <Typography variant="body2">썸네일을 불러오는 중입니다.</Typography>
+                  </Stack>
+                </Box>
+              ) : thumbnailUnavailable ? (
+                <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+                    썸네일 프리뷰
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    썸네일을 사용할 수 없습니다.
+                  </Typography>
+                </Box>
+              ) : null}
+              {metadataEntries.length > 0 && (
+                <Box sx={{ mt: 2, pt: 1, borderTop: "1px solid", borderColor: "divider" }}>
+                  <RagMetadataAccordion entries={metadataEntries} />
                 </Box>
               )}
             </Paper>

@@ -58,7 +58,7 @@ export async function requestThumbnail(attachmentId: number, size = 256) {
     function load() {
       reactFilesApi
         .fetchThumbnail(attachmentId, size)
-        .then((blob) => {
+        .then(({ blob }) => {
           if (blob.size === 0) {
             if (attempt < THUMBNAIL_RETRY_LIMIT) {
               attempt += 1;

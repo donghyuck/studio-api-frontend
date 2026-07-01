@@ -409,10 +409,24 @@ export function UserDetailPage() {
             <Box ref={propertiesSectionRef} sx={{ scrollMarginTop: 56 }}>
               <Accordion
                 disableGutters
+                elevation={0}
                 expanded={propertiesExpanded}
                 onChange={(_, expanded) => setPropertiesExpanded(expanded)}
+                sx={{
+                  border: 0,
+                  boxShadow: "none",
+                  "&:before": {
+                    display: "none",
+                  },
+                }}
               >
-                <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
+                <AccordionSummary
+                  expandIcon={<ExpandMoreOutlined />}
+                  sx={{
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
+                  }}
+                >
                   프로퍼티
                 </AccordionSummary>
                 <AccordionDetails>

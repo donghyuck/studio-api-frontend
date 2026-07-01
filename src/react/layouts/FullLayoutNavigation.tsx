@@ -1,4 +1,5 @@
 import {
+  alpha,
   Box,
   List,
   ListItemButton,
@@ -9,8 +10,9 @@ import {
 } from "@mui/material";
 import {
   AccountCircleOutlined,
-  ArticleOutlined,
   AccountTreeOutlined,
+  ArticleOutlined,
+  BubbleChartOutlined,
   BusinessOutlined,
   DashboardOutlined,
   ExpandLess,
@@ -18,7 +20,6 @@ import {
   FolderOpenOutlined,
   ForumOutlined,
   GroupOutlined,
-  HubOutlined,
   Inventory2Outlined,
   LinkOutlined,
   MailOutline,
@@ -60,16 +61,8 @@ export function buildNavSections(): NavSection[] {
     {
       title: "General",
       items: [
-        {
-          label: "대시보드",
-          path: "/",
-          icon: <DashboardOutlined fontSize="small" />,
-        },
-        {
-          label: "내 프로필",
-          path: "/profile",
-          icon: <AccountCircleOutlined fontSize="small" />,
-        },
+        { label: "대시보드", path: "/", icon: <DashboardOutlined fontSize="small" /> },
+        { label: "내 프로필", path: "/profile", icon: <AccountCircleOutlined fontSize="small" /> },
       ],
     },
     {
@@ -91,13 +84,9 @@ export function buildNavSections(): NavSection[] {
     {
       title: "Resource",
       items: [
+        { label: "파일", path: "/application/files", icon: <FolderOpenOutlined fontSize="small" /> },
         {
-          label: "파일",
-          path: "/application/files",
-          icon: <FolderOpenOutlined fontSize="small" />,
-        },
-        {
-          label: "작업공간",
+          label: "Workspace",
           path: "/application/workspaces",
           icon: <AccountTreeOutlined fontSize="small" />,
         },
@@ -121,11 +110,7 @@ export function buildNavSections(): NavSection[] {
           path: "/policy/object-types",
           icon: <RuleOutlined fontSize="small" />,
         },
-        {
-          label: "ACL",
-          path: "/admin/acl",
-          icon: <RuleOutlined fontSize="small" />,
-        },
+        { label: "ACL", path: "/admin/acl", icon: <RuleOutlined fontSize="small" /> },
       ],
     },
     {
@@ -150,53 +135,22 @@ export function buildNavSections(): NavSection[] {
           label: "AI RAG",
           path: "/services/ai/rag",
           icon: <TopicOutlined fontSize="small" />,
-          match: (pathname) =>
-            pathname === "/services/ai/rag" ||
-            /^\/services\/ai\/rag\/jobs\/[^/]+$/.test(pathname),
         },
         {
-          label: "RAG 시뮬레이터",
-          path: "/services/ai/rag/chunking-simulator",
-          icon: <HubOutlined fontSize="small" />,
-        },
-        {
-          label: "벡터 시각화",
+          label: "Vector Map",
           path: "/services/ai/vector-visualization",
-          icon: <TopicOutlined fontSize="small" />,
-        },
-        // {
-        //   label: "NCS 데이터셋 임포트",
-        //   path: "/services/ai/skillgraph/dataset-import",
-        //   icon: <StorageOutlined fontSize="small" />,
-        // },
-        {
-          label: "SkillGraph Console",
-          path: "/services/ai/skillgraph/dashboard",
-          icon: <HubOutlined fontSize="small" />,
-          match: (pathname) => pathname.startsWith("/services/ai/skillgraph"),
+          icon: <BubbleChartOutlined fontSize="small" />,
         },
       ],
     },
     {
       title: "Admin",
       items: [
+        { label: "회원", path: "/admin/users", icon: <AccountCircleOutlined fontSize="small" /> },
+        { label: "그룹", path: "/admin/groups", icon: <GroupOutlined fontSize="small" /> },
+        { label: "역할", path: "/admin/roles", icon: <RuleOutlined fontSize="small" /> },
         {
-          label: "회원",
-          path: "/admin/users",
-          icon: <AccountCircleOutlined fontSize="small" />,
-        },
-        {
-          label: "그룹",
-          path: "/admin/groups",
-          icon: <GroupOutlined fontSize="small" />,
-        },
-        {
-          label: "역할",
-          path: "/admin/roles",
-          icon: <RuleOutlined fontSize="small" />,
-        },
-        {
-          label: "회사",
+          label: "Company",
           path: "/admin/companies",
           icon: <BusinessOutlined fontSize="small" />,
         },
@@ -206,7 +160,7 @@ export function buildNavSections(): NavSection[] {
           icon: <ArticleOutlined fontSize="small" />,
         },
         {
-          label: "파일 다운로드 로그",
+          label: "다운로드 링크 감사",
           path: "/admin/audit/attachment-download-links",
           icon: <LinkOutlined fontSize="small" />,
         },
@@ -247,7 +201,7 @@ export function FullLayoutNavigation({
           <Box
             key={section.title}
             sx={{
-              mb: 1.5,
+              mb: 1,
               px: collapsed ? 1 : 2,
             }}
           >
@@ -275,19 +229,16 @@ export function FullLayoutNavigation({
                     alignItems: "center",
                     gap: 0.5,
                     textTransform: "uppercase",
-                    fontWeight: 650,
-                    letterSpacing: "0.08em",
-                    fontSize: 10,
-                    color: "text.secondary",
-                    opacity: 0.8,
+                    fontWeight: 500,
+                    letterSpacing: 0.2,
                   }}
                 >
                   {section.title}
                 </Typography>
                 {expandedSections[section.title] ? (
-                  <ExpandLess fontSize="small" sx={{ fontSize: 16, opacity: 0.6 }} />
+                  <ExpandLess fontSize="small" />
                 ) : (
-                  <ExpandMore fontSize="small" sx={{ fontSize: 16, opacity: 0.6 }} />
+                  <ExpandMore fontSize="small" />
                 )}
               </ListItemButton>
             ) : null}
@@ -298,14 +249,8 @@ export function FullLayoutNavigation({
                 pl: collapsed ? 0 : 1.5,
                 pr: 0,
                 borderLeft: collapsed ? "none" : "1px solid",
-                borderColor: (theme) =>
-                  theme.palette.mode === "dark"
-                    ? "rgba(255, 255, 255, 0.06)"
-                    : "rgba(0, 0, 0, 0.05)",
-                display:
-                  collapsed || expandedSections[section.title]
-                    ? "block"
-                    : "none",
+                borderColor: "divider",
+                display: collapsed || expandedSections[section.title] ? "block" : "none",
               }}
             >
               {section.items.map((item) => {
@@ -317,52 +262,31 @@ export function FullLayoutNavigation({
                     onClick={() => onNavigate(item.path)}
                     sx={{
                       position: "relative",
-                      minHeight: 34,
-                      borderRadius: "6px",
-                      mb: 0.5,
-                      px: collapsed ? 1 : 1.5,
-                      py: 0.5,
-                      ml: collapsed ? 0 : -0.5,
+                      minHeight: 30,
+                      borderRadius: 1,
+                      mb: 0.25,
+                      px: 1,
+                      py: 0.25,
+                      ml: -0.5,
                       justifyContent: collapsed ? "center" : "flex-start",
                       color: active ? "primary.main" : "text.secondary",
-                      transition: "all 200ms cubic-bezier(0.4, 0, 0.2, 1)",
                       "&.Mui-selected": {
-                        bgcolor: (theme) =>
-                          theme.palette.mode === "dark"
-                            ? "rgba(139, 92, 246, 0.15)"
-                            : "rgba(139, 92, 246, 0.08)",
+                        bgcolor: "transparent",
                         color: "primary.main",
-                        "&::before": collapsed ? {} : {
-                          content: '""',
-                          position: "absolute",
-                          left: 0,
-                          top: "20%",
-                          height: "60%",
-                          width: 3,
-                          borderRadius: 1,
-                          bgcolor: "primary.main",
-                        },
+                        fontWeight: 700,
                       },
                       "&.Mui-selected:hover": {
-                        bgcolor: (theme) =>
-                          theme.palette.mode === "dark"
-                            ? "rgba(139, 92, 246, 0.22)"
-                            : "rgba(139, 92, 246, 0.12)",
-                        transform: collapsed ? "none" : "translateX(4px)",
+                        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
                       },
                       "&:hover": {
-                        bgcolor: (theme) =>
-                          theme.palette.mode === "dark"
-                            ? "rgba(139, 92, 246, 0.08)"
-                            : "rgba(139, 92, 246, 0.04)",
-                        color: active ? "primary.main" : "text.primary",
-                        transform: collapsed ? "none" : "translateX(4px)",
+                        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.06),
+                        color: "primary.main",
                       },
                     }}
                   >
                     <ListItemIcon
                       sx={{
-                        minWidth: collapsed ? 0 : 28,
+                        minWidth: collapsed ? 0 : 30,
                         color: "inherit",
                         justifyContent: "center",
                         "& svg": {
@@ -376,10 +300,9 @@ export function FullLayoutNavigation({
                       <ListItemText
                         primary={item.label}
                         primaryTypographyProps={{
-                          fontSize: 13.5,
+                          fontSize: 14,
                           fontWeight: active ? 600 : 500,
                           color: "inherit",
-                          letterSpacing: "-0.01em",
                         }}
                       />
                     ) : null}
