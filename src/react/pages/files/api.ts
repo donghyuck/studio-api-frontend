@@ -3,6 +3,8 @@ import { apiRequest } from "@/react/query/fetcher";
 import { apiClient } from "@/react/api/client";
 import type { RagIndexRequestDto } from "@/types/studio/ai";
 import type { AttachmentDto } from "@/types/studio/files";
+import { API_BASE_URL } from "@/config/backend";
+import { useAuthStore } from "@/react/auth/store";
 
 export interface PaginatedFilesResponse {
   content: AttachmentDto[];
@@ -491,6 +493,56 @@ export const reactMarkdownDocumentApi = {
     return apiRequest<IdeaBlockMergeApplyBatchResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/ideablocks/merge-auto-apply`, {
       data: request,
     });
+  },
+
+  async getMarkdownText(documentId: string, revisionId?: string): Promise<string> {
+    const path = revisionId
+      ? `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/markdown`
+      : `/api/markdown-documents/${encodeURIComponent(documentId)}/markdown`;
+    const token = useAuthStore.getState().token;
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: {
+        Accept: "text/markdown",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const message = response.headers.get("content-type")?.includes("application/json")
+        ? (await response.json().catch(() => ({})))?.message
+        : await response.text().catch(() => "");
+      throw new Error(message || `Markdown fetch failed: ${response.status}`);
+    }
+    return response.text();
+  },
+
+  async downloadMarkdown(documentId: string, revisionId?: string, filename?: string): Promise<void> {
+    const path = revisionId
+      ? `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/markdown`
+      : `/api/markdown-documents/${encodeURIComponent(documentId)}/markdown`;
+    const token = useAuthStore.getState().token;
+    const response = await fetch(`${API_BASE_URL}${path}?download=true`, {
+      headers: {
+        Accept: "text/markdown",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const message = response.headers.get("content-type")?.includes("application/json")
+        ? (await response.json().catch(() => ({})))?.message
+        : await response.text().catch(() => "");
+      throw new Error(message || `Markdown download failed: ${response.status}`);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename || `${documentId}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   },
   async createEvaluation(request: RagEvaluationRequest): Promise<RagEvaluationRunResponse> {
     return apiRequest<RagEvaluationRunResponse>("post", "/api/ai/chat/rag/evaluations", {

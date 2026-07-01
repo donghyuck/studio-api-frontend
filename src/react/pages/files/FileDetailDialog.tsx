@@ -43,6 +43,7 @@ import {
   CheckCircle,
   Cancel,
   ArrowBackIosNewOutlined,
+  VisibilityOutlined,
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import { useAuthStore } from "@/react/auth/store";
@@ -75,6 +76,7 @@ import { DocumentConvertDialog, getDocumentFormat, getFriendlyErrorMessage } fro
 import { IdeaBlockSummaryPanel } from "./IdeaBlockSummaryPanel";
 import { EpubReaderDialog } from "./EpubReaderDialog";
 import { PdfReaderDialog } from "./PdfReaderDialog";
+import { MarkdownViewerDialog } from "./MarkdownViewerDialog";
 import { useMarkdownDocumentPolling } from "./hooks/useMarkdownDocumentPolling";
 import { getCachedThumbnailUrl, requestThumbnail, invalidateThumbnail } from "./thumbnailCache";
 import { findNormalizedDocumentResource, getNormalizationBadge, getNormalizationSourceLabel } from "../ai/chunkMetaHelper";
@@ -308,6 +310,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   // Locators & Resources
   const [locators, setLocators] = useState<MarkdownLocatorDto[]>([]);
   const [resources, setResources] = useState<MarkdownResourceDto[]>([]);
+
+  // Markdown Viewer States
+  const [markdownViewerOpen, setMarkdownViewerOpen] = useState<boolean>(false);
+  const [selectedViewerRevisionId, setSelectedViewerRevisionId] = useState<string | undefined>(undefined);
 
   const normalizedRes = findNormalizedDocumentResource(resources);
   const normalizedMeta = (() => {
@@ -1776,6 +1782,31 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     }
   }
 
+  async function handleCopyMarkdown() {
+    if (!documentId) return;
+    try {
+      const text = await reactMarkdownDocumentApi.getMarkdownText(documentId);
+      await navigator.clipboard.writeText(text);
+      toast.success("마크다운이 클립보드에 복사되었습니다.");
+    } catch (err: any) {
+      toast.error("복사 실패: " + (err?.message || "알 수 없는 오류"));
+    }
+  }
+
+  async function handleDownloadMarkdown() {
+    if (!documentId) return;
+    try {
+      await reactMarkdownDocumentApi.downloadMarkdown(
+        documentId,
+        undefined,
+        file?.name ? `${file.name.replace(/\.[^/.]+$/, "")}.md` : undefined
+      );
+      toast.success("다운로드가 시작되었습니다.");
+    } catch (err: any) {
+      toast.error("다운로드 실패: " + (err?.message || "알 수 없는 오류"));
+    }
+  }
+
   const getExtractStepStatus = () => {
     const failState = getStageFailureState("EXTRACT");
     if (failState) return failState;
@@ -1933,13 +1964,13 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     const hasNormalized = normalizedRes !== null;
 
     const stepsList = [
-      { key: "origin", label: "원본", active: activeStage === "origin" || !isPendingOrRunning },
-      { key: "extract", label: "추출", active: activeStage === "extract" },
-      { key: "normalization", label: "정규화", active: activeStage === "normalization", isNeutral: !hasNormalized },
-      { key: "markdown", label: "Markdown", active: activeStage === "markdown" },
-      { key: "chunking", label: "청킹", active: activeStage === "chunking" },
-      { key: "embedding", label: "임베딩", active: activeStage === "embedding" },
-      { key: "indexing", label: "벡터 저장", active: activeStage === "indexing" },
+      { key: "origin", label: "원본" },
+      { key: "extract", label: "추출" },
+      { key: "normalization", label: "정규화" },
+      { key: "markdown", label: "Markdown" },
+      { key: "chunking", label: "청킹" },
+      { key: "embedding", label: "임베딩" },
+      { key: "indexing", label: "벡터 저장" },
     ];
 
     return (
@@ -1948,24 +1979,68 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
           {stepsList.map((stepItem, index) => {
             const isLast = index === stepsList.length - 1;
             let chipColor: "default" | "primary" | "warning" | "success" = "default";
-            if (stepItem.active) {
+
+            if (isPendingOrRunning && stepItem.key === activeStage) {
               chipColor = "primary";
-            } else if (stepItem.key === "normalization" && hasNormalized) {
-              const meta = normalizedRes.metadataJson;
-              const status = typeof meta === "string" ? (JSON.parse(meta)?.normalizationStatus) : meta?.normalizationStatus;
-              chipColor = status === "REVIEW_REQUIRED" ? "warning" : "success";
+            } else {
+              if (stepItem.key === "origin") {
+                chipColor = "success";
+              } else if (stepItem.key === "extract") {
+                if (markdownStatus === "COMPLETED" || latestRevision?.status === "COMPLETED") {
+                  chipColor = "success";
+                }
+              } else if (stepItem.key === "normalization") {
+                if (hasNormalized) {
+                  const meta = normalizedRes.metadataJson;
+                  const status = typeof meta === "string" ? (JSON.parse(meta)?.normalizationStatus) : meta?.normalizationStatus;
+                  chipColor = status === "REVIEW_REQUIRED" ? "warning" : "success";
+                }
+              } else if (stepItem.key === "markdown") {
+                if (markdownStatus === "COMPLETED") {
+                  chipColor = "success";
+                }
+              } else if (stepItem.key === "chunking") {
+                const chunkingCompleted = 
+                  (latestRagJob && (latestRagJob.status === "SUCCEEDED" || latestRagJob.currentStep === "EMBEDDING" || latestRagJob.currentStep === "INDEXING" || latestRagJob.currentStep === "COMPLETED")) ||
+                  pipelineExecution?.lastCompletedStage === "CHUNKING" || 
+                  pipelineExecution?.lastCompletedStage === "RAG_INDEX" ||
+                  pipelineExecution?.status === "COMPLETED";
+                if (chunkingCompleted) {
+                  chipColor = "success";
+                }
+              } else if (stepItem.key === "embedding") {
+                const embeddingCompleted = 
+                  (latestRagJob && (latestRagJob.status === "SUCCEEDED" || latestRagJob.currentStep === "INDEXING" || latestRagJob.currentStep === "COMPLETED")) ||
+                  pipelineExecution?.lastCompletedStage === "RAG_INDEX" ||
+                  pipelineExecution?.status === "COMPLETED";
+                if (embeddingCompleted) {
+                  chipColor = "success";
+                }
+              } else if (stepItem.key === "indexing") {
+                const indexingCompleted = 
+                  latestRagJob?.status === "SUCCEEDED" || 
+                  pipelineExecution?.status === "COMPLETED" || 
+                  ragIndexed || 
+                  (ragMetadata as any)?.indexed;
+                if (indexingCompleted) {
+                  chipColor = "success";
+                }
+              }
             }
+
+            const isFilled = chipColor !== "default";
+
             return (
               <Box key={stepItem.key} sx={{ display: "flex", alignItems: "center" }}>
                 <Chip
                   size="small"
                   label={stepItem.label}
                   color={chipColor}
-                  variant={stepItem.active ? "filled" : "outlined"}
+                  variant={isFilled ? "filled" : "outlined"}
                   sx={{
                     height: 22,
                     fontSize: 10.5,
-                    fontWeight: stepItem.active ? 700 : 500,
+                    fontWeight: isFilled ? 700 : 500,
                   }}
                 />
                 {!isLast && (
@@ -2718,6 +2793,43 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                           }}
                         />
                       )}
+
+                      {markdownStatus === "COMPLETED" && (
+                        <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
+                          <Stack direction="row" spacing={1}>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              color="primary"
+                              startIcon={<VisibilityOutlined />}
+                              onClick={() => {
+                                setSelectedViewerRevisionId(undefined);
+                                setMarkdownViewerOpen(true);
+                              }}
+                            >
+                              Markdown 보기
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="primary"
+                              startIcon={<DownloadOutlined />}
+                              onClick={handleDownloadMarkdown}
+                            >
+                              다운로드
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="primary"
+                              startIcon={<ContentCopyOutlined />}
+                              onClick={handleCopyMarkdown}
+                            >
+                              복사
+                            </Button>
+                          </Stack>
+                        </Box>
+                      )}
                     </Box>
                   )}
                   {/* Pipeline Step Checklist */}
@@ -3386,6 +3498,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                 <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>상태</TableCell>
                                 <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>생성 시간</TableCell>
                                 <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>오류 내용</TableCell>
+                                <TableCell sx={{ fontSize: 12, fontWeight: 600, width: 80 }}>액션</TableCell>
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -3406,6 +3519,21 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                   </TableCell>
                                   <TableCell sx={{ fontSize: 12 }}>{formatDate(rev.createdAt)}</TableCell>
                                   <TableCell sx={{ fontSize: 12, color: "error.main" }}>{rev.errorMessage || "-"}</TableCell>
+                                  <TableCell sx={{ fontSize: 12, py: 0.25 }}>
+                                    {rev.status === "COMPLETED" && (
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={() => {
+                                          setSelectedViewerRevisionId(rev.revisionId);
+                                          setMarkdownViewerOpen(true);
+                                        }}
+                                        sx={{ height: 20, fontSize: 10.5, py: 0 }}
+                                      >
+                                        보기
+                                      </Button>
+                                    )}
+                                  </TableCell>
                                 </TableRow>
                               ))}
                             </TableBody>
@@ -3867,6 +3995,20 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
               onClose={() => setPdfReaderOpen(false)}
               url={`/api/mgmt/files/${file.attachmentId}/download`}
               filename={file.name}
+            />
+          )}
+          {documentId && (
+            <MarkdownViewerDialog
+              open={markdownViewerOpen}
+              onClose={() => setMarkdownViewerOpen(false)}
+              documentId={documentId}
+              revisionId={selectedViewerRevisionId}
+              fileName={file.name}
+              onRetryProgress={() => {
+                if (documentId) {
+                  startPolling(documentId, attachmentId);
+                }
+              }}
             />
           )}
           {retrievalPolicy?.questionSetId && (
