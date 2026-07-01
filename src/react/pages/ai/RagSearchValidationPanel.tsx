@@ -29,6 +29,12 @@ import type { ColDef } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
+import {
+  getChunkStrategyDisplay,
+  getChunkQualityIssueText,
+  getProvenanceBadges,
+  formatStrategyName
+} from "./chunkMetaHelper";
 import type {
   AiInfoResponse,
   ChatMessageDto,
@@ -760,6 +766,69 @@ function ReferenceDocuments({
                 >
                   {highlightText(row.content?.trim() || "-", query)}
                 </Typography>
+
+                {row.metadata && (
+                  <Stack spacing={0.5} sx={{ mt: 1.25, pt: 1, borderTop: "1px dashed", borderColor: "divider" }}>
+                    <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" alignItems="center">
+                      <Typography variant="caption" sx={{ fontWeight: 700, mr: 0.5, fontSize: 10 }}>품질 및 Provenance:</Typography>
+                      {getProvenanceBadges(row).map((b) => {
+                        const isMissing = (row.metadata?.chunkQualityIssues as string[] | undefined)?.includes("MISSING_PROVENANCE");
+                        const color = b === "No provenance" ? (isMissing ? "warning" : "default") : "primary";
+                        const variant = b === "No provenance" ? "outlined" : "filled";
+                        return <Chip key={b} label={b} size="small" color={color} variant={variant} sx={{ height: 16, fontSize: 8.5 }} />;
+                      })}
+                      {row.metadata.fallbackStatus === "APPLIED" && (
+                        <Chip size="small" color="warning" variant="outlined" label="Strategy Fallback" sx={{ height: 16, fontSize: 8.5 }} />
+                      )}
+                      {row.metadata.validationStatus === "FALLBACK" && (
+                        <Chip size="small" color="warning" variant="outlined" label="Blockify Fallback" sx={{ height: 16, fontSize: 8.5 }} />
+                      )}
+                      {row.metadata.chunkQualityStatus === "VALID" && (
+                        <Chip size="small" color="success" label="Valid" sx={{ height: 16, fontSize: 8.5 }} />
+                      )}
+                      {row.metadata.chunkQualityStatus === "REVIEW_REQUIRED" && (
+                        <Chip size="small" color="error" label="Review required" sx={{ height: 16, fontSize: 8.5 }} />
+                      )}
+                    </Stack>
+
+                    <Box sx={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px", mt: 0.5 }}>
+                      {row.metadata.strategy && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Strategy:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>{formatStrategyName(row.metadata.strategy as string)}</Typography>
+                        </>
+                      )}
+                      {row.metadata.requestedChunkingStrategy && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Requested:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>{formatStrategyName(row.metadata.requestedChunkingStrategy as string)}</Typography>
+                        </>
+                      )}
+                      {row.metadata.actualChunkingStrategy && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Actual:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>{formatStrategyName(row.metadata.actualChunkingStrategy as string)}</Typography>
+                        </>
+                      )}
+                      {row.metadata.fallbackStatus && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Fallback:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>
+                            {String(row.metadata.fallbackStatus)} {row.metadata.fallbackReason ? `(${String(row.metadata.fallbackReason)})` : ""}
+                          </Typography>
+                        </>
+                      )}
+                      {row.metadata.chunkQualityIssues && (row.metadata.chunkQualityIssues as string[]).length > 0 && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Quality Issues:</Typography>
+                          <Typography variant="caption" color="error.main" sx={{ fontSize: 9.5 }} fontWeight={600}>
+                            {(row.metadata.chunkQualityIssues as string[]).map(issue => getChunkQualityIssueText(issue)).join(", ")}
+                          </Typography>
+                        </>
+                      )}
+                    </Box>
+                  </Stack>
+                )}
               </AccordionDetails>
             </Accordion>
           );

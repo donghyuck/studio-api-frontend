@@ -59,7 +59,17 @@ import { GridContent, PageableGridContent } from "@/react/components/ag-grid";
 import {
   getChunkStrategyDisplay,
   getChunkQualityIssueText,
-  formatStrategyName
+  formatStrategyName,
+  getActualChunkingStrategy,
+  getRequestedChunkingStrategy,
+  getStrategyFlowLabel,
+  getFallbackBadge,
+  getQualityBadge,
+  getQualityIssues,
+  getProvenanceBadges,
+  hasProvenance,
+  summarizeChunkQuality,
+  recommendChunkingActions
 } from "./chunkMetaHelper";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
@@ -670,6 +680,103 @@ export function RagPage() {
   }, [jobs]);
   const [jobLogs, setJobLogs] = useState<RagIndexJobLogDto[]>([]);
   const [chunks, setChunks] = useState<RagIndexChunkDto[]>([]);
+
+  // 청킹 품질 개선 필터 및 정렬 상태
+  const [filterQuality, setFilterQuality] = useState<string>("ALL");
+  const [filterStrategy, setFilterStrategy] = useState<string>("ALL");
+  const [filterStrategyFlow, setFilterStrategyFlow] = useState<string>("ALL");
+  const [filterFallback, setFilterFallback] = useState<string>("ALL");
+  const [filterIssue, setFilterIssue] = useState<string>("ALL");
+  const [filterProvenance, setFilterProvenance] = useState<string>("ALL");
+  const [sortOption, setSortOption] = useState<string>("NONE");
+
+  // A. displayChunks (필터링 & 정렬 가공)
+  const displayChunks = useMemo(() => {
+    let result = [...chunks];
+
+    if (filterQuality !== "ALL") {
+      result = result.filter(c => {
+        const q = c.metadata?.chunkQualityStatus;
+        if (filterQuality === "UNKNOWN") return q === undefined || q === null || q === "";
+        return q === filterQuality;
+      });
+    }
+    if (filterStrategy !== "ALL") {
+      result = result.filter(c => {
+        const act = getActualChunkingStrategy(c.metadata);
+        return act === filterStrategy;
+      });
+    }
+    if (filterStrategyFlow !== "ALL") {
+      result = result.filter(c => {
+        const flow = getStrategyFlowLabel(c.metadata);
+        return flow === filterStrategyFlow;
+      });
+    }
+    if (filterFallback !== "ALL") {
+      result = result.filter(c => {
+        const fb = c.metadata?.fallbackStatus;
+        if (filterFallback === "UNKNOWN") return fb === undefined || fb === null || fb === "";
+        return fb === filterFallback;
+      });
+    }
+    if (filterIssue !== "ALL") {
+      result = result.filter(c => {
+        const issues = getQualityIssues(c.metadata);
+        return issues.includes(filterIssue);
+      });
+    }
+    if (filterProvenance !== "ALL") {
+      result = result.filter(c => {
+        const hasProv = hasProvenance(c);
+        return filterProvenance === "HAS_PROVENANCE" ? hasProv : !hasProv;
+      });
+    }
+
+    // 정렬
+    if (sortOption === "REVIEW_PRIORITY") {
+      result.sort((a, b) => {
+        const aReview = a.metadata?.chunkQualityStatus === "REVIEW_REQUIRED" ? 1 : 0;
+        const bReview = b.metadata?.chunkQualityStatus === "REVIEW_REQUIRED" ? 1 : 0;
+        return bReview - aReview;
+      });
+    } else if (sortOption === "FALLBACK_PRIORITY") {
+      result.sort((a, b) => {
+        const aFb = a.metadata?.fallbackStatus === "APPLIED" ? 1 : 0;
+        const bFb = b.metadata?.fallbackStatus === "APPLIED" ? 1 : 0;
+        return bFb - aFb;
+      });
+    } else if (sortOption === "PROVENANCE_PRIORITY") {
+      result.sort((a, b) => {
+        const aNoProv = !hasProvenance(a) ? 1 : 0;
+        const bNoProv = !hasProvenance(b) ? 1 : 0;
+        return bNoProv - aNoProv;
+      });
+    }
+
+    return result;
+  }, [chunks, filterQuality, filterStrategy, filterStrategyFlow, filterFallback, filterIssue, filterProvenance, sortOption]);
+
+  // B. 품질 집계
+  const qualitySummary = useMemo(() => {
+    return summarizeChunkQuality(chunks);
+  }, [chunks]);
+
+  // C. 추천 액션
+  const recommendedActions = useMemo(() => {
+    return recommendChunkingActions(qualitySummary);
+  }, [qualitySummary]);
+
+  // D. Strategy Flow 분포 집계
+  const strategyFlowDistribution = useMemo(() => {
+    const dist: Record<string, number> = {};
+    chunks.forEach(c => {
+      const label = getStrategyFlowLabel(c.metadata);
+      dist[label] = (dist[label] || 0) + 1;
+    });
+    return dist;
+  }, [chunks]);
+
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
   const [chunkPage, setChunkPage] = useState({ page: 0, size: 50, hasNext: false });
   const [lastMetadata, setLastMetadata] = useState<ChatResponseMetadataDto | null>(null);
@@ -1130,6 +1237,25 @@ export function RagPage() {
         valueFormatter: (params) =>
           typeof params.value === "number" ? params.value.toFixed(4) : "-",
       },
+      {
+        headerName: "Provenance",
+        width: 220,
+        filter: false,
+        cellRenderer: (params: ICellRendererParams<RagIndexChunkDto>) => {
+          if (!params.data) return null;
+          const badges = getProvenanceBadges(params.data);
+          const isMissing = (params.data.metadata?.chunkQualityIssues as string[] | undefined)?.includes("MISSING_PROVENANCE");
+          return (
+            <Stack direction="row" spacing={0.5} sx={{ height: "100%", alignItems: "center", overflowX: "auto" }}>
+              {badges.map(b => {
+                const color = b === "No provenance" ? (isMissing ? "warning" : "default") : "primary";
+                const variant = b === "No provenance" ? "outlined" : "filled";
+                return <Chip key={b} label={b} size="small" color={color} variant={variant} sx={{ height: 18, fontSize: 9 }} />;
+              })}
+            </Stack>
+          );
+        }
+      },
       { field: "headingPath", headerName: "위치", width: 180, filter: false },
       { field: "content", headerName: "콘텐츠", flex: 1.4, filter: false },
     ],
@@ -1269,6 +1395,15 @@ export function RagPage() {
   }
 
   async function loadChunks(scopeObjectType?: string, scopeObjectId?: string, page = 0, force = false) {
+    if (page === 0) {
+      setFilterQuality("ALL");
+      setFilterStrategy("ALL");
+      setFilterStrategyFlow("ALL");
+      setFilterFallback("ALL");
+      setFilterIssue("ALL");
+      setFilterProvenance("ALL");
+      setSortOption("NONE");
+    }
     if (!scopeObjectType || !scopeObjectId) {
       setChunks([]);
       setSelectedChunk(null);
@@ -3273,6 +3408,192 @@ export function RagPage() {
                 </Tooltip>
               </Stack>
             </Stack>
+
+            {chunks.length > 0 && (
+              <Stack spacing={1.25} sx={{ mt: 1 }}>
+                {/* A. 품질 요약 카드 */}
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1.5,
+                    borderLeft: 4,
+                    borderLeftColor:
+                      qualitySummary.status === "warning"
+                        ? "warning.main"
+                        : qualitySummary.status === "info"
+                        ? "info.main"
+                        : "success.main",
+                    bgcolor: (theme) =>
+                      theme.palette.mode === "dark"
+                        ? "rgba(255, 255, 255, 0.02)"
+                        : "action.hover",
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2" fontWeight={700}>
+                      Chunk 품질: Valid {qualitySummary.valid} / Review {qualitySummary.reviewRequired} / Fallback {qualitySummary.strategyFallback} / Missing provenance {qualitySummary.missingProvenance} {qualitySummary.unknown > 0 ? `/ Unknown ${qualitySummary.unknown}` : ""} (전체 {qualitySummary.total}개)
+                    </Typography>
+                    <Chip
+                      size="small"
+                      color={
+                        qualitySummary.status === "warning"
+                          ? "warning"
+                          : qualitySummary.status === "info"
+                          ? "info"
+                          : "success"
+                      }
+                      label={
+                        qualitySummary.status === "warning"
+                          ? "주의 필요"
+                          : qualitySummary.status === "info"
+                          ? "정보 알림"
+                          : "정상"
+                      }
+                    />
+                  </Stack>
+                </Paper>
+
+                {/* B. 추천 액션 */}
+                {recommendedActions.length > 0 && (
+                  <Alert severity="warning" variant="outlined" sx={{ py: 0.5, borderRadius: 1.5 }}>
+                    <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
+                      💡 추천 재처리 액션:
+                    </Typography>
+                    {recommendedActions.map((act, i) => (
+                      <Typography key={i} variant="caption" display="block">
+                        • {act}
+                      </Typography>
+                    ))}
+                  </Alert>
+                )}
+
+                {/* C. Strategy Flow 분포 */}
+                <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center">
+                  <Typography variant="caption" sx={{ fontWeight: 700, mr: 0.5 }}>
+                    Strategy Flow 분포 (클릭 시 필터 토글):
+                  </Typography>
+                  {Object.entries(strategyFlowDistribution).map(([flow, count]) => {
+                    const isSelected = filterStrategyFlow === flow;
+                    return (
+                      <Chip
+                        key={flow}
+                        label={`${flow}: ${count}`}
+                        size="small"
+                        color={isSelected ? "primary" : "default"}
+                        variant={isSelected ? "filled" : "outlined"}
+                        onClick={() => {
+                          setFilterStrategyFlow(isSelected ? "ALL" : flow);
+                        }}
+                        sx={{ height: 22, fontSize: 9.5, cursor: "pointer" }}
+                      />
+                    );
+                  })}
+                </Stack>
+              </Stack>
+            )}
+
+            {chunks.length > 0 && (
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1, py: 1, borderTop: "1px solid", borderBottom: "1px solid", borderColor: "divider" }}>
+                {/* 1. Quality */}
+                <Stack spacing={0.25}>
+                  <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: "text.secondary" }}>Quality</Typography>
+                  <Select
+                    size="small"
+                    value={filterQuality}
+                    onChange={(e) => setFilterQuality(e.target.value)}
+                    sx={{ height: 28, fontSize: 11, minWidth: 100 }}
+                  >
+                    <MenuItem value="ALL" sx={{ fontSize: 11 }}>ALL Quality</MenuItem>
+                    <MenuItem value="VALID" sx={{ fontSize: 11 }}>VALID</MenuItem>
+                    <MenuItem value="REVIEW_REQUIRED" sx={{ fontSize: 11 }}>REVIEW_REQUIRED</MenuItem>
+                    <MenuItem value="UNKNOWN" sx={{ fontSize: 11 }}>UNKNOWN (Legacy)</MenuItem>
+                  </Select>
+                </Stack>
+
+                {/* 2. Fallback */}
+                <Stack spacing={0.25}>
+                  <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: "text.secondary" }}>Fallback</Typography>
+                  <Select
+                    size="small"
+                    value={filterFallback}
+                    onChange={(e) => setFilterFallback(e.target.value)}
+                    sx={{ height: 28, fontSize: 11, minWidth: 105 }}
+                  >
+                    <MenuItem value="ALL" sx={{ fontSize: 11 }}>ALL Fallback</MenuItem>
+                    <MenuItem value="APPLIED" sx={{ fontSize: 11 }}>APPLIED</MenuItem>
+                    <MenuItem value="NOT_REQUIRED" sx={{ fontSize: 11 }}>NOT_REQUIRED</MenuItem>
+                    <MenuItem value="UNKNOWN" sx={{ fontSize: 11 }}>UNKNOWN</MenuItem>
+                  </Select>
+                </Stack>
+
+                {/* 3. Provenance */}
+                <Stack spacing={0.25}>
+                  <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: "text.secondary" }}>Provenance</Typography>
+                  <Select
+                    size="small"
+                    value={filterProvenance}
+                    onChange={(e) => setFilterProvenance(e.target.value)}
+                    sx={{ height: 28, fontSize: 11, minWidth: 120 }}
+                  >
+                    <MenuItem value="ALL" sx={{ fontSize: 11 }}>ALL Provenance</MenuItem>
+                    <MenuItem value="HAS_PROVENANCE" sx={{ fontSize: 11 }}>HAS_PROVENANCE</MenuItem>
+                    <MenuItem value="NO_PROVENANCE" sx={{ fontSize: 11 }}>NO_PROVENANCE</MenuItem>
+                  </Select>
+                </Stack>
+
+                {/* 4. Issue */}
+                <Stack spacing={0.25}>
+                  <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: "text.secondary" }}>Issue</Typography>
+                  <Select
+                    size="small"
+                    value={filterIssue}
+                    onChange={(e) => setFilterIssue(e.target.value)}
+                    sx={{ height: 28, fontSize: 11, minWidth: 130 }}
+                  >
+                    <MenuItem value="ALL" sx={{ fontSize: 11 }}>ALL Issues</MenuItem>
+                    <MenuItem value="MISSING_PROVENANCE" sx={{ fontSize: 11 }}>MISSING_PROVENANCE</MenuItem>
+                    <MenuItem value="MAX_SIZE_EXCEEDED" sx={{ fontSize: 11 }}>MAX_SIZE_EXCEEDED</MenuItem>
+                    <MenuItem value="EMPTY_CONTENT" sx={{ fontSize: 11 }}>EMPTY_CONTENT</MenuItem>
+                  </Select>
+                </Stack>
+
+                {/* 5. 정렬 */}
+                <Stack spacing={0.25}>
+                  <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: "text.secondary" }}>정렬 기준</Typography>
+                  <Select
+                    size="small"
+                    value={sortOption}
+                    onChange={(e) => setSortOption(e.target.value)}
+                    sx={{ height: 28, fontSize: 11, minWidth: 140 }}
+                  >
+                    <MenuItem value="NONE" sx={{ fontSize: 11 }}>기본 순서 (Original)</MenuItem>
+                    <MenuItem value="REVIEW_PRIORITY" sx={{ fontSize: 11 }}>Review Required 우선</MenuItem>
+                    <MenuItem value="FALLBACK_PRIORITY" sx={{ fontSize: 11 }}>Fallback 우선</MenuItem>
+                    <MenuItem value="PROVENANCE_PRIORITY" sx={{ fontSize: 11 }}>No Provenance 우선</MenuItem>
+                  </Select>
+                </Stack>
+
+                {/* 6. 필터 리셋 버튼 */}
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    setFilterQuality("ALL");
+                    setFilterStrategy("ALL");
+                    setFilterStrategyFlow("ALL");
+                    setFilterFallback("ALL");
+                    setFilterIssue("ALL");
+                    setFilterProvenance("ALL");
+                    setSortOption("NONE");
+                  }}
+                  sx={{ height: 28, alignSelf: "flex-end", fontSize: 10.5 }}
+                >
+                  필터 초기화
+                </Button>
+              </Stack>
+            )}
+
             <Box
               sx={{
                 "& .ag-row.rag-chunk-row-selected": {
@@ -3295,7 +3616,7 @@ export function RagPage() {
               <GridContent<RagIndexChunkDto>
                 columns={chunkColumnDefs}
                 options={chunkGridOptions}
-                rowData={chunks}
+                rowData={displayChunks}
                 loading={chunksLoading}
                 height={280}
                 onRowClicked={(event) => {
