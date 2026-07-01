@@ -294,17 +294,12 @@ export function FileUploadDialog({
       onClose={handleClose}
       fullWidth
       maxWidth="sm"
-      slotProps={{
-        paper: {
-          sx: {
-            borderRadius: 3,
-          },
-        },
-      }}
     >
-      <DialogTitle>파일 업로드</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ pt: 1 }}>
+      <DialogTitle>
+        파일 업로드
+      </DialogTitle>
+      <DialogContent sx={{ px: 3, pb: 2 }}>
+        <Stack spacing={2.5} sx={{ pt: 1.5 }}>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
             <TextField
               label="객체 유형"
@@ -318,6 +313,11 @@ export function FileUploadDialog({
               }}
               helperText="등록된 ACTIVE 객체 유형만 업로드할 수 있습니다."
               fullWidth
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "8px",
+                },
+              }}
               SelectProps={{
                 renderValue: (selected) => {
                   const selectedType = objectTypes.find(
@@ -356,25 +356,33 @@ export function FileUploadDialog({
               inputProps={{ min: 0 }}
               helperText="파일을 연결할 대상 객체의 ID입니다."
               fullWidth
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "8px",
+                },
+              }}
             />
           </Stack>
           {policy ? (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: 0.5 }}>
               파일 정책: 최대 {policy.maxFileMb != null ? `${policy.maxFileMb}MB` : "제한 없음"}
               {policy.allowedExt ? ` · 확장자 ${policy.allowedExt}` : ""}
               {policy.allowedMime ? ` · MIME ${policy.allowedMime}` : ""}
             </Typography>
           ) : objectType ? (
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: 0.5 }}>
               선택한 객체 유형에는 별도 파일 정책이 없습니다.
             </Typography>
           ) : null}
-          {error ? <Alert severity="error">{error}</Alert> : null}
+          {error ? <Alert severity="error" sx={{ borderRadius: "8px" }}>{error}</Alert> : null}
           {objectType ? (
             <Box
               ref={handleUppyContainerRef}
               className="file-upload-uppy"
               sx={{
+                borderRadius: "8px",
+                overflow: "hidden",
+                border: (theme) => `1px solid ${theme.palette.divider}`,
                 "& .uppy-Dashboard-AddFiles-title": { fontSize: 14 },
                 "& .uppy-Dashboard-AddFiles-info": { fontSize: 12 },
                 "& .uppy-Dashboard-note": { fontSize: 12 },
@@ -385,12 +393,14 @@ export function FileUploadDialog({
               }}
             />
           ) : (
-            <Alert severity="info">객체 유형을 선택하면 파일 선택 영역이 표시됩니다.</Alert>
+            <Alert severity="info" sx={{ borderRadius: "8px" }}>
+              객체 유형을 선택하면 파일 선택 영역이 표시됩니다.
+            </Alert>
           )}
         </Stack>
       </DialogContent>
-      <DialogActions>
-        <Button variant="outlined" onClick={handleClose}>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <Button variant="outlined" color="inherit" onClick={handleClose} sx={{ borderRadius: "8px", fontWeight: 600 }}>
           취소
         </Button>
       </DialogActions>

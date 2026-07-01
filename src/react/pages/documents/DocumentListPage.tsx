@@ -2,9 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
+  Button,
   Stack,
-  IconButton,
-  Tooltip,
 } from "@mui/material";
 import { AddOutlined } from "@mui/icons-material";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
@@ -79,7 +78,7 @@ export function DocumentListPage() {
   return (
     <Stack spacing={0.5}>
       <PageToolbar
-        divider={false}
+        hasGrid
         breadcrumbs={["애플리케이션", "문서"]}
         label="문서를 검색하고 생성합니다."
         onRefresh={() => gridRef.current?.refresh()}
@@ -87,12 +86,23 @@ export function DocumentListPage() {
         searchValue={searchInput}
         onSearchValueChange={setSearchInput}
         onSearch={handleSearch}
-        actions={
-          <Tooltip title="문서를 생성합니다.">
-            <IconButton size="small" onClick={() => setCreateOpen(true)}>
-              <AddOutlined fontSize="small" />
-            </IconButton>
-          </Tooltip>
+        createButton={
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddOutlined fontSize="small" />}
+            onClick={() => setCreateOpen(true)}
+            sx={{
+              height: 32,
+              px: 1.5,
+              borderRadius: "6px",
+              textTransform: "none",
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            생성
+          </Button>
         }
       />
       <PageableGridContent<DocumentSummaryDto>

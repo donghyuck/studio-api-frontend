@@ -330,20 +330,31 @@ export function CompanyListPage() {
   return (
     <Stack spacing={0.5}>
       <PageToolbar
-        divider={false}
-        breadcrumbs={["시스템관리", "Company"]}
+        hasGrid
+        breadcrumbs={["시스템관리", "회사"]}
         label="Company 기본 정보와 멤버 권한을 관리합니다."
         searchPlaceholder="name, 표시 이름, domain 검색"
         searchValue={searchInput}
         onSearchValueChange={setSearchInput}
         onSearch={handleSearch}
         onRefresh={handleRefresh}
-        actions={
-          <Tooltip title="Company 생성">
-            <IconButton size="small" onClick={() => setCreateOpen(true)}>
-              <AddOutlined fontSize="small" />
-            </IconButton>
-          </Tooltip>
+        createButton={
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddOutlined fontSize="small" />}
+            onClick={() => setCreateOpen(true)}
+            sx={{
+              height: 32,
+              px: 1.5,
+              borderRadius: "6px",
+              textTransform: "none",
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            생성
+          </Button>
         }
       />
       {loadError ? <Alert severity="error">{loadError}</Alert> : null}

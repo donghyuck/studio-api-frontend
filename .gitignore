@@ -18,6 +18,7 @@ hs_err_pid*
 replay_pid*
 
 #
+dist/
 .DS_Store
 **/bin
 **/build
@@ -30,3 +31,4 @@ replay_pid*
 .package-lock.json
 node_modules/
 node_modules/**
+dist/**

@@ -100,9 +100,17 @@ export function ChatMessageList({
       <Box
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        sx={{ height: "100%", minHeight: 0, overflowY: "auto", px: { xs: 1, md: 4 }, py: 3 }}
+        sx={{
+          height: "100%",
+          minHeight: 0,
+          overflowY: "auto",
+          px: { xs: 1.5, md: 5 },
+          py: 3,
+          bgcolor: (theme) =>
+            theme.palette.mode === "dark" ? "background.default" : "#fbfcfe",
+        }}
       >
-        <Stack spacing={2}>
+        <Stack spacing={2.25} sx={{ maxWidth: 920, mx: "auto", width: "100%" }}>
           {summaryVisible ? (
             <SummaryCard
               collapsedMessageCount={collapsedMessageCount}
@@ -111,7 +119,7 @@ export function ChatMessageList({
             />
           ) : null}
           {messages.length === 0 ? (
-            <Stack spacing={1.25} alignItems="center" justifyContent="center" sx={{ minHeight: 260, textAlign: "center" }}>
+            <Stack spacing={1.25} alignItems="center" justifyContent="center" sx={{ minHeight: 360, textAlign: "center" }}>
               <EmptyChatIllustration />
               <Typography variant="body1" color="text.primary" sx={{ fontWeight: 600 }}>
                 {emptyTitle}

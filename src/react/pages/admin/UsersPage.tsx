@@ -4,6 +4,7 @@ import {
   Alert,
   Avatar,
   Box,
+  Button,
   Chip,
   IconButton,
   Stack,
@@ -228,7 +229,7 @@ export function UsersPage() {
   return (
     <Stack spacing={0.5}>
       <PageToolbar
-        divider={false}
+        hasGrid
         breadcrumbs={["시스템관리", "보안관리", "회원"]}
         // title="회원 목록"
         label="회원을 검색하고 계정 상태를 관리합니다."
@@ -237,16 +238,23 @@ export function UsersPage() {
         searchValue={searchInput}
         onSearchValueChange={setSearchInput}
         onSearch={handleSearch}
-        actions={
-          <Tooltip title="사용자 생성">
-            <IconButton
-              size="small"
-              aria-label="사용자 생성"
-              onClick={() => setCreateOpen(true)}
-            >
-              <PersonAddAlt1Outlined fontSize="small" />
-            </IconButton>
-          </Tooltip>
+        createButton={
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<PersonAddAlt1Outlined fontSize="small" />}
+            onClick={() => setCreateOpen(true)}
+            sx={{
+              height: 32,
+              px: 1.5,
+              borderRadius: "6px",
+              textTransform: "none",
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            생성
+          </Button>
         }
       />
 

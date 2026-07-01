@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   MenuItem,
   Paper,
@@ -17,7 +19,7 @@ import {
 } from "@mui/material";
 import { AddCommentOutlined, SettingsOutlined } from "@mui/icons-material";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
-import { reactAiApi } from "@/react/pages/ai/api";
+import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
 import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
 import type { ChatMessage } from "@/react/pages/ai/components/chatTypes";
@@ -42,6 +44,8 @@ export function RagChatPage() {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
   const [provider, setProvider] = useState("");
   const [model, setModel] = useState("");
+  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
   const [systemPrompt, setSystemPrompt] = useState(
     "제공된 RAG 문서 내용에 근거해서만 답변하세요. 문서에서 확인할 수 없는 내용은 확인할 수 없다고 답변하세요."
   );
@@ -53,9 +57,16 @@ export function RagChatPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelAnchorEl, setModelAnchorEl] = useState<HTMLElement | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [topK, setTopK] = useState("2");
-  const [minScore, setMinScore] = useState("0.6");
-  const [debug, setDebug] = useState(false);
+  const [topK, setTopK] = useState("5"); // changed default topK to 5
+  const [minScore, setMinScore] = useState("0.35");
+  const [debug, setDebug] = useState(true); // changed default debug to true for leg visualization
+  const [retrievalStrategy, setRetrievalStrategy] = useState("hybrid");
+  const [structureTopK, setStructureTopK] = useState("5");
+  const [ideaBlockTopK, setIdeaBlockTopK] = useState("5");
+  const [finalTopK, setFinalTopK] = useState("5");
+  const [dedupe, setDedupe] = useState(true);
+  const [includeDebugChunks, setIncludeDebugChunks] = useState(true);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false); // advanced toggle
   const [inputHistory, setInputHistory] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -90,6 +101,18 @@ export function RagChatPage() {
         setMemoryEnabled(data.chat?.memory?.enabled === true);
       })
       .catch((loadError) => setError(resolveAxiosError(loadError)));
+
+    reactAiApi
+      .getEmbeddingOptions()
+      .then((res) => {
+        const list = res.options ?? [];
+        setEmbeddingOptions(list);
+        const def = list.find((o) => o.defaultProfile) || list.find((o) => o.defaultProvider) || list[0] || null;
+        setSelectedOption(def);
+      })
+      .catch(() => {
+        // ignore
+      });
   }, []);
 
   useEffect(() => {
@@ -136,7 +159,7 @@ export function RagChatPage() {
     setInput("");
 
     try {
-      const response = await reactAiApi.sendRagChat({
+      const payload: any = {
         chat: {
           provider: provider || undefined,
           model: model || undefined,
@@ -148,8 +171,26 @@ export function RagChatPage() {
         ragTopK: numericTopK,
         topK: numericTopK,
         minScore: numericMinScore,
+        retrievalStrategy: retrievalStrategy || undefined,
+        retrievalOptions: {
+          structureTopK: numberOrUndefined(structureTopK) ?? 5,
+          ideaBlockTopK: numberOrUndefined(ideaBlockTopK) ?? 5,
+          finalTopK: numberOrUndefined(finalTopK) ?? 5,
+          minScore: numericMinScore ?? 0.35,
+          dedupe,
+          includeDebugChunks,
+        },
         debug,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const response = await reactAiApi.sendRagChat(payload);
       if (activeRequestIdRef.current !== requestId) return;
 
       const assistant = [...(response.messages ?? [])].reverse().find((item) => item.role === "assistant");
@@ -304,6 +345,35 @@ export function RagChatPage() {
               </TextField>
               <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth size="small" />
             </Stack>
+            {embeddingOptions.length > 0 ? (
+              <TextField
+                select
+                label="임베딩 모델 프로필"
+                size="small"
+                value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
+                onChange={(event) => {
+                  const val = event.target.value;
+                  const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
+                  if (matched) {
+                    setSelectedOption(matched);
+                  }
+                }}
+                disabled={sending}
+                fullWidth
+              >
+                {embeddingOptions.map((opt) => {
+                  const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
+                  const label = opt.profileId
+                    ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                    : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                  return (
+                    <MenuItem key={valueKey} value={valueKey}>
+                      {label}
+                    </MenuItem>
+                  );
+                })}
+              </TextField>
+            ) : null}
             {selectedProvider ? (
               <Typography variant="caption" color="text.secondary">
                 Embedding: {selectedProvider.embedding.enabled ? selectedProvider.embedding.model : "disabled"}
@@ -311,6 +381,28 @@ export function RagChatPage() {
               </Typography>
             ) : null}
             <TextField label="System Prompt" value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} multiline minRows={2} size="small" fullWidth />
+            <TextField
+              select
+              label="RAG 검색 전략 (retrievalStrategy)"
+              value={retrievalStrategy}
+              onChange={(e) => setRetrievalStrategy(e.target.value)}
+              size="small"
+              fullWidth
+              helperText={
+                retrievalStrategy === "hybrid" ? "구조 기반 chunk와 IdeaBlock을 병합/dedupe하여 최종 전달합니다. (권장 기본)" :
+                retrievalStrategy === "structure" ? "Structure-Based chunk만 RAG 후보군으로 검색합니다." :
+                retrievalStrategy === "ideaBlock" ? "IdeaBlock chunk만 RAG 후보군으로 검색합니다. (비교/실험용)" :
+                retrievalStrategy === "auto" ? "서버에서 질의에 맞춰 최적의 검색 방식을 판단합니다." :
+                "기존 RAG 기본 검색 파이프라인을 사용합니다."
+              }
+            >
+              <MenuItem value="hybrid">Hybrid (구조 + IdeaBlock 병합)</MenuItem>
+              <MenuItem value="structure">Structure (구조 기반 단독)</MenuItem>
+              <MenuItem value="ideaBlock">IdeaBlock (질답형 블록 단독)</MenuItem>
+              <MenuItem value="auto">Auto (자동 라우팅)</MenuItem>
+              <MenuItem value="default">Default (기존 검색)</MenuItem>
+            </TextField>
+
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
               <TextField
                 label="topK"
@@ -333,6 +425,57 @@ export function RagChatPage() {
                 fullWidth
               />
             </Stack>
+
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>고급 RAG 검색 옵션 표시</Typography>
+              <Switch checked={showAdvancedSettings} onChange={(e) => setShowAdvancedSettings(e.target.checked)} />
+            </Stack>
+
+            {showAdvancedSettings && (
+              <Box sx={{ border: "1px dashed", borderColor: "divider", borderRadius: 1.5, p: 1.5, bgcolor: "action.hover" }}>
+                <Stack spacing={1.5}>
+                  <Typography variant="caption" sx={{ fontWeight: 600, display: "block" }}>
+                    Retrieval Options 상세 구성
+                  </Typography>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                    <TextField
+                      label="structureTopK"
+                      value={structureTopK}
+                      onChange={(e) => setStructureTopK(e.target.value)}
+                      size="small"
+                      type="number"
+                      fullWidth
+                    />
+                    <TextField
+                      label="ideaBlockTopK"
+                      value={ideaBlockTopK}
+                      onChange={(e) => setIdeaBlockTopK(e.target.value)}
+                      size="small"
+                      type="number"
+                      fullWidth
+                    />
+                    <TextField
+                      label="finalTopK"
+                      value={finalTopK}
+                      onChange={(e) => setFinalTopK(e.target.value)}
+                      size="small"
+                      type="number"
+                      fullWidth
+                    />
+                  </Stack>
+                  <Stack direction="row" spacing={2}>
+                    <FormControlLabel
+                      control={<Switch size="small" checked={dedupe} onChange={(e) => setDedupe(e.target.checked)} />}
+                      label={<Typography variant="body2" sx={{ fontSize: 12 }}>중복 제거 (dedupe)</Typography>}
+                    />
+                    <FormControlLabel
+                      control={<Switch size="small" checked={includeDebugChunks} onChange={(e) => setIncludeDebugChunks(e.target.checked)} />}
+                      label={<Typography variant="body2" sx={{ fontSize: 12 }}>디버그용 chunk 포함</Typography>}
+                    />
+                  </Stack>
+                </Stack>
+              </Box>
+            )}
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
               <Stack spacing={0} sx={{ flex: 1 }}>
                 <Typography variant="body2">Debug 응답</Typography>
@@ -357,7 +500,19 @@ export function RagChatPage() {
       </Dialog>
 
       <Stack sx={{ height: "calc(100vh - 170px)", minHeight: 0 }}>
-        <Paper elevation={0} sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <Paper
+          elevation={0}
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: "8px",
+          }}
+        >
           <ChatMessageList
             messages={messages}
             sending={sending}

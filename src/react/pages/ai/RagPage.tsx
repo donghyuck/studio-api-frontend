@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Accordion,
@@ -18,6 +19,7 @@ import {
   DialogTitle,
   Divider,
   FormControlLabel,
+  Grid,
   IconButton,
   MenuItem,
   Select,
@@ -28,9 +30,16 @@ import {
   Switch,
   Tab,
   Tabs,
+  TablePagination,
   TextField,
   Tooltip,
   Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableRow,
+  Paper,
 } from "@mui/material";
 import {
   ArticleOutlined,
@@ -46,9 +55,26 @@ import {
   StorageOutlined,
 } from "@mui/icons-material";
 import type { ColDef, GridOptions, ICellRendererParams } from "ag-grid-community";
-import { GridContent } from "@/react/components/ag-grid";
+import { GridContent, PageableGridContent } from "@/react/components/ag-grid";
+import {
+  getChunkStrategyDisplay,
+  getChunkQualityIssueText,
+  formatStrategyName,
+  getActualChunkingStrategy,
+  getRequestedChunkingStrategy,
+  getStrategyFlowLabel,
+  getFallbackBadge,
+  getQualityBadge,
+  getQualityIssues,
+  getProvenanceBadges,
+  hasProvenance,
+  summarizeChunkQuality,
+  recommendChunkingActions
+} from "./chunkMetaHelper";
+import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
+import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
-import { reactAiApi } from "@/react/pages/ai/api";
+import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import { reactFilesApi } from "@/react/pages/files/api";
 import { reactObjectTypeApi } from "@/react/pages/objecttype/api";
 import type {
@@ -69,6 +95,15 @@ import type {
 } from "@/types/studio/ai";
 import type { ObjectTypeDto } from "@/types/studio/objecttype";
 import { resolveAxiosError } from "@/utils/helpers";
+import { toast } from "@/react/feedback";
+
+export interface RagObjectGroup {
+  objectType: string;
+  objectId: string;
+  documentId?: string;
+  latestJob: RagIndexJobDto;
+  count: number;
+}
 
 type ValidationTab = "vector" | "rag" | "chat";
 type RagJobStatusFilter = RagIndexJobStatus | "";
@@ -365,16 +400,58 @@ function SummaryStatusCard({
 function SearchResultDetail({
   title,
   content,
-  metadata,
+  metadata = {},
 }: {
   title: string;
   content?: string | null;
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, any>;
 }) {
+  const requested = metadata.requestedChunkingStrategy;
+  const actual = metadata.actualChunkingStrategy ?? metadata.strategy;
+  const strategyDisplay = getChunkStrategyDisplay(metadata as any);
+
+  const isStrategyFallback = metadata.fallbackStatus === "APPLIED";
+  const isBlockifyFallback = metadata.validationStatus === "FALLBACK";
+
+  const qualityStatus = metadata.chunkQualityStatus;
+  const qualityIssues: string[] = Array.isArray(metadata.chunkQualityIssues) ? metadata.chunkQualityIssues : [];
+
+  const specialFields = [
+    { key: "strategyDisplay", label: "적용 전략", value: strategyDisplay !== "-" ? strategyDisplay : undefined },
+    { key: "requestedChunkingStrategy", label: "요청 전략", value: requested ? formatStrategyName(requested) : undefined },
+    { key: "actualChunkingStrategy", label: "실제 전략", value: actual ? formatStrategyName(actual) : undefined },
+    { key: "fallbackStatus", label: "Strategy Fallback 여부", value: metadata.fallbackStatus },
+    { key: "fallbackFrom", label: "Fallback 시작 전략", value: metadata.fallbackFrom ? formatStrategyName(metadata.fallbackFrom) : undefined },
+    { key: "fallbackTo", label: "Fallback 대상 전략", value: metadata.fallbackTo ? formatStrategyName(metadata.fallbackTo) : undefined },
+    { key: "fallbackReason", label: "Fallback 사유", value: metadata.fallbackReason },
+    { key: "chunkQualityStatus", label: "품질 검증 상태", value: qualityStatus },
+    { key: "blockifyFingerprint", label: "Blockify Fingerprint", value: metadata.blockifyFingerprint },
+    { key: "promptVersion", label: "Prompt Version", value: metadata.promptVersion },
+    { key: "generatorModel", label: "Generator Model", value: metadata.generatorModel },
+    { key: "sourceEvidence", label: "Source Evidence", value: metadata.sourceEvidence },
+  ].filter(f => f.value !== undefined && f.value !== null && f.value !== "");
+
   return (
     <Box sx={{ border: 1, borderColor: "divider", borderRadius: 2, p: 1.25 }}>
       <Stack spacing={1}>
-        <Typography variant="subtitle2">{title}</Typography>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+          <Typography variant="subtitle2">{title}</Typography>
+          <Stack direction="row" spacing={0.5}>
+            {isStrategyFallback && (
+              <Chip size="small" color="warning" variant="outlined" label="Strategy Fallback" sx={{ height: 20, fontSize: 10 }} />
+            )}
+            {isBlockifyFallback && (
+              <Chip size="small" color="warning" variant="outlined" label="Blockify Fallback" sx={{ height: 20, fontSize: 10 }} />
+            )}
+            {qualityStatus === "VALID" && (
+              <Chip size="small" color="success" label="Valid" sx={{ height: 20, fontSize: 10 }} />
+            )}
+            {qualityStatus === "REVIEW_REQUIRED" && (
+              <Chip size="small" color="error" label="Review required" sx={{ height: 20, fontSize: 10 }} />
+            )}
+          </Stack>
+        </Stack>
+
         <Box
           component="pre"
           sx={{
@@ -393,21 +470,70 @@ function SearchResultDetail({
         >
           {content?.trim() || "검색 결과 row를 선택하면 전체 콘텐츠가 여기에 표시됩니다."}
         </Box>
+
+        {qualityIssues.length > 0 && (
+          <Alert severity="warning" sx={{ py: 0.5, px: 1, fontSize: 11.5 }}>
+            <Typography variant="caption" fontWeight={700} display="block">품질 이슈 감지됨:</Typography>
+            {qualityIssues.map((issue) => (
+              <Box key={issue} component="div" sx={{ mt: 0.25 }}>
+                • <strong>{issue}</strong>: {getChunkQualityIssueText(issue)}
+              </Box>
+            ))}
+          </Alert>
+        )}
+
+        {specialFields.length > 0 && (
+          <TableContainer component={Paper} variant="outlined" sx={{ overflow: "hidden", mt: 1 }}>
+            <Table size="small">
+              <TableBody>
+                {specialFields.map(({ key, label, value }) => {
+                  const shouldUnderline = 
+                    (key === "fallbackReason" && isStrategyFallback) ||
+                    (key === "strategyDisplay" && requested !== actual);
+
+                  return (
+                    <TableRow key={key}>
+                      <TableCell sx={{ fontWeight: 600, width: "35%", fontSize: 11, py: 0.5 }}>{label}</TableCell>
+                      <TableCell 
+                        sx={{ 
+                          fontSize: 11, 
+                          py: 0.5, 
+                          textDecoration: shouldUnderline ? "underline" : "none",
+                          fontWeight: shouldUnderline ? 600 : "normal",
+                          color: shouldUnderline ? "error.main" : "text.primary"
+                        }}
+                      >
+                        {String(value)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        )}
         {metadata ? (
-          <Box
-            component="pre"
-            sx={{
-              m: 0,
-              maxHeight: 180,
-              overflow: "auto",
-              whiteSpace: "pre-wrap",
-              overflowWrap: "anywhere",
-              color: "text.secondary",
-              fontSize: 12,
-            }}
-          >
-            {JSON.stringify(metadata, null, 2)}
-          </Box>
+          (() => {
+            const remaining = { ...metadata };
+            specialFields.forEach(({ key }) => delete remaining[key]);
+            if (Object.keys(remaining).length === 0) return null;
+            return (
+              <Box
+                component="pre"
+                sx={{
+                  m: 0,
+                  maxHeight: 180,
+                  overflow: "auto",
+                  whiteSpace: "pre-wrap",
+                  overflowWrap: "anywhere",
+                  color: "text.secondary",
+                  fontSize: 12,
+                }}
+              >
+                {JSON.stringify(remaining, null, 2)}
+              </Box>
+            );
+          })()
         ) : null}
       </Stack>
     </Box>
@@ -415,6 +541,7 @@ function SearchResultDetail({
 }
 
 export function RagPage() {
+  const navigate = useNavigate();
   const statusSectionRef = useRef<HTMLDivElement | null>(null);
   const targetSectionRef = useRef<HTMLDivElement | null>(null);
   const jobsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -429,6 +556,8 @@ export function RagPage() {
   const [provider, setProvider] = useState("");
   const [objectTypes, setObjectTypes] = useState<ObjectTypeDto[]>([]);
   const [model, setModel] = useState("");
+  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState("5");
   const [minScore, setMinScore] = useState("");
@@ -462,10 +591,194 @@ export function RagPage() {
   const [jobsTotal, setJobsTotal] = useState(0);
   const [jobStatusFilter, setJobStatusFilter] = useState<RagJobStatusFilter>("");
   const [selectedJob, setSelectedJob] = useState<RagIndexJobDto | null>(null);
+
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
+  const [selectedGroup, setSelectedGroup] = useState<{ objectType: string; objectId: string } | null>(null);
+  const [groupHistoryJobs, setGroupHistoryJobs] = useState<RagIndexJobDto[]>([]);
+  const [groupHistoryLoading, setGroupHistoryLoading] = useState(false);
+
+  const jobsGridRef = useRef<any>(null);
+
+  const fetchJobs = useCallback(async () => {
+    setJobsLoading(true);
+    try {
+      const res = await reactAiApi.listRagJobs({
+        status: jobStatusFilter || undefined,
+        page: page,
+        size: pageSize,
+        sort: "createdAt",
+        direction: "desc",
+      });
+      const items = res.content ?? [];
+      setJobs(items);
+      setJobsTotal(res.totalElements ?? (res as any).total ?? 0);
+
+      const selectedJobId = selectedJobIdRef.current;
+      if (selectedJobId && !items.some((job) => job.jobId === selectedJobId)) {
+        setSelectedJob(null);
+        setJobLogs([]);
+        setChunks([]);
+      }
+    } catch (err) {
+      toast.error("색인 작업 목록 로드 실패: " + resolveAxiosError(err));
+    } finally {
+      setJobsLoading(false);
+    }
+  }, [page, pageSize, jobStatusFilter]);
+
+  const loadGroupHistory = useCallback(async (objectType: string, objectId: string) => {
+    setGroupHistoryLoading(true);
+    try {
+      const res = await reactAiApi.listRagJobs({
+        objectType,
+        objectId,
+        page: 0,
+        size: 50,
+        sort: "createdAt",
+        direction: "desc",
+      });
+      setGroupHistoryJobs(res.content ?? []);
+    } catch (err) {
+      toast.error("작업 상세 이력 조회 실패: " + resolveAxiosError(err));
+    } finally {
+      setGroupHistoryLoading(false);
+    }
+  }, []);
+
+  const handleSelectGroup = useCallback((group: { objectType: string; objectId: string }) => {
+    setSelectedGroup({
+      objectType: group.objectType,
+      objectId: group.objectId,
+    });
+    void loadGroupHistory(group.objectType, group.objectId);
+  }, [loadGroupHistory]);
+
+  const groupedJobs = useMemo(() => {
+    const map = new Map<string, { objectType: string; objectId: string; documentId?: string; latestJob: RagIndexJobDto; count: number }>();
+    jobs.forEach((job) => {
+      const key = `${job.objectType}::${job.objectId}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          objectType: job.objectType,
+          objectId: job.objectId,
+          documentId: job.documentId,
+          latestJob: job,
+          count: 1,
+        });
+      } else {
+        const val = map.get(key)!;
+        val.count += 1;
+        const tCurrent = new Date(val.latestJob.createdAt || 0).getTime();
+        const tNext = new Date(job.createdAt || 0).getTime();
+        if (tNext > tCurrent) {
+          val.latestJob = job;
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [jobs]);
   const [jobLogs, setJobLogs] = useState<RagIndexJobLogDto[]>([]);
   const [chunks, setChunks] = useState<RagIndexChunkDto[]>([]);
+
+  // 청킹 품질 개선 필터 및 정렬 상태
+  const [filterQuality, setFilterQuality] = useState<string>("ALL");
+  const [filterStrategy, setFilterStrategy] = useState<string>("ALL");
+  const [filterStrategyFlow, setFilterStrategyFlow] = useState<string>("ALL");
+  const [filterFallback, setFilterFallback] = useState<string>("ALL");
+  const [filterIssue, setFilterIssue] = useState<string>("ALL");
+  const [filterProvenance, setFilterProvenance] = useState<string>("ALL");
+  const [sortOption, setSortOption] = useState<string>("NONE");
+
+  // A. displayChunks (필터링 & 정렬 가공)
+  const displayChunks = useMemo(() => {
+    let result = [...chunks];
+
+    if (filterQuality !== "ALL") {
+      result = result.filter(c => {
+        const q = c.metadata?.chunkQualityStatus;
+        if (filterQuality === "UNKNOWN") return q === undefined || q === null || q === "";
+        return q === filterQuality;
+      });
+    }
+    if (filterStrategy !== "ALL") {
+      result = result.filter(c => {
+        const act = getActualChunkingStrategy(c.metadata);
+        return act === filterStrategy;
+      });
+    }
+    if (filterStrategyFlow !== "ALL") {
+      result = result.filter(c => {
+        const flow = getStrategyFlowLabel(c.metadata);
+        return flow === filterStrategyFlow;
+      });
+    }
+    if (filterFallback !== "ALL") {
+      result = result.filter(c => {
+        const fb = c.metadata?.fallbackStatus;
+        if (filterFallback === "UNKNOWN") return fb === undefined || fb === null || fb === "";
+        return fb === filterFallback;
+      });
+    }
+    if (filterIssue !== "ALL") {
+      result = result.filter(c => {
+        const issues = getQualityIssues(c.metadata);
+        return issues.includes(filterIssue);
+      });
+    }
+    if (filterProvenance !== "ALL") {
+      result = result.filter(c => {
+        const hasProv = hasProvenance(c);
+        return filterProvenance === "HAS_PROVENANCE" ? hasProv : !hasProv;
+      });
+    }
+
+    // 정렬
+    if (sortOption === "REVIEW_PRIORITY") {
+      result.sort((a, b) => {
+        const aReview = a.metadata?.chunkQualityStatus === "REVIEW_REQUIRED" ? 1 : 0;
+        const bReview = b.metadata?.chunkQualityStatus === "REVIEW_REQUIRED" ? 1 : 0;
+        return bReview - aReview;
+      });
+    } else if (sortOption === "FALLBACK_PRIORITY") {
+      result.sort((a, b) => {
+        const aFb = a.metadata?.fallbackStatus === "APPLIED" ? 1 : 0;
+        const bFb = b.metadata?.fallbackStatus === "APPLIED" ? 1 : 0;
+        return bFb - aFb;
+      });
+    } else if (sortOption === "PROVENANCE_PRIORITY") {
+      result.sort((a, b) => {
+        const aNoProv = !hasProvenance(a) ? 1 : 0;
+        const bNoProv = !hasProvenance(b) ? 1 : 0;
+        return bNoProv - aNoProv;
+      });
+    }
+
+    return result;
+  }, [chunks, filterQuality, filterStrategy, filterStrategyFlow, filterFallback, filterIssue, filterProvenance, sortOption]);
+
+  // B. 품질 집계
+  const qualitySummary = useMemo(() => {
+    return summarizeChunkQuality(chunks);
+  }, [chunks]);
+
+  // C. 추천 액션
+  const recommendedActions = useMemo(() => {
+    return recommendChunkingActions(qualitySummary);
+  }, [qualitySummary]);
+
+  // D. Strategy Flow 분포 집계
+  const strategyFlowDistribution = useMemo(() => {
+    const dist: Record<string, number> = {};
+    chunks.forEach(c => {
+      const label = getStrategyFlowLabel(c.metadata);
+      dist[label] = (dist[label] || 0) + 1;
+    });
+    return dist;
+  }, [chunks]);
+
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
-  const [chunkPage, setChunkPage] = useState({ offset: 0, limit: 50, hasMore: false });
+  const [chunkPage, setChunkPage] = useState({ page: 0, size: 50, hasNext: false });
   const [lastMetadata, setLastMetadata] = useState<ChatResponseMetadataDto | null>(null);
   const [lastValidatedAt, setLastValidatedAt] = useState<string | null>(null);
   const [tab, setTab] = useState<ValidationTab>("vector");
@@ -576,8 +889,8 @@ export function RagPage() {
     return `${scopeObjectType ?? ""}:${scopeObjectId ?? ""}`;
   }
 
-  function chunksCacheKey(scopeObjectType?: string, scopeObjectId?: string, offset = 0, limit = chunkPage.limit) {
-    return `${objectCacheKey(scopeObjectType, scopeObjectId)}:${offset}:${limit}`;
+  function chunksCacheKey(scopeObjectType?: string, scopeObjectId?: string, page = 0, size = chunkPage.size) {
+    return `${objectCacheKey(scopeObjectType, scopeObjectId)}:${page}:${size}`;
   }
 
   function clearObjectInspectionCache(scopeObjectType?: string, scopeObjectId?: string) {
@@ -641,49 +954,40 @@ export function RagPage() {
     }
   }, []);
 
+  const loadEmbeddingOptions = useCallback(async () => {
+    try {
+      const res = await reactAiApi.getEmbeddingOptions();
+      const list = res.options ?? [];
+      setEmbeddingOptions(list);
+      const def = list.find((o) => o.defaultProfile) || list.find((o) => o.defaultProvider) || list[0] || null;
+      setSelectedOption(def);
+    } catch {
+      // ignore
+    }
+  }, []);
+
   const loadObjectTypes = useCallback(async () => {
     try {
       setObjectTypes(await reactObjectTypeApi.list({ status: "ACTIVE" }));
     } catch {
       setObjectTypes([]);
     }
-  }, []);
-
-  const loadJobs = useCallback(async () => {
-    setError(null);
-    setJobsLoading(true);
-    try {
-      const response = await reactAiApi.listRagJobs({
-        status: jobStatusFilter || undefined,
-        offset: 0,
-        limit: 50,
-        sort: "createdAt",
-        direction: "desc",
-      });
-      setJobs(response.items ?? []);
-      setJobsTotal(response.total ?? 0);
-      const selectedJobId = selectedJobIdRef.current;
-      if (selectedJobId && !response.items.some((job) => job.jobId === selectedJobId)) {
-        setSelectedJob(null);
-        setJobLogs([]);
-        setChunks([]);
-      }
-    } catch (loadError) {
-      setError(resolveAxiosError(loadError));
-    } finally {
-      setJobsLoading(false);
+  }, []);  const loadJobs = useCallback(() => {
+    void fetchJobs();
+    if (selectedGroup) {
+      void loadGroupHistory(selectedGroup.objectType, selectedGroup.objectId);
     }
-  }, [jobStatusFilter]);
+  }, [fetchJobs, selectedGroup, loadGroupHistory]);
 
   useEffect(() => {
     void loadProviders();
     void loadObjectTypes();
-  }, [loadObjectTypes, loadProviders]);
+    void loadEmbeddingOptions();
+  }, [loadObjectTypes, loadProviders, loadEmbeddingOptions]);
 
   useEffect(() => {
-    void loadJobs();
-  }, [loadJobs]);
-
+    void fetchJobs();
+  }, [fetchJobs]);
   useEffect(() => {
     selectedJobIdRef.current = selectedJob?.jobId ?? null;
   }, [selectedJob?.jobId]);
@@ -744,7 +1048,7 @@ export function RagPage() {
   }, [chunkConfig, chunkPreviewOpen]);
 
   async function handleRefresh() {
-    await Promise.all([loadProviders(), loadJobs()]);
+    await Promise.all([loadProviders(), loadJobs(), loadEmbeddingOptions()]);
     if (selectedJob) {
       await handleSelectJob(selectedJob, true);
     }
@@ -833,8 +1137,7 @@ export function RagPage() {
     ],
     []
   );
-
-  const jobColumnDefs = useMemo<ColDef<RagIndexJobDto>[]>(
+  const groupColumnDefs = useMemo<ColDef<RagObjectGroup>[]>(
     () => [
       {
         colId: "selection",
@@ -850,18 +1153,18 @@ export function RagPage() {
         lockPosition: true,
         cellClass: "selection-column-centered",
         headerClass: "selection-column-centered",
-        cellRenderer: (params: ICellRendererParams<RagIndexJobDto>) => {
-          const checked = params.data?.jobId === selectedJob?.jobId;
+        cellRenderer: (params: ICellRendererParams<RagObjectGroup>) => {
+          const checked =
+            selectedGroup?.objectType === params.data?.objectType &&
+            selectedGroup?.objectId === params.data?.objectId;
 
           return (
             <Box sx={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <JobSelectionToggle
                 checked={checked}
                 onToggle={() => {
-                  if (!params.data) {
-                    return;
-                  }
-                  toggleSelectedJob(params.data);
+                  if (!params.data) return;
+                  handleSelectGroup(params.data);
                 }}
               />
             </Box>
@@ -869,69 +1172,56 @@ export function RagPage() {
         },
       },
       {
-        field: "status",
-        headerName: "상태",
+        field: "latestJob.status",
+        headerName: "최근 상태",
         width: 120,
         filter: false,
+        valueGetter: (params) => params.data?.latestJob.status,
         cellRenderer: (params: { value?: RagIndexJobStatus }) => (
           <Chip size="small" color={statusColor(params.value)} label={params.value ?? "-"} />
         ),
       },
-      { field: "currentStep", headerName: "단계", width: 120, filter: false },
-      { field: "objectType", headerName: "객체 유형", width: 130, filter: false },
-      { field: "objectId", headerName: "객체 ID", width: 130, filter: false },
-      { field: "sourceType", headerName: "소스", width: 120, filter: false },
       {
-        field: "chunkCount",
-        headerName: "Chunk",
-        width: 100,
+        field: "latestJob.currentStep",
+        headerName: "최근 단계",
+        width: 110,
         filter: false,
-        type: "numericColumn",
+        valueGetter: (params) => params.data?.latestJob.currentStep,
       },
+      { field: "objectType", headerName: "객체 유형", width: 120, filter: false },
+      { field: "objectId", headerName: "객체 ID", width: 120, filter: false },
+      { field: "documentId", headerName: "문서 ID", width: 120, filter: false },
       {
-        field: "warningCount",
-        headerName: "경고",
+        field: "count",
+        headerName: "이력 수",
         width: 90,
         filter: false,
         type: "numericColumn",
       },
       {
-        field: "durationMs",
-        headerName: "소요",
-        width: 110,
+        field: "latestJob.createdAt",
+        headerName: "최근 작업일시",
+        flex: 1,
+        minWidth: 170,
         filter: false,
-        valueFormatter: (params) =>
-          typeof params.value === "number" ? `${params.value.toLocaleString()}ms` : "-",
-      },
-      {
-        field: "createdAt",
-        headerName: "생성일시",
-        width: 190,
-        filter: false,
+        valueGetter: (params) => params.data?.latestJob.createdAt,
         valueFormatter: (params) => formatDateTime(params.value as string | undefined),
       },
-      {
-        field: "errorMessage",
-        headerName: "오류",
-        flex: 1.4,
-        minWidth: 220,
-        filter: false,
-        tooltipField: "errorMessage",
-        cellRenderer: ErrorMessageCell,
-      },
     ],
-    [selectedJob?.jobId]
+    [selectedGroup, handleSelectGroup, statusColor]
   );
 
-  const jobGridOptions = useMemo<GridOptions<RagIndexJobDto>>(
+  const groupGridOptions = useMemo<GridOptions<RagObjectGroup>>(
     () => ({
-      getRowId: (params) => params.data.jobId,
+      getRowId: (params) => `${params.data.objectType}::${params.data.objectId}`,
       suppressRowClickSelection: true,
       rowClassRules: {
-        "rag-job-row-selected": (params) => params.data?.jobId === selectedJob?.jobId,
+        "rag-job-row-selected": (params) =>
+          selectedGroup?.objectType === params.data?.objectType &&
+          selectedGroup?.objectId === params.data?.objectId,
       },
     }),
-    [selectedJob?.jobId]
+    [selectedGroup]
   );
 
   const chunkColumnDefs = useMemo<ColDef<RagIndexChunkDto>[]>(
@@ -946,6 +1236,25 @@ export function RagPage() {
         filter: false,
         valueFormatter: (params) =>
           typeof params.value === "number" ? params.value.toFixed(4) : "-",
+      },
+      {
+        headerName: "Provenance",
+        width: 220,
+        filter: false,
+        cellRenderer: (params: ICellRendererParams<RagIndexChunkDto>) => {
+          if (!params.data) return null;
+          const badges = getProvenanceBadges(params.data);
+          const isMissing = (params.data.metadata?.chunkQualityIssues as string[] | undefined)?.includes("MISSING_PROVENANCE");
+          return (
+            <Stack direction="row" spacing={0.5} sx={{ height: "100%", alignItems: "center", overflowX: "auto" }}>
+              {badges.map(b => {
+                const color = b === "No provenance" ? (isMissing ? "warning" : "default") : "primary";
+                const variant = b === "No provenance" ? "outlined" : "filled";
+                return <Chip key={b} label={b} size="small" color={color} variant={variant} sx={{ height: 18, fontSize: 9 }} />;
+              })}
+            </Stack>
+          );
+        }
       },
       { field: "headingPath", headerName: "위치", width: 180, filter: false },
       { field: "content", headerName: "콘텐츠", flex: 1.4, filter: false },
@@ -1085,36 +1394,45 @@ export function RagPage() {
     }
   }
 
-  async function loadChunks(scopeObjectType?: string, scopeObjectId?: string, offset = 0, force = false) {
+  async function loadChunks(scopeObjectType?: string, scopeObjectId?: string, page = 0, force = false) {
+    if (page === 0) {
+      setFilterQuality("ALL");
+      setFilterStrategy("ALL");
+      setFilterStrategyFlow("ALL");
+      setFilterFallback("ALL");
+      setFilterIssue("ALL");
+      setFilterProvenance("ALL");
+      setSortOption("NONE");
+    }
     if (!scopeObjectType || !scopeObjectId) {
       setChunks([]);
       setSelectedChunk(null);
       return;
     }
-    const cacheKey = chunksCacheKey(scopeObjectType, scopeObjectId, offset, chunkPage.limit);
+    const cacheKey = chunksCacheKey(scopeObjectType, scopeObjectId, page, chunkPage.size);
     if (!force && chunksPageCacheRef.current.has(cacheKey)) {
       const cached = chunksPageCacheRef.current.get(cacheKey);
       if (cached) {
-        setChunks(cached.items ?? []);
-        setSelectedChunk(cached.items?.[0] ?? null);
+        setChunks(cached.content ?? []);
+        setSelectedChunk(cached.content?.[0] ?? null);
         setChunkPage({
-          offset: cached.offset,
-          limit: cached.limit,
-          hasMore: cached.hasMore,
+          page: cached.page,
+          size: cached.size,
+          hasNext: cached.hasNext,
         });
         return;
       }
     }
     setChunksLoading(true);
     try {
-      const response = await reactAiApi.getRagObjectChunksPage(scopeObjectType, scopeObjectId, offset, chunkPage.limit);
+      const response = await reactAiApi.getRagObjectChunksPage(scopeObjectType, scopeObjectId, page, chunkPage.size);
       chunksPageCacheRef.current.set(cacheKey, response);
-      setChunks(response.items ?? []);
-      setSelectedChunk(response.items?.[0] ?? null);
+      setChunks(response.content ?? []);
+      setSelectedChunk(response.content?.[0] ?? null);
       setChunkPage({
-        offset: response.offset,
-        limit: response.limit,
-        hasMore: response.hasMore,
+        page: response.page,
+        size: response.size,
+        hasNext: response.hasNext,
       });
     } finally {
       setChunksLoading(false);
@@ -1137,11 +1455,33 @@ export function RagPage() {
     setTargetIndexed(job.status === "SUCCEEDED" || job.status === "WARNING");
     setTargetMetadata(null);
     setError(null);
+
+    const isAttachment = Boolean(jobAttachmentId);
+    const ragObjectType = isAttachment ? "attachment" : job.objectType;
+    const ragObjectId = isAttachment ? jobAttachmentId! : job.objectId;
+
+    if (job.embeddingProfileId) {
+      const matched = embeddingOptions.find((o) => o.profileId === job.embeddingProfileId);
+      if (matched) {
+        setSelectedOption(matched);
+      }
+    }
+    
+    if (!selectedOption || (job.embeddingProfileId && selectedOption.profileId !== job.embeddingProfileId)) {
+      if (job.embeddingProvider && job.embeddingModel) {
+        const matched = embeddingOptions.find(
+          (o) => o.provider === job.embeddingProvider && o.model === job.embeddingModel
+        );
+        if (matched) {
+          setSelectedOption(matched);
+        }
+      }
+    }
     if (!force && alreadySelected && jobLogsCacheRef.current.has(job.jobId)) {
       setJobLogs(jobLogsCacheRef.current.get(job.jobId) ?? []);
       await Promise.all([
-        loadChunks(job.objectType, job.objectId, 0),
-        loadObjectMetadata(job.objectType, job.objectId),
+        loadChunks(ragObjectType, ragObjectId, 0),
+        loadObjectMetadata(ragObjectType, ragObjectId),
       ]);
       return;
     }
@@ -1152,8 +1492,8 @@ export function RagPage() {
         : reactAiApi.getRagJobLogs(job.jobId);
       const [logs] = await Promise.all([
         logsPromise,
-        loadChunks(job.objectType, job.objectId, 0, force),
-        loadObjectMetadata(job.objectType, job.objectId, force),
+        loadChunks(ragObjectType, ragObjectId, 0, force),
+        loadObjectMetadata(ragObjectType, ragObjectId, force),
       ]);
       jobLogsCacheRef.current.set(job.jobId, logs ?? []);
       setJobLogs(logs ?? []);
@@ -1178,7 +1518,7 @@ export function RagPage() {
     }
 
     try {
-      const job = await reactAiApi.createRagJob({
+      const payload: any = {
         objectType: scope.objectType,
         objectId: scope.objectId,
         documentId: documentId.trim() || undefined,
@@ -1187,7 +1527,16 @@ export function RagPage() {
         text: indexText.trim() || undefined,
         useLlmKeywordExtraction: true,
         ...indexChunkingOptions(),
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const job = await reactAiApi.createRagJob(payload);
       setSelectedJob(job);
       await loadJobs();
       clearObjectInspectionCache(job.objectType, job.objectId);
@@ -1204,7 +1553,36 @@ export function RagPage() {
     }
     setError(null);
     try {
-      const job = await reactAiApi.retryRagJob(selectedJob.jobId);
+      let job: RagIndexJobDto;
+      if (selectedJob.status === "CANCELLED") {
+        const payload: any = {
+          objectType: selectedJob.objectType,
+          objectId: selectedJob.objectId,
+          documentId: selectedJob.documentId || undefined,
+          sourceType: selectedJob.sourceType || undefined,
+          forceReindex: true,
+          useLlmKeywordExtraction: true,
+          ...indexChunkingOptions(),
+        };
+        if (selectedOption) {
+          if (selectedOption.profileId) {
+            payload.embeddingProfileId = selectedOption.profileId;
+          } else {
+            payload.embeddingProvider = selectedOption.provider;
+            payload.embeddingModel = selectedOption.model;
+          }
+        }
+        job = await reactAiApi.createRagJob(payload);
+      } else {
+        const res = await reactAiApi.retryRagJob(selectedJob.jobId);
+        job = {
+          ...res,
+          status: "PENDING",
+          currentStep: undefined,
+          errorMessage: undefined,
+        };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 300));
       await loadJobs();
       clearObjectInspectionCache(job.objectType, job.objectId);
       jobLogsCacheRef.current.delete(job.jobId);
@@ -1264,7 +1642,7 @@ export function RagPage() {
         setDocumentId((current) => current || String(numericAttachmentId));
         setConfirmedScope(nextScope);
         setTargetMetadata(indexed ? await reactFilesApi.ragMetadata(numericAttachmentId) : null);
-        await loadChunks(nextScope.objectType, nextScope.objectId, 0);
+        await loadChunks("attachment", nextScope.attachmentId, 0);
       } else {
         const nextScope = {
           objectType: scopedObjectType,
@@ -1291,7 +1669,7 @@ export function RagPage() {
     }
 
     try {
-      const job = await reactAiApi.createRagJob({
+      const payload: any = {
         objectType: confirmedScope.objectType,
         objectId: confirmedScope.objectId,
         documentId: documentId.trim() || confirmedScope.attachmentId,
@@ -1302,7 +1680,16 @@ export function RagPage() {
         },
         useLlmKeywordExtraction: true,
         ...indexChunkingOptions(),
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const job = await reactAiApi.createRagJob(payload);
       setSelectedJob(job);
       await loadJobs();
       clearObjectInspectionCache(job.objectType, job.objectId);
@@ -1323,7 +1710,7 @@ export function RagPage() {
     }
 
     try {
-      const job = await reactAiApi.createRagJob({
+      const payload: any = {
         objectType: resolveObjectTypeValue(confirmedScope.objectType),
         objectId: confirmedScope.objectId,
         documentId: documentId.trim() || attachmentIdForIndexing,
@@ -1334,7 +1721,16 @@ export function RagPage() {
         },
         useLlmKeywordExtraction: true,
         ...indexChunkingOptions(),
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const job = await reactAiApi.createRagJob(payload);
       setSelectedJob(job);
       await loadJobs();
       clearObjectInspectionCache(job.objectType, job.objectId);
@@ -1397,12 +1793,21 @@ export function RagPage() {
     setLastRagSearchQuery("");
     setRagLoading(true);
     try {
-      const data = await reactAiApi.searchRag({
+      const payload: any = {
         query: searchQuery,
         topK: Number(topK) || 5,
         objectType: scope.objectType,
         objectId: scope.objectId,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const data = await reactAiApi.searchRag(payload);
       setRagRows(data);
       setLastRagSearchQuery(searchQuery);
       setSelectedRagResult(data[0] ?? null);
@@ -1487,7 +1892,7 @@ export function RagPage() {
 
     setChatLoading(true);
     try {
-      const response = await reactAiApi.sendRagChat({
+      const payload: any = {
         chat: {
           provider: provider || undefined,
           model: model || undefined,
@@ -1505,7 +1910,16 @@ export function RagPage() {
         objectType: scope.objectType,
         objectId: scope.objectId,
         debug,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const response = await reactAiApi.sendRagChat(payload);
 
       const assistant = [...response.messages]
         .reverse()
@@ -1900,6 +2314,37 @@ export function RagPage() {
                         확정된 대상에 대해 attachment source 또는 직접 입력 텍스트 기반 색인 Job을 생성합니다.
                       </Typography>
                     </Box>
+                    {embeddingOptions.length > 0 ? (
+                      <Box sx={{ mt: 0.5, mb: 0.5 }}>
+                        <TextField
+                          select
+                          label="임베딩 모델 프로필"
+                          size="small"
+                          value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
+                          onChange={(event) => {
+                            const val = event.target.value;
+                            const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
+                            if (matched) {
+                              setSelectedOption(matched);
+                            }
+                          }}
+                          disabled={jobsLoading}
+                          fullWidth
+                        >
+                          {embeddingOptions.map((opt) => {
+                            const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
+                            const label = opt.profileId
+                              ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                              : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                            return (
+                              <MenuItem key={valueKey} value={valueKey}>
+                                {label}
+                              </MenuItem>
+                            );
+                          })}
+                        </TextField>
+                      </Box>
+                    ) : null}
                     <Accordion variant="outlined" sx={{ borderRadius: 1.5, "&:before": { display: "none" } }}>
                       <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
                         <Stack spacing={0.25}>
@@ -2228,55 +2673,183 @@ export function RagPage() {
                   취소
                 </Button>
               </Stack>
-              <Box
-                sx={{
-                  "& .ag-row.rag-job-row-selected": {
-                    bgcolor: (theme) =>
-                      theme.palette.mode === "dark"
-                        ? "rgba(66, 165, 245, 0.22)"
-                        : "rgba(25, 118, 210, 0.12)",
-                  },
-                  "& .ag-row.rag-job-row-selected:hover": {
-                    bgcolor: (theme) =>
-                      theme.palette.mode === "dark"
-                        ? "rgba(66, 165, 245, 0.28)"
-                        : "rgba(25, 118, 210, 0.18)",
-                  },
-                  "& .ag-row.rag-job-row-selected::before": {
-                    content: '""',
-                    position: "absolute",
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
-                    width: 3,
-                    bgcolor: "primary.main",
-                    zIndex: 1,
-                  },
-                  "& .ag-row.rag-job-row-selected .ag-cell": {
-                    fontWeight: 600,
-                  },
-                }}
-              >
-                <GridContent<RagIndexJobDto>
-                  columns={jobColumnDefs}
-                  options={jobGridOptions}
-                  rowData={jobs}
-                  loading={jobsLoading}
-                  height={300}
-                  events={[
-                    {
-                      type: "rowClicked",
-                      listener: (event) => {
-                        const row = (event as { data?: RagIndexJobDto }).data;
-                        if (!row) {
-                          return;
-                        }
-                        toggleSelectedJob(row);
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: 7.5 }}>
+                  <Box
+                    sx={{
+                      "& .ag-row.rag-job-row-selected": {
+                        bgcolor: (theme) =>
+                          theme.palette.mode === "dark"
+                            ? "rgba(66, 165, 245, 0.22)"
+                            : "rgba(25, 118, 210, 0.12)",
                       },
-                    },
-                  ]}
-                />
-              </Box>
+                      "& .ag-row.rag-job-row-selected:hover": {
+                        bgcolor: (theme) =>
+                          theme.palette.mode === "dark"
+                            ? "rgba(66, 165, 245, 0.28)"
+                            : "rgba(25, 118, 210, 0.18)",
+                      },
+                      "& .ag-row.rag-job-row-selected::before": {
+                        content: '""',
+                        position: "absolute",
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 3,
+                        bgcolor: "primary.main",
+                        zIndex: 1,
+                      },
+                      "& .ag-row.rag-job-row-selected .ag-cell": {
+                        fontWeight: 600,
+                      },
+                    }}
+                  >
+                    <GridContent<RagObjectGroup>
+                      rowData={groupedJobs}
+                      columns={groupColumnDefs}
+                      options={groupGridOptions}
+                      height={320}
+                      onRowClicked={(event) => {
+                            const row = (event as { data?: RagObjectGroup }).data;
+                            if (!row) {
+                              return;
+                            }
+                            handleSelectGroup(row);
+                          }}
+                    />
+                    <TablePagination
+                      component="div"
+                      count={jobsTotal}
+                      page={page}
+                      onPageChange={(_, newPage) => setPage(newPage)}
+                      rowsPerPage={pageSize}
+                      onRowsPerPageChange={(e) => {
+                        setPageSize(parseInt(e.target.value, 10));
+                        setPage(0);
+                      }}
+                      rowsPerPageOptions={[15, 30, 50]}
+                      labelRowsPerPage="페이지당 건수:"
+                      sx={{ borderTop: "1px solid", borderColor: "divider" }}
+                    />
+                  </Box>
+                </Grid>
+                <Grid size={{ xs: 12, md: 4.5 }}>
+                  <Card variant="outlined" sx={{ height: 372, borderRadius: 2 }}>
+                    <CardContent sx={{ height: "100%", display: "flex", flexDirection: "column", p: 1.5, "&:last-child": { pb: 1.5 } }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        세부 작업 이력
+                      </Typography>
+                      {selectedGroup ? (
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                          대상: {formatObjectTypeLabel(selectedGroup.objectType)} / {selectedGroup.objectId}
+                        </Typography>
+                      ) : (
+                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1 }}>
+                          대상을 선택해 주세요.
+                        </Typography>
+                      )}
+
+                      <Divider sx={{ mb: 1 }} />
+
+                      {!selectedGroup ? (
+                        <Box sx={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center" }}>
+                          <Typography variant="caption" color="text.secondary" align="center">
+                            좌측 목록에서 대상을 선택하면<br />세부 작업 이력이 표시됩니다.
+                          </Typography>
+                        </Box>
+                      ) : groupHistoryLoading ? (
+                        <Box sx={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center" }}>
+                          <CircularProgress size={24} />
+                        </Box>
+                      ) : groupHistoryJobs.length === 0 ? (
+                        <Box sx={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center" }}>
+                          <Typography variant="caption" color="text.secondary" align="center">
+                            작업 이력이 존재하지 않습니다.
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <Box sx={{ flex: 1, overflowY: "auto", pr: 0.5 }}>
+                          <Stack spacing={1}>
+                            {groupHistoryJobs.map((job) => {
+                              const isSelected = selectedJob?.jobId === job.jobId;
+                              return (
+                                <Box
+                                  key={job.jobId}
+                                  onClick={() => {
+                                    toggleSelectedJob(job);
+                                  }}
+                                  sx={{
+                                    p: 1,
+                                    border: "1px solid",
+                                    borderColor: isSelected ? "primary.main" : "divider",
+                                    borderRadius: 1.5,
+                                    cursor: "pointer",
+                                    bgcolor: isSelected ? "action.selected" : "background.paper",
+                                    "&:hover": {
+                                      bgcolor: "action.hover",
+                                    },
+                                    position: "relative",
+                                  }}
+                                >
+                                  {isSelected && (
+                                    <Box
+                                      sx={{
+                                        position: "absolute",
+                                        left: 0,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: 3,
+                                        bgcolor: "primary.main",
+                                        borderTopLeftRadius: 6,
+                                        borderBottomLeftRadius: 6,
+                                      }}
+                                    />
+                                  )}
+                                  <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={1}>
+                                    <Stack spacing={0.25}>
+                                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                                        {formatDateTime(job.createdAt)}
+                                      </Typography>
+                                      <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 12 }}>
+                                        {job.currentStep || "대기"}
+                                      </Typography>
+                                      {job.documentId && (
+                                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                                          문서: {job.documentId}
+                                        </Typography>
+                                      )}
+                                    </Stack>
+                                    <Stack direction="row" alignItems="center" spacing={0.5}>
+                                      <Chip
+                                        size="small"
+                                        color={statusColor(job.status)}
+                                        label={job.status}
+                                        sx={{ height: 18, fontSize: 9, "& .MuiChip-label": { px: 0.75 } }}
+                                      />
+                                      <IconButton
+                                        size="small"
+                                        color="primary"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigate(`/services/ai/rag/jobs/${job.jobId}`);
+                                        }}
+                                        title="상세 페이지 이동"
+                                      >
+                                        <ChevronRightOutlined sx={{ fontSize: 16 }} />
+                                      </IconButton>
+                                    </Stack>
+                                  </Stack>
+                                </Box>
+                              );
+                            })}
+                          </Stack>
+                        </Box>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+
               {selectedJob ? (
                 <Alert severity="info" icon={false}>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={0.75} alignItems={{ sm: "center" }}>
@@ -2384,6 +2957,35 @@ export function RagPage() {
               </Typography>
             </Alert>
             <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} alignItems={{ lg: "flex-start" }}>
+              {embeddingOptions.length > 0 ? (
+                <TextField
+                  select
+                  label="임베딩 모델 프로필"
+                  size="small"
+                  value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
+                  onChange={(event) => {
+                    const val = event.target.value;
+                    const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
+                    if (matched) {
+                      setSelectedOption(matched);
+                    }
+                  }}
+                  disabled={ragLoading || chatLoading}
+                  sx={{ minWidth: 260 }}
+                >
+                  {embeddingOptions.map((opt) => {
+                    const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
+                    const label = opt.profileId
+                      ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                      : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                    return (
+                      <MenuItem key={valueKey} value={valueKey}>
+                        {label}
+                      </MenuItem>
+                    );
+                  })}
+                </TextField>
+              ) : null}
               <TextField
                 select
                 label="Provider"
@@ -2567,6 +3169,13 @@ export function RagPage() {
                 </AccordionDetails>
               </Accordion>
             </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined" sx={{ borderRadius: 2 }}>
+        <CardContent>
+          <Stack spacing={1.5}>
             <Tabs value={tab} onChange={(_, value: ValidationTab) => void handleValidationTabChange(value)}>
               <Tab
                 value="vector"
@@ -2611,15 +3220,10 @@ export function RagPage() {
                   rowData={vectorRows}
                   loading={vectorLoading}
                   height={360}
-                  events={[
-                    {
-                      type: "rowClicked",
-                      listener: (event) => {
+                  onRowClicked={(event) => {
                         const row = (event as { data?: VectorSearchResultDto }).data;
                         setSelectedVectorResult(row ?? null);
-                      },
-                    },
-                  ]}
+                      }}
                 />
                 <SearchResultDetail
                   title={
@@ -2649,15 +3253,10 @@ export function RagPage() {
                   rowData={ragRows}
                   loading={ragLoading}
                   height={360}
-                  events={[
-                    {
-                      type: "rowClicked",
-                      listener: (event) => {
+                  onRowClicked={(event) => {
                         const row = (event as { data?: SearchResultDto }).data;
                         setSelectedRagResult(row ?? null);
-                      },
-                    },
-                  ]}
+                      }}
                 />
                 <SearchResultDetail
                   title={
@@ -2780,12 +3379,12 @@ export function RagPage() {
                     <Button
                       size="small"
                       variant="text"
-                      disabled={chunkPage.offset <= 0}
+                      disabled={chunkPage.page <= 0}
                       onClick={() =>
                         void loadChunks(
                           confirmedScope?.objectType,
                           confirmedScope?.objectId,
-                          Math.max(0, chunkPage.offset - chunkPage.limit)
+                          Math.max(0, chunkPage.page - 1)
                         )
                       }
                     >
@@ -2798,9 +3397,9 @@ export function RagPage() {
                     <Button
                       size="small"
                       variant="text"
-                      disabled={!chunkPage.hasMore}
+                      disabled={!chunkPage.hasNext}
                       onClick={() =>
-                        void loadChunks(confirmedScope?.objectType, confirmedScope?.objectId, chunkPage.offset + chunkPage.limit)
+                        void loadChunks(confirmedScope?.objectType, confirmedScope?.objectId, chunkPage.page + 1)
                       }
                     >
                       다음
@@ -2809,6 +3408,192 @@ export function RagPage() {
                 </Tooltip>
               </Stack>
             </Stack>
+
+            {chunks.length > 0 && (
+              <Stack spacing={1.25} sx={{ mt: 1 }}>
+                {/* A. 품질 요약 카드 */}
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1.5,
+                    borderLeft: 4,
+                    borderLeftColor:
+                      qualitySummary.status === "warning"
+                        ? "warning.main"
+                        : qualitySummary.status === "info"
+                        ? "info.main"
+                        : "success.main",
+                    bgcolor: (theme) =>
+                      theme.palette.mode === "dark"
+                        ? "rgba(255, 255, 255, 0.02)"
+                        : "action.hover",
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2" fontWeight={700}>
+                      Chunk 품질: Valid {qualitySummary.valid} / Review {qualitySummary.reviewRequired} / Fallback {qualitySummary.strategyFallback} / Missing provenance {qualitySummary.missingProvenance} {qualitySummary.unknown > 0 ? `/ Unknown ${qualitySummary.unknown}` : ""} (전체 {qualitySummary.total}개)
+                    </Typography>
+                    <Chip
+                      size="small"
+                      color={
+                        qualitySummary.status === "warning"
+                          ? "warning"
+                          : qualitySummary.status === "info"
+                          ? "info"
+                          : "success"
+                      }
+                      label={
+                        qualitySummary.status === "warning"
+                          ? "주의 필요"
+                          : qualitySummary.status === "info"
+                          ? "정보 알림"
+                          : "정상"
+                      }
+                    />
+                  </Stack>
+                </Paper>
+
+                {/* B. 추천 액션 */}
+                {recommendedActions.length > 0 && (
+                  <Alert severity="warning" variant="outlined" sx={{ py: 0.5, borderRadius: 1.5 }}>
+                    <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
+                      💡 추천 재처리 액션:
+                    </Typography>
+                    {recommendedActions.map((act, i) => (
+                      <Typography key={i} variant="caption" display="block">
+                        • {act}
+                      </Typography>
+                    ))}
+                  </Alert>
+                )}
+
+                {/* C. Strategy Flow 분포 */}
+                <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center">
+                  <Typography variant="caption" sx={{ fontWeight: 700, mr: 0.5 }}>
+                    Strategy Flow 분포 (클릭 시 필터 토글):
+                  </Typography>
+                  {Object.entries(strategyFlowDistribution).map(([flow, count]) => {
+                    const isSelected = filterStrategyFlow === flow;
+                    return (
+                      <Chip
+                        key={flow}
+                        label={`${flow}: ${count}`}
+                        size="small"
+                        color={isSelected ? "primary" : "default"}
+                        variant={isSelected ? "filled" : "outlined"}
+                        onClick={() => {
+                          setFilterStrategyFlow(isSelected ? "ALL" : flow);
+                        }}
+                        sx={{ height: 22, fontSize: 9.5, cursor: "pointer" }}
+                      />
+                    );
+                  })}
+                </Stack>
+              </Stack>
+            )}
+
+            {chunks.length > 0 && (
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 1, py: 1, borderTop: "1px solid", borderBottom: "1px solid", borderColor: "divider" }}>
+                {/* 1. Quality */}
+                <Stack spacing={0.25}>
+                  <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: "text.secondary" }}>Quality</Typography>
+                  <Select
+                    size="small"
+                    value={filterQuality}
+                    onChange={(e) => setFilterQuality(e.target.value)}
+                    sx={{ height: 28, fontSize: 11, minWidth: 100 }}
+                  >
+                    <MenuItem value="ALL" sx={{ fontSize: 11 }}>ALL Quality</MenuItem>
+                    <MenuItem value="VALID" sx={{ fontSize: 11 }}>VALID</MenuItem>
+                    <MenuItem value="REVIEW_REQUIRED" sx={{ fontSize: 11 }}>REVIEW_REQUIRED</MenuItem>
+                    <MenuItem value="UNKNOWN" sx={{ fontSize: 11 }}>UNKNOWN (Legacy)</MenuItem>
+                  </Select>
+                </Stack>
+
+                {/* 2. Fallback */}
+                <Stack spacing={0.25}>
+                  <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: "text.secondary" }}>Fallback</Typography>
+                  <Select
+                    size="small"
+                    value={filterFallback}
+                    onChange={(e) => setFilterFallback(e.target.value)}
+                    sx={{ height: 28, fontSize: 11, minWidth: 105 }}
+                  >
+                    <MenuItem value="ALL" sx={{ fontSize: 11 }}>ALL Fallback</MenuItem>
+                    <MenuItem value="APPLIED" sx={{ fontSize: 11 }}>APPLIED</MenuItem>
+                    <MenuItem value="NOT_REQUIRED" sx={{ fontSize: 11 }}>NOT_REQUIRED</MenuItem>
+                    <MenuItem value="UNKNOWN" sx={{ fontSize: 11 }}>UNKNOWN</MenuItem>
+                  </Select>
+                </Stack>
+
+                {/* 3. Provenance */}
+                <Stack spacing={0.25}>
+                  <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: "text.secondary" }}>Provenance</Typography>
+                  <Select
+                    size="small"
+                    value={filterProvenance}
+                    onChange={(e) => setFilterProvenance(e.target.value)}
+                    sx={{ height: 28, fontSize: 11, minWidth: 120 }}
+                  >
+                    <MenuItem value="ALL" sx={{ fontSize: 11 }}>ALL Provenance</MenuItem>
+                    <MenuItem value="HAS_PROVENANCE" sx={{ fontSize: 11 }}>HAS_PROVENANCE</MenuItem>
+                    <MenuItem value="NO_PROVENANCE" sx={{ fontSize: 11 }}>NO_PROVENANCE</MenuItem>
+                  </Select>
+                </Stack>
+
+                {/* 4. Issue */}
+                <Stack spacing={0.25}>
+                  <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: "text.secondary" }}>Issue</Typography>
+                  <Select
+                    size="small"
+                    value={filterIssue}
+                    onChange={(e) => setFilterIssue(e.target.value)}
+                    sx={{ height: 28, fontSize: 11, minWidth: 130 }}
+                  >
+                    <MenuItem value="ALL" sx={{ fontSize: 11 }}>ALL Issues</MenuItem>
+                    <MenuItem value="MISSING_PROVENANCE" sx={{ fontSize: 11 }}>MISSING_PROVENANCE</MenuItem>
+                    <MenuItem value="MAX_SIZE_EXCEEDED" sx={{ fontSize: 11 }}>MAX_SIZE_EXCEEDED</MenuItem>
+                    <MenuItem value="EMPTY_CONTENT" sx={{ fontSize: 11 }}>EMPTY_CONTENT</MenuItem>
+                  </Select>
+                </Stack>
+
+                {/* 5. 정렬 */}
+                <Stack spacing={0.25}>
+                  <Typography variant="caption" sx={{ fontSize: 9, fontWeight: 700, color: "text.secondary" }}>정렬 기준</Typography>
+                  <Select
+                    size="small"
+                    value={sortOption}
+                    onChange={(e) => setSortOption(e.target.value)}
+                    sx={{ height: 28, fontSize: 11, minWidth: 140 }}
+                  >
+                    <MenuItem value="NONE" sx={{ fontSize: 11 }}>기본 순서 (Original)</MenuItem>
+                    <MenuItem value="REVIEW_PRIORITY" sx={{ fontSize: 11 }}>Review Required 우선</MenuItem>
+                    <MenuItem value="FALLBACK_PRIORITY" sx={{ fontSize: 11 }}>Fallback 우선</MenuItem>
+                    <MenuItem value="PROVENANCE_PRIORITY" sx={{ fontSize: 11 }}>No Provenance 우선</MenuItem>
+                  </Select>
+                </Stack>
+
+                {/* 6. 필터 리셋 버튼 */}
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    setFilterQuality("ALL");
+                    setFilterStrategy("ALL");
+                    setFilterStrategyFlow("ALL");
+                    setFilterFallback("ALL");
+                    setFilterIssue("ALL");
+                    setFilterProvenance("ALL");
+                    setSortOption("NONE");
+                  }}
+                  sx={{ height: 28, alignSelf: "flex-end", fontSize: 10.5 }}
+                >
+                  필터 초기화
+                </Button>
+              </Stack>
+            )}
+
             <Box
               sx={{
                 "& .ag-row.rag-chunk-row-selected": {
@@ -2831,13 +3616,10 @@ export function RagPage() {
               <GridContent<RagIndexChunkDto>
                 columns={chunkColumnDefs}
                 options={chunkGridOptions}
-                rowData={chunks}
+                rowData={displayChunks}
                 loading={chunksLoading}
                 height={280}
-                events={[
-                  {
-                    type: "rowClicked",
-                    listener: (event) => {
+                onRowClicked={(event) => {
                       const row = (event as { data?: RagIndexChunkDto }).data;
                       const node = (event as {
                         node?: { setSelected: (selected: boolean, clearSelection?: boolean) => void };
@@ -2846,14 +3628,12 @@ export function RagPage() {
                         node?.setSelected(true, true);
                         setSelectedChunk(row);
                       }
-                    },
-                  },
-                ]}
+                    }}
               />
             </Box>
             <Typography variant="caption" color="text.secondary">
-              offset {chunkPage.offset.toLocaleString()} / returned {chunks.length.toLocaleString()} / hasMore{" "}
-              {chunkPage.hasMore ? "true" : "false"}
+              page {chunkPage.page.toLocaleString()} / size {chunkPage.size.toLocaleString()} / hasNext{" "}
+              {chunkPage.hasNext ? "true" : "false"}
             </Typography>
             <SearchResultDetail
               title={
@@ -3056,14 +3836,9 @@ export function RagPage() {
               rowData={chunkPreviewRows}
               loading={chunkPreviewLoading}
               height={260}
-              events={[
-                {
-                  type: "rowClicked",
-                  listener: (event) => {
+              onRowClicked={(event) => {
                     setSelectedPreviewChunk((event as { data?: RagChunkPreviewItemDto }).data ?? null);
-                  },
-                },
-              ]}
+                  }}
             />
             <SearchResultDetail
               title={

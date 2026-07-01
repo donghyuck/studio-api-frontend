@@ -180,6 +180,9 @@ export interface SearchRequestDto {
   objectType?: string;
   objectId?: string;
   minScore?: number;
+  embeddingProfileId?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
 }
 
 export interface SearchResultDto {
@@ -210,6 +213,15 @@ export interface VectorProjectionSummaryDto {
   itemCount: number;
   createdAt?: string;
   completedAt?: string;
+  mode?: 'OVERVIEW' | 'DETAIL' | null;
+  totalCount?: number | null;
+  projectedCount?: number | null;
+  sampled?: boolean | null;
+  sampleSize?: number | null;
+  samplingStrategy?: string | null;
+  maxAllowed?: number | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
 }
 
 export interface VectorProjectionListResponseDto {
@@ -221,6 +233,9 @@ export interface VectorProjectionCreateRequestDto {
   targetTypes?: string[] | null;
   algorithm?: string;
   filters?: Record<string, unknown> | null;
+  mode?: 'OVERVIEW' | 'DETAIL';
+  sampleSize?: number | null;
+  samplingStrategy?: 'HEAD' | 'RANDOM' | 'STRATIFIED' | null;
 }
 
 export interface VectorProjectionCreateResponseDto {
@@ -240,6 +255,35 @@ export interface VectorProjectionDetailDto {
   errorMessage?: string | null;
   createdAt?: string;
   completedAt?: string;
+  mode?: 'OVERVIEW' | 'DETAIL' | null;
+  totalCount?: number | null;
+  projectedCount?: number | null;
+  sampled?: boolean | null;
+  sampleSize?: number | null;
+  samplingStrategy?: string | null;
+  maxAllowed?: number | null;
+  errorCode?: string | null;
+}
+
+export interface VectorProjectionEstimateRequest {
+  mode: 'OVERVIEW' | 'DETAIL';
+  targetTypes?: string[] | null;
+  filters?: Record<string, unknown> | null;
+  sampleSize?: number | null;
+  samplingStrategy?: 'HEAD' | 'RANDOM' | 'STRATIFIED' | null;
+}
+
+export interface VectorProjectionEstimateResponse {
+  success: boolean;
+  data: {
+    totalCount: number;
+    maxAllowed: number;
+    exceedsLimit: boolean;
+    recommendedSampling: {
+      sampleSize: number;
+      samplingStrategy: 'HEAD' | 'RANDOM' | 'STRATIFIED';
+    } | null;
+  };
 }
 
 export interface VectorProjectionPointDto {
@@ -274,6 +318,9 @@ export interface VectorSearchVisualizationResultPointDto {
   x: number;
   y: number;
   similarity?: number | null;
+  tokenCount?: number | null;
+  contextIncluded?: boolean | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface VectorSearchVisualizationResponseDto {
@@ -285,6 +332,8 @@ export interface VectorSearchVisualizationRequestDto {
   projectionId: string;
   query: string;
   targetTypes?: string[] | null;
+  embeddingProvider?: string;
+  embeddingModel?: string;
   topK?: number;
   minScore?: number;
 }
@@ -297,6 +346,8 @@ export interface VectorItemDetailDto {
   text: string;
   embeddingModel?: string | null;
   dimension?: number | null;
+  tokenCount?: number | null;
+  contextIncluded?: boolean | null;
   metadata?: Record<string, unknown> | null;
   createdAt?: string;
 }
@@ -434,7 +485,11 @@ export interface RagIndexRequestDto {
   objectId?: string;
   metadata?: Record<string, any>;
   keywords?: string[];
+  embeddingProfileId?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
   useLlmKeywordExtraction?: boolean;
+  chunkingStrategy?: string;
 }
 
 export type RagIndexJobStatus =
@@ -458,7 +513,6 @@ export interface RagIndexJobCreateRequestDto extends RagIndexRequestDto {
   text?: string;
   sourceType?: string;
   forceReindex?: boolean;
-  chunkingStrategy?: string;
   chunkMaxSize?: number;
   chunkOverlap?: number;
   chunkUnit?: string;
@@ -486,14 +540,11 @@ export interface RagIndexJobDto {
   startedAt?: string;
   finishedAt?: string;
   durationMs?: number;
+  embeddingProfileId?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
 }
-
-export interface RagIndexJobListResponseDto {
-  items: RagIndexJobDto[];
-  total: number;
-  offset: number;
-  limit: number;
-}
+export type RagIndexJobListResponseDto = PageDto<RagIndexJobDto>;
 
 export interface RagIndexJobLogDto {
   logId: string;
@@ -511,10 +562,20 @@ export interface RagIndexChunkDto {
   documentId: string;
   parentChunkId?: string;
   chunkOrder?: number;
+  chunkIndex?: number;
   chunkType?: string;
   content: string;
+  textLength?: number;
+  tokenCount?: number;
+  tokenizerProvider?: string;
+  tokenizerEncoding?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  warningStatus?: string;
+  warnings?: string[];
   score?: number;
   headingPath?: string;
+  section?: string;
   sourceRef?: string;
   page?: number;
   slide?: number;
@@ -523,13 +584,21 @@ export interface RagIndexChunkDto {
   indexedAt?: string;
 }
 
-export interface RagIndexChunkPageResponseDto {
-  items: RagIndexChunkDto[];
-  offset: number;
-  limit: number;
-  returned: number;
-  hasMore: boolean;
+export interface PageDto<T> {
+  content: T[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+  hasNext: boolean;
+  hasPrevious: boolean;
+  sort?: string;
 }
+
+export type RagIndexChunkPageResponseDto = PageDto<RagIndexChunkDto>;
+
 
 export interface RagChunkPreviewRequestDto {
   text: string;
@@ -550,7 +619,16 @@ export interface RagChunkPreviewItemDto {
   content: string;
   contentLength: number;
   chunkOrder?: number;
+  chunkIndex?: number;
   chunkType?: string;
+  textLength?: number;
+  tokenCount?: number;
+  tokenizerProvider?: string;
+  tokenizerEncoding?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  warningStatus?: string;
+  warnings?: string[];
   parentChunkId?: string;
   previousChunkId?: string;
   nextChunkId?: string;
@@ -609,4 +687,83 @@ export interface RagChunkConfigResponseDto {
     maxInputChars: number;
     maxPreviewChunks: number;
   };
+}
+
+export interface RagTokenizerStatusDto {
+  embeddingProvider?: string | null;
+  embeddingModel?: string | null;
+  tokenizerProvider?: string | null;
+  tokenizerEncoding?: string | null;
+  tokenizerModel?: string | null;
+  selectionSource?: string | null;
+  confidence?: number | string | null;
+  chunkUnit?: string | null;
+  chunkSize?: number | null;
+  chunkOverlap?: number | null;
+  fallbackUsed?: boolean | null;
+  warnings?: string[];
+}
+
+export interface RagChunkingSimulationRequestDto {
+  text: string;
+  objectType?: string;
+  objectId?: string;
+  attachmentId?: string;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  tokenizerAutoDetect?: boolean;
+  chunkUnit?: string;
+  chunkSize?: number;
+  chunkOverlap?: number;
+  maxChunkSize?: number;
+}
+
+export interface RagChunkingSimulationResponseDto {
+  tokenizer?: RagTokenizerStatusDto | null;
+  chunks?: RagChunkPreviewItemDto[];
+  tokenDistribution?: number[];
+  totalChunks?: number;
+  totalChars?: number;
+  totalTokens?: number;
+  warnings?: string[];
+}
+
+export interface RagContextSimulationRequestDto {
+  query: string;
+  objectType?: string;
+  objectId?: string;
+  topK?: number;
+  contextBudgetTokens?: number;
+  includeNeighborChunks?: boolean;
+  includeParentChunk?: boolean;
+  embeddingProvider?: string;
+  embeddingModel?: string;
+  minScore?: number;
+}
+
+export interface RagContextSimulationChunkDto extends SearchResultDto {
+  rank?: number;
+  chunkId?: string;
+  chunkIndex?: number;
+  objectType?: string;
+  objectId?: string;
+  tokenCount?: number;
+  included?: boolean;
+  exclusionReason?: string;
+  cumulativeTokenCount?: number;
+  tokenizerProvider?: string;
+  tokenizerEncoding?: string;
+  embeddingModel?: string;
+  warnings?: string[];
+}
+
+export interface RagContextSimulationResponseDto {
+  tokenizer?: RagTokenizerStatusDto | null;
+  chunks?: RagContextSimulationChunkDto[];
+  retrievedChunks?: RagContextSimulationChunkDto[];
+  usedTokens?: number;
+  budgetTokens?: number;
+  contextBudgetTokens?: number;
+  finalContext?: string;
+  warnings?: string[];
 }

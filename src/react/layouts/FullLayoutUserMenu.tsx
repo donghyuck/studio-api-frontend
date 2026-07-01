@@ -1,5 +1,4 @@
 import {
-  alpha,
   Avatar,
   Box,
   Button,
@@ -74,6 +73,13 @@ export function FullLayoutUserMenu({
         }
         size="small"
         aria-label="사용자 메뉴"
+        sx={{
+          p: 0.25,
+          transition: "transform 150ms ease",
+          "&:hover": {
+            transform: "scale(1.05)",
+          },
+        }}
       >
         <Avatar
           alt={displayName}
@@ -83,7 +89,16 @@ export function FullLayoutUserMenu({
               event.currentTarget.src = fallbackImageUrl;
             },
           }}
-          sx={{ width: 30, height: 30, bgcolor: "grey.200" }}
+          sx={{
+            width: 32,
+            height: 32,
+            bgcolor: "grey.200",
+            border: (theme) => `1.5px solid ${theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"}`,
+            transition: "border-color 150ms ease",
+            "&:hover": {
+              borderColor: "primary.main",
+            },
+          }}
         />
       </IconButton>
       <Popper
@@ -94,14 +109,23 @@ export function FullLayoutUserMenu({
       >
         <ClickAwayListener onClickAway={closeMenu}>
           <Paper
-            elevation={8}
+            elevation={12}
             sx={{
               width: 320,
-              mt: 1,
-              borderRadius: 3,
+              mt: 1.5,
+              borderRadius: 3.5,
               overflow: "hidden",
               border: "1px solid",
-              borderColor: "divider",
+              borderColor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(255, 255, 255, 0.08)"
+                  : "rgba(0, 0, 0, 0.08)",
+              bgcolor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(17, 24, 39, 0.85)"
+                  : "rgba(255, 255, 255, 0.85)",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
             }}
           >
             <Box
@@ -111,9 +135,15 @@ export function FullLayoutUserMenu({
                 display: "flex",
                 alignItems: "center",
                 gap: 1.5,
-                bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
+                bgcolor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.02)"
+                    : "rgba(0, 0, 0, 0.01)",
                 borderBottom: "1px solid",
-                borderColor: "divider",
+                borderColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.08)"
+                    : "rgba(0, 0, 0, 0.06)",
               }}
             >
               <Avatar
@@ -127,7 +157,7 @@ export function FullLayoutUserMenu({
                 sx={{ width: 42, height: 42, bgcolor: "grey.200" }}
               />
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant="subtitle2" noWrap>
+                <Typography variant="subtitle2" noWrap fontWeight={600}>
                   {displayName}
                 </Typography>
                 <Typography variant="caption" color="text.secondary" noWrap>
@@ -140,28 +170,67 @@ export function FullLayoutUserMenu({
                 closeMenu();
                 onProfile();
               }}
-              sx={{ px: 2.5, py: 1.25 }}
+              sx={{
+                px: 2.5,
+                py: 1.25,
+                transition: "all 150ms ease",
+                "&:hover": {
+                  bgcolor: (theme) =>
+                    theme.palette.mode === "dark"
+                      ? "rgba(255, 255, 255, 0.04)"
+                      : "rgba(0, 0, 0, 0.02)",
+                },
+              }}
             >
               <ListItemIcon>
                 <AccountCircleOutlined fontSize="small" />
               </ListItemIcon>
-              <MuiListItemText primary="내 프로필" secondary={username} />
+              <MuiListItemText
+                primary="내 프로필"
+                secondary={username}
+                primaryTypographyProps={{ fontSize: 13.5, fontWeight: 500 }}
+              />
             </MenuItem>
             <MenuItem
               onClick={() => {
                 closeMenu();
                 onPasswordChange();
               }}
-              sx={{ px: 2.5, py: 1.25 }}
+              sx={{
+                px: 2.5,
+                py: 1.25,
+                transition: "all 150ms ease",
+                "&:hover": {
+                  bgcolor: (theme) =>
+                    theme.palette.mode === "dark"
+                      ? "rgba(255, 255, 255, 0.04)"
+                      : "rgba(0, 0, 0, 0.02)",
+                },
+              }}
             >
               <ListItemIcon>
                 <ListAltOutlined fontSize="small" />
               </ListItemIcon>
-              <MuiListItemText primary="비밀번호 변경" />
+              <MuiListItemText
+                primary="비밀번호 변경"
+                primaryTypographyProps={{ fontSize: 13.5, fontWeight: 500 }}
+              />
             </MenuItem>
-            <Divider />
+            <Divider
+              sx={{
+                borderColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.08)"
+                    : "rgba(0, 0, 0, 0.06)",
+              }}
+            />
             <Box sx={{ px: 2.5, py: 1.5 }}>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                display="block"
+                sx={{ mb: 1, fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}
+              >
                 테마
               </Typography>
               <ToggleButtonGroup
@@ -174,22 +243,49 @@ export function FullLayoutUserMenu({
                     onThemeModeChange(nextMode);
                   }
                 }}
+                sx={{
+                  "& .MuiToggleButton-root": {
+                    borderRadius: "6px",
+                    border: (theme) =>
+                      `1px solid ${theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"}`,
+                    mx: 0.25,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    textTransform: "none",
+                    color: "text.secondary",
+                    "&.Mui-selected": {
+                      bgcolor: "primary.main",
+                      color: "primary.contrastText",
+                      borderColor: "primary.main",
+                      "&:hover": {
+                        bgcolor: "primary.dark",
+                      },
+                    },
+                  },
+                }}
               >
                 <ToggleButton value="system" sx={{ gap: 0.5 }}>
-                  <ComputerOutlined fontSize="small" />
+                  <ComputerOutlined sx={{ fontSize: 14 }} />
                   시스템
                 </ToggleButton>
                 <ToggleButton value="light" sx={{ gap: 0.5 }}>
-                  <LightModeOutlined fontSize="small" />
+                  <LightModeOutlined sx={{ fontSize: 14 }} />
                   라이트
                 </ToggleButton>
                 <ToggleButton value="dark" sx={{ gap: 0.5 }}>
-                  <DarkModeOutlined fontSize="small" />
+                  <DarkModeOutlined sx={{ fontSize: 14 }} />
                   다크
                 </ToggleButton>
               </ToggleButtonGroup>
             </Box>
-            <Divider />
+            <Divider
+              sx={{
+                borderColor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(255, 255, 255, 0.08)"
+                    : "rgba(0, 0, 0, 0.06)",
+              }}
+            />
             <Box sx={{ px: 2.5, py: 2 }}>
               <Button
                 variant="outlined"
@@ -199,6 +295,12 @@ export function FullLayoutUserMenu({
                 onClick={() => {
                   closeMenu();
                   onLogout();
+                }}
+                sx={{
+                  borderRadius: "8px",
+                  fontWeight: 600,
+                  fontSize: 13,
+                  py: 0.75,
                 }}
               >
                 로그아웃

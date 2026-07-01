@@ -22,16 +22,18 @@ export function UserMessageBubble({ message, onCopy, onEdit }: Props) {
       <Box
         sx={{
           maxWidth: { xs: "92%", md: "86%" },
-          px: 1.75,
-          py: 1,
-          borderRadius: 2,
+          px: 2,
+          py: 1.15,
+          borderRadius: "8px",
           bgcolor: (theme) =>
-            alpha(theme.palette.info.main, theme.palette.mode === "dark" ? 0.18 : 0.1),
-          color: "info.main",
+            theme.palette.mode === "dark"
+              ? alpha(theme.palette.primary.main, 0.28)
+              : theme.palette.primary.main,
+          color: "primary.contrastText",
           border: "none",
         }}
       >
-        <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14 }}>
+        <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14, lineHeight: 1.7 }}>
           {message.content}
         </Typography>
       </Box>

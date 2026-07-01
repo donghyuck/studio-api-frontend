@@ -15,6 +15,8 @@ import type {
   ConversationSummaryDto,
   QueryRewriteRequestDto,
   QueryRewriteResponseDto,
+  RagChunkingSimulationRequestDto,
+  RagChunkingSimulationResponseDto,
   ProjectionCreateRequest,
   ProjectionCreateResponse,
   ProjectionListResponse,
@@ -22,6 +24,8 @@ import type {
   RagChunkConfigResponseDto,
   RagChunkPreviewRequestDto,
   RagChunkPreviewResponseDto,
+  RagContextSimulationRequestDto,
+  RagContextSimulationResponseDto,
   RagIndexChunkDto,
   RagIndexChunkPageResponseDto,
   RagIndexJobCreateRequestDto,
@@ -46,6 +50,8 @@ import type {
   VectorProjectionPointsResponseDto,
   VectorSearchVisualizationRequestDto,
   VectorSearchVisualizationResponseDto,
+  VectorProjectionEstimateRequest,
+  VectorProjectionEstimateResponse,
 } from "@/types/studio/ai";
 
 const BASE = "/api/ai";
@@ -191,6 +197,14 @@ export const reactAiApi = {
     return apiRequest<ProjectionCreateResponse>("post", `${MGMT_BASE}/vectors/projections`, { data: req });
   },
 
+  estimateVectorProjection(payload: VectorProjectionEstimateRequest) {
+    return apiRequest<VectorProjectionEstimateResponse>(
+      "post",
+      `${MGMT_BASE}/vectors/projections/estimate`,
+      { data: payload }
+    );
+  },
+
   async listVectorProjections(params?: { limit?: number; offset?: number }) {
     const response = await apiRequest<ProjectionListResponse>("get", `${MGMT_BASE}/vectors/projections`, { params });
     return response.items ?? [];
@@ -199,6 +213,14 @@ export const reactAiApi = {
   getVectorProjection(projectionId: string) {
     return apiRequest<VectorProjection>("get", `${MGMT_BASE}/vectors/projections/${encodeURIComponent(projectionId)}`);
   },
+
+  deleteVectorProjection(projectionId: string) {
+    return apiRequest<void>(
+      "delete",
+      `${MGMT_BASE}/vectors/projections/${encodeURIComponent(projectionId)}`
+    );
+  },
+
 
   getVectorProjectionPoints(
     projectionId: string,
@@ -226,7 +248,7 @@ export const reactAiApi = {
   },
 
   async searchRag(req: SearchRequestDto) {
-    const response = await apiRequest<SearchResponseDto>("post", `${MGMT_BASE}/rag/search`, { data: req });
+    const response = await apiRequest<SearchResponseDto>("post", `/api/mgmt/files/rag/search`, { data: req });
     return response.results ?? [];
   },
 
@@ -235,8 +257,8 @@ export const reactAiApi = {
     objectType?: string;
     objectId?: string;
     documentId?: string;
-    offset?: number;
-    limit?: number;
+    page?: number;
+    size?: number;
     sort?: string;
     direction?: "asc" | "desc";
   }) {
@@ -274,17 +296,17 @@ export const reactAiApi = {
     return apiRequest<RagIndexJobLogDto[]>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/logs`);
   },
 
-  getRagJobChunks(jobId: string, limit = 200) {
-    return apiRequest<RagIndexChunkDto[]>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/chunks`, {
-      params: { limit },
+  getRagJobChunks(jobId: string, page = 0, size = 200) {
+    return apiRequest<RagIndexChunkPageResponseDto>("get", `${MGMT_BASE}/rag/jobs/${encodeURIComponent(jobId)}/chunks`, {
+      params: { page, size },
     });
   },
 
-  getRagObjectChunksPage(objectType: string, objectId: string, offset = 0, limit = 50) {
+  getRagObjectChunksPage(objectType: string, objectId: string, page = 0, size = 50) {
     return apiRequest<RagIndexChunkPageResponseDto>(
       "get",
-      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}/chunks/page`,
-      { params: { offset, limit } }
+      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}/chunks`,
+      { params: { page, size } }
     );
   },
 
@@ -295,6 +317,7 @@ export const reactAiApi = {
     );
   },
 
+
   getRagChunkConfig() {
     return apiRequest<RagChunkConfigResponseDto>("get", `${MGMT_BASE}/rag/chunks/config`);
   },
@@ -303,7 +326,36 @@ export const reactAiApi = {
     return apiRequest<RagChunkPreviewResponseDto>("post", `${MGMT_BASE}/rag/chunks/preview`, { data: req });
   },
 
+  simulateRagChunking(req: RagChunkingSimulationRequestDto) {
+    return apiRequest<RagChunkingSimulationResponseDto>("post", `${MGMT_BASE}/rag/simulations/chunking`, {
+      data: req,
+    });
+  },
+
+  simulateRagContext(req: RagContextSimulationRequestDto) {
+    return apiRequest<RagContextSimulationResponseDto>("post", `${MGMT_BASE}/rag/simulations/context`, {
+      data: req,
+    });
+  },
+
   rewriteQuery(req: QueryRewriteRequestDto) {
     return apiRequest<QueryRewriteResponseDto>("post", `${BASE}/query-rewrite`, { data: req });
   },
+
+  getEmbeddingOptions() {
+    return apiRequest<{ options: EmbeddingOption[] }>("get", `${BASE}/embedding-options`);
+  },
 };
+
+export interface EmbeddingOption {
+  profileId: string | null;
+  provider: string;
+  providerType: string | null;
+  model: string;
+  dimension: number;
+  supportedInputTypes: string[] | null;
+  defaultProvider: boolean;
+  defaultProfile: boolean;
+  profile: boolean;
+  source: string | null;
+}

@@ -11,11 +11,11 @@ import {
   Chip,
   CircularProgress,
   Container,
-  Divider,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
   Drawer,
   IconButton,
   Stack,
@@ -24,6 +24,8 @@ import {
   Stepper,
   Tooltip,
   Typography,
+  TextField,
+  MenuItem,
 } from "@mui/material";
 import {
   AccountTreeOutlined,
@@ -38,12 +40,24 @@ import {
   RefreshOutlined,
   ReplayOutlined,
   SearchOutlined,
+  InfoOutlined,
   WarningAmberOutlined,
 } from "@mui/icons-material";
 import type { ColDef, GridOptions } from "ag-grid-community";
-import { GridContent } from "@/react/components/ag-grid";
+import { GridContent, PageableGridContent } from "@/react/components/ag-grid";
+import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
+import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
-import { reactAiApi } from "@/react/pages/ai/api";
+import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
+import {
+  getChunkStrategyDisplay,
+  getChunkQualityIssueText,
+  hasChunkProvenance,
+  formatStrategyName
+} from "./chunkMetaHelper";
+import { useQuery } from "@tanstack/react-query";
+import { IdeaBlockSummaryPanel } from "@/react/pages/files/IdeaBlockSummaryPanel";
+import { reactMarkdownDocumentApi } from "@/react/pages/files/api";
 import type {
   RagIndexChunkDto,
   RagIndexJobDto,
@@ -192,6 +206,45 @@ function describeChunk(chunk?: RagIndexChunkDto) {
 
 function metadataText(chunk: RagIndexChunkDto | null | undefined, keys: string[]) {
   return formatValue(metadataValue(chunk?.metadata, keys));
+}
+
+function metadataBoolean(metadata: Record<string, unknown> | undefined, keys: string[]) {
+  const value = metadataValue(metadata, keys);
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    return value.toLowerCase() === "true";
+  }
+  return undefined;
+}
+
+function chunkNumber(chunk: RagIndexChunkDto | null | undefined, field: keyof RagIndexChunkDto, keys: string[]) {
+  return numberValue((chunk as unknown as Record<string, unknown> | undefined)?.[field as string]) ?? metadataNumber(chunk, keys);
+}
+
+function chunkString(chunk: RagIndexChunkDto | null | undefined, field: keyof RagIndexChunkDto, keys: string[]) {
+  const direct = (chunk as unknown as Record<string, unknown> | undefined)?.[field as string];
+  if (direct != null && direct !== "") {
+    return formatValue(direct);
+  }
+  return metadataText(chunk, keys);
+}
+
+function chunkWarnings(chunk: RagIndexChunkDto | null | undefined) {
+  const direct = chunk?.warnings;
+  const metadataWarnings = metadataValue(chunk?.metadata, ["warnings", "tokenizerWarnings", "warningMessages"]);
+  if (Array.isArray(direct)) {
+    return direct.filter(Boolean).map(String);
+  }
+  if (Array.isArray(metadataWarnings)) {
+    return metadataWarnings.filter(Boolean).map(String);
+  }
+  if (typeof metadataWarnings === "string" && metadataWarnings.trim()) {
+    return [metadataWarnings];
+  }
+  const warningStatus = chunk?.warningStatus ?? metadataValue(chunk?.metadata, ["warningStatus", "warning_status"]);
+  return warningStatus ? [formatValue(warningStatus)] : [];
 }
 
 function chunkLength(chunk?: RagIndexChunkDto | null) {
@@ -380,6 +433,76 @@ function StatusChip({ status }: { status: RagIndexJobStatus }) {
   );
 }
 
+function tokenizerSelectionBadge(selectionSource: unknown, fallbackUsed?: boolean) {
+  const source = formatValue(selectionSource).toLowerCase();
+  if (fallbackUsed || source.includes("fallback")) {
+    return <Chip size="small" color="warning" label="FALLBACK" />;
+  }
+  if (source.includes("explicit")) {
+    return <Chip size="small" color="primary" label="EXPLICIT" />;
+  }
+  if (source.includes("auto") || source.includes("mapping") || source.includes("provider-default")) {
+    return <Chip size="small" color="success" label="AUTO SELECTED" />;
+  }
+  return null;
+}
+
+function TokenizerStatusPanel({ job, chunks }: { job: RagIndexJobDto; chunks: RagIndexChunkDto[] }) {
+  const sampleChunk = chunks.find((chunk) => chunk.metadata || chunk.embeddingModel || chunk.tokenizerProvider);
+  const metadata = sampleChunk?.metadata;
+  const selectionSource = metadataValue(metadata, [
+    "tokenizerSelectionSource",
+    "selectionSource",
+    "tokenizer_selection_source",
+  ]);
+  const fallbackUsed = metadataBoolean(metadata, ["tokenizerFallbackUsed", "fallbackUsed", "tokenizer_fallback_used"]);
+  const warnings = chunkWarnings(sampleChunk);
+
+  const rows: Array<[string, unknown]> = [
+    ["embeddingProvider", sampleChunk?.embeddingProvider ?? metadataValue(metadata, ["embeddingProvider"])],
+    ["embeddingModel", sampleChunk?.embeddingModel ?? metadataValue(metadata, ["embeddingModel"])],
+    ["tokenizerProvider", sampleChunk?.tokenizerProvider ?? metadataValue(metadata, ["tokenizerProvider"])],
+    ["tokenizerEncoding", sampleChunk?.tokenizerEncoding ?? metadataValue(metadata, ["tokenizerEncoding"])],
+    ["selectionSource", selectionSource],
+    ["confidence", metadataValue(metadata, ["tokenizerConfidence", "confidence"])],
+    ["chunkUnit", job.chunkUnit ?? metadataValue(metadata, ["chunkUnit", "unit"])],
+    ["chunkSize", job.chunkMaxSize ?? metadataValue(metadata, ["chunkSize", "chunkMaxSize", "maxSize"])],
+    ["chunkOverlap", job.chunkOverlap ?? metadataValue(metadata, ["chunkOverlap", "overlap"])],
+    ["fallbackUsed", fallbackUsed == null ? undefined : String(fallbackUsed)],
+  ];
+
+  return (
+    <Box sx={{ mt: 2, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+      <Stack spacing={1.25}>
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Typography variant="subtitle2">Tokenizer Status</Typography>
+          {tokenizerSelectionBadge(selectionSource, fallbackUsed)}
+          {warnings.length > 0 ? <Chip size="small" color="warning" label="WARNING" /> : null}
+        </Stack>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", lg: "repeat(5, 1fr)" },
+            gap: 1,
+          }}
+        >
+          {rows.map(([label, value]) => (
+            <Box key={label} sx={{ minWidth: 0 }}>
+              <Typography variant="caption" color="text.secondary">
+                {label}
+              </Typography>
+              <Typography variant="body2" fontWeight={700} noWrap>
+                {formatValue(value)}
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+        {warnings.length > 0 ? <Alert severity="warning">{warnings.join(" ")}</Alert> : null}
+      </Stack>
+    </Box>
+  );
+}
+
 function ChunkLengthCell({ chunk, maxSize }: { chunk?: RagIndexChunkDto; maxSize: number }) {
   const value = chunkLength(chunk);
   const rawRatio = maxSize > 0 ? Math.round((value / maxSize) * 100) : 0;
@@ -390,7 +513,7 @@ function ChunkLengthCell({ chunk, maxSize }: { chunk?: RagIndexChunkDto; maxSize
   return (
     <Stack spacing={0} justifyContent="center" sx={{ height: "100%" }}>
       <Stack direction="row" spacing={0} alignItems="center">
-        <Typography variant="caption" sx={{ lineHeight: 1 }}>
+        <Typography variant="body2" sx={{ lineHeight: 1, fontSize: "13px" }}>
           {value.toLocaleString()}
         </Typography>
         {short ? (
@@ -623,8 +746,34 @@ function ChunkInspector({
               <Chip size="small" label={`#${chunk.chunkOrder ?? "-"}`} />
               <Chip size="small" label={chunk.chunkType ?? "chunk"} />
               <Chip size="small" label={`${chunkLength(chunk).toLocaleString()}자`} />
+              {chunkNumber(chunk, "tokenCount", ["tokenCount"]) != null ? (
+                <Chip size="small" color="primary" label={`${chunkNumber(chunk, "tokenCount", ["tokenCount"])?.toLocaleString()} tokens`} />
+              ) : null}
+              {chunkWarnings(chunk).length > 0 ? <Chip size="small" color="warning" label="WARNING" /> : null}
               {chunk.page != null ? <Chip size="small" label={`page ${chunk.page}`} /> : null}
               {chunk.slide != null ? <Chip size="small" label={`slide ${chunk.slide}`} /> : null}
+
+              {/* 신규 요구사항 뱃지 추가 */}
+              {chunk.chunkType === "ideaBlock" && (
+                <Chip size="small" color="secondary" label="IdeaBlock" sx={{ height: 20 }} />
+              )}
+              {metadataValue(chunk.metadata, ["fallbackStatus"]) === "APPLIED" && (
+                <Chip size="small" color="warning" variant="outlined" label="Strategy Fallback" sx={{ height: 20 }} />
+              )}
+              {metadataValue(chunk.metadata, ["validationStatus"]) === "FALLBACK" && (
+                <Chip size="small" color="warning" variant="outlined" label="Blockify Fallback" sx={{ height: 20 }} />
+              )}
+              {metadataValue(chunk.metadata, ["chunkQualityStatus"]) === "VALID" && (
+                <Chip size="small" color="success" label="Valid" sx={{ height: 20 }} />
+              )}
+              {metadataValue(chunk.metadata, ["chunkQualityStatus"]) === "REVIEW_REQUIRED" && (
+                <Chip size="small" color="error" label="Review required" sx={{ height: 20 }} />
+              )}
+              {hasChunkProvenance(chunk) ? (
+                <Chip size="small" variant="outlined" label="Provenance" sx={{ height: 20 }} />
+              ) : (
+                <Chip size="small" variant="outlined" color="error" label="No Provenance" sx={{ height: 20 }} />
+              )}
             </Stack>
 
             <Stack direction="row" spacing={0.5}>
@@ -712,6 +861,26 @@ function ChunkInspector({
 
               <Stack spacing={1.25}>
                 <Stack spacing={0.75}>
+                  <Typography variant="subtitle2">토큰 정보</Typography>
+                  <DetailRow label="textLength" value={formatValue(chunkNumber(chunk, "textLength", ["textLength", "contentLength", "chunkLength", "length"]) ?? chunkLength(chunk))} />
+                  <DetailRow label="tokenCount" value={formatValue(chunkNumber(chunk, "tokenCount", ["tokenCount"]))} />
+                  <DetailRow label="chunkIndex" value={formatValue(chunkNumber(chunk, "chunkIndex", ["chunkIndex", "chunkOrder"]) ?? chunk.chunkOrder)} />
+                </Stack>
+
+                <Stack spacing={0.75}>
+                  <Typography variant="subtitle2">Tokenizer</Typography>
+                  <DetailRow label="provider" value={chunkString(chunk, "tokenizerProvider", ["tokenizerProvider"])} />
+                  <DetailRow label="encoding" value={chunkString(chunk, "tokenizerEncoding", ["tokenizerEncoding"])} />
+                  <DetailRow label="selection" value={formatValue(metadataValue(chunk.metadata, ["tokenizerSelectionSource", "selectionSource"]))} />
+                  <DetailRow label="confidence" value={formatValue(metadataValue(chunk.metadata, ["tokenizerConfidence", "confidence"]))} />
+                  <DetailRow label="fallback" value={formatValue(metadataBoolean(chunk.metadata, ["tokenizerFallbackUsed", "fallbackUsed"]))} />
+                </Stack>
+
+                {chunkWarnings(chunk).length > 0 ? (
+                  <Alert severity="warning">{chunkWarnings(chunk).join(" ")}</Alert>
+                ) : null}
+
+                <Stack spacing={0.75}>
                   <Typography variant="subtitle2">출처</Typography>
                   <DetailRow label="위치" value={chunkPosition(chunk)} />
                   <DetailRow label="headingPath" value={compactText(chunk.headingPath, 90)} />
@@ -752,6 +921,68 @@ function ChunkInspector({
                   <DetailRow label="dimension" value={metadataText(chunk, ["embeddingDimension"])} />
                   <DetailRow label="indexedAt" value={formatDateTime(chunk.indexedAt ?? (metadataValue(chunk.metadata, ["indexedAt"]) as string | undefined))} />
                 </Stack>
+
+                <Stack spacing={0.75}>
+                  <Typography variant="subtitle2" color="primary">청킹 전략 및 품질</Typography>
+                  <DetailRow label="적용 전략" value={getChunkStrategyDisplay(chunk.metadata)} />
+                  <DetailRow label="요청 전략" value={metadataValue(chunk.metadata, ["requestedChunkingStrategy"]) ? formatStrategyName(metadataValue(chunk.metadata, ["requestedChunkingStrategy"]) as string) : undefined} />
+                  <DetailRow label="실제 전략" value={metadataValue(chunk.metadata, ["actualChunkingStrategy"]) ? formatStrategyName(metadataValue(chunk.metadata, ["actualChunkingStrategy"]) as string) : undefined} />
+                  <DetailRow label="Strategy Fallback" value={metadataValue(chunk.metadata, ["fallbackStatus"]) === "APPLIED" ? `Fallback 적용됨 (${formatStrategyName(metadataValue(chunk.metadata, ["fallbackFrom"]) as string)} -> ${formatStrategyName(metadataValue(chunk.metadata, ["fallbackTo"]) as string)})` : "적용되지 않음"} />
+                  {metadataValue(chunk.metadata, ["fallbackReason"]) && (
+                    <DetailRow label="Fallback 사유" value={metadataValue(chunk.metadata, ["fallbackReason"]) as string} />
+                  )}
+                  <DetailRow label="품질 상태" value={metadataValue(chunk.metadata, ["chunkQualityStatus"]) as string} />
+                  {Array.isArray(metadataValue(chunk.metadata, ["chunkQualityIssues"])) && (metadataValue(chunk.metadata, ["chunkQualityIssues"]) as string[]).length > 0 && (
+                    <DetailRow
+                      label="품질 이슈"
+                      value={(metadataValue(chunk.metadata, ["chunkQualityIssues"]) as string[])
+                        .map((issue) => `${issue}: ${getChunkQualityIssueText(issue)}`)
+                        .join(", ")}
+                    />
+                  )}
+                </Stack>
+
+                {(() => {
+                  const meta = chunk.metadata || {};
+                  const isIdea = chunk.chunkType === "ideaBlock" || meta.chunkType === "ideaBlock" || meta.criticalQuestion || meta.trustedAnswer;
+                  if (!isIdea && !meta.fallbackReason) return null;
+
+                  const fallbackLabels: Record<string, string> = {
+                    ANSWER_TOO_SHORT: "생성 답변이 너무 짧음",
+                    ANSWER_HAS_NO_BODY: "답변 본문 없음",
+                    ANSWER_EQUALS_TITLE: "답변이 제목만 반복",
+                    HEADING_ONLY: "제목만 있는 block",
+                    EVIDENCE_NOT_FOUND: "원문 evidence 없음",
+                    TRUSTED_ANSWER_FACT_MISMATCH: "숫자/날짜/기간/비율이 원문과 불일치",
+                    GENERIC_QUESTION: "질문이 너무 일반적",
+                    TABLE_SECTION: "표 섹션 fallback",
+                    COVERAGE_GAP: "coverage 누락 보존 fallback",
+                  };
+
+                  return (
+                    <Stack spacing={0.75}>
+                      <Typography variant="subtitle2" color="secondary">IdeaBlock / Fallback 상세</Typography>
+                      <DetailRow label="chunkType" value={formatValue(meta.chunkType || chunk.chunkType)} />
+                      <DetailRow label="ideaBlockName" value={formatValue(meta.ideaBlockName || meta.title)} />
+                      <DetailRow label="criticalQuestion" value={formatValue(meta.criticalQuestion || meta.question)} />
+                      <DetailRow label="trustedAnswer" value={formatValue(meta.trustedAnswer || meta.answer)} />
+                      <DetailRow label="entityName" value={formatValue(meta.entityName)} />
+                      <DetailRow label="entityType" value={formatValue(meta.entityType)} />
+                      <DetailRow label="keywords" value={formatValue(meta.keywords)} />
+                      <DetailRow label="tags" value={formatValue(meta.tags)} />
+                      <DetailRow label="sourceEvidence" value={formatValue(meta.sourceEvidence)} />
+                      <DetailRow label="sourceBlockRange" value={formatValue(meta.sourceBlockRange)} />
+                      <DetailRow label="sourceSectionId" value={formatValue(meta.sourceSectionId)} />
+                      <DetailRow label="confidence" value={formatValue(meta.confidence)} />
+                      {meta.fallbackReason && (
+                        <DetailRow
+                          label="fallbackReason"
+                          value={`${fallbackLabels[String(meta.fallbackReason)] || String(meta.fallbackReason)} (${meta.fallbackReason})`}
+                        />
+                      )}
+                    </Stack>
+                  );
+                })()}
               </Stack>
             </Box>
 
@@ -838,6 +1069,17 @@ function ChunkInspector({
   );
 }
 
+function embeddingDisplay(job: RagIndexJobDto | null) {
+  if (!job) return "-";
+  if (job.embeddingProfileId) {
+    return job.embeddingProfileId;
+  }
+  if (job.embeddingProvider || job.embeddingModel) {
+    return `${job.embeddingProvider} / ${job.embeddingModel}`;
+  }
+  return "기본 임베딩 설정";
+}
+
 export function RagJobDetailPage() {
   const { jobId = "" } = useParams();
   const navigate = useNavigate();
@@ -849,12 +1091,63 @@ export function RagJobDetailPage() {
   const [chunks, setChunks] = useState<RagIndexChunkDto[]>([]);
   const [selectedChunk, setSelectedChunk] = useState<RagIndexChunkDto | null>(null);
   const [loading, setLoading] = useState(false);
+  const ideablocksRef = useRef<HTMLDivElement | null>(null);
+
+  const { data: revisionsList } = useQuery({
+    queryKey: ["markdown-revisions", job?.documentId],
+    queryFn: () => reactMarkdownDocumentApi.getRevisions(job!.documentId!),
+    enabled: !!job?.documentId,
+    retry: false,
+  });
+
+  const latestRevision = useMemo(() => {
+    if (!revisionsList || revisionsList.length === 0) return null;
+    return revisionsList[0];
+  }, [revisionsList]);
+
+  const gridRef = useRef<PageableGridContentHandle<RagIndexChunkDto>>(null);
+  const dataSource = useMemo(() => {
+    const ds = new ReactPageDataSource<RagIndexChunkDto>(
+      `/api/mgmt/ai/rag/jobs/${encodeURIComponent(jobId)}/chunks`
+    );
+    const originalFetch = ds.fetchForAgGrid.bind(ds);
+    ds.fetchForAgGrid = async (params) => {
+      const res = await originalFetch(params);
+      if (params.startRow === 0) {
+        setChunks(res.rows);
+      }
+      return res;
+    };
+    return ds;
+  }, [jobId]);
   const [mutating, setMutating] = useState(false);
+  const [retryConfirmOpen, setRetryConfirmOpen] = useState(false);
+  const [selectedChunkingStrategy, setSelectedChunkingStrategy] = useState<string>("recursive");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+  const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
+  const [originalOption, setOriginalOption] = useState<EmbeddingOption | null>(null);
   const selectedChunkIndex = useMemo(
     () => chunks.findIndex((chunk) => chunkRowId(chunk) === chunkRowId(selectedChunk)),
     [chunks, selectedChunk]
+  );
+
+  const isPartialEmbedding = Boolean(
+    (job?.status === "FAILED" || job?.status === "CANCELLED") &&
+    job?.currentStep === "EMBEDDING" &&
+    job?.indexedCount &&
+    job.indexedCount > 0
+  );
+  const retryButtonText = isPartialEmbedding ? "이어가기" : "재시도";
+
+  const hasChanged = Boolean(
+    (originalOption && selectedOption && (
+      selectedOption.profileId !== originalOption.profileId ||
+      selectedOption.provider !== originalOption.provider ||
+      selectedOption.model !== originalOption.model
+    )) ||
+    selectedChunkingStrategy !== (job?.chunkingStrategy || "recursive")
   );
 
   const selectChunkByOffset = useCallback(
@@ -899,17 +1192,20 @@ export function RagJobDetailPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectChunkByOffset, selectedChunk]);
 
-  function scrollToSection(section: "summary" | "chunks" | "logs") {
+  function scrollToSection(section: "summary" | "chunks" | "logs" | "ideablocks") {
     const refs = {
       summary: summaryRef,
       chunks: chunksRef,
       logs: logsRef,
+      ideablocks: ideablocksRef,
     };
 
     window.setTimeout(() => {
       refs[section].current?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 0);
   }
+
+
 
   const loadDetail = useCallback(async () => {
     if (!jobId) {
@@ -921,12 +1217,12 @@ export function RagJobDetailPage() {
       const jobResponse = await reactAiApi.getRagJob(jobId);
       setJob(jobResponse);
 
-      const [logsResult, chunksResult] = await Promise.allSettled([
-        reactAiApi.getRagJobLogs(jobResponse.jobId),
-        reactAiApi.getRagJobChunks(jobResponse.jobId, 200),
-      ]);
-      setLogs(logsResult.status === "fulfilled" ? logsResult.value : []);
-      setChunks(chunksResult.status === "fulfilled" ? chunksResult.value : []);
+      try {
+        const logsResult = await reactAiApi.getRagJobLogs(jobResponse.jobId);
+        setLogs(logsResult ?? []);
+      } catch {
+        setLogs([]);
+      }
     } catch (loadError) {
       setError(resolveAxiosError(loadError));
     } finally {
@@ -938,6 +1234,72 @@ export function RagJobDetailPage() {
     void loadDetail();
   }, [loadDetail]);
 
+  useEffect(() => {
+    let alive = true;
+    reactAiApi.getEmbeddingOptions()
+      .then((res) => {
+        if (alive) {
+          setEmbeddingOptions(res.options ?? []);
+        }
+      })
+      .catch(() => {
+        // ignore
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (embeddingOptions.length > 0) {
+      const provider = job?.embeddingProvider;
+      const model = job?.embeddingModel;
+      const profileId = job?.embeddingProfileId;
+
+      const sampleChunk = chunks.find((chunk) => chunk.metadata || chunk.embeddingModel || chunk.tokenizerProvider);
+      const chunkProvider = sampleChunk?.embeddingProvider ?? metadataValue(sampleChunk?.metadata, ["embeddingProvider"]);
+      const chunkModel = sampleChunk?.embeddingModel ?? metadataValue(sampleChunk?.metadata, ["embeddingModel"]);
+      const chunkProfileId = metadataValue(sampleChunk?.metadata, ["embeddingProfileId"]);
+
+      const effProfileId = profileId || chunkProfileId;
+      const effProvider = provider || chunkProvider;
+      const effModel = model || chunkModel;
+
+      if (effProfileId || (effProvider && effModel)) {
+        const matched = embeddingOptions.find((o) => {
+          if (effProfileId) {
+            return o.profileId === effProfileId;
+          }
+          return o.provider === effProvider && o.model === effModel;
+        });
+
+        if (matched) {
+          setOriginalOption(matched);
+          setSelectedOption(matched);
+          return;
+        }
+      }
+
+      const defaultOpt = embeddingOptions.find((o) => o.defaultProfile) || embeddingOptions.find((o) => o.defaultProvider) || embeddingOptions[0] || null;
+      setSelectedOption(defaultOpt);
+    }
+  }, [job, chunks, embeddingOptions]);
+
+  useEffect(() => {
+    if (originalOption) {
+      setSelectedOption(originalOption);
+    }
+  }, [originalOption]);
+
+  useEffect(() => {
+    if (retryConfirmOpen) {
+      if (originalOption) {
+        setSelectedOption(originalOption);
+      }
+      setSelectedChunkingStrategy(job?.chunkingStrategy || "recursive");
+    }
+  }, [retryConfirmOpen, originalOption, job]);
+
   async function handleRetry() {
     if (!job) {
       return;
@@ -945,8 +1307,52 @@ export function RagJobDetailPage() {
     setMutating(true);
     setError(null);
     try {
-      const response = await reactAiApi.retryRagJob(job.jobId);
+      let response: RagIndexJobDto;
+      const hasChanged = Boolean(
+        (originalOption && selectedOption && (
+          selectedOption.profileId !== originalOption.profileId ||
+          selectedOption.provider !== originalOption.provider ||
+          selectedOption.model !== originalOption.model
+        )) ||
+        selectedChunkingStrategy !== (job.chunkingStrategy || "recursive")
+      );
+
+      if (job.status === "CANCELLED" || hasChanged) {
+        const payload: any = {
+          objectType: job.objectType,
+          objectId: job.objectId,
+          documentId: job.documentId || undefined,
+          sourceType: job.sourceType || undefined,
+          forceReindex: true,
+          useLlmKeywordExtraction: true,
+          chunkingStrategy: selectedChunkingStrategy,
+        };
+        if (job.chunkMaxSize) payload.chunkMaxSize = job.chunkMaxSize;
+        if (job.chunkOverlap) payload.chunkOverlap = job.chunkOverlap;
+        if (job.chunkUnit) payload.chunkUnit = job.chunkUnit;
+
+        if (selectedOption) {
+          if (selectedOption.profileId) {
+            payload.embeddingProfileId = selectedOption.profileId;
+          } else {
+            payload.embeddingProvider = selectedOption.provider;
+            payload.embeddingModel = selectedOption.model;
+          }
+        }
+        response = await reactAiApi.createRagJob(payload);
+        navigate(`/services/ai/rag/jobs/${response.jobId}`, { replace: true });
+      } else {
+        const res = await reactAiApi.retryRagJob(job.jobId);
+        response = {
+          ...res,
+          status: "PENDING",
+          currentStep: undefined,
+          errorMessage: undefined,
+        };
+      }
       setJob(response);
+      setRetryConfirmOpen(false);
+      await new Promise((resolve) => setTimeout(resolve, 300));
       await loadDetail();
     } catch (retryError) {
       setError(resolveAxiosError(retryError));
@@ -1021,6 +1427,59 @@ export function RagJobDetailPage() {
         filter: false,
         valueGetter: (params) => chunkPosition(params.data),
         tooltipValueGetter: (params) => describeChunk(params.data),
+        cellRenderer: (params: { data?: RagIndexChunkDto }) => {
+          const value = chunkPosition(params.data);
+          if (!value || value === "-") {
+            return <Typography variant="body2" color="text.secondary">-</Typography>;
+          }
+          
+          let displayLabel = value;
+          const hashIdx = value.indexOf("#");
+          if (hashIdx >= 0) {
+            const partStr = value.substring(hashIdx + 1);
+            const cleanPart = partStr.replace("part-", "파트 ");
+            displayLabel = `📁 위치 (${cleanPart})`;
+          } else if (value.length > 20) {
+            displayLabel = `📁 위치 (${value.substring(0, 8)}...)`;
+          }
+
+          return (
+            <Tooltip title={`클릭하여 상세 정보 보기: ${value}`} arrow>
+              <Chip
+                label={displayLabel}
+                size="small"
+                clickable
+                sx={{
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  height: 24,
+                  borderRadius: 1,
+                  borderColor: "primary.light",
+                  color: "primary.main",
+                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
+                  "&:hover": {
+                    bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
+                  }
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.nativeEvent.stopImmediatePropagation();
+                  if (params.data) {
+                    setSelectedChunk(params.data);
+                  }
+                }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  e.nativeEvent.stopImmediatePropagation();
+                }}
+                onMouseUp={(e) => {
+                  e.stopPropagation();
+                  e.nativeEvent.stopImmediatePropagation();
+                }}
+              />
+            </Tooltip>
+          );
+        },
       },
       {
         field: "page",
@@ -1046,6 +1505,61 @@ export function RagJobDetailPage() {
         cellRenderer: (params: { data?: RagIndexChunkDto }) => (
           <ChunkLengthCell chunk={params.data} maxSize={effectiveChunkSize} />
         ),
+      },
+      {
+        colId: "tokenCount",
+        headerName: "Token",
+        sortable: true,
+        width: 92,
+        minWidth: 84,
+        filter: false,
+        type: "numericColumn",
+        valueGetter: (params) => chunkNumber(params.data, "tokenCount", ["tokenCount"]),
+        tooltipValueGetter: (params) => describeChunk(params.data),
+      },
+      {
+        colId: "tokenizerProvider",
+        headerName: "Tokenizer",
+        sortable: true,
+        width: 132,
+        minWidth: 112,
+        filter: false,
+        valueGetter: (params) => chunkString(params.data, "tokenizerProvider", ["tokenizerProvider"]),
+        tooltipValueGetter: (params) => describeChunk(params.data),
+      },
+      {
+        colId: "tokenizerEncoding",
+        headerName: "Encoding",
+        sortable: true,
+        width: 132,
+        minWidth: 112,
+        filter: false,
+        valueGetter: (params) => chunkString(params.data, "tokenizerEncoding", ["tokenizerEncoding"]),
+        tooltipValueGetter: (params) => describeChunk(params.data),
+      },
+      {
+        colId: "embeddingModel",
+        headerName: "Embedding",
+        sortable: true,
+        width: 150,
+        minWidth: 128,
+        filter: false,
+        valueGetter: (params) => chunkString(params.data, "embeddingModel", ["embeddingModel"]),
+        tooltipValueGetter: (params) => describeChunk(params.data),
+      },
+      {
+        colId: "warningStatus",
+        headerName: "경고",
+        sortable: true,
+        width: 92,
+        minWidth: 84,
+        filter: false,
+        cellRenderer: (params: { data?: RagIndexChunkDto }) =>
+          chunkWarnings(params.data).length > 0 ? (
+            <Chip size="small" color="warning" label="WARNING" />
+          ) : (
+            "-"
+          ),
       },
       {
         field: "chunkId",
@@ -1102,7 +1616,10 @@ export function RagJobDetailPage() {
         label="색인 작업의 상태, 로그, Chunk를 확인합니다."
         previous
         onPrevious={() => navigate("/services/ai/rag")}
-        onRefresh={() => void loadDetail()}
+        onRefresh={() => {
+          void loadDetail();
+          gridRef.current?.refresh();
+        }}
         actions={
           <Stack direction="row" spacing={1}>
             <Tooltip title="실패 또는 완료된 작업을 서버 retry 엔드포인트로 다시 실행합니다.">
@@ -1112,9 +1629,9 @@ export function RagJobDetailPage() {
                   variant="outlined"
                   startIcon={<ReplayOutlined />}
                   disabled={!job || mutating || job.status === "PENDING" || job.status === "RUNNING"}
-                  onClick={() => void handleRetry()}
+                  onClick={() => setRetryConfirmOpen(true)}
                 >
-                  재시도
+                  {retryButtonText}
                 </Button>
               </span>
             </Tooltip>
@@ -1150,6 +1667,120 @@ export function RagJobDetailPage() {
           </Stack>
         }
       />
+      <Dialog
+        open={retryConfirmOpen}
+        onClose={mutating ? undefined : () => setRetryConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>{retryButtonText}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5}>
+            <Typography variant="body2">
+              이 RAG 색인 작업을 {retryButtonText}할까요?
+            </Typography>
+            {job ? (
+              <Box sx={{ bgcolor: "action.hover", borderRadius: 1, p: 1.25 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Job ID
+                </Typography>
+                <Typography variant="body2" sx={{ wordBreak: "break-all" }}>
+                  {job.jobId}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                  대상
+                </Typography>
+                <Typography variant="body2" sx={{ wordBreak: "break-all" }}>
+                  {job.objectType} / {job.objectId}
+                </Typography>
+              </Box>
+            ) : null}
+            {embeddingOptions.length > 0 ? (
+              <Box sx={{ mt: 0.5 }}>
+                <TextField
+                  select
+                  label="임베딩 모델 프로필 (재시도 설정)"
+                  size="small"
+                  value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
+                  onChange={(event) => {
+                    const val = event.target.value;
+                    const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
+                    if (matched) {
+                      setSelectedOption(matched);
+                    }
+                  }}
+                  disabled={mutating}
+                  fullWidth
+                  helperText={
+                    originalOption && selectedOption && (
+                      selectedOption.profileId !== originalOption.profileId ||
+                      selectedOption.provider !== originalOption.provider ||
+                      selectedOption.model !== originalOption.model
+                    )
+                      ? "임베딩 모델이 변경되어 기존 작업을 재시도하는 대신 새로운 강제 재색인 Job이 생성됩니다."
+                      : "설정을 변경하지 않으면 기존 색인 구성 그대로 재시도를 요청합니다."
+                  }
+                >
+                  {embeddingOptions.map((opt) => {
+                    const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
+                    const label = opt.profileId
+                      ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                      : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                    return (
+                      <MenuItem key={valueKey} value={valueKey}>
+                        {label}
+                      </MenuItem>
+                    );
+                  })}
+                </TextField>
+              </Box>
+            ) : null}
+            <Box sx={{ mt: 1.5 }}>
+              <TextField
+                select
+                label="청킹 전략 (재시도 설정)"
+                size="small"
+                value={selectedChunkingStrategy}
+                onChange={(event) => setSelectedChunkingStrategy(event.target.value)}
+                disabled={mutating}
+                fullWidth
+                helperText={
+                  job && selectedChunkingStrategy !== (job.chunkingStrategy || "recursive")
+                    ? "청킹 전략이 변경되어 기존 작업을 재시도하는 대신 새로운 강제 재색인 Job이 생성됩니다."
+                    : "설정을 변경하지 않으면 기존 색인 구성 그대로 재시도를 요청합니다."
+                }
+              >
+                <MenuItem value="recursive">재귀적 청킹 (Recursive)</MenuItem>
+                <MenuItem value="fixed-size">고정 크기 청킹 (Fixed Size)</MenuItem>
+                <MenuItem value="structure-based">구조 기반 청킹 (Structure Based)</MenuItem>
+                <MenuItem value="semantic">의미론적 청킹 (Semantic)</MenuItem>
+                <MenuItem value="llm-based">LLM 기반 청킹 (LLM Based)</MenuItem>
+              </TextField>
+            </Box>
+            {isPartialEmbedding && !hasChanged ? (
+              <Alert severity="info" sx={{ mt: 0.5 }}>
+                이미 색인된 chunk는 건너뛰고 나머지부터 진행합니다.
+              </Alert>
+            ) : null}
+            {hasChanged ? (
+              <Alert severity="warning" sx={{ mt: 0.5 }}>
+                모델을 변경하면 기존 chunk 재사용 없이 새 모델 기준으로 다시 진행됩니다.
+              </Alert>
+            ) : null}
+            <Typography variant="caption" color="text.secondary">
+              취소된 작업은 동일 대상으로 새 색인 작업을 생성하고, 그 외 작업은 서버 retry 엔드포인트로 재실행합니다.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRetryConfirmOpen(false)} disabled={mutating}>
+            취소
+          </Button>
+          <Button variant="contained" onClick={() => void handleRetry()} disabled={mutating}>
+            {retryButtonText} 진행
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {error ? <Alert severity="error">{error}</Alert> : null}
       {loading && !job ? (
@@ -1179,14 +1810,63 @@ export function RagJobDetailPage() {
                     gap: 1.25,
                   }}
                 >
+                  <StatItem
+                    label="Job ID"
+                    value={
+                      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0, width: "100%" }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 700,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {job.jobId}
+                        </Typography>
+                        <Tooltip title="Job ID 복사">
+                          <IconButton
+                            size="small"
+                            sx={{ p: 0.25 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void navigator.clipboard.writeText(job.jobId);
+                            }}
+                          >
+                            <ContentCopyOutlined sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    }
+                  />
                   <StatItem label="문서/파일명" value={sourceDisplayName(job)} />
                   <StatItem label="상태" value={<StatusChip status={job.status} />} />
                   <StatItem label="단계" value={job.currentStep ?? "-"} />
                   <StatItem label="객체" value={`${job.objectType} #${job.objectId}`} />
-                  <StatItem label="Chunk" value={job.chunkCount.toLocaleString()} />
                   <StatItem label="소요" value={job.durationMs ? `${job.durationMs.toLocaleString()}ms` : "-"} />
                   <StatItem label="청킹 전략" value={chunkingDisplay(job, chunks)} />
+                  <StatItem label="임베딩 설정" value={embeddingDisplay(job)} />
+                  <StatItem label="전체 chunk 수" value={job.chunkCount.toLocaleString()} />
+                  <StatItem label="임베딩 시도/진행 chunk 수" value={job.embeddedCount.toLocaleString()} />
+                  <StatItem label="실제 저장 완료 chunk 수" value={job.indexedCount.toLocaleString()} />
                 </Box>
+                <TokenizerStatusPanel job={job} chunks={chunks} />
+                {job.documentId && latestRevision && (
+                  <Box ref={ideablocksRef} sx={{ mt: 3, scrollMarginTop: 56 }}>
+                    <IdeaBlockSummaryPanel
+                      documentId={job.documentId}
+                      revisionId={latestRevision.revisionId}
+                      revisionStatus={latestRevision.status}
+                      attachmentId={Number(job.objectId)}
+                      chunkingStrategy={job.chunkingStrategy || "recursive"}
+                      llmProvider={job.embeddingProvider || "google-ai-gemini"}
+                      llmModel={job.embeddingModel || "gemini-2.5-flash"}
+                      embeddingProfileId={job.embeddingProfileId}
+                      useLlmKeywordExtraction={true}
+                    />
+                  </Box>
+                )}
                 <Box sx={{ mt: 3, overflowX: "auto", pb: 0.5 }}>
                   <Stepper activeStep={activeStepIndex(job)} alternativeLabel sx={{ minWidth: 620 }}>
                     {INDEX_STEPS.map((step, index) => (
@@ -1210,11 +1890,28 @@ export function RagJobDetailPage() {
                   <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <Typography variant="subtitle1">색인 결과</Typography>
                     <Tooltip title="Chunk 목록 새로고침">
-                      <IconButton size="small" onClick={() => void loadDetail()}>
+                      <IconButton size="small" onClick={() => {
+                        void loadDetail();
+                        gridRef.current?.refresh();
+                      }}>
                         <RefreshOutlined fontSize="small" />
                       </IconButton>
                     </Tooltip>
                   </Box>
+                  <Alert 
+                    severity="info" 
+                    variant="outlined" 
+                    icon={<InfoOutlined fontSize="small" />}
+                    sx={{ 
+                      borderRadius: 1.5, 
+                      borderColor: "info.light", 
+                      bgcolor: (theme) => alpha(theme.palette.info.main, 0.02),
+                      py: 0.5,
+                      "& .MuiAlert-message": { fontSize: 12, fontWeight: 500 }
+                    }}
+                  >
+                    색인 결과 표의 <strong>📁 위치 (파트 X)</strong> 태그 칩을 클릭하시면, 해당 청크 조각의 상세 본문, 연결 관계 및 벡터 유사도 분석 등 고급 디버깅을 즉시 확인할 수 있습니다.
+                  </Alert>
                   <Box
                     sx={{
                       minWidth: 0,
@@ -1235,26 +1932,30 @@ export function RagJobDetailPage() {
                       },
                     }}
                   >
-                    <GridContent<RagIndexChunkDto>
+                    <PageableGridContent<RagIndexChunkDto>
+                      ref={gridRef}
                       columns={chunkColumns}
                       options={chunkGridOptions}
-                      rowData={chunks}
+                      datasource={dataSource}
                       height={640}
-                      loading={loading}
-                      events={[
-                        {
-                          type: "rowClicked",
-                          listener: (event) => {
-                            setSelectedChunk((event as { data?: RagIndexChunkDto }).data ?? null);
-                          },
-                        },
-                      ]}
+                      onRowClicked={(event: any) => {
+                        const target = event.event?.target as HTMLElement | null;
+                        if (target && target.closest('[col-id="headingPath"]')) {
+                          return;
+                        }
+                        const typedEvent = event as { data?: RagIndexChunkDto };
+                        if (typedEvent.data) {
+                          setSelectedChunk((prev) =>
+                            chunkRowId(prev) === chunkRowId(typedEvent.data) ? null : typedEvent.data!
+                          );
+                        }
+                      }}
                     />
                   </Box>
                   <Drawer
                     anchor="right"
                     open={Boolean(selectedChunk)}
-                    variant="persistent"
+                    variant="temporary"
                     onClose={() => setSelectedChunk(null)}
                     PaperProps={{
                       sx: {
@@ -1317,6 +2018,7 @@ export function RagJobDetailPage() {
               {[
                 ["summary", "상태 요약"],
                 ["chunks", "색인 결과"],
+                ["ideablocks", "IdeaBlock 품질"],
                 ["logs", "실패·경고 로그"],
               ].map(([key, label]) => (
                 <Button
@@ -1330,7 +2032,7 @@ export function RagJobDetailPage() {
                     borderLeft: "2px solid transparent",
                     pl: 1,
                   }}
-                  onClick={() => scrollToSection(key as "summary" | "chunks" | "logs")}
+                  onClick={() => scrollToSection(key as "summary" | "chunks" | "logs" | "ideablocks")}
                 >
                   {label}
                 </Button>

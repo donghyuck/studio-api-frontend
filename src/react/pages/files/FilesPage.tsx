@@ -1,19 +1,20 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, Avatar, Box, CircularProgress, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { Alert, Avatar, Box, Button, CircularProgress, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import type { SelectionChangedEvent } from "ag-grid-community";
+import { useNavigate } from "react-router-dom";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { reactFilesApi } from "@/react/pages/files/api";
-import { FileDetailDialog } from "@/react/pages/files/FileDetailDialog";
 import { FileUploadDialog } from "@/react/pages/files/FileUploadDialog";
+import { FileDetailDialog } from "@/react/pages/files/FileDetailDialog";
 import { filesQueryKeys } from "@/react/pages/files/queryKeys";
 import { useToast } from "@/react/feedback";
 import type { AttachmentDto } from "@/types/studio/files";
@@ -309,7 +310,7 @@ function SelectionCheckbox({
         width: 16,
         height: 16,
         margin: 0,
-        accentColor: "#1565c0",
+        accentColor: "#2563eb",
         cursor: "pointer",
         transform: ariaLabel === "행 선택" ? "translateY(2px)" : "none",
       }}
@@ -354,6 +355,7 @@ function toggleDisplayedRows(
 }
 
 export function FilesPage() {
+  const navigate = useNavigate();
   const toast = useToast();
   const queryClient = useQueryClient();
   const gridRef = useRef<PageableGridContentHandle<AttachmentDto>>(null);
@@ -362,7 +364,7 @@ export function FilesPage() {
   const [objectType, setObjectType] = useState("");
   const [objectId, setObjectId] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [detailAttachmentId, setDetailAttachmentId] = useState<number | null>(null);
+  const [selectedAttachmentId, setSelectedAttachmentId] = useState<number | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [issuingDownloadLinkIds, setIssuingDownloadLinkIds] = useState<number[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -475,7 +477,7 @@ export function FilesPage() {
           params.data ? (
             <FileNameCell
               file={params.data}
-              onOpen={(attachmentId) => setDetailAttachmentId(attachmentId)}
+              onOpen={(attachmentId) => setSelectedAttachmentId(attachmentId)}
             />
           ) : null,
       },
@@ -561,7 +563,7 @@ export function FilesPage() {
       },
       suppressRowClickSelection: true,
       rowMultiSelectWithClick: true,
-      rowHeight: 48,
+      rowHeight: 52,
     }),
     []
   );
@@ -591,7 +593,18 @@ export function FilesPage() {
     []
   );
 
+  const isMounted = useRef(false);
+  useEffect(() => {
+    if (!isMounted.current) {
+      isMounted.current = true;
+      return;
+    }
+    applyFilters();
+  }, [objectType]);
+
   function applyFilters() {
+    gridRef.current?.deselectAll();
+    setSelectedIds([]);
     dataSource.applyFilter({
       ...(keyword.trim() ? { keyword: keyword.trim() } : {}),
       ...(objectType.trim() ? { objectType: Number(objectType) } : {}),
@@ -623,7 +636,7 @@ export function FilesPage() {
     <>
       <Stack spacing={0.5}>
         <PageToolbar
-          divider={false}
+          hasGrid
           breadcrumbs={["애플리케이션", "파일"]}
           label="파일을 검색하고 업로드 경로를 관리합니다."
           onRefresh={() => gridRef.current?.refresh()}
@@ -631,26 +644,37 @@ export function FilesPage() {
           searchValue={keyword}
           onSearchValueChange={setKeyword}
           onSearch={applyFilters}
+          createButton={
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<UploadFileIcon fontSize="small" />}
+              onClick={() => setDialogOpen(true)}
+              sx={{
+                height: 32,
+                px: 1.5,
+                borderRadius: "6px",
+                textTransform: "none",
+                fontSize: 12.5,
+                fontWeight: 600,
+              }}
+            >
+              업로드
+            </Button>
+          }
           actions={
-            <>
-              <Tooltip title="새로운 파일 업로드">
-                <IconButton size="small" onClick={() => setDialogOpen(true)}>
-                  <UploadFileIcon fontSize="small" />
+            <Tooltip title={selectedCount > 0 ? "선택 삭제" : "삭제할 파일을 선택하세요"}>
+              <span>
+                <IconButton
+                  size="small"
+                  color="error"
+                  disabled={selectedCount === 0}
+                  onClick={() => void handleDeleteSelected()}
+                >
+                  <DeleteOutlineIcon fontSize="small" />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title={selectedCount > 0 ? "선택 삭제" : "삭제할 파일을 선택하세요"}>
-                <span>
-                  <IconButton
-                    size="small"
-                    color="error"
-                    disabled={selectedCount === 0}
-                    onClick={() => void handleDeleteSelected()}
-                  >
-                    <DeleteOutlineIcon fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </>
+              </span>
+            </Tooltip>
           }
         />
 
@@ -698,13 +722,11 @@ export function FilesPage() {
           gridRef.current?.refresh();
         }}
       />
-      {detailAttachmentId ? (
-        <FileDetailDialog
-          open={detailAttachmentId !== null}
-          onClose={() => setDetailAttachmentId(null)}
-          attachmentId={detailAttachmentId}
-        />
-      ) : null}
+      <FileDetailDialog
+        open={selectedAttachmentId !== null}
+        attachmentId={selectedAttachmentId || 0}
+        onClose={() => setSelectedAttachmentId(null)}
+      />
     </>
   );
 }

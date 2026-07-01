@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Accordion,
   AccordionDetails,
@@ -8,8 +8,12 @@ import {
   Box,
   Button,
   ButtonGroup,
+  Card,
+  CardContent,
   Chip,
   CircularProgress,
+  Divider,
+  MenuItem,
   Stack,
   Switch,
   TextField,
@@ -23,7 +27,14 @@ import SpeedOutlined from "@mui/icons-material/SpeedOutlined";
 import TagOutlined from "@mui/icons-material/TagOutlined";
 import type { ColDef } from "ag-grid-community";
 import { GridContent } from "@/react/components/ag-grid";
-import { reactAiApi } from "@/react/pages/ai/api";
+import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
+import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
+import {
+  getChunkStrategyDisplay,
+  getChunkQualityIssueText,
+  getProvenanceBadges,
+  formatStrategyName
+} from "./chunkMetaHelper";
 import type {
   AiInfoResponse,
   ChatMessageDto,
@@ -222,56 +233,117 @@ function parseAnswerBlocks(content: string): AnswerBlock[] {
 
 function CitationBadge({
   index,
+  reference,
   onReferenceHover,
 }: {
   index: number;
+  reference?: any;
   onReferenceHover: (index: number | null) => void;
 }) {
   const color = referenceColor(index);
   const scrollToReference = () => {
-    document.getElementById(`rag-reference-${index}`)?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
+    onReferenceHover(index);
+    setTimeout(() => {
+      document.getElementById(`rag-reference-${index}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 80);
   };
+
+  const content = reference?.content?.trim() 
+    || (reference === undefined 
+        ? "제공된 RAG 문서 개수 범위를 벗어난 가상의 근거 번호입니다 (AI 모델의 환각 현상)." 
+        : "내용 없음");
+  const sourceName = reference ? resultSourceName(reference) : "존재하지 않는 근거 문서";
+  const score = reference?.score;
+
+  const page = reference?.metadata?.page || reference?.metadata?.pageNumber;
+  const chunkOrder = reference?.metadata?.chunkOrder;
+  const locationText = [
+    page != null ? `p.${page}` : "",
+    chunkOrder != null ? `청크 #${chunkOrder}` : "",
+  ].filter(Boolean).join(", ");
+
+  const displayTitle = locationText 
+    ? `${sourceName} (${locationText})`
+    : sourceName;
+
+  const tooltipContent = (
+    <Box sx={{ p: 0.5, maxWidth: 360 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: 11, color: "#fff", mb: 0.5 }}>
+        [근거 {index + 1}] {displayTitle}
+      </Typography>
+      {score != null && (
+        <Typography variant="caption" sx={{ display: "block", color: "rgba(255, 255, 255, 0.7)", mb: 0.75, fontSize: 9.5 }}>
+          유사도 점수: {score.toFixed(4)}
+        </Typography>
+      )}
+      <Divider sx={{ borderColor: "rgba(255,255,255,0.15)", my: 0.5 }} />
+      <Typography variant="caption" sx={{ display: "block", fontSize: 10.5, lineHeight: 1.5, whiteSpace: "pre-wrap", maxHeight: 180, overflow: "auto", color: "#E2E8F0" }}>
+        {content}
+      </Typography>
+    </Box>
+  );
+
   return (
-    <Box
-      component="span"
-      onMouseEnter={() => onReferenceHover(index)}
-      onMouseLeave={() => onReferenceHover(null)}
-      onClick={scrollToReference}
-      sx={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 0.2,
-        mx: 0.18,
-        px: 0.52,
-        py: 0.02,
-        borderRadius: 999,
-        border: 1,
-        borderColor: "transparent",
-        bgcolor: "rgba(237, 233, 254, 0.72)",
-        color: "#4C1D95",
-        fontSize: 10.5,
-        fontWeight: 700,
-        lineHeight: 1.35,
-        verticalAlign: "super",
-        cursor: "pointer",
-        transition: "background-color 140ms ease, border-color 140ms ease, color 140ms ease",
-        "&:hover": {
-          borderColor: CITATION_PRIMARY,
-          bgcolor: CITATION_BACKGROUND,
-          color: "#3B0764",
-        },
+    <Tooltip
+      title={tooltipContent}
+      arrow
+      placement="top"
+      enterDelay={200}
+      leaveDelay={150}
+      componentsProps={{
+        tooltip: {
+          sx: {
+            bgcolor: "rgba(15, 23, 42, 0.96)",
+            boxShadow: "0 10px 25px -5px rgba(0,0,0,0.3)",
+            borderRadius: 1.5,
+            border: "1px solid rgba(255,255,255,0.1)",
+            maxHeight: 240,
+            overflow: "hidden"
+          }
+        }
       }}
     >
-      <DescriptionOutlined sx={{ fontSize: 11, color: color.main }} />
-      ({index + 1})
-    </Box>
+      <Box
+        component="span"
+        onMouseEnter={() => onReferenceHover(index)}
+        onMouseLeave={() => onReferenceHover(null)}
+        onClick={scrollToReference}
+        sx={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 0.2,
+          mx: 0.18,
+          px: 0.52,
+          py: 0.02,
+          borderRadius: 999,
+          border: 1,
+          borderColor: "transparent",
+          bgcolor: "rgba(237, 233, 254, 0.72)",
+          color: "#4C1D95",
+          fontSize: 10.5,
+          fontWeight: 700,
+          lineHeight: 1.35,
+          verticalAlign: "super",
+          cursor: "pointer",
+          transition: "background-color 140ms ease, border-color 140ms ease, color 140ms ease",
+          "&:hover": {
+            borderColor: CITATION_PRIMARY,
+            bgcolor: CITATION_BACKGROUND,
+            color: "#3B0764",
+          },
+        }}
+      >
+        <DescriptionOutlined sx={{ fontSize: 11, color: color.main }} />
+        ({index + 1})
+      </Box>
+    </Tooltip>
   );
 }
 
-function renderTextWithCitations(text: string, onReferenceHover: (index: number | null) => void) {
+function renderTextWithCitations(text: string, onReferenceHover: (index: number | null) => void, references?: any[]) {
   const parts = text.split(/(\[근거\s*\d+[^\]]*\]|\(근거\s*\d+[^\)]*\))/g);
   return parts.map((part, index) => {
     const referenceIndex = parseCitationIndex(part);
@@ -282,6 +354,7 @@ function renderTextWithCitations(text: string, onReferenceHover: (index: number 
       <CitationBadge
         key={`${part}-${index}`}
         index={referenceIndex}
+        reference={references?.[referenceIndex]}
         onReferenceHover={onReferenceHover}
       />
     );
@@ -297,9 +370,11 @@ function stripCitationLabels(text: string) {
 
 function CitationGroup({
   indices,
+  references,
   onReferenceHover,
 }: {
   indices: number[];
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   if (indices.length === 0) {
@@ -308,7 +383,12 @@ function CitationGroup({
   return (
     <Box component="span" sx={{ whiteSpace: "nowrap" }}>
       {indices.map((index) => (
-        <CitationBadge key={index} index={index} onReferenceHover={onReferenceHover} />
+        <CitationBadge
+          key={index}
+          index={index}
+          reference={references?.[index]}
+          onReferenceHover={onReferenceHover}
+        />
       ))}
     </Box>
   );
@@ -330,10 +410,12 @@ function renderInlineMarkdown(text: string) {
 function MarkdownText({
   text,
   citationIndices,
+  references,
   onReferenceHover,
 }: {
   text: string;
   citationIndices: number[];
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   const lines = text.split(/\r?\n/).filter((line) => line.trim());
@@ -348,7 +430,7 @@ function MarkdownText({
             {index === lines.length - 1 ? (
               <>
                 {" "}
-                <CitationGroup indices={citationIndices} onReferenceHover={onReferenceHover} />
+                <CitationGroup indices={citationIndices} references={references} onReferenceHover={onReferenceHover} />
               </>
             ) : null}
           </Box>
@@ -365,7 +447,7 @@ function MarkdownText({
           {index === lines.length - 1 ? (
             <>
               {" "}
-              <CitationGroup indices={citationIndices} onReferenceHover={onReferenceHover} />
+              <CitationGroup indices={citationIndices} references={references} onReferenceHover={onReferenceHover} />
             </>
           ) : null}
         </Box>
@@ -439,11 +521,13 @@ function ReferenceDocuments({
 }) {
   const references = rows.slice(0, Math.max(1, topK));
   const [expandedReferenceIndex, setExpandedReferenceIndex] = useState<number | false>(0);
+  const lastActiveRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (activeReferenceIndex != null) {
+    if (activeReferenceIndex != null && activeReferenceIndex !== lastActiveRef.current) {
       setExpandedReferenceIndex(activeReferenceIndex);
     }
+    lastActiveRef.current = activeReferenceIndex;
   }, [activeReferenceIndex]);
 
   if (references.length === 0) {
@@ -487,7 +571,7 @@ function ReferenceDocuments({
       >
         {references.map((row, index) => {
           const color = referenceColor(index);
-          const active = activeReferenceIndex === index;
+          const active = activeReferenceIndex === index || expandedReferenceIndex === index;
           const scorePercent =
             typeof row.score === "number" ? Math.max(0, Math.min(100, row.score * 100)) : 0;
           return (
@@ -682,6 +766,69 @@ function ReferenceDocuments({
                 >
                   {highlightText(row.content?.trim() || "-", query)}
                 </Typography>
+
+                {row.metadata && (
+                  <Stack spacing={0.5} sx={{ mt: 1.25, pt: 1, borderTop: "1px dashed", borderColor: "divider" }}>
+                    <Stack direction="row" spacing={0.5} useFlexGap flexWrap="wrap" alignItems="center">
+                      <Typography variant="caption" sx={{ fontWeight: 700, mr: 0.5, fontSize: 10 }}>품질 및 Provenance:</Typography>
+                      {getProvenanceBadges(row).map((b) => {
+                        const isMissing = (row.metadata?.chunkQualityIssues as string[] | undefined)?.includes("MISSING_PROVENANCE");
+                        const color = b === "No provenance" ? (isMissing ? "warning" : "default") : "primary";
+                        const variant = b === "No provenance" ? "outlined" : "filled";
+                        return <Chip key={b} label={b} size="small" color={color} variant={variant} sx={{ height: 16, fontSize: 8.5 }} />;
+                      })}
+                      {row.metadata.fallbackStatus === "APPLIED" && (
+                        <Chip size="small" color="warning" variant="outlined" label="Strategy Fallback" sx={{ height: 16, fontSize: 8.5 }} />
+                      )}
+                      {row.metadata.validationStatus === "FALLBACK" && (
+                        <Chip size="small" color="warning" variant="outlined" label="Blockify Fallback" sx={{ height: 16, fontSize: 8.5 }} />
+                      )}
+                      {row.metadata.chunkQualityStatus === "VALID" && (
+                        <Chip size="small" color="success" label="Valid" sx={{ height: 16, fontSize: 8.5 }} />
+                      )}
+                      {row.metadata.chunkQualityStatus === "REVIEW_REQUIRED" && (
+                        <Chip size="small" color="error" label="Review required" sx={{ height: 16, fontSize: 8.5 }} />
+                      )}
+                    </Stack>
+
+                    <Box sx={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px", mt: 0.5 }}>
+                      {row.metadata.strategy && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Strategy:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>{formatStrategyName(row.metadata.strategy as string)}</Typography>
+                        </>
+                      )}
+                      {row.metadata.requestedChunkingStrategy && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Requested:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>{formatStrategyName(row.metadata.requestedChunkingStrategy as string)}</Typography>
+                        </>
+                      )}
+                      {row.metadata.actualChunkingStrategy && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Actual:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>{formatStrategyName(row.metadata.actualChunkingStrategy as string)}</Typography>
+                        </>
+                      )}
+                      {row.metadata.fallbackStatus && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Fallback:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>
+                            {String(row.metadata.fallbackStatus)} {row.metadata.fallbackReason ? `(${String(row.metadata.fallbackReason)})` : ""}
+                          </Typography>
+                        </>
+                      )}
+                      {row.metadata.chunkQualityIssues && (row.metadata.chunkQualityIssues as string[]).length > 0 && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Quality Issues:</Typography>
+                          <Typography variant="caption" color="error.main" sx={{ fontSize: 9.5 }} fontWeight={600}>
+                            {(row.metadata.chunkQualityIssues as string[]).map(issue => getChunkQualityIssueText(issue)).join(", ")}
+                          </Typography>
+                        </>
+                      )}
+                    </Box>
+                  </Stack>
+                )}
               </AccordionDetails>
             </Accordion>
           );
@@ -693,9 +840,11 @@ function ReferenceDocuments({
 
 function AnswerTextBlock({
   text,
+  references,
   onReferenceHover,
 }: {
   text: string;
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   const indices = extractCitationIndices(text);
@@ -715,6 +864,7 @@ function AnswerTextBlock({
         <MarkdownText
           text={cleanText}
           citationIndices={indices}
+          references={references}
           onReferenceHover={onReferenceHover}
         />
       </Typography>
@@ -724,9 +874,11 @@ function AnswerTextBlock({
 
 function AnswerTable({
   rows,
+  references,
   onReferenceHover,
 }: {
   rows: string[][];
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   const [header, ...bodyRows] = rows;
@@ -752,7 +904,7 @@ function AnswerTable({
                   borderColor: "divider",
                 }}
               >
-                {renderTextWithCitations(cell, onReferenceHover)}
+                {renderTextWithCitations(cell, onReferenceHover, references)}
               </Box>
             ))}
           </Box>
@@ -774,7 +926,7 @@ function AnswerTable({
                     color: "text.secondary",
                   }}
                 >
-                  {renderTextWithCitations(row[cellIndex] ?? "", onReferenceHover)}
+                  {renderTextWithCitations(row[cellIndex] ?? "", onReferenceHover, references)}
                 </Box>
               ))}
             </Box>
@@ -787,9 +939,11 @@ function AnswerTable({
 
 function AnswerRenderer({
   content,
+  references,
   onReferenceHover,
 }: {
   content: string;
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   const blocks = parseAnswerBlocks(content);
@@ -797,9 +951,9 @@ function AnswerRenderer({
     <Stack spacing={1.25}>
       {blocks.map((block, index) =>
         block.type === "table" ? (
-          <AnswerTable key={`table-${index}`} rows={block.rows} onReferenceHover={onReferenceHover} />
+          <AnswerTable key={`table-${index}`} rows={block.rows} references={references} onReferenceHover={onReferenceHover} />
         ) : (
-          <AnswerTextBlock key={`text-${index}`} text={block.text} onReferenceHover={onReferenceHover} />
+          <AnswerTextBlock key={`text-${index}`} text={block.text} references={references} onReferenceHover={onReferenceHover} />
         )
       )}
     </Stack>
@@ -809,10 +963,12 @@ function AnswerRenderer({
 function AnswerPanel({
   messages,
   referencesCount,
+  references,
   onReferenceHover,
 }: {
   messages: ChatMessageDto[];
   referencesCount: number;
+  references?: any[];
   onReferenceHover: (index: number | null) => void;
 }) {
   return (
@@ -864,7 +1020,7 @@ function AnswerPanel({
               p: 1.5,
             }}
           >
-            <AnswerRenderer content={message.content} onReferenceHover={onReferenceHover} />
+            <AnswerRenderer content={message.content} references={references} onReferenceHover={onReferenceHover} />
           </Box>
         ))}
       </Stack>
@@ -1001,8 +1157,46 @@ function ContentPreview({
   );
 }
 
+function isPositiveIntegerText(value?: string | null) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return false;
+  }
+  const numberValue = Number(trimmed);
+  return Number.isInteger(numberValue) && numberValue > 0;
+}
+
+function inferAttachmentIdFromJob(job: RagIndexJobDto) {
+  if (job.sourceType !== "attachment") {
+    return undefined;
+  }
+  if (isPositiveIntegerText(job.documentId)) {
+    return job.documentId;
+  }
+  if (job.objectType === "attachment" && isPositiveIntegerText(job.objectId)) {
+    return job.objectId;
+  }
+  return undefined;
+}
+
 export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }) {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
+  const [chatProvider, setChatProvider] = useState("");
+  const [chatModel, setChatModel] = useState("");
+  const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+
+  useEffect(() => {
+    if (aiInfo) {
+      if (!chatProvider) {
+        setChatProvider(aiInfo.defaultProvider ?? "");
+      }
+      if (!chatModel && aiInfo.defaultProvider) {
+        const match = aiInfo.providers.find((item) => item.name === aiInfo.defaultProvider);
+        setChatModel(match?.chat.model ?? "");
+      }
+    }
+  }, [aiInfo, chatProvider, chatModel]);
+  const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
   const [query, setQuery] = useState("");
   const [topK, setTopK] = useState("2");
   const [minScore, setMinScore] = useState("0.7");
@@ -1022,12 +1216,108 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
   const [lastRagKey, setLastRagKey] = useState<string | null>(null);
   const [lastAnswerKey, setLastAnswerKey] = useState<string | null>(null);
   const [activeReferenceIndex, setActiveReferenceIndex] = useState<number | null>(null);
+  const [chunkCache, setChunkCache] = useState<Record<string, string>>({});
 
-  const provider = aiInfo?.defaultProvider ?? "";
-  const model = aiInfo?.providers.find((item) => item.name === provider)?.chat.model ?? "";
+  useEffect(() => {
+    const refs = lastMetadata?.ragReferences;
+    if (!refs || refs.length === 0) return;
+
+    const missingRefs = refs.filter((ref) => {
+      if (!ref.chunkId) return false;
+      if (chunkCache[ref.chunkId]) return false;
+      const inRagRows = ragRows.some((row) =>
+        row.documentId === ref.chunkId ||
+        row.metadata?.chunkId === ref.chunkId ||
+        row.metadata?.id === ref.chunkId
+      );
+      return !inRagRows;
+    });
+
+    if (missingRefs.length === 0) return;
+
+    if (job?.jobId) {
+      reactAiApi.getRagJobChunks(job.jobId, 0, 1000)
+        .then((res) => {
+          const newCache: Record<string, string> = {};
+          res.content.forEach((chunk) => {
+            if (chunk.chunkId && chunk.content) {
+              newCache[chunk.chunkId] = chunk.content;
+            }
+          });
+          setChunkCache((prev) => ({ ...prev, ...newCache }));
+        })
+        .catch((err) => console.error("Failed to fetch job chunks for validation", err));
+    } else {
+      const docIds = Array.from(new Set(missingRefs.map((r) => r.documentId).filter(Boolean)));
+      docIds.forEach((docId) => {
+        const type = job?.objectType || "attachment";
+        reactAiApi.getRagObjectChunksPage(type, docId!, 0, 500)
+          .then((res) => {
+            const newCache: Record<string, string> = {};
+            res.content.forEach((chunk) => {
+              if (chunk.chunkId && chunk.content) {
+                newCache[chunk.chunkId] = chunk.content;
+              }
+            });
+            setChunkCache((prev) => ({ ...prev, ...newCache }));
+          })
+          .catch((err) => console.error(`Failed to fetch object chunks for doc ${docId}`, err));
+      });
+    }
+  }, [lastMetadata?.ragReferences, ragRows, job?.jobId, chunkCache]);
+
+  const resolvedReferences = useMemo(() => {
+    const refs = lastMetadata?.ragReferences;
+    if (!refs || refs.length === 0) {
+      return ragRows;
+    }
+    const maxIdx = Math.max(...refs.map((r: any) => r.index), ragRows.length);
+    const list = new Array(maxIdx).fill(null);
+    refs.forEach((refItem: any) => {
+      const idx = refItem.index - 1;
+      if (idx < 0) return;
+      const matchedChunk = ragRows.find((row) =>
+        row.documentId === refItem.chunkId ||
+        row.metadata?.chunkId === refItem.chunkId ||
+        row.metadata?.id === refItem.chunkId
+      );
+      list[idx] = {
+        documentId: refItem.documentId || matchedChunk?.documentId,
+        chunkId: refItem.chunkId,
+        content: matchedChunk?.content || chunkCache[refItem.chunkId || ""] || refItem.content || "내용 없음 (본문이 RAG 검색 대상에서 제외되었습니다)",
+        score: refItem.score ?? matchedChunk?.score ?? 0.0,
+        metadata: {
+          ...(matchedChunk?.metadata || {}),
+          ...(refItem.metadata || {}),
+          sourceName: refItem.sourceName || refItem.metadata?.sourceName || matchedChunk?.metadata?.sourceName,
+          page: refItem.page ?? refItem.pageNumber ?? refItem.metadata?.page ?? matchedChunk?.metadata?.page,
+          chunkOrder: refItem.chunkOrder ?? refItem.metadata?.chunkOrder ?? matchedChunk?.metadata?.chunkOrder,
+        },
+      };
+    });
+    for (let i = 0; i < list.length; i++) {
+      if (!list[i]) {
+        list[i] = ragRows[i] || {
+          documentId: "",
+          content: "제공된 RAG 문서 개수 범위를 벗어난 가상의 근거 번호입니다 (AI 모델의 환각 현상).",
+          score: 0.0,
+          metadata: {},
+        };
+      }
+    }
+    return list;
+  }, [lastMetadata?.ragReferences, ragRows, chunkCache]);
+
+  const provider = chatProvider;
+  const model = chatModel;
   const topKNumber = Math.max(1, Number(topK) || 5);
   const minScoreNumber = minScore.trim() === "" ? undefined : Number(minScore);
-  const searchScope = job ? { objectType: job.objectType, objectId: job.objectId } : {};
+  const jobAttachmentId = job ? inferAttachmentIdFromJob(job) : undefined;
+  const searchScope = job
+    ? jobAttachmentId
+      ? { objectType: "attachment", objectId: jobAttachmentId }
+      : { objectType: job.objectType, objectId: job.objectId }
+    : {};
   const isRunning = runningAction != null;
   const currentSearchKey = buildRequestKey({
     query: query.trim(),
@@ -1067,6 +1357,20 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
         }
       });
 
+    reactAiApi
+      .getEmbeddingOptions()
+      .then((res) => {
+        if (alive) {
+          const list = res.options ?? [];
+          setEmbeddingOptions(list);
+          const def = list.find((o) => o.defaultProfile) || list.find((o) => o.defaultProvider) || list[0] || null;
+          setSelectedOption(def);
+        }
+      })
+      .catch(() => {
+        // ignore
+      });
+
     return () => {
       alive = false;
     };
@@ -1087,6 +1391,27 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
     setLastAnswerKey(null);
     setActiveReferenceIndex(null);
   }, [job?.jobId]);
+
+  useEffect(() => {
+    if (!job || embeddingOptions.length === 0) return;
+
+    if (job.embeddingProfileId) {
+      const matched = embeddingOptions.find((o) => o.profileId === job.embeddingProfileId);
+      if (matched) {
+        setSelectedOption(matched);
+        return;
+      }
+    }
+
+    if (job.embeddingProvider && job.embeddingModel) {
+      const matched = embeddingOptions.find(
+        (o) => o.provider === job.embeddingProvider && o.model === job.embeddingModel
+      );
+      if (matched) {
+        setSelectedOption(matched);
+      }
+    }
+  }, [job, embeddingOptions]);
 
   const vectorColumns = useMemo<ColDef<VectorSearchResultDto>[]>(
     () => [
@@ -1152,12 +1477,21 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
     setVectorRows([]);
     setSelectedVector(null);
     try {
-      const response = await reactAiApi.searchVector({
+      const payload: any = {
         query: query.trim(),
         topK: topKNumber,
         ...searchScope,
         minScore: Number.isFinite(minScoreNumber) ? minScoreNumber : undefined,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const response = await reactAiApi.searchVector(payload);
       setVectorRows(response);
       setLastVectorKey(currentSearchKey);
     } catch (searchError) {
@@ -1188,12 +1522,22 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
     setLastAnswerKey(null);
     setActiveReferenceIndex(null);
     try {
-      const response = await reactAiApi.searchRag({
+      const payload: any = {
         query: query.trim(),
         topK: topKNumber,
         hybrid: true,
         ...searchScope,
-      });
+        minScore: Number.isFinite(minScoreNumber) ? minScoreNumber : undefined,
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const response = await reactAiApi.searchRag(payload);
       setRagRows(response);
       setLastRagKey(currentRagKey);
     } catch (searchError) {
@@ -1222,7 +1566,7 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
     setActiveReferenceIndex(null);
     const visibleRagContext = buildVisibleRagContext(ragRows, topKNumber);
     try {
-      const response = await reactAiApi.sendRagChat({
+      const payload: any = {
         chat: {
           provider: provider || undefined,
           model: model || undefined,
@@ -1243,7 +1587,16 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
         ...searchScope,
         minScore: Number.isFinite(minScoreNumber) ? minScoreNumber : undefined,
         debug,
-      });
+      };
+      if (selectedOption) {
+        if (selectedOption.profileId) {
+          payload.embeddingProfileId = selectedOption.profileId;
+        } else {
+          payload.embeddingProvider = selectedOption.provider;
+          payload.embeddingModel = selectedOption.model;
+        }
+      }
+      const response = await reactAiApi.sendRagChat(payload);
       setMessages(response.messages ?? []);
       setLastMetadata(response.metadata ?? null);
       const ragDiagnostics = response.metadata?.ragDiagnostics;
@@ -1266,263 +1619,354 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
 
   return (
     <Stack spacing={1.5} sx={{ mt: 1.5 }}>
-      <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography variant="subtitle1">검색 검증</Typography>
-          <Typography variant="caption" color="text.secondary" noWrap>
-            {job
-              ? `${sourceDisplayName(job)} / ${job.objectType} #${job.objectId}`
-              : "색인 작업을 선택하지 않으면 전체 RAG 범위에서 검색합니다."}
-          </Typography>
-        </Box>
-      </Stack>
+      <Typography variant="subtitle1">검색 검증</Typography>
 
       {error ? <Alert severity="error">{error}</Alert> : null}
 
-      <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
-        <TextField
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
-            setVectorRows([]);
-            setRagRows([]);
-            setMessages([]);
-            setAnswerError(false);
-            setSelectedVector(null);
-            setSelectedRag(null);
-            setLastVectorKey(null);
-            setLastRagKey(null);
-            setLastAnswerKey(null);
-            setActiveReferenceIndex(null);
-          }}
-          placeholder="검증 쿼리 입력"
-          size="small"
-          fullWidth
-          inputProps={{ "aria-label": "검증 쿼리" }}
-        />
-        <TextField
-          label="Top K"
-          value={topK}
-          onChange={(event) => setTopK(event.target.value)}
-          size="small"
-          sx={{ width: { xs: "100%", md: 110 } }}
-        />
-        <TextField
-          label="Min Score"
-          value={minScore}
-          onChange={(event) => setMinScore(event.target.value)}
-          size="small"
-          sx={{ width: { xs: "100%", md: 130 } }}
-        />
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Typography variant="caption" color="text.secondary">
-            Debug
-          </Typography>
-          <Switch checked={debug} onChange={(event) => setDebug(event.target.checked)} />
-        </Stack>
-      </Stack>
-
-      <Stack spacing={0.5} alignItems="flex-start">
-        <ButtonGroup
-          variant="outlined"
-          size="small"
-          sx={{
-            flexWrap: "wrap",
-            "& .MuiButton-root": {
-              minWidth: { xs: 150, md: 180 },
-              px: 2,
-            },
-          }}
-        >
-          <Button
-            variant={tab === "vector" ? "contained" : "outlined"}
-            onClick={() => void handleVectorSearch()}
-            disabled={isRunning || !query.trim()}
-            startIcon={
-              runningAction === "vector" ? <CircularProgress size={16} color="inherit" /> : undefined
-            }
-          >
-            <Tooltip describeChild title={vectorLoaded ? "배지를 클릭하면 같은 조건으로 다시 조회합니다." : ""}>
-              <Badge
-                badgeContent={vectorLoaded ? vectorRows.length : null}
-                color={vectorRows.length === 0 ? "default" : "primary"}
-                invisible={!vectorLoaded}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (!isRunning && query.trim()) {
-                    void handleVectorSearch(true);
-                  }
-                }}
-                sx={{
-                  cursor: vectorLoaded ? "pointer" : "inherit",
-                  "& .MuiBadge-badge": { right: -14 },
-                }}
-              >
-                <Box component="span">벡터 검색</Box>
-              </Badge>
-            </Tooltip>
-          </Button>
-          <Button
-            variant={tab === "rag" ? "contained" : "outlined"}
-            onClick={() => void handleRagSearch()}
-            disabled={isRunning || !query.trim()}
-            startIcon={runningAction === "rag" ? <CircularProgress size={16} color="inherit" /> : undefined}
-          >
-            <Tooltip describeChild title={ragLoaded ? "배지를 클릭하면 같은 조건으로 다시 조회합니다." : ""}>
-              <Badge
-                badgeContent={ragLoaded ? ragRows.length : null}
-                color={ragRows.length === 0 ? "default" : "primary"}
-                invisible={!ragLoaded}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (!isRunning && query.trim()) {
-                    void handleRagSearch(true);
-                  }
-                }}
-                sx={{
-                  cursor: ragLoaded ? "pointer" : "inherit",
-                  "& .MuiBadge-badge": { right: -14 },
-                }}
-              >
-                <Box component="span">RAG 결과 조회</Box>
-              </Badge>
-            </Tooltip>
-          </Button>
-          <Button
-            variant={tab === "answer" ? "contained" : "outlined"}
-            onClick={() => void handleAnswer()}
-            disabled={isRunning || !query.trim()}
-            startIcon={
-              runningAction === "answer" ? <CircularProgress size={16} color="inherit" /> : undefined
-            }
-          >
-            <Tooltip describeChild title={answerLoaded ? "배지를 클릭하면 같은 조건으로 다시 생성합니다." : ""}>
-              <Badge
-                badgeContent={
-                  answerLoaded
-                    ? answerError
-                      ? <BugReportOutlined sx={{ fontSize: 12 }} />
-                      : "완료"
-                    : null
-                }
-                color={answerError ? "error" : "success"}
-                invisible={!answerLoaded}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (!isRunning && query.trim()) {
-                    void handleAnswer(true);
-                  }
-                }}
-                sx={{
-                  cursor: answerLoaded ? "pointer" : "inherit",
-                  "& .MuiBadge-badge": {
-                    minWidth: answerError ? 18 : undefined,
-                    right: answerError ? -12 : -18,
-                  },
-                }}
-              >
-                <Box component="span">문맥 기반 답변 생성</Box>
-              </Badge>
-            </Tooltip>
-          </Button>
-        </ButtonGroup>
-      </Stack>
-
-      {tab === "vector" ? (
-        <Stack spacing={1}>
-          <GridContent<VectorSearchResultDto>
-            columns={vectorColumns}
-            rowData={vectorRows}
-            loading={runningAction === "vector"}
-            height={280}
-            events={[
-              {
-                type: "rowClicked",
-                listener: (event) =>
-                  setSelectedVector((event as { data?: VectorSearchResultDto }).data ?? null),
-              },
-            ]}
-          />
-          <ContentPreview
-            title="선택한 벡터 결과"
-            content={selectedVector?.content}
-            metadata={selectedVector?.metadata}
-          />
-        </Stack>
-      ) : null}
-
-      {tab === "rag" ? (
-        <Stack spacing={1}>
-          <GridContent<SearchResultDto>
-            columns={ragColumns}
-            rowData={ragRows}
-            loading={runningAction === "rag"}
-            height={280}
-            events={[
-              {
-                type: "rowClicked",
-                listener: (event) => setSelectedRag((event as { data?: SearchResultDto }).data ?? null),
-              },
-            ]}
-          />
-          <ContentPreview
-            title="선택한 RAG 결과"
-            content={selectedRag?.content}
-            metadata={selectedRag?.metadata}
-          />
-        </Stack>
-      ) : null}
-
-      {tab === "answer" ? (
-        <Stack spacing={1}>
-          {runningAction === "answer" ? (
-            <LoadingPanel />
-          ) : messages.length ? (
+      <Card variant="outlined" sx={{ borderRadius: 2 }}>
+        <CardContent>
+          <Stack spacing={1.5}>
             <Box
               sx={{
                 display: "grid",
-                gridTemplateColumns: {
-                  xs: "minmax(0, 1fr)",
-                  lg: "minmax(0, 1fr) minmax(0, 1fr)",
-                },
-                gap: 1.25,
-                alignItems: "stretch",
+                gridTemplateColumns: embeddingOptions.length > 0
+                  ? { xs: "1fr", md: "1fr 1fr" }
+                  : "1fr",
+                gap: 2,
+                alignItems: "center",
+                mb: 0.5,
               }}
             >
-              <AnswerPanel
-                messages={messages}
-                referencesCount={Math.min(ragRows.length, topKNumber)}
-                onReferenceHover={setActiveReferenceIndex}
-              />
-              <ReferenceDocuments
-                rows={ragRows}
-                topK={topKNumber}
-                query={query}
-                activeReferenceIndex={activeReferenceIndex}
-              />
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                  선택 파일 정보
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    fontWeight: 500,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {job
+                    ? `${sourceDisplayName(job)} / ${job.objectType} #${job.objectId}`
+                    : "색인 작업을 선택하지 않으면 전체 RAG 범위에서 검색합니다."}
+                </Typography>
+              </Box>
+
+              <Box sx={{ minWidth: 0 }}>
+                {embeddingOptions.length > 0 ? (
+                  <TextField
+                    select
+                    label="임베딩 모델 프로필"
+                    size="small"
+                    value={selectedOption ? (selectedOption.profileId || `${selectedOption.provider}:${selectedOption.model}`) : ""}
+                    onChange={(event) => {
+                      const val = event.target.value;
+                      const matched = embeddingOptions.find((o) => (o.profileId || `${o.provider}:${o.model}`) === val);
+                      if (matched) {
+                        setSelectedOption(matched);
+                      }
+                    }}
+                    disabled={isRunning}
+                    fullWidth
+                  >
+                    {embeddingOptions.map((opt) => {
+                      const valueKey = opt.profileId || `${opt.provider}:${opt.model}`;
+                      const label = opt.profileId
+                        ? `${opt.profileId} (${opt.provider} - ${opt.model})`
+                        : `${opt.provider} - ${opt.model} (${opt.dimension}d)`;
+                      return (
+                        <MenuItem key={valueKey} value={valueKey}>
+                          {label}
+                        </MenuItem>
+                      );
+                    })}
+                  </TextField>
+                ) : null}
+              </Box>
             </Box>
-          ) : (
-            <EmptyAnswerPanel />
-          )}
-          <MetadataPanel metadata={lastMetadata} provider={provider} model={model} />
-          {diagnostics ? (
+
             <Box
-              component="pre"
               sx={{
-                m: 0,
-                p: 1,
-                maxHeight: 220,
-                overflow: "auto",
-                bgcolor: "action.hover",
-                borderRadius: 2,
-                fontSize: 12,
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+                gap: 2,
+                alignItems: "center",
+                mb: 0.5,
               }}
             >
-              {JSON.stringify(diagnostics, null, 2)}
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                  답변 생성 Chat 모델
+                </Typography>
+                <AiProviderSelect
+                  provider={chatProvider}
+                  model={chatModel}
+                  onChange={(p, m) => {
+                    setChatProvider(p);
+                    setChatModel(m);
+                  }}
+                />
+              </Box>
             </Box>
-          ) : null}
-        </Stack>
-      ) : null}
+
+            <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
+              <TextField
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setVectorRows([]);
+                  setRagRows([]);
+                  setMessages([]);
+                  setAnswerError(false);
+                  setSelectedVector(null);
+                  setSelectedRag(null);
+                  setLastVectorKey(null);
+                  setLastRagKey(null);
+                  setLastAnswerKey(null);
+                  setActiveReferenceIndex(null);
+                }}
+                placeholder="검증 쿼리 입력"
+                size="small"
+                fullWidth
+                inputProps={{ "aria-label": "검증 쿼리" }}
+              />
+              <TextField
+                label="Top K"
+                value={topK}
+                onChange={(event) => setTopK(event.target.value)}
+                size="small"
+                sx={{ width: { xs: "100%", md: 110 } }}
+              />
+              <TextField
+                label="Min Score"
+                value={minScore}
+                onChange={(event) => setMinScore(event.target.value)}
+                size="small"
+                sx={{ width: { xs: "100%", md: 130 } }}
+              />
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="caption" color="text.secondary">
+                  Debug
+                </Typography>
+                <Switch checked={debug} onChange={(event) => setDebug(event.target.checked)} />
+              </Stack>
+            </Stack>
+
+            <Stack spacing={0.5} alignItems="flex-start">
+              <ButtonGroup
+                variant="outlined"
+                size="small"
+                sx={{
+                  flexWrap: "wrap",
+                  "& .MuiButton-root": {
+                    minWidth: { xs: 150, md: 180 },
+                    px: 2,
+                  },
+                }}
+              >
+                <Button
+                  variant={tab === "vector" ? "contained" : "outlined"}
+                  onClick={() => void handleVectorSearch()}
+                  disabled={isRunning || !query.trim()}
+                  startIcon={
+                    runningAction === "vector" ? <CircularProgress size={16} color="inherit" /> : undefined
+                  }
+                >
+                  <Tooltip describeChild title={vectorLoaded ? "배지를 클릭하면 같은 조건으로 다시 조회합니다." : ""}>
+                    <Badge
+                      badgeContent={vectorLoaded ? vectorRows.length : null}
+                      color={vectorRows.length === 0 ? "default" : "primary"}
+                      invisible={!vectorLoaded}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!isRunning && query.trim()) {
+                          void handleVectorSearch(true);
+                        }
+                      }}
+                      sx={{
+                        cursor: vectorLoaded ? "pointer" : "inherit",
+                        "& .MuiBadge-badge": { right: -14 },
+                      }}
+                    >
+                      <Box component="span">벡터 검색</Box>
+                    </Badge>
+                  </Tooltip>
+                </Button>
+                <Button
+                  variant={tab === "rag" ? "contained" : "outlined"}
+                  onClick={() => void handleRagSearch()}
+                  disabled={isRunning || !query.trim()}
+                  startIcon={runningAction === "rag" ? <CircularProgress size={16} color="inherit" /> : undefined}
+                >
+                  <Tooltip describeChild title={ragLoaded ? "배지를 클릭하면 같은 조건으로 다시 조회합니다." : ""}>
+                    <Badge
+                      badgeContent={ragLoaded ? ragRows.length : null}
+                      color={ragRows.length === 0 ? "default" : "primary"}
+                      invisible={!ragLoaded}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!isRunning && query.trim()) {
+                          void handleRagSearch(true);
+                        }
+                      }}
+                      sx={{
+                        cursor: ragLoaded ? "pointer" : "inherit",
+                        "& .MuiBadge-badge": { right: -14 },
+                      }}
+                    >
+                      <Box component="span">RAG 결과 조회</Box>
+                    </Badge>
+                  </Tooltip>
+                </Button>
+                <Button
+                  variant={tab === "answer" ? "contained" : "outlined"}
+                  onClick={() => void handleAnswer()}
+                  disabled={isRunning || !query.trim()}
+                  startIcon={
+                    runningAction === "answer" ? <CircularProgress size={16} color="inherit" /> : undefined
+                  }
+                >
+                  <Tooltip describeChild title={answerLoaded ? "배지를 클릭하면 같은 조건으로 다시 생성합니다." : ""}>
+                    <Badge
+                      badgeContent={
+                        answerLoaded
+                          ? answerError
+                            ? <BugReportOutlined sx={{ fontSize: 12 }} />
+                            : "완료"
+                          : null
+                      }
+                      color={answerError ? "error" : "success"}
+                      invisible={!answerLoaded}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!isRunning && query.trim()) {
+                          void handleAnswer(true);
+                        }
+                      }}
+                      sx={{
+                        cursor: answerLoaded ? "pointer" : "inherit",
+                        "& .MuiBadge-badge": {
+                          minWidth: answerError ? 18 : undefined,
+                          right: answerError ? -12 : -18,
+                        },
+                      }}
+                    >
+                      <Box component="span">문맥 기반 답변 생성</Box>
+                    </Badge>
+                  </Tooltip>
+                </Button>
+              </ButtonGroup>
+            </Stack>
+          </Stack>
+        </CardContent>
+      </Card>
+
+      <Card variant="outlined" sx={{ borderRadius: 2 }}>
+        <CardContent>
+          <Stack spacing={1.5}>
+            {tab === "vector" ? (
+              <Stack spacing={1}>
+                <GridContent<VectorSearchResultDto>
+                  columns={vectorColumns}
+                  rowData={vectorRows}
+                  loading={runningAction === "vector"}
+                  height={280}
+                  events={[
+                    {
+                      type: "rowClicked",
+                      listener: (event) =>
+                        setSelectedVector((event as { data?: VectorSearchResultDto }).data ?? null),
+                    },
+                  ]}
+                />
+                <ContentPreview
+                  title="선택한 벡터 결과"
+                  content={selectedVector?.content}
+                  metadata={selectedVector?.metadata}
+                />
+              </Stack>
+            ) : null}
+
+            {tab === "rag" ? (
+              <Stack spacing={1}>
+                <GridContent<SearchResultDto>
+                  columns={ragColumns}
+                  rowData={ragRows}
+                  loading={runningAction === "rag"}
+                  height={280}
+                  events={[
+                    {
+                      type: "rowClicked",
+                      listener: (event) => setSelectedRag((event as { data?: SearchResultDto }).data ?? null),
+                    },
+                  ]}
+                />
+                <ContentPreview
+                  title="선택한 RAG 결과"
+                  content={selectedRag?.content}
+                  metadata={selectedRag?.metadata}
+                />
+              </Stack>
+            ) : null}
+
+            {tab === "answer" ? (
+              <Stack spacing={1}>
+                {runningAction === "answer" ? (
+                  <LoadingPanel />
+                ) : messages.length ? (
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "minmax(0, 1fr)",
+                        lg: "minmax(0, 1fr) minmax(0, 1fr)",
+                      },
+                      gap: 1.25,
+                      alignItems: "stretch",
+                    }}
+                  >
+                    <AnswerPanel
+                      messages={messages}
+                      referencesCount={Math.min(ragRows.length, topKNumber)}
+                      references={resolvedReferences}
+                      onReferenceHover={setActiveReferenceIndex}
+                    />
+                    <ReferenceDocuments
+                      rows={ragRows}
+                      topK={topKNumber}
+                      query={query}
+                      activeReferenceIndex={activeReferenceIndex}
+                    />
+                  </Box>
+                ) : (
+                  <EmptyAnswerPanel />
+                )}
+                <MetadataPanel metadata={lastMetadata} provider={provider} model={model} />
+                {diagnostics ? (
+                  <Box
+                    component="pre"
+                    sx={{
+                      m: 0,
+                      p: 1,
+                      maxHeight: 220,
+                      overflow: "auto",
+                      bgcolor: "action.hover",
+                      borderRadius: 2,
+                      fontSize: 12,
+                    }}
+                  >
+                    {JSON.stringify(diagnostics, null, 2)}
+                  </Box>
+                ) : null}
+              </Stack>
+            ) : null}
+          </Stack>
+        </CardContent>
+      </Card>
     </Stack>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Divider, IconButton, Popover, Stack, Tooltip, Typography } from "@mui/material";
+import { alpha, Avatar, Box, Divider, IconButton, Popover, Stack, Tooltip, Typography, Chip } from "@mui/material";
 import { ContentCopyOutlined, DescriptionOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
 import type { ChatMessage, ChatResponseMetadataDto } from "@/react/pages/ai/components/chatTypes";
 import type { RagReferenceDto } from "@/types/studio/ai";
@@ -16,6 +16,7 @@ interface NormalizedRagReference {
   chunk?: string;
   score?: number;
   content?: string;
+  raw?: RagReferenceDto;
 }
 
 function stringifyValue(value: unknown) {
@@ -67,6 +68,7 @@ function normalizeReference(reference: RagReferenceDto, fallbackIndex: number): 
     chunk,
     score: reference.score,
     content: reference.content,
+    raw: reference,
   };
 }
 
@@ -134,6 +136,55 @@ function renderTokenUsage(metadata?: ChatResponseMetadataDto) {
   );
 }
 
+function renderRetrievalPolicy(metadata?: ChatResponseMetadataDto) {
+  const policy = metadata?.retrievalPolicy as any;
+  if (!policy) return null;
+
+  const hitRate = policy.hitRate;
+  const mrr = policy.mrr;
+  
+  return (
+    <Box sx={{ mt: 1, pt: 1, borderTop: "1px dashed", borderColor: "divider" }}>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+        <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 10.5, color: "success.main" }}>
+          검색 전략: {policy.retrievalStrategy || "-"}
+        </Typography>
+        <Chip label="정책 적용됨" size="small" color="success" sx={{ height: 16, fontSize: 8.5, fontWeight: 700 }} />
+      </Stack>
+      {(hitRate != null || mrr != null) && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: 9.5 }}>
+          평가 기준: {hitRate != null ? `HitRate ${(hitRate * 100).toFixed(0)}%` : ""}{hitRate != null && mrr != null ? ", " : ""}{mrr != null ? `MRR ${mrr.toFixed(2)}` : ""}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+function renderRetrievalDebug(metadata?: ChatResponseMetadataDto) {
+  const retrieval = metadata?.retrieval as any;
+  if (!retrieval) return null;
+
+  return (
+    <Box sx={{ mt: 1.25, pt: 1, borderTop: "1px dashed", borderColor: "divider" }}>
+      <Typography variant="caption" sx={{ fontWeight: 600, display: "block", fontSize: 10, color: "primary.main", mb: 0.5 }}>
+        [RAG 검색 진단 디버그]
+      </Typography>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: 10, mb: 0.5 }}>
+        전략: {retrieval.requestedStrategy ?? "-"} (실제: {retrieval.resolvedStrategy ?? "-"}) · 최종 컨텍스트 Chunk 수: {retrieval.finalCount ?? 0}
+      </Typography>
+      {Array.isArray(retrieval.legs) && retrieval.legs.length > 0 && (
+        <Stack spacing={0.25}>
+          {retrieval.legs.map((leg: any, idx: number) => (
+            <Typography key={idx} variant="caption" color="text.secondary" sx={{ display: "block", fontSize: 9.5, pl: 0.5 }}>
+              · {leg.strategy === "structure" ? "구조 기반" : leg.strategy.includes("ideaBlock") ? "IdeaBlock" : leg.strategy}: topK {leg.topK ?? 0} / 후보 {leg.candidateCount ?? 0} / 반환 {leg.returnedCount ?? 0}
+            </Typography>
+          ))}
+        </Stack>
+      )}
+    </Box>
+  );
+}
+
 function renderInlineMarkdown(text: string) {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, index) => {
@@ -181,26 +232,43 @@ export function AssistantMessageBubble({
 
   return (
     <Stack spacing={0.5} alignItems="flex-start" sx={{ width: "100%" }}>
-      <Box
-        sx={{
-          maxWidth: { xs: "92%", md: "72%" },
-          px: 2,
-          py: 1.5,
-          borderRadius: "18px 18px 18px 4px",
-          bgcolor: "background.paper",
-          color: "text.primary",
-          border: "none",
-        }}
-      >
-        <Typography variant="caption" color="text.secondary">
-          Assistant{message.model ? ` · ${message.model}` : ""}
-        </Typography>
-        <Typography component="div" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 13 }}>
-          {message.content ? renderInlineMarkdown(message.content) : (sending ? "응답 생성 중..." : "")}
-        </Typography>
-        {renderTokenUsage(message.metadata)}
-      </Box>
-      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ pl: 0.25 }}>
+      <Stack direction="row" spacing={1.25} alignItems="flex-start" sx={{ maxWidth: { xs: "100%", md: "82%" } }}>
+        <Avatar
+          sx={{
+            width: 28,
+            height: 28,
+            fontSize: 12,
+            fontWeight: 800,
+            bgcolor: (theme) => alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.32 : 0.12),
+            color: "primary.main",
+          }}
+        >
+          AI
+        </Avatar>
+        <Box
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderRadius: "8px",
+            bgcolor: "background.paper",
+            color: "text.primary",
+            border: "1px solid",
+            borderColor: "divider",
+            boxShadow: (theme) => `0 8px 24px ${alpha(theme.palette.common.black, theme.palette.mode === "dark" ? 0.22 : 0.06)}`,
+          }}
+        >
+          <Typography variant="caption" color="text.secondary">
+            Assistant{message.model ? ` · ${message.model}` : ""}
+          </Typography>
+          <Typography component="div" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14, lineHeight: 1.75 }}>
+            {message.content ? renderInlineMarkdown(message.content) : (sending ? "응답 생성 중..." : "")}
+          </Typography>
+          {renderTokenUsage(message.metadata)}
+          {renderRetrievalDebug(message.metadata)}
+          {renderRetrievalPolicy(message.metadata)}
+        </Box>
+      </Stack>
+      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ pl: 5 }}>
         {message.createdAt ? (
           <Typography variant="caption" color="text.secondary">
             {formatMessageTime(message.createdAt)}
@@ -359,10 +427,79 @@ export function AssistantMessageBubble({
                           {formatReferenceTitle(reference)}
                         </Typography>
                         {formatReferenceSummary(reference) ? (
-                          <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere" }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere", fontSize: 12.5 }}>
                             {formatReferenceSummary(reference)}
                           </Typography>
                         ) : null}
+
+                        {/* IdeaBlock 특정 필드 노출 */}
+                        {(() => {
+                          const meta = reference.raw?.metadata || {};
+                          const chunkType = meta.chunkType || (reference.raw as any)?.chunkType;
+                          const hasIdeaFields = chunkType === "ideaBlock" || meta.criticalQuestion || meta.trustedAnswer;
+                          if (!hasIdeaFields && !meta.fallbackReason) return null;
+
+                          const fallbackLabels: Record<string, string> = {
+                            ANSWER_TOO_SHORT: "생성 답변이 너무 짧음",
+                            ANSWER_HAS_NO_BODY: "답변 본문 없음",
+                            ANSWER_EQUALS_TITLE: "답변이 제목만 반복",
+                            HEADING_ONLY: "제목만 있는 block",
+                            EVIDENCE_NOT_FOUND: "원문 evidence 없음",
+                            TRUSTED_ANSWER_FACT_MISMATCH: "숫자/날짜/기간/비율이 원문과 불일치",
+                            GENERIC_QUESTION: "질문이 너무 일반적",
+                            TABLE_SECTION: "표 섹션 fallback",
+                            COVERAGE_GAP: "누락 보존 fallback",
+                          };
+
+                          return (
+                            <Box sx={{ mt: 1, p: 1, borderRadius: 1, bgcolor: "action.hover", border: "1px solid", borderColor: "divider" }}>
+                              <Stack spacing={0.5}>
+                                <Stack direction="row" spacing={0.5} flexWrap="wrap" sx={{ mb: 0.5 }}>
+                                  {chunkType && (
+                                    <Chip label={`유형: ${chunkType}`} size="small" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
+                                  )}
+                                  {meta.fallbackReason && (
+                                    <Chip
+                                      label={`Fallback: ${fallbackLabels[String(meta.fallbackReason)] || String(meta.fallbackReason)}`}
+                                      size="small"
+                                      color="warning"
+                                      variant="outlined"
+                                      sx={{ fontSize: 10, height: 18 }}
+                                    />
+                                  )}
+                                  {meta.confidence != null && (
+                                    <Chip label={`신뢰도: ${meta.confidence}`} size="small" variant="outlined" sx={{ fontSize: 10, height: 18 }} />
+                                  )}
+                                </Stack>
+
+                                {meta.criticalQuestion && (
+                                  <Typography variant="body2" sx={{ fontSize: 11.5, fontWeight: 600 }}>
+                                    <span style={{ color: "#7C3AED" }}>Q.</span> {String(meta.criticalQuestion)}
+                                  </Typography>
+                                )}
+                                {meta.trustedAnswer && (
+                                  <Typography variant="body2" sx={{ fontSize: 11.5 }}>
+                                    <span style={{ color: "#059669" }}>A.</span> {String(meta.trustedAnswer)}
+                                  </Typography>
+                                )}
+                                {meta.sourceEvidence && (
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10.5, fontStyle: "italic", mt: 0.25, display: "block" }}>
+                                    원문 근거: {String(meta.sourceEvidence)}
+                                  </Typography>
+                                )}
+                                {(meta.entityName || meta.keywords || meta.tags) && (
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                                    {[
+                                      meta.entityName ? `엔티티: ${meta.entityName} (${meta.entityType ?? ""})` : "",
+                                      meta.keywords ? `키워드: ${JSON.stringify(meta.keywords)}` : "",
+                                      meta.tags ? `태그: ${JSON.stringify(meta.tags)}` : "",
+                                    ].filter(Boolean).join(" | ")}
+                                  </Typography>
+                                )}
+                              </Stack>
+                            </Box>
+                          );
+                        })()}
                       </Stack>
                     </Stack>
                   );

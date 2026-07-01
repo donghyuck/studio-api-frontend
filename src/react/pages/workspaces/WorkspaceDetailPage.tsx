@@ -48,11 +48,13 @@ import type { GridContentHandle } from "@/react/components/ag-grid/types";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import { SkeletonPlaceholder } from "@/react/components/common/SkeletonPlaceholder";
 import { useConfirm, useToast } from "@/react/feedback";
 import { UserSearchDialog } from "@/react/pages/admin/UserSearchDialog";
 import { reactUsersApi } from "@/react/pages/admin/users/api";
 import { reactWorkspaceApi } from "@/react/pages/workspaces/api";
 import { WorkspaceWikiPanel } from "@/react/pages/workspaces/WorkspaceWikiPanel";
+import { WorkspaceFilesPanel } from "@/react/pages/workspaces/WorkspaceFilesPanel";
 import type { PageResponse } from "@/types/studio/api-common";
 import type { UserDto } from "@/types/studio/user";
 import type {
@@ -67,7 +69,7 @@ import type {
 } from "@/types/studio/workspace";
 import { resolveAxiosError } from "@/utils/helpers";
 
-type DetailTab = "tree" | "members" | "effective" | "permissions" | "wiki";
+type DetailTab = "tree" | "members" | "effective" | "permissions" | "wiki" | "files";
 type StatusAction = "activate" | "deactivate";
 
 const roleOptions: WorkspaceRole[] = ["VIEWER", "EDITOR", "ADMIN", "OWNER"];
@@ -525,7 +527,7 @@ function WorkspaceMembersGrid({
       },
       {
         field: "workspaceId",
-        headerName: "Workspace",
+        headerName: "작업공간",
         width: 130,
         filter: false,
         sortable: false,
@@ -653,7 +655,8 @@ function WorkspaceCreateChildDialog({
     slug: "",
     visibility: "PRIVATE",
   });
-  const valid = form.name.trim() && form.slug.trim();
+  const slugRegex = /^[a-z0-9][a-z0-9-]*$/;
+  const valid = form.name.trim() && slugRegex.test(form.slug);
 
   useEffect(() => {
     if (open) {
@@ -670,11 +673,11 @@ function WorkspaceCreateChildDialog({
         slug: form.slug.trim(),
         visibility: form.visibility,
       });
-      toast.success("Child Workspace가 생성되었습니다.");
+      toast.success("Child 작업공간이 생성되었습니다.");
       onCreated();
       onClose();
     } catch (err) {
-      toast.error(resolveAxiosError(err) || "Child Workspace 생성에 실패했습니다.");
+      toast.error(resolveAxiosError(err) || "Child 작업공간 생성에 실패했습니다.");
     } finally {
       setSaving(false);
     }
@@ -682,7 +685,7 @@ function WorkspaceCreateChildDialog({
 
   return (
     <Dialog open={open} onClose={saving ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Child Workspace 생성</DialogTitle>
+      <DialogTitle>Child 작업공간 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 1 }}>
           <TextField label="Parent" value={parent?.path ?? "-"} size="small" disabled fullWidth />
@@ -698,6 +701,12 @@ function WorkspaceCreateChildDialog({
             size="small"
             value={form.slug}
             onChange={(event) => setForm((current) => ({ ...current, slug: event.target.value }))}
+            error={Boolean(form.slug && !slugRegex.test(form.slug))}
+            helperText={
+              form.slug && !slugRegex.test(form.slug)
+                ? "소문자 영문, 숫자, 하이픈(-)만 사용 가능하며 첫 글자는 영문 또는 숫자여야 합니다."
+                : "영문 소문자, 숫자, 하이픈(-)만 허용 (예: child-workspace)"
+            }
             fullWidth
           />
           <TextField
@@ -768,7 +777,7 @@ function WorkspaceParentChangeDialog({
       .list({ page: 0, size: 200, sort: "path,asc" })
       .then((response) => setOptions(response.content ?? []))
       .catch((err) => {
-        toast.error(resolveAxiosError(err) || "Workspace 목록을 불러오지 못했습니다.");
+        toast.error(resolveAxiosError(err) || "작업공간 목록을 불러오지 못했습니다.");
         setOptions([]);
       })
       .finally(() => setLoading(false));
@@ -790,11 +799,11 @@ function WorkspaceParentChangeDialog({
       await reactWorkspaceApi.changeParent(workspace.id, {
         newParentId: selectedParentId === "root" ? null : Number(selectedParentId),
       });
-      toast.success("Workspace Parent가 변경되었습니다.");
+      toast.success("작업공간 Parent가 변경되었습니다.");
       onChanged();
       onClose();
     } catch (err) {
-      toast.error(resolveAxiosError(err) || "Workspace Parent 변경에 실패했습니다.");
+      toast.error(resolveAxiosError(err) || "작업공간 Parent 변경에 실패했습니다.");
     } finally {
       setSaving(false);
     }
@@ -802,10 +811,10 @@ function WorkspaceParentChangeDialog({
 
   return (
     <Dialog open={open} onClose={saving ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Parent Workspace 변경</DialogTitle>
+      <DialogTitle>Parent 작업공간 변경</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 1 }}>
-          <TextField label="현재 Workspace" value={workspace?.path ?? "-"} size="small" disabled fullWidth />
+          <TextField label="현재 작업공간" value={workspace?.path ?? "-"} size="small" disabled fullWidth />
           <TextField
             label="새 Parent"
             size="small"
@@ -814,9 +823,9 @@ function WorkspaceParentChangeDialog({
             onChange={(event) => setSelectedParentId(event.target.value)}
             disabled={loading || saving}
             fullWidth
-            helperText="변경하면 하위 Workspace의 path, depth, root도 함께 갱신됩니다."
+            helperText="변경하면 하위 작업공간의 path, depth, root도 함께 갱신됩니다."
           >
-            <MenuItem value="root">Root Workspace로 이동</MenuItem>
+            <MenuItem value="root">Root 작업공간으로 이동</MenuItem>
             {selectableOptions.map((item) => (
               <MenuItem key={item.id} value={String(item.id)}>
                 {item.path}
@@ -865,6 +874,23 @@ export function WorkspaceDetailPage() {
   const [usersById, setUsersById] = useState<Record<number, UserDto | undefined>>({});
   const [permissionSummary, setPermissionSummary] = useState<WorkspacePermissionSummary | null>(null);
   const [permissionActions, setPermissionActions] = useState<WorkspacePermissionDefinition[]>([]);
+  
+  // Loading indicators for lazy loading tabs
+  const [treeLoading, setTreeLoading] = useState(false);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [effectiveMembersLoading, setEffectiveMembersLoading] = useState(false);
+  const [permissionsLoading, setPermissionsLoading] = useState(false);
+
+  // Track loaded status to lazy-load only once
+  const [loadedTabs, setLoadedTabs] = useState<Record<DetailTab, boolean>>({
+    tree: false,
+    members: false,
+    effective: false,
+    permissions: false,
+    wiki: false,
+    files: false,
+  });
+
   const [childDialogOpen, setChildDialogOpen] = useState(false);
   const [parentDialogOpen, setParentDialogOpen] = useState(false);
   const [userSearchOpen, setUserSearchOpen] = useState(false);
@@ -889,81 +915,201 @@ export function WorkspaceDetailPage() {
     []
   );
 
-  const loadWorkspace = useCallback(async () => {
+  // Core metadata loader (on page load or change of workspaceId)
+  const loadWorkspaceMeta = useCallback(async () => {
     if (!Number.isFinite(workspaceIdNumber) || workspaceIdNumber <= 0) {
-      setError("잘못된 Workspace ID입니다.");
+      setError("잘못된 작업공간 ID입니다.");
       setLoading(false);
       return;
     }
 
-    setLoading(true);
     try {
-      const [nextWorkspace, nextTree, nextMembers, nextEffectiveMembers, nextPermissions, nextActions] =
-        await Promise.all([
-          reactWorkspaceApi.get(workspaceIdNumber),
-          reactWorkspaceApi.tree(workspaceIdNumber).catch(() => null),
-          reactWorkspaceApi
-            .members(workspaceIdNumber, {
-              page: membersPage,
-              size: memberPageSize,
-              sort: "userId,asc",
-            })
-            .catch(() => emptyMemberPage),
-          reactWorkspaceApi
-            .effectiveMembers(workspaceIdNumber, {
-              page: effectiveMembersPage,
-              size: memberPageSize,
-              sort: "userId,asc",
-            })
-            .catch(() => emptyMemberPage),
-          reactWorkspaceApi.permissionsMe(workspaceIdNumber).catch(() => null),
-          reactWorkspaceApi.permissionActions(workspaceIdNumber).catch(() => []),
-        ]);
+      const nextWorkspace = await reactWorkspaceApi.get(workspaceIdNumber);
       setWorkspace(nextWorkspace);
       setForm({
         name: nextWorkspace.name,
         visibility: nextWorkspace.visibility,
       });
+      setError(null);
+    } catch (err) {
+      setError(resolveAxiosError(err) || "작업공간을 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }, [workspaceIdNumber]);
+
+  // Tab Loaders
+  const loadTree = useCallback(async () => {
+    if (!Number.isFinite(workspaceIdNumber) || workspaceIdNumber <= 0) return;
+    setTreeLoading(true);
+    try {
+      const nextTree = await reactWorkspaceApi.tree(workspaceIdNumber);
       setTree(nextTree);
+    } catch (err) {
+      toast.error(resolveAxiosError(err) || "트리 데이터를 불러오지 못했습니다.");
+    } finally {
+      setTreeLoading(false);
+    }
+  }, [workspaceIdNumber, toast]);
+
+  const loadMembers = useCallback(async () => {
+    if (!Number.isFinite(workspaceIdNumber) || workspaceIdNumber <= 0) return;
+    setMembersLoading(true);
+    try {
+      const nextMembers = await reactWorkspaceApi.members(workspaceIdNumber, {
+        page: membersPage,
+        size: memberPageSize,
+        sort: "userId,asc",
+      });
       setMembers(nextMembers.content ?? []);
       setMembersTotal(nextMembers.totalElements ?? 0);
-      setEffectiveMembers(nextEffectiveMembers.content ?? []);
-      setEffectiveMembersTotal(nextEffectiveMembers.totalElements ?? 0);
-      setPermissionSummary(nextPermissions);
-      setPermissionActions(nextActions);
+
       const userIds = Array.from(
         new Set(
-          [...(nextMembers.content ?? []), ...(nextEffectiveMembers.content ?? [])]
+          (nextMembers.content ?? [])
             .map((member) => member.userId)
             .filter((userId): userId is number => typeof userId === "number" && userId > 0)
         )
       );
-      const userEntries = await Promise.all(
-        userIds.map(async (userId) => {
-          try {
-            return [userId, await reactUsersApi.getUser(userId)] as const;
-          } catch {
-            return [userId, undefined] as const;
-          }
-        })
-      );
-      setUsersById(Object.fromEntries(userEntries));
-      setError(null);
+      if (userIds.length > 0) {
+        const userEntries = await Promise.all(
+          userIds.map(async (userId) => {
+            try {
+              return [userId, await reactUsersApi.getUser(userId)] as const;
+            } catch {
+              return [userId, undefined] as const;
+            }
+          })
+        );
+        setUsersById((prev) => ({ ...prev, ...Object.fromEntries(userEntries) }));
+      }
     } catch (err) {
-      setError(resolveAxiosError(err) || "Workspace를 불러오지 못했습니다.");
+      toast.error(resolveAxiosError(err) || "직접 멤버 목록을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      setMembersLoading(false);
     }
-  }, [effectiveMembersPage, emptyMemberPage, membersPage, workspaceIdNumber]);
+  }, [workspaceIdNumber, membersPage, toast]);
 
-  useEffect(() => {
-    void loadWorkspace();
-  }, [loadWorkspace]);
+  const loadEffectiveMembers = useCallback(async () => {
+    if (!Number.isFinite(workspaceIdNumber) || workspaceIdNumber <= 0) return;
+    setEffectiveMembersLoading(true);
+    try {
+      const nextEffectiveMembers = await reactWorkspaceApi.effectiveMembers(workspaceIdNumber, {
+        page: effectiveMembersPage,
+        size: memberPageSize,
+        sort: "userId,asc",
+      });
+      setEffectiveMembers(nextEffectiveMembers.content ?? []);
+      setEffectiveMembersTotal(nextEffectiveMembers.totalElements ?? 0);
 
+      const userIds = Array.from(
+        new Set(
+          (nextEffectiveMembers.content ?? [])
+            .map((member) => member.userId)
+            .filter((userId): userId is number => typeof userId === "number" && userId > 0)
+        )
+      );
+      if (userIds.length > 0) {
+        const userEntries = await Promise.all(
+          userIds.map(async (userId) => {
+            try {
+              return [userId, await reactUsersApi.getUser(userId)] as const;
+            } catch {
+              return [userId, undefined] as const;
+            }
+          })
+        );
+        setUsersById((prev) => ({ ...prev, ...Object.fromEntries(userEntries) }));
+      }
+    } catch (err) {
+      toast.error(resolveAxiosError(err) || "유효 멤버 목록을 불러오지 못했습니다.");
+    } finally {
+      setEffectiveMembersLoading(false);
+    }
+  }, [workspaceIdNumber, effectiveMembersPage, toast]);
+
+  const loadPermissions = useCallback(async () => {
+    if (!Number.isFinite(workspaceIdNumber) || workspaceIdNumber <= 0) return;
+    setPermissionsLoading(true);
+    try {
+      const [nextPermissions, nextActions] = await Promise.all([
+        reactWorkspaceApi.permissionsMe(workspaceIdNumber).catch(() => null),
+        reactWorkspaceApi.permissionActions(workspaceIdNumber).catch(() => []),
+      ]);
+      setPermissionSummary(nextPermissions);
+      setPermissionActions(nextActions);
+    } catch (err) {
+      toast.error(resolveAxiosError(err) || "권한 정보를 불러오지 못했습니다.");
+    } finally {
+      setPermissionsLoading(false);
+    }
+  }, [workspaceIdNumber, toast]);
+
+  // Context-aware refresh function
+  const handleRefresh = useCallback(async () => {
+    await loadWorkspaceMeta();
+    if (tab === "tree") {
+      await loadTree();
+    } else if (tab === "members") {
+      await loadMembers();
+    } else if (tab === "effective") {
+      await loadEffectiveMembers();
+    } else if (tab === "permissions") {
+      await loadPermissions();
+    }
+  }, [tab, loadWorkspaceMeta, loadTree, loadMembers, loadEffectiveMembers, loadPermissions]);
+
+  // Initial load when page enters or workspaceId changes
   useEffect(() => {
+    setLoading(true);
+    void loadWorkspaceMeta();
+  }, [loadWorkspaceMeta]);
+
+  // Reset page parameters and loaded status when workspace changes
+  useEffect(() => {
+    setTab("tree");
     setMembersPage(0);
     setEffectiveMembersPage(0);
+    setLoadedTabs({
+      tree: false,
+      members: false,
+      effective: false,
+      permissions: false,
+      wiki: false,
+      files: false,
+    });
+    setTree(null);
+    setMembers([]);
+    setMembersTotal(0);
+    setEffectiveMembers([]);
+    setEffectiveMembersTotal(0);
+    setPermissionSummary(null);
+    setPermissionActions([]);
   }, [workspaceIdNumber]);
+
+  // Trigger loading data on tab click or pagination change
+  useEffect(() => {
+    if (!workspace) return;
+
+    if (tab === "tree" && !loadedTabs.tree) {
+      void loadTree().then(() => setLoadedTabs((prev) => ({ ...prev, tree: true })));
+    } else if (tab === "members") {
+      void loadMembers().then(() => setLoadedTabs((prev) => ({ ...prev, members: true })));
+    } else if (tab === "effective") {
+      void loadEffectiveMembers().then(() => setLoadedTabs((prev) => ({ ...prev, effective: true })));
+    } else if (tab === "permissions" && !loadedTabs.permissions) {
+      void loadPermissions().then(() => setLoadedTabs((prev) => ({ ...prev, permissions: true })));
+    }
+  }, [
+    tab,
+    workspace,
+    loadedTabs.tree,
+    loadedTabs.permissions,
+    loadTree,
+    loadMembers,
+    loadEffectiveMembers,
+    loadPermissions,
+  ]);
 
   const permissionActionSet = useMemo(
     () => new Set(permissionSummary?.actions ?? []),
@@ -972,8 +1118,8 @@ export function WorkspaceDetailPage() {
   const statusActionLabel = statusAction === "activate" ? "활성화" : "비활성화";
   const statusDialogMessage =
     statusAction === "activate"
-      ? `${workspace?.name ?? ""} Workspace를 활성화하시겠습니까?`
-      : `${workspace?.name ?? ""} Workspace를 비활성화하시겠습니까? 비활성화하면 수정과 멤버 변경이 제한됩니다.`;
+      ? `${workspace?.name ?? ""} 작업공간을 활성화하시겠습니까?`
+      : `${workspace?.name ?? ""} 작업공간을 비활성화하시겠습니까? 비활성화하면 수정과 멤버 변경이 제한됩니다.`;
 
   async function handleSave() {
     if (!workspace) return;
@@ -986,9 +1132,9 @@ export function WorkspaceDetailPage() {
       setWorkspace(saved);
       setForm({ name: saved.name, visibility: saved.visibility });
       setTree((current) => replaceWorkspaceInTree(current, saved));
-      toast.success("Workspace가 저장되었습니다.");
+      toast.success("작업공간이 저장되었습니다.");
     } catch (err) {
-      toast.error(resolveAxiosError(err) || "Workspace 저장에 실패했습니다.");
+      toast.error(resolveAxiosError(err) || "작업공간 저장에 실패했습니다.");
     } finally {
       setSaving(false);
     }
@@ -1013,18 +1159,18 @@ export function WorkspaceDetailPage() {
       const payload = { cascade: hasChildWorkspaces ? statusCascade : false };
       if (statusAction === "activate") {
         await reactWorkspaceApi.activate(workspace.id, payload);
-        toast.success("Workspace가 활성화되었습니다.");
+        toast.success("작업공간이 활성화되었습니다.");
       } else {
         await reactWorkspaceApi.archive(workspace.id, payload);
-        toast.success("Workspace가 비활성화되었습니다.");
+        toast.success("작업공간이 비활성화되었습니다.");
       }
       setStatusAction(null);
       setStatusCascade(false);
-      await loadWorkspace();
+      await handleRefresh();
     } catch (err) {
       toast.error(
         resolveAxiosError(err) ||
-          (statusAction === "activate" ? "Workspace 활성화에 실패했습니다." : "Workspace 비활성화에 실패했습니다.")
+          (statusAction === "activate" ? "작업공간 활성화에 실패했습니다." : "작업공간 비활성화에 실패했습니다.")
       );
     } finally {
       setStatusSaving(false);
@@ -1048,7 +1194,7 @@ export function WorkspaceDetailPage() {
     try {
       await Promise.all(userIds.map((userId) => reactWorkspaceApi.addMember(workspace.id, { userId, role: "VIEWER" })));
       toast.success(`${userIds.length}명의 멤버가 추가되었습니다.`);
-      await loadWorkspace();
+      await handleRefresh();
     } catch (err) {
       toast.error(resolveAxiosError(err) || "멤버 추가에 실패했습니다.");
     }
@@ -1059,7 +1205,7 @@ export function WorkspaceDetailPage() {
     try {
       await reactWorkspaceApi.changeRole(workspace.id, member.userId, { role });
       toast.success("역할이 변경되었습니다.");
-      await loadWorkspace();
+      await handleRefresh();
     } catch (err) {
       toast.error(resolveAxiosError(err) || "역할 변경에 실패했습니다.");
     }
@@ -1083,18 +1229,14 @@ export function WorkspaceDetailPage() {
     try {
       await Promise.all(userIds.map((userId) => reactWorkspaceApi.removeMember(workspace.id, userId)));
       toast.success(`${userIds.length}명의 멤버가 제거되었습니다.`);
-      await loadWorkspace();
+      await handleRefresh();
     } catch (err) {
       toast.error(resolveAxiosError(err) || "멤버 제거에 실패했습니다.");
     }
   }
 
   if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <SkeletonPlaceholder variant="detail" />;
   }
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!workspace) return null;
@@ -1103,21 +1245,21 @@ export function WorkspaceDetailPage() {
     <Stack spacing={2}>
       <PageToolbar
         divider
-        breadcrumbs={["애플리케이션", "Workspace", workspace.name]}
-        label="Workspace tree와 멤버 권한을 관리합니다."
+        breadcrumbs={["애플리케이션", "작업공간", workspace.name]}
+        label="작업공간 tree와 멤버 권한을 관리합니다."
         previous
         onPrevious={() => navigate(previousListPath)}
-        onRefresh={loadWorkspace}
+        onRefresh={handleRefresh}
         actions={
           <Stack direction="row" spacing={0.5}>
-            <Tooltip title="Child Workspace 생성">
+            <Tooltip title="Child 작업공간 생성">
               <span>
                 <IconButton size="small" disabled={archived || statusSaving} onClick={() => setChildDialogOpen(true)}>
                   <AddOutlined fontSize="small" />
                 </IconButton>
               </span>
             </Tooltip>
-            <Tooltip title="Parent Workspace 변경">
+            <Tooltip title="Parent 작업공간 변경">
               <span>
                 <IconButton size="small" disabled={archived || saving || statusSaving} onClick={() => setParentDialogOpen(true)}>
                   <DriveFileMoveOutlined fontSize="small" />
@@ -1128,7 +1270,7 @@ export function WorkspaceDetailPage() {
         }
       />
 
-      {archived ? <Alert severity="info">비활성화된 Workspace입니다. 수정과 멤버 변경은 제한됩니다.</Alert> : null}
+      {archived ? <Alert severity="info">비활성화된 작업공간입니다. 수정과 멤버 변경은 제한됩니다.</Alert> : null}
 
       <Container maxWidth="lg" disableGutters>
         <Grid container spacing={2}>
@@ -1215,95 +1357,122 @@ export function WorkspaceDetailPage() {
         <Tab value="effective" label="유효 멤버" />
         <Tab value="permissions" label="권한" />
         <Tab value="wiki" label="Wiki" />
+        <Tab value="files" label="파일" />
       </Tabs>
 
       {tab === "tree" ? (
         <Paper variant="outlined" sx={{ p: 2 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-            <Typography variant="subtitle1">Workspace Tree</Typography>
+            <Typography variant="subtitle1">작업공간 Tree</Typography>
             <Tooltip title="새로고침">
-              <IconButton size="small" onClick={() => void loadWorkspace()}>
+              <IconButton size="small" onClick={() => void loadTree()}>
                 <RefreshOutlined fontSize="small" />
               </IconButton>
             </Tooltip>
           </Stack>
-          <WorkspaceTreeView node={tree} currentId={workspace.id} />
+          {treeLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+              <CircularProgress size={30} />
+            </Box>
+          ) : (
+            <WorkspaceTreeView node={tree} currentId={workspace.id} />
+          )}
         </Paper>
       ) : null}
 
       {tab === "members" ? (
         <Paper variant="outlined" sx={{ p: 2 }}>
-          <WorkspaceMembersGrid
-            members={members}
-            totalElements={membersTotal}
-            page={membersPage}
-            pageSize={memberPageSize}
-            usersById={usersById}
-            archived={archived}
-            onAdd={() => setUserSearchOpen(true)}
-            onChangeRole={handleChangeRole}
-            onRemove={(selectedMembers) => void handleRemoveMembers(selectedMembers)}
-            onPageChange={setMembersPage}
-          />
+          {membersLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+              <CircularProgress size={30} />
+            </Box>
+          ) : (
+            <WorkspaceMembersGrid
+              members={members}
+              totalElements={membersTotal}
+              page={membersPage}
+              pageSize={memberPageSize}
+              usersById={usersById}
+              archived={archived}
+              onAdd={() => setUserSearchOpen(true)}
+              onChangeRole={handleChangeRole}
+              onRemove={(selectedMembers) => void handleRemoveMembers(selectedMembers)}
+              onPageChange={setMembersPage}
+            />
+          )}
         </Paper>
       ) : null}
 
       {tab === "effective" ? (
         <Paper variant="outlined" sx={{ p: 2 }}>
-          <WorkspaceMembersGrid
-            members={effectiveMembers}
-            totalElements={effectiveMembersTotal}
-            page={effectiveMembersPage}
-            pageSize={memberPageSize}
-            usersById={usersById}
-            inherited
-            onPageChange={setEffectiveMembersPage}
-          />
+          {effectiveMembersLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+              <CircularProgress size={30} />
+            </Box>
+          ) : (
+            <WorkspaceMembersGrid
+              members={effectiveMembers}
+              totalElements={effectiveMembersTotal}
+              page={effectiveMembersPage}
+              pageSize={memberPageSize}
+              usersById={usersById}
+              inherited
+              onPageChange={setEffectiveMembersPage}
+            />
+          )}
         </Paper>
       ) : null}
 
       {tab === "permissions" ? (
-        <Stack spacing={2}>
-          <WorkspacePermissionMatrix actions={permissionActions} summary={permissionSummary} />
-          <Paper variant="outlined" sx={{ p: 2 }}>
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                Action Definitions
-              </Typography>
-              <Stack spacing={0.75}>
-                {permissionActions.map((action) => (
-                  <Stack key={action.action} direction="row" spacing={1} alignItems="center">
-                    <Chip
-                      size="small"
-                      color={permissionActionSet.has(action.action) ? "success" : "default"}
-                      variant={permissionActionSet.has(action.action) ? "filled" : "outlined"}
-                      label={action.action}
-                    />
-                    <Typography variant="body2" color="text.secondary">
-                      {action.description ?? ""}
-                    </Typography>
-                  </Stack>
-                ))}
-              </Stack>
-            </Box>
-          </Paper>
-        </Stack>
+        permissionsLoading ? (
+          <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+            <CircularProgress size={30} />
+          </Box>
+        ) : (
+          <Stack spacing={2}>
+            <WorkspacePermissionMatrix actions={permissionActions} summary={permissionSummary} />
+            <Paper variant="outlined" sx={{ p: 2 }}>
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Action Definitions
+                </Typography>
+                <Stack spacing={0.75}>
+                  {permissionActions.map((action) => (
+                    <Stack key={action.action} direction="row" spacing={1} alignItems="center">
+                      <Chip
+                        size="small"
+                        color={permissionActionSet.has(action.action) ? "success" : "default"}
+                        variant={permissionActionSet.has(action.action) ? "filled" : "outlined"}
+                        label={action.action}
+                      />
+                      <Typography variant="body2" color="text.secondary">
+                        {action.description ?? ""}
+                      </Typography>
+                    </Stack>
+                  ))}
+                </Stack>
+              </Box>
+            </Paper>
+          </Stack>
+        )
       ) : null}
 
       {tab === "wiki" ? <WorkspaceWikiPanel workspaceId={workspace.id} archived={archived} /> : null}
+
+      {tab === "files" ? <WorkspaceFilesPanel workspaceId={workspace.id} archived={archived} /> : null}
 
       <WorkspaceCreateChildDialog
         open={childDialogOpen}
         parent={workspace}
         onClose={() => setChildDialogOpen(false)}
-        onCreated={() => void loadWorkspace()}
+        onCreated={() => void handleRefresh()}
       />
       <WorkspaceParentChangeDialog
         open={parentDialogOpen}
         workspace={workspace}
         tree={tree}
         onClose={() => setParentDialogOpen(false)}
-        onChanged={() => void loadWorkspace()}
+        onChanged={() => void handleRefresh()}
       />
       <UserSearchDialog
         open={userSearchOpen}
@@ -1313,7 +1482,7 @@ export function WorkspaceDetailPage() {
         onConfirmSelection={(users) => void handleAddMembers(users)}
       />
       <Dialog open={Boolean(statusAction)} onClose={closeStatusDialog} maxWidth="xs" fullWidth>
-        <DialogTitle>Workspace {statusActionLabel}</DialogTitle>
+        <DialogTitle>작업공간 {statusActionLabel}</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5}>
             <DialogContentText>{statusDialogMessage}</DialogContentText>
@@ -1326,7 +1495,7 @@ export function WorkspaceDetailPage() {
                     onChange={(event) => setStatusCascade(event.target.checked)}
                   />
                 }
-                label={`하위 Workspace도 함께 ${statusActionLabel}`}
+                label={`하위 작업공간도 함께 ${statusActionLabel}`}
               />
             ) : null}
           </Stack>

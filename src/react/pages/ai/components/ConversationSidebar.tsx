@@ -50,9 +50,10 @@ export function ConversationSidebar({
         width: drawer ? "100%" : { xs: "100%", md: 320 },
         height: drawer ? "100%" : "auto",
         p: 1.5,
-        borderRadius: drawer ? 0 : 3,
+        borderRadius: drawer ? 0 : "8px",
         flexShrink: 0,
         overflow: "hidden",
+        bgcolor: "background.paper",
       }}
     >
       <Stack spacing={1} sx={{ height: "100%" }}>
@@ -80,7 +81,14 @@ export function ConversationSidebar({
               key={conversation.conversationId}
               selected={conversation.conversationId === conversationId}
               onClick={() => onOpen(conversation.conversationId)}
-              sx={{ borderRadius: 1, alignItems: "flex-start" }}
+              sx={{
+                borderRadius: "8px",
+                alignItems: "flex-start",
+                mb: 0.5,
+                "&.Mui-selected": {
+                  bgcolor: "action.selected",
+                },
+              }}
             >
               <ListItemText
                 primary={conversation.title || conversation.conversationId}

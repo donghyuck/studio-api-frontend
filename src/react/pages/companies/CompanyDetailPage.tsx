@@ -40,6 +40,7 @@ import dayjs from "dayjs";
 import { API_BASE_URL } from "@/config/backend";
 import NO_AVATAR from "@/assets/images/users/no-avatar.png";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import { SkeletonPlaceholder } from "@/react/components/common/SkeletonPlaceholder";
 import { useConfirm, useToast } from "@/react/feedback";
 import { UserSearchDialog } from "@/react/pages/admin/UserSearchDialog";
 import { reactUsersApi } from "@/react/pages/admin/users/api";
@@ -1067,11 +1068,7 @@ export function CompanyDetailPage() {
   }
 
   if (loading) {
-    return (
-      <Box sx={{ display: "flex", justifyContent: "center", mt: 4 }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <SkeletonPlaceholder variant="detail" />;
   }
   if (error) return <Alert severity="error">{error}</Alert>;
   if (!company) return null;
@@ -1080,13 +1077,19 @@ export function CompanyDetailPage() {
     <Stack spacing={2}>
       <PageToolbar
         divider
-        breadcrumbs={["시스템관리", "Company", company.displayName ?? company.name]}
+        breadcrumbs={[
+          "시스템관리",
+          "회사",
+          company.displayName && company.displayName !== company.name
+            ? `${company.displayName} (${company.name})`
+            : company.name,
+        ]}
         label="Company 기본 정보와 멤버 권한을 관리합니다."
         previous
         onPrevious={() => navigate("/admin/companies")}
         onRefresh={loadCompany}
         actions={
-          <Tooltip title="Workspace 목록 보기">
+          <Tooltip title="작업공간 목록 보기">
             <IconButton
               size="small"
               onClick={() => navigate(`/application/workspaces?companyId=${company.companyId}`)}
@@ -1210,9 +1213,9 @@ export function CompanyDetailPage() {
       {tab === "basic" ? (
         <Paper ref={workspaceScopeRef} variant="outlined" sx={{ p: 2, scrollMarginTop: 56 }}>
           <Stack spacing={1}>
-            <Typography variant="subtitle1">Workspace Scope</Typography>
+            <Typography variant="subtitle1">작업공간 Scope</Typography>
             <Typography variant="body2" color="text.secondary">
-              이 Company에 연결된 Workspace를 목록에서 필터링해 확인할 수 있습니다.
+              이 Company에 연결된 작업공간을 목록에서 필터링해 확인할 수 있습니다.
             </Typography>
             <Box>
               <Button
@@ -1221,7 +1224,7 @@ export function CompanyDetailPage() {
                 startIcon={<AccountTreeOutlined />}
                 onClick={() => navigate(`/application/workspaces?companyId=${company.companyId}`)}
               >
-                Workspace 목록 보기
+                작업공간 목록 보기
               </Button>
             </Box>
           </Stack>

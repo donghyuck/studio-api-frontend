@@ -41,6 +41,7 @@ function GridContentInner<TData = unknown>(
     height,
     onFilterActived,
     onRowSelected,
+    onRowClicked,
   }: GridContentProps<TData>,
   ref: React.ForwardedRef<GridContentHandle<TData>>
 ) {
@@ -185,7 +186,11 @@ function GridContentInner<TData = unknown>(
         columnDefs={columnDefs}
         rowData={rowData}
         loading={loading}
+        pagination={gridOptions.pagination}
+        paginationPageSize={gridOptions.paginationPageSize}
+        paginationPageSizeSelector={gridOptions.paginationPageSizeSelector}
         onRowSelected={onRowSelected}
+        onRowClicked={onRowClicked as any}
         onFilterChanged={handleFilterChanged}
         onSelectionChanged={handleSelectionChanged}
         onGridReady={handleGridReady}

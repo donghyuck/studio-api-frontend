@@ -1,25 +1,50 @@
+/* Claude Design System tokens for AG Grid */
+[data-theme-mode="light"] {
+  --theme-surface-color: rgba(255, 255, 255, 0.85); /* Glassmorphism Soft Light */
+  --theme-background-color: #f8fafc;    /* Light Sky Canvas */
+  --theme-text-primary: #0f172a;        /* Slate Slate-900 */
+  --theme-text-secondary: #475569;      /* Slate Muted */
+  --theme-primary-color: #8b5cf6;       /* Quantum Violet */
+  --theme-border-color: rgba(139, 92, 246, 0.15); /* Violet Light Border */
+}
+
+[data-theme-mode="dark"] {
+  --theme-surface-color: rgba(13, 16, 31, 0.75);  /* Space Navy Glassmorphism */
+  --theme-background-color: #07080f;    /* Space Navy Canvas */
+  --theme-text-primary: #f8fafc;        /* On-Dark Text */
+  --theme-text-secondary: #94a3b8;      /* Muted On-Dark */
+  --theme-primary-color: #8b5cf6;       /* Quantum Violet */
+  --theme-border-color: rgba(139, 92, 246, 0.2); /* Violet Dark Border */
+}
+
 .ag-theme-adapted {
-  --ag-background-color: rgb(var(--v-theme-surface));
-  --ag-foreground-color: rgb(var(--v-theme-on-surface));
-  --ag-header-background-color: rgb(var(--v-theme-surface));
-  --ag-header-foreground-color: rgb(var(--v-theme-on-surface));
-  --ag-odd-row-background-color: rgba(var(--v-theme-on-surface), 0.02);
-  --ag-row-hover-color: rgba(var(--v-theme-primary), 0.12);
-  --ag-selected-row-background-color: rgba(var(--v-theme-primary), 0.2);
-  --ag-border-color: rgba(var(--v-border-color), var(--v-border-opacity));
-  --ag-row-border-color: rgba(var(--v-border-color), var(--v-border-opacity));
-  --ag-secondary-border-color: rgba(var(--v-border-color), var(--v-border-opacity));
-  --ag-input-border-color: rgba(var(--v-border-color), var(--v-border-opacity));
-  --ag-modal-overlay-background-color: rgba(var(--v-theme-surface), 0.7);
+  --ag-background-color: var(--theme-surface-color);
+  --ag-foreground-color: var(--theme-text-primary);
+  --ag-header-background-color: var(--theme-surface-color);
+  --ag-header-foreground-color: var(--theme-text-secondary);
+  --ag-odd-row-background-color: rgba(139, 92, 246, 0.015);
+  --ag-row-hover-color: rgba(139, 92, 246, 0.08);
+  --ag-selected-row-background-color: rgba(139, 92, 246, 0.15);
+  --ag-border-color: var(--theme-border-color);
+  --ag-row-border-color: var(--theme-border-color);
+  --ag-secondary-border-color: var(--theme-border-color);
+  --ag-input-border-color: var(--theme-border-color);
+  --ag-modal-overlay-background-color: rgba(7, 8, 15, 0.7);
+
+  /* Fonts */
+  --ag-font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --ag-header-font-family: "Outfit", "Inter", sans-serif;
+  --ag-header-font-weight: 600;
 }
 
 .ag-theme-adapted .ag-root-wrapper {
-  border-color: rgba(var(--v-border-color), var(--v-border-opacity));
-  background-color: rgb(var(--v-theme-surface));
+  border-color: var(--theme-border-color);
+  background-color: var(--theme-surface-color);
 }
 
 .ag-theme-adapted .ag-header {
-  border-bottom-color: rgba(var(--v-border-color), var(--v-border-opacity));
+  border-bottom-color: var(--theme-border-color);
+  background-color: var(--theme-surface-color);
 }
 
 .ag-theme-adapted .ag-selection-checkbox,
@@ -33,31 +58,19 @@
   margin: 0 auto;
 }
 
-.v-theme--dark .ag-theme-adapted {
-  --ag-header-foreground-color: rgb(var(--v-theme-on-surface));
-}
-
-.v-theme--dark .ag-theme-adapted .ag-header,
-.v-theme--dark .ag-theme-adapted .ag-header-cell,
-.v-theme--dark .ag-theme-adapted .ag-header-cell-text {
-  color: rgb(var(--v-theme-on-surface)) !important;
+.ag-theme-adapted .ag-header,
+.ag-theme-adapted .ag-header-cell,
+.ag-theme-adapted .ag-header-cell-text {
+  color: var(--theme-text-primary) !important;
 }
 
 .ag-theme-adapted .ag-link {
-  color: rgb(var(--v-theme-primary));
+  color: var(--theme-primary-color);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .ag-theme-adapted .ag-link:hover {
-  color: rgb(var(--v-theme-primary));
+  color: var(--theme-primary-color);
   opacity: 0.85;
-}
-
-.v-theme--dark .ag-theme-adapted .ag-link {
-  color: rgb(var(--v-theme-primary));
-}
-
-.v-theme--dark .ag-theme-adapted .ag-link:hover {
-  opacity: 0.9;
 }

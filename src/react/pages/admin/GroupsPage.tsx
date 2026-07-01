@@ -182,7 +182,7 @@ export function GroupsPage() {
   return (
     <Stack spacing={0.5}>
       <PageToolbar
-        divider={false}
+        hasGrid
         breadcrumbs={["시스템관리", "보안관리", "그룹"]}
         label="그룹을 검색하고 멤버십과 역할을 관리합니다."
         onRefresh={handleRefresh}
@@ -190,12 +190,23 @@ export function GroupsPage() {
         searchValue={searchInput}
         onSearchValueChange={setSearchInput}
         onSearch={handleSearch}
-        actions={
-          <Tooltip title="그룹 생성">
-            <IconButton size="small" aria-label="그룹 생성" onClick={() => setCreateOpen(true)}>
-              <GroupAddOutlined fontSize="small" />
-            </IconButton>
-          </Tooltip>
+        createButton={
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<GroupAddOutlined fontSize="small" />}
+            onClick={() => setCreateOpen(true)}
+            sx={{
+              height: 32,
+              px: 1.5,
+              borderRadius: "6px",
+              textTransform: "none",
+              fontSize: 12.5,
+              fontWeight: 600,
+            }}
+          >
+            생성
+          </Button>
         }
       />
 
