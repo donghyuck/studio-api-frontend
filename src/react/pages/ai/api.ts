@@ -38,6 +38,14 @@ import type {
   VectorProjection,
   VectorSearchRequestDto,
   VectorSearchResultDto,
+  VectorItemDetailDto,
+  VectorProjectionCreateRequestDto,
+  VectorProjectionCreateResponseDto,
+  VectorProjectionDetailDto,
+  VectorProjectionListResponseDto,
+  VectorProjectionPointsResponseDto,
+  VectorSearchVisualizationRequestDto,
+  VectorSearchVisualizationResponseDto,
 } from "@/types/studio/ai";
 
 const BASE = "/api/ai";

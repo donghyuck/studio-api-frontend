@@ -29,6 +29,8 @@ import { TemplateDetailsPage } from "@/react/pages/templates/TemplateDetailsPage
 import { TemplatesPage } from "@/react/pages/templates/TemplatesPage";
 import { UnauthorizedPage } from "@/react/pages/UnauthorizedPage";
 import { AdminRoutes } from "@/react/router/AdminRoutes";
+import { WorkspaceDetailPage } from "@/react/pages/workspaces/WorkspaceDetailPage";
+import { WorkspaceListPage } from "@/react/pages/workspaces/WorkspaceListPage";
 
 export function AppRouter() {
   return (
@@ -53,6 +55,11 @@ export function AppRouter() {
           <Route index element={<DashboardPage />} />
           {profileRoutes}
           <Route path="application/files" element={<FilesPage />} />
+          <Route path="application/workspaces" element={<WorkspaceListPage />} />
+          <Route
+            path="application/workspaces/:workspaceId"
+            element={<WorkspaceDetailPage />}
+          />
           <Route path="application/mail" element={<MailPage />}>
             <Route index element={<Navigate to="inbox" replace />} />
             <Route path="inbox" element={<MailInboxPage />} />
@@ -81,6 +88,14 @@ export function AppRouter() {
           <Route path="services/ai/chat" element={<ChatPage />} />
           <Route path="services/ai/rag-chat" element={<RagChatPage />} />
           <Route path="services/ai/rag" element={<RagJobListPage />} />
+          <Route
+            path="services/ai/vector-visualization"
+            element={<VectorVisualizationPage />}
+          />
+          <Route
+            path="services/ai/rag-visualization"
+            element={<Navigate to="/services/ai/vector-visualization" replace />}
+          />
           <Route path="services/ai/rag/jobs/:jobId" element={<RagJobDetailPage />} />
           <Route
             path="services/ai/vector-visualization"

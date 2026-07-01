@@ -3,6 +3,7 @@ import { Autocomplete, CircularProgress, Stack, TextField, Typography } from "@m
 import type { SxProps, TextFieldProps, Theme } from "@mui/material";
 import { reactObjectTypeApi } from "@/react/pages/objecttype/api";
 import type { ObjectTypeDto } from "@/types/studio/objecttype";
+import { resolveAxiosError } from "@/utils/helpers";
 
 const DEFAULT_CACHE_TTL_MS = 60_000;
 let cachedObjectTypes: ObjectTypeDto[] | null = null;
@@ -32,6 +33,7 @@ type ObjectTypeSelectProps = {
   textFieldSx?: SxProps<Theme>;
   onOptionsLoaded?: (options: ObjectTypeSelectOption[]) => void;
   cacheTtlMs?: number;
+  helperText?: string;
 };
 
 export function toObjectTypeOption(item: ObjectTypeDto): ObjectTypeSelectOption {
@@ -67,9 +69,11 @@ export function ObjectTypeSelect({
   textFieldSx,
   onOptionsLoaded,
   cacheTtlMs = DEFAULT_CACHE_TTL_MS,
+  helperText,
 }: ObjectTypeSelectProps) {
   const [objectTypes, setObjectTypes] = useState<ObjectTypeDto[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadObjectTypes = useCallback(async (force = false) => {
     const now = Date.now();
@@ -80,6 +84,7 @@ export function ObjectTypeSelect({
     }
 
     setLoading(true);
+    setError(null);
     try {
       pendingObjectTypes ??= reactObjectTypeApi
         .list({ status: "ACTIVE" })
@@ -91,8 +96,10 @@ export function ObjectTypeSelect({
         .finally(() => {
           pendingObjectTypes = null;
         });
-      setObjectTypes(await pendingObjectTypes);
-    } catch {
+      const items = await pendingObjectTypes;
+      setObjectTypes(items);
+    } catch (loadError) {
+      setError(resolveAxiosError(loadError));
       if (!cachedObjectTypes) {
         setObjectTypes([]);
       }
@@ -156,6 +163,7 @@ export function ObjectTypeSelect({
           label={label}
           placeholder={placeholder}
           sx={textFieldSx}
+          helperText={helperText ?? (error ? "오브젝트 타입 목록을 불러오지 못했습니다." : undefined)}
           InputProps={{
             ...params.InputProps,
             endAdornment: (
