@@ -97,6 +97,10 @@ export function AppRouter() {
             element={<Navigate to="/services/ai/vector-visualization" replace />}
           />
           <Route path="services/ai/rag/jobs/:jobId" element={<RagJobDetailPage />} />
+          <Route
+            path="services/ai/vector-visualization"
+            element={<VectorVisualizationPage />}
+          />
           {/* Admin and Security Pages */}
           <Route path="admin/*" element={<AdminRoutes />} />
         </Route>

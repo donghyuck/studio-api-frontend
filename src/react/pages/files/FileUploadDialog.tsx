@@ -32,6 +32,72 @@ interface Props {
   onUploaded: () => Promise<void> | void;
 }
 
+function parsePolicyList(value?: string | null) {
+  return (value ?? "")
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function fileExtension(fileName?: string) {
+  const name = fileName ?? "";
+  const index = name.lastIndexOf(".");
+  return index >= 0 ? name.slice(index + 1).toLowerCase() : "";
+}
+
+function mimeAllowed(allowedMime: string[], contentType?: string) {
+  const normalized = (contentType ?? "").toLowerCase();
+  if (!normalized || allowedMime.length === 0) {
+    return true;
+  }
+  return allowedMime.some((mime) => {
+    if (mime.endsWith("/*")) {
+      return normalized.startsWith(mime.slice(0, -1));
+    }
+    return normalized === mime;
+  });
+}
+
+function validateFileAgainstPolicy(file: { name?: string; type?: string; size?: number }, policy: ObjectTypePolicyDto | null) {
+  if (!policy) {
+    return null;
+  }
+
+  if (policy.maxFileMb != null && file.size != null) {
+    const maxBytes = policy.maxFileMb * 1024 * 1024;
+    if (file.size > maxBytes) {
+      return `파일 크기는 최대 ${policy.maxFileMb}MB까지 업로드할 수 있습니다.`;
+    }
+  }
+
+  const allowedExt = parsePolicyList(policy.allowedExt).map((item) => item.replace(/^\./, ""));
+  const ext = fileExtension(file.name);
+  if (allowedExt.length > 0 && (!ext || !allowedExt.includes(ext))) {
+    return `허용되지 않은 확장자입니다. 허용 확장자: ${allowedExt.join(", ")}`;
+  }
+
+  const allowedMime = parsePolicyList(policy.allowedMime);
+  if (!mimeAllowed(allowedMime, file.type)) {
+    return `허용되지 않은 MIME 타입입니다. 허용 MIME: ${allowedMime.join(", ")}`;
+  }
+
+  return null;
+}
+
+function buildUppyRestrictions(policy: ObjectTypePolicyDto | null) {
+  const allowedExt = parsePolicyList(policy?.allowedExt).map((item) =>
+    item.startsWith(".") ? item : `.${item}`
+  );
+  const allowedMime = parsePolicyList(policy?.allowedMime);
+  const allowedFileTypes = [...allowedExt, ...allowedMime];
+
+  return {
+    maxFileSize: policy?.maxFileMb != null ? policy.maxFileMb * 1024 * 1024 : undefined,
+    maxNumberOfFiles: 1,
+    allowedFileTypes: allowedFileTypes.length > 0 ? allowedFileTypes : undefined,
+  };
+}
+
 export function FileUploadDialog({
   open,
   initialObjectType = null,
@@ -43,6 +109,7 @@ export function FileUploadDialog({
   const uppyRef = useRef<Uppy | null>(null);
   const objectTypeRef = useRef("");
   const objectIdRef = useRef("");
+  const policyRef = useRef<ObjectTypePolicyDto | null>(null);
   const [uppyContainer, setUppyContainer] = useState<HTMLDivElement | null>(null);
   const [objectType, setObjectType] = useState<string>(
     initialObjectType == null ? "" : String(initialObjectType)
@@ -65,6 +132,7 @@ export function FileUploadDialog({
     setObjectType(nextType);
     setObjectId(nextId);
     setPolicy(null);
+    policyRef.current = null;
     setError(null);
     objectTypeRef.current = nextType;
     objectIdRef.current = nextId;
@@ -104,11 +172,13 @@ export function FileUploadDialog({
       .then((nextPolicy) => {
         if (!ignored) {
           setPolicy(nextPolicy);
+          policyRef.current = nextPolicy;
         }
       })
       .catch(() => {
         if (!ignored) {
           setPolicy(null);
+          policyRef.current = null;
         }
       });
 
@@ -122,19 +192,45 @@ export function FileUploadDialog({
       return;
     }
 
-    reset(initialObjectType, initialObjectId);
-
     const uppy = new Uppy({
       autoProceed: false,
       locale: Korean,
       restrictions: {
-        maxFileSize: 50 * 1024 * 1024,
         maxNumberOfFiles: 1,
+      },
+      onBeforeFileAdded: (currentFile) => {
+        const policyError = validateFileAgainstPolicy(
+          {
+            name: currentFile.name,
+            type: currentFile.type,
+            size: currentFile.size,
+          },
+          policyRef.current
+        );
+        if (policyError) {
+          setError(policyError);
+          return false;
+        }
+        return true;
       },
       onBeforeUpload: () => {
         if (objectTypeRef.current === "" || objectIdRef.current === "") {
           setError("등록된 객체 유형과 객체 식별자를 입력해야 업로드할 수 있습니다.");
           return false;
+        }
+        for (const file of uppy.getFiles()) {
+          const policyError = validateFileAgainstPolicy(
+            {
+              name: file.name,
+              type: file.type,
+              size: file.size,
+            },
+            policyRef.current
+          );
+          if (policyError) {
+            setError(policyError);
+            return false;
+          }
         }
         return true;
       },
@@ -174,12 +270,23 @@ export function FileUploadDialog({
       }
     });
 
+    uppy.on("upload-error", (_file, uploadError) => {
+      setError(resolveAxiosError(uploadError));
+    });
+
     uppyRef.current = uppy;
 
     return () => {
       destroyUppy();
     };
   }, [open, uppyContainer, initialObjectId, initialObjectType, onUploaded]);
+
+  useEffect(() => {
+    policyRef.current = policy;
+    uppyRef.current?.setOptions({
+      restrictions: buildUppyRestrictions(policy),
+    });
+  }, [policy]);
 
   return (
     <Dialog
@@ -253,7 +360,7 @@ export function FileUploadDialog({
           </Stack>
           {policy ? (
             <Typography variant="caption" color="text.secondary">
-              파일 정책: 최대 {policy.maxFileMb ?? "-"}MB
+              파일 정책: 최대 {policy.maxFileMb != null ? `${policy.maxFileMb}MB` : "제한 없음"}
               {policy.allowedExt ? ` · 확장자 ${policy.allowedExt}` : ""}
               {policy.allowedMime ? ` · MIME ${policy.allowedMime}` : ""}
             </Typography>
@@ -263,19 +370,23 @@ export function FileUploadDialog({
             </Typography>
           ) : null}
           {error ? <Alert severity="error">{error}</Alert> : null}
-          <Box
-            ref={handleUppyContainerRef}
-            className="file-upload-uppy"
-            sx={{
-              "& .uppy-Dashboard-AddFiles-title": { fontSize: 14 },
-              "& .uppy-Dashboard-AddFiles-info": { fontSize: 12 },
-              "& .uppy-Dashboard-note": { fontSize: 12 },
-              "& .uppy-DashboardContent-title": { fontSize: 14 },
-              "& .uppy-Dashboard-Item-name": { fontSize: 12 },
-              "& .uppy-Dashboard-Item-status": { fontSize: 11 },
-              "& .uppy-DashboardContent-back, & .uppy-DashboardContent-addMore": { fontSize: 12 },
-            }}
-          />
+          {objectType ? (
+            <Box
+              ref={handleUppyContainerRef}
+              className="file-upload-uppy"
+              sx={{
+                "& .uppy-Dashboard-AddFiles-title": { fontSize: 14 },
+                "& .uppy-Dashboard-AddFiles-info": { fontSize: 12 },
+                "& .uppy-Dashboard-note": { fontSize: 12 },
+                "& .uppy-DashboardContent-title": { fontSize: 14 },
+                "& .uppy-Dashboard-Item-name": { fontSize: 12 },
+                "& .uppy-Dashboard-Item-status": { fontSize: 11 },
+                "& .uppy-DashboardContent-back, & .uppy-DashboardContent-addMore": { fontSize: 12 },
+              }}
+            />
+          ) : (
+            <Alert severity="info">객체 유형을 선택하면 파일 선택 영역이 표시됩니다.</Alert>
+          )}
         </Stack>
       </DialogContent>
       <DialogActions>

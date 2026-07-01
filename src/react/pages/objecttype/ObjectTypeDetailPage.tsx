@@ -4,21 +4,38 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Autocomplete,
   Box,
+  Chip,
   Stack,
   Button,
   Container,
   Grid,
+  IconButton,
+  InputAdornment,
   TextField,
   CircularProgress,
   Alert,
 } from "@mui/material";
-import { ExpandMoreOutlined, SaveOutlined } from "@mui/icons-material";
+import { AddOutlined, ExpandMoreOutlined, SaveOutlined } from "@mui/icons-material";
 import { useConfirm, useToast } from "@/react/feedback";
 import { reactObjectTypeApi } from "./api";
 import type { ObjectTypeDto, ObjectTypePolicyDto } from "@/types/studio/objecttype";
 import { useAuthStore } from "@/react/auth/store";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
+import { COMMON_MIME_TYPES } from "./commonMimeTypes";
+
+function parseList(value?: string | null) {
+  return (value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function serializeList(values: string[]) {
+  const normalized = Array.from(new Set(values.map((item) => item.trim()).filter(Boolean)));
+  return normalized.length > 0 ? normalized.join(",") : null;
+}
 
 export function ObjectTypeDetailPage() {
   const { objectTypeId } = useParams<{ objectTypeId: string }>();
@@ -35,8 +52,9 @@ export function ObjectTypeDetailPage() {
   const [form, setForm] = useState({ name: "", description: "", status: "" });
   const [policyForm, setPolicyForm] = useState({
     maxFileMb: "",
-    allowedExt: "",
-    allowedMime: "",
+    allowedExt: [] as string[],
+    allowedExtDraft: "",
+    allowedMime: [] as string[],
   });
 
   const loadObjectType = useCallback(() => {
@@ -58,8 +76,9 @@ export function ObjectTypeDetailPage() {
           setPolicy(pol);
           setPolicyForm({
             maxFileMb: pol.maxFileMb?.toString() ?? "",
-            allowedExt: pol.allowedExt ?? "",
-            allowedMime: pol.allowedMime ?? "",
+            allowedExt: parseList(pol.allowedExt),
+            allowedExtDraft: "",
+            allowedMime: parseList(pol.allowedMime),
           });
         }
         setPolicySource(effective?.source ?? (pol === null ? "default" : "stored"));
@@ -98,20 +117,44 @@ export function ObjectTypeDetailPage() {
     try {
       const nextPolicy = await reactObjectTypeApi.upsertPolicy(Number(objectTypeId), {
         maxFileMb: policyForm.maxFileMb === "" ? null : Number(policyForm.maxFileMb),
-        allowedExt: policyForm.allowedExt || null,
-        allowedMime: policyForm.allowedMime || null,
+        allowedExt: serializeList(policyForm.allowedExt),
+        allowedMime: serializeList(policyForm.allowedMime),
         updatedBy: user.username,
         updatedById: user.userId,
         createdBy: policy?.createdBy ?? user.username,
         createdById: policy?.createdById ?? user.userId,
       });
       setPolicy(nextPolicy);
+      setPolicyForm({
+        maxFileMb: nextPolicy.maxFileMb?.toString() ?? "",
+        allowedExt: parseList(nextPolicy.allowedExt),
+        allowedExtDraft: "",
+        allowedMime: parseList(nextPolicy.allowedMime),
+      });
+      setPolicySource("stored");
       toast.success("파일 정책이 저장되었습니다.");
     } catch {
       toast.error("파일 정책 저장에 실패했습니다.");
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleAddAllowedExt() {
+    const nextValue = policyForm.allowedExtDraft.trim().replace(/^\./, "");
+    if (!nextValue) return;
+    setPolicyForm((current) => ({
+      ...current,
+      allowedExt: Array.from(new Set([...current.allowedExt, nextValue])),
+      allowedExtDraft: "",
+    }));
+  }
+
+  function handleDeleteAllowedExt(value: string) {
+    setPolicyForm((current) => ({
+      ...current,
+      allowedExt: current.allowedExt.filter((item) => item !== value),
+    }));
   }
 
   async function handleDelete() {
@@ -240,7 +283,7 @@ export function ObjectTypeDetailPage() {
             파일 정책
           </AccordionSummary>
           <AccordionDetails>
-            <Grid container spacing={1} alignItems="center">
+            <Grid container spacing={1} alignItems="flex-start">
               <Grid size={{ xs: 12, md: 4 }}>
                 <TextField
                   label="최대 파일 크기 (MB)"
@@ -253,23 +296,102 @@ export function ObjectTypeDetailPage() {
               />
               </Grid>
               <Grid size={{ xs: 12, md: 4 }}>
-                <TextField
-                  label="허용 확장자"
-                  value={policyForm.allowedExt}
-                  onChange={(e) => setPolicyForm((f) => ({ ...f, allowedExt: e.target.value }))}
-                  size="small"
-                  helperText="예: jpg,png,pdf"
-                  fullWidth
-                />
+                <Stack spacing={0.75}>
+                  <TextField
+                    label="허용 확장자"
+                    value={policyForm.allowedExtDraft}
+                    onChange={(e) =>
+                      setPolicyForm((f) => ({ ...f, allowedExtDraft: e.target.value }))
+                    }
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        handleAddAllowedExt();
+                      }
+                    }}
+                    size="small"
+                    helperText="예: jpg"
+                    FormHelperTextProps={{
+                      sx: {
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      },
+                    }}
+                    fullWidth
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            edge="end"
+                            size="small"
+                            aria-label="허용 확장자 추가"
+                            onClick={handleAddAllowedExt}
+                            disabled={!policyForm.allowedExtDraft.trim()}
+                          >
+                            <AddOutlined fontSize="small" />
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                  <Stack
+                    direction="row"
+                    spacing={0.5}
+                    useFlexGap
+                    flexWrap="wrap"
+                    sx={{ minHeight: 24 }}
+                  >
+                    {policyForm.allowedExt.map((ext) => (
+                      <Chip
+                        key={ext}
+                        label={ext}
+                        size="small"
+                        variant="outlined"
+                        onDelete={() => handleDeleteAllowedExt(ext)}
+                      />
+                    ))}
+                  </Stack>
+                </Stack>
               </Grid>
               <Grid size={{ xs: 12, md: 4 }}>
-                <TextField
-                  label="허용 MIME 타입"
+                <Autocomplete
+                  multiple
+                  freeSolo
+                  options={COMMON_MIME_TYPES}
                   value={policyForm.allowedMime}
-                  onChange={(e) => setPolicyForm((f) => ({ ...f, allowedMime: e.target.value }))}
-                  size="small"
-                  helperText="예: image/*,application/pdf"
-                  fullWidth
+                  onChange={(_, value) =>
+                    setPolicyForm((current) => ({
+                      ...current,
+                      allowedMime: Array.from(new Set(value.map((item) => item.trim()).filter(Boolean))),
+                    }))
+                  }
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        label={option}
+                        size="small"
+                        variant="outlined"
+                        {...getTagProps({ index })}
+                        key={option}
+                      />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="허용 MIME 타입"
+                      size="small"
+                      helperText="목록 선택 또는 직접 입력. 빈 값은 제한 없음"
+                      FormHelperTextProps={{
+                        sx: {
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        },
+                      }}
+                    />
+                  )}
                 />
               </Grid>
               <Grid size={12} sx={{ mt: 2 }}>

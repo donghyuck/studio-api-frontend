@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   CircularProgress,
@@ -20,6 +23,7 @@ import {
   CloseOutlined,
   ContentCopyOutlined,
   DownloadOutlined,
+  ExpandMoreOutlined,
   IosShareOutlined,
   OpenInNewOutlined,
 } from "@mui/icons-material";
@@ -273,29 +277,55 @@ export function ObjectDialog({
           {renderDetail("수정일", formatDate(head?.modifiedDate))}
           {renderDetail("etag", head?.eTag)}
           {metadataEntries.length > 0 ? (
-            <Box>
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.75 }}>
-                Metadata
-              </Typography>
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Value</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {metadataEntries.map(([key, value]) => (
-                      <TableRow key={key}>
-                        <TableCell>{key}</TableCell>
-                        <TableCell sx={{ overflowWrap: "anywhere" }}>{String(value)}</TableCell>
+            <Accordion
+              disableGutters
+              elevation={0}
+              square
+              sx={{
+                bgcolor: "transparent",
+                border: 0,
+                boxShadow: "none",
+                "&:before": { display: "none" },
+              }}
+            >
+              <AccordionSummary
+                expandIcon={<ExpandMoreOutlined fontSize="small" />}
+                sx={{
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                  minHeight: 36,
+                  px: 0,
+                  "& .MuiAccordionSummary-content": {
+                    my: 0.75,
+                    alignItems: "center",
+                  },
+                }}
+              >
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
+                  Metadata
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 0, pt: 1, pb: 0 }}>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Name</TableCell>
+                        <TableCell>Value</TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
+                    </TableHead>
+                    <TableBody>
+                      {metadataEntries.map(([key, value]) => (
+                        <TableRow key={key}>
+                          <TableCell>{key}</TableCell>
+                          <TableCell sx={{ overflowWrap: "anywhere" }}>{String(value)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </AccordionDetails>
+            </Accordion>
           ) : null}
           <Box>
             <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">

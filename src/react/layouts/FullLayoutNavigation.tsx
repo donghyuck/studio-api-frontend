@@ -10,8 +10,9 @@ import {
 } from "@mui/material";
 import {
   AccountCircleOutlined,
-  ArticleOutlined,
   AccountTreeOutlined,
+  ArticleOutlined,
+  BubbleChartOutlined,
   BusinessOutlined,
   DashboardOutlined,
   ExpandLess,
@@ -20,6 +21,7 @@ import {
   ForumOutlined,
   GroupOutlined,
   Inventory2Outlined,
+  LinkOutlined,
   MailOutline,
   PsychologyAltOutlined,
   RuleOutlined,
@@ -135,9 +137,9 @@ export function buildNavSections(): NavSection[] {
           icon: <TopicOutlined fontSize="small" />,
         },
         {
-          label: "벡터 시각화",
+          label: "Vector Map",
           path: "/services/ai/vector-visualization",
-          icon: <TopicOutlined fontSize="small" />,
+          icon: <BubbleChartOutlined fontSize="small" />,
         },
       ],
     },
@@ -156,6 +158,11 @@ export function buildNavSections(): NavSection[] {
           label: "로그인 실패 감사",
           path: "/admin/audit/login-failures",
           icon: <ArticleOutlined fontSize="small" />,
+        },
+        {
+          label: "다운로드 링크 감사",
+          path: "/admin/audit/attachment-download-links",
+          icon: <LinkOutlined fontSize="small" />,
         },
       ],
     },
