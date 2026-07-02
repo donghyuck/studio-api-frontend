@@ -42,6 +42,10 @@ import CodeMirror from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
 import { markdown as markdownLang } from "@codemirror/lang-markdown";
 import DOMPurify from "dompurify";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { useAuthStore } from "@/react/auth/store";
 import {
   reactMarkdownDocumentApi,
@@ -92,49 +96,6 @@ export function MarkdownViewerDialog({
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Parse markdown to HTML (lightweight custom renderer for preview)
-  const renderedHtml = useEffectHtml(text);
-
-  function useEffectHtml(md: string) {
-    if (!md) return "";
-    let html = md
-      // Escaping HTML characters first for safety
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      // Headers
-      .replace(/^###### (.*$)/gim, "<h6>$1</h6>")
-      .replace(/^##### (.*$)/gim, "<h5>$1</h5>")
-      .replace(/^#### (.*$)/gim, "<h4>$1</h4>")
-      .replace(/^### (.*$)/gim, "<h3>$1</h3>")
-      .replace(/^## (.*$)/gim, "<h2>$1</h2>")
-      .replace(/^# (.*$)/gim, "<h1>$1</h1>")
-      // Code Blocks
-      .replace(/```([\s\S]*?)```/gm, "<pre><code>$1</code></pre>")
-      // Inline Code
-      .replace(/`([^`]+)`/g, "<code>$1</code>")
-      // Bold
-      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      // Italic
-      .replace(/\*([^*]+)\*/g, "<em>$1</em>")
-      // Blockquotes
-      .replace(/^\> (.*$)/gim, "<blockquote>$1</blockquote>")
-      // Unordered lists
-      .replace(/^\s*[\-\*]\s+(.*$)/gim, "<ul><li>$1</li></ul>")
-      // Replace duplicate closing/opening list tags
-      .replace(/<\/ul>\s*<ul>/g, "")
-      // Paragraphs
-      .split("\n\n")
-      .map(p => {
-        if (p.trim().startsWith("<h") || p.trim().startsWith("<pre") || p.trim().startsWith("<ul") || p.trim().startsWith("<block")) {
-          return p;
-        }
-        return `<p>${p.replace(/\n/g, "<br />")}</p>`;
-      })
-      .join("\n");
-
-    return DOMPurify.sanitize(html);
-  }
 
   // Load markdown text with progressive streaming
   async function loadMarkdown() {
@@ -762,10 +723,23 @@ export function MarkdownViewerDialog({
                         "& pre code": { p: 0, bgcolor: "transparent" },
                         "& blockquote": { borderLeft: "4px solid", borderColor: "primary.main", pl: 1.5, my: 1.5, color: "text.secondary", fontStyle: "italic" },
                         "& ul": { pl: 2, my: 1 },
+                        "& ol": { pl: 2, my: 1 },
                         "& li": { my: 0.5 },
+                        "& table": { borderCollapse: "collapse", width: "100%", my: 1.5, fontSize: "0.9em" },
+                        "& th": { border: "1px solid", borderColor: "divider", p: 0.75, bgcolor: "action.hover", fontWeight: 700 },
+                        "& td": { border: "1px solid", borderColor: "divider", p: 0.75 },
+                        // KaTeX math styles
+                        "& .katex-display": { overflowX: "auto", overflowY: "hidden", my: 1.5 },
+                        "& .katex": { fontSize: "1.05em" },
                       }}
-                      dangerouslySetInnerHTML={{ __html: renderedHtml }}
-                    />
+                    >
+                      <ReactMarkdown
+                        remarkPlugins={[remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                      >
+                        {text}
+                      </ReactMarkdown>
+                    </Box>
                   ) : (
                     <CodeMirror
                       value={text}
