@@ -7,6 +7,7 @@ import {
   DialogTitle,
   IconButton,
   Stack,
+  Tooltip,
   Typography,
   Tab,
   Tabs,
@@ -33,6 +34,8 @@ import {
   CloseOutlined,
   ContentCopyOutlined,
   DownloadOutlined,
+  FullscreenExitOutlined,
+  FullscreenOutlined,
   SearchOutlined,
   RefreshOutlined,
   VisibilityOutlined,
@@ -93,6 +96,7 @@ export function MarkdownViewerDialog({
   const [resources, setResources] = useState<MarkdownResourceDto[]>([]);
   const [locators, setLocators] = useState<MarkdownLocatorDto[]>([]);
   const [progress, setProgress] = useState<MarkdownPipelineProgressResponseDto | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -555,9 +559,10 @@ export function MarkdownViewerDialog({
       onClose={onClose}
       maxWidth="lg"
       fullWidth
+      fullScreen={isFullscreen}
       sx={{
         "& .MuiDialog-paper": {
-          height: "85vh",
+          height: isFullscreen ? "100vh" : "85vh",
           display: "flex",
           flexDirection: "column",
         },
@@ -574,6 +579,11 @@ export function MarkdownViewerDialog({
             </Typography>
           )}
         </Stack>
+        <Tooltip title={isFullscreen ? "창 모드" : "전체화면"}>
+          <IconButton size="small" onClick={() => setIsFullscreen((v) => !v)} sx={{ mr: 0.5 }}>
+            {isFullscreen ? <FullscreenExitOutlined fontSize="small" /> : <FullscreenOutlined fontSize="small" />}
+          </IconButton>
+        </Tooltip>
       </DialogTitle>
 
       <DialogContent sx={{ p: 0, display: "flex", flexDirection: "column", flexGrow: 1, overflow: "hidden" }}>
