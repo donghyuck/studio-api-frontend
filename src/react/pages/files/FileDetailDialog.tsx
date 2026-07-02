@@ -295,6 +295,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [runSkillExtraction, setRunSkillExtraction] = useState<boolean>(false);
   const [skillExtractionMode, setSkillExtractionMode] = useState<'regex' | 'llm' | ''>('');
   const [force, setForce] = useState<boolean>(false);
+  const [ocrRequired, setOcrRequired] = useState<boolean>(false);
 
   // Chunking Configuration
   const [chunkingStrategy, setChunkingStrategy] = useState<string>("structure-based");
@@ -823,6 +824,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       if (typeof opts.runChunking === "boolean") setRunChunking(opts.runChunking);
       if (typeof opts.runRagIndex === "boolean") setRunRagIndex(opts.runRagIndex);
       if (typeof opts.runSkillExtraction === "boolean") setRunSkillExtraction(opts.runSkillExtraction);
+      if (typeof opts.ocrRequired === "boolean") setOcrRequired(opts.ocrRequired);
       if (typeof opts.skillExtractionMode === "string" && (opts.skillExtractionMode === "regex" || opts.skillExtractionMode === "llm")) {
         setSkillExtractionMode(opts.skillExtractionMode);
       } else {
@@ -1380,6 +1382,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       blockifyLlmProvider: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? (blockifyLlmProvider || null) : null,
       blockifyLlmModel: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? (blockifyLlmModel || null) : null,
       blockifyPiiMaskingEnabled: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? blockifyPiiMaskingEnabled : null,
+      ocrRequired: isPdf ? ocrRequired : null,
     };
 
     if (runSkillExtraction || forEstimate) {
@@ -1613,6 +1616,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         runChunking: false,
         runRagIndex: false,
         runSkillExtraction: false,
+        ocrRequired: isPdf ? ocrRequired : null,
       } as any);
       const newDocId = res.document.documentId;
       setDocumentId(newDocId);
@@ -2883,20 +2887,46 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                         label={<Typography variant="body2" sx={{ fontSize: 13 }}>Skill 추출</Typography>}
                       />
                     </Grid>
-                    <Grid size={{ xs: 6, sm: 4 }}>
+                  </Grid>
+
+                  {/* Extraction Options Row */}
+                  <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2, px: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                      추출 옵션
+                    </Typography>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          size="small"
+                          checked={force}
+                          onChange={(e) => setForce(e.target.checked)}
+                          disabled={controlsDisabled || isCanceledRevision}
+                        />
+                      }
+                      label={<Typography variant="body2" sx={{ fontSize: 13 }}>강제 재추출 (force)</Typography>}
+                    />
+                    {isPdf && (
                       <FormControlLabel
                         control={
                           <Checkbox
                             size="small"
-                            checked={force}
-                            onChange={(e) => setForce(e.target.checked)}
+                            checked={ocrRequired}
+                            onChange={(e) => setOcrRequired(e.target.checked)}
                             disabled={controlsDisabled || isCanceledRevision}
                           />
                         }
-                        label={<Typography variant="body2" sx={{ fontSize: 13 }}>강제 재추출 (force)</Typography>}
+                        label={
+                          <Typography variant="body2" sx={{ fontSize: 13 }}>
+                            OCR 적용
+                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
+                              (PDF 전용)
+                            </Typography>
+                          </Typography>
+                        }
                       />
-                    </Grid>
-                  </Grid>
+                    )}
+                  </Stack>
+
 
                   {/* Chunking Configuration Form */}
                   {runChunking && (
