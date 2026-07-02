@@ -1490,16 +1490,16 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
           return;
         }
       } catch (err: any) {
-        console.error("Pipeline estimation failed:", err);
+        console.warn("Pipeline estimation failed, proceeding without estimate:", err);
         const status = err?.response?.status;
         const data = err?.response?.data;
         const code = data?.code || data?.message;
         if (code === "markdown.source.too-large" || status === 413) {
           toast.error("허용 크기를 초과했습니다.");
+          setIsExtracting(false);
           return;
-        } else {
-          toast.error("부하 추산 실패: " + resolveAxiosError(err));
         }
+        // 추산 실패는 치명적 오류가 아님 - 추산 없이 계속 실행
       } finally {
         setIsExtracting(false);
       }
