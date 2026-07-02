@@ -1940,126 +1940,6 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     return "PENDING";
   };
 
-  function renderInternalPipelineProgressSteps() {
-    const stage = pipelineProgress?.currentStage || pipelineExecution?.currentStage || (markdownStatus === "RUNNING" ? "MARKDOWN" : "");
-    const step = pipelineProgress?.rag?.currentStep || latestRagJob?.currentStep;
-    
-    // Determine active stage name
-    let activeStage: "origin" | "extract" | "normalization" | "markdown" | "chunking" | "embedding" | "indexing" | null = null;
-    if (isPendingOrRunning) {
-      if (markdownStatus === "RUNNING" || markdownStatus === "PENDING" || String(stage) === "EXTRACT") {
-        activeStage = "extract";
-      } else if (stage === "MARKDOWN") {
-        activeStage = "markdown";
-      } else if (stage === "CHUNKING") {
-        activeStage = "chunking";
-      } else if (stage === "RAG_INDEX") {
-        if (step === "EMBEDDING") activeStage = "embedding";
-        else if (step === "INDEXING") activeStage = "indexing";
-        else activeStage = "embedding";
-      } else if (latestRagJob?.status === "RUNNING") {
-        if (latestRagJob.currentStep === "EMBEDDING") activeStage = "embedding";
-        else if (latestRagJob.currentStep === "INDEXING") activeStage = "indexing";
-      }
-    }
-    
-    // Check if normalized document resource exists
-    const normalizedRes = findNormalizedDocumentResource(resources);
-    const hasNormalized = normalizedRes !== null;
-
-    const stepsList = [
-      { key: "origin", label: "원본" },
-      { key: "extract", label: "추출" },
-      { key: "normalization", label: "정규화" },
-      { key: "markdown", label: "Markdown" },
-      { key: "chunking", label: "청킹" },
-      { key: "embedding", label: "임베딩" },
-      { key: "indexing", label: "벡터 저장" },
-    ];
-
-    return (
-      <Box sx={{ mt: 1.5, mb: 1, p: 1.25, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "background.paper" }}>
-        <Stack direction="row" spacing={0.5} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap sx={{ gap: 0.5 }}>
-          {stepsList.map((stepItem, index) => {
-            const isLast = index === stepsList.length - 1;
-            let chipColor: "default" | "primary" | "warning" | "success" = "default";
-
-            if (isPendingOrRunning && stepItem.key === activeStage) {
-              chipColor = "primary";
-            } else {
-              if (stepItem.key === "origin") {
-                chipColor = "success";
-              } else if (stepItem.key === "extract") {
-                if (markdownStatus === "COMPLETED" || latestRevision?.status === "COMPLETED") {
-                  chipColor = "success";
-                }
-              } else if (stepItem.key === "normalization") {
-                if (hasNormalized) {
-                  const meta = normalizedRes.metadataJson;
-                  const status = typeof meta === "string" ? (JSON.parse(meta)?.normalizationStatus) : meta?.normalizationStatus;
-                  chipColor = status === "REVIEW_REQUIRED" ? "warning" : "success";
-                }
-              } else if (stepItem.key === "markdown") {
-                if (markdownStatus === "COMPLETED") {
-                  chipColor = "success";
-                }
-              } else if (stepItem.key === "chunking") {
-                const chunkingCompleted = 
-                  (latestRagJob && (latestRagJob.status === "SUCCEEDED" || latestRagJob.currentStep === "EMBEDDING" || latestRagJob.currentStep === "INDEXING" || latestRagJob.currentStep === "COMPLETED")) ||
-                  pipelineExecution?.lastCompletedStage === "CHUNKING" || 
-                  pipelineExecution?.lastCompletedStage === "RAG_INDEX" ||
-                  pipelineExecution?.status === "COMPLETED";
-                if (chunkingCompleted) {
-                  chipColor = "success";
-                }
-              } else if (stepItem.key === "embedding") {
-                const embeddingCompleted = 
-                  (latestRagJob && (latestRagJob.status === "SUCCEEDED" || latestRagJob.currentStep === "INDEXING" || latestRagJob.currentStep === "COMPLETED")) ||
-                  pipelineExecution?.lastCompletedStage === "RAG_INDEX" ||
-                  pipelineExecution?.status === "COMPLETED";
-                if (embeddingCompleted) {
-                  chipColor = "success";
-                }
-              } else if (stepItem.key === "indexing") {
-                const indexingCompleted = 
-                  latestRagJob?.status === "SUCCEEDED" || 
-                  pipelineExecution?.status === "COMPLETED" || 
-                  ragIndexed || 
-                  (ragMetadata as any)?.indexed;
-                if (indexingCompleted) {
-                  chipColor = "success";
-                }
-              }
-            }
-
-            const isFilled = chipColor !== "default";
-
-            return (
-              <Box key={stepItem.key} sx={{ display: "flex", alignItems: "center" }}>
-                <Chip
-                  size="small"
-                  label={stepItem.label}
-                  color={chipColor}
-                  variant={isFilled ? "filled" : "outlined"}
-                  sx={{
-                    height: 22,
-                    fontSize: 10.5,
-                    fontWeight: isFilled ? 700 : 500,
-                  }}
-                />
-                {!isLast && (
-                  <Typography variant="caption" color="text.secondary" sx={{ mx: 0.4, fontWeight: 700 }}>
-                    →
-                  </Typography>
-                )}
-              </Box>
-            );
-          })}
-        </Stack>
-      </Box>
-    );
-  }
-
   function renderPipelineStatusDashboard() {
     if (!documentId) return null;
 
@@ -2800,38 +2680,18 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
                       {markdownStatus === "COMPLETED" && (
                         <Box sx={{ mt: 2, pt: 2, borderTop: "1px solid", borderColor: "divider" }}>
-                          <Stack direction="row" spacing={1}>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color="primary"
-                              startIcon={<VisibilityOutlined />}
-                              onClick={() => {
-                                setSelectedViewerRevisionId(undefined);
-                                setMarkdownViewerOpen(true);
-                              }}
-                            >
-                              Markdown 보기
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="primary"
-                              startIcon={<DownloadOutlined />}
-                              onClick={handleDownloadMarkdown}
-                            >
-                              다운로드
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="primary"
-                              startIcon={<ContentCopyOutlined />}
-                              onClick={handleCopyMarkdown}
-                            >
-                              복사
-                            </Button>
-                          </Stack>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="primary"
+                            startIcon={<VisibilityOutlined />}
+                            onClick={() => {
+                              setSelectedViewerRevisionId(undefined);
+                              setMarkdownViewerOpen(true);
+                            }}
+                          >
+                            Markdown 보기
+                          </Button>
                         </Box>
                       )}
                     </Box>
@@ -3255,7 +3115,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                     )}
                   </Stack>
 
-                  {renderInternalPipelineProgressSteps()}
+
                   {renderPipelineStatusDashboard()}
 
                   {isPendingOrRunning && (
