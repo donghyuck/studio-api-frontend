@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Box,
+  Chip,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -340,6 +341,36 @@ export function MarkdownViewerDialog({
 
     const docMetadata = normMeta?.document?.metadata || null;
 
+    // OCR info: from normMeta top-level or any resource metadataJson
+    // Try normMeta first, then other resources
+    const ocrMeta: any = normMeta ?? (() => {
+      for (const r of resources) {
+        const m = parseMetadataJson(r);
+        if (m && (m.ocrApplied != null || m.ocrRequested != null || m.ocrRequired != null)) return m;
+      }
+      return null;
+    })();
+    const ocrRequested: boolean | null | undefined = ocrMeta?.ocrRequested ?? ocrMeta?.ocrRequired;
+    const ocrApplied: boolean | null | undefined = ocrMeta?.ocrApplied;
+    const ocrEngine: string | null | undefined = ocrMeta?.ocrEngine ?? ocrMeta?.pdfExtractionEngine;
+    const ocrUnavailableReason: string | null | undefined = ocrMeta?.ocrUnavailableReason;
+    const pdfOcrFallback: boolean | null | undefined = ocrMeta?.pdfOcrFallback;
+    const hasOcrInfo = ocrRequested != null || ocrApplied != null || ocrEngine != null;
+
+    // Determine OCR status label
+    function getOcrStatusLabel(): { label: string; color: "success" | "warning" | "info" | "default" } {
+      if (ocrRequested === true && ocrApplied === true) {
+        return { label: "OCR 적용됨", color: "success" };
+      } else if (ocrRequested === true && ocrApplied === false) {
+        return { label: "OCR 요청됨 / 미적용", color: "warning" };
+      } else if (ocrRequested === false && ocrApplied === true) {
+        return { label: "OCR fallback 적용됨", color: "info" };
+      } else if (ocrRequested === false && ocrApplied === false) {
+        return { label: "OCR 미사용", color: "default" };
+      }
+      return { label: "-", color: "default" };
+    }
+
     return (
       <Box sx={{ p: 3 }}>
         <Grid container spacing={3}>
@@ -420,7 +451,57 @@ export function MarkdownViewerDialog({
             </Paper>
           </Grid>
 
-          {/* 3. Document Metadata */}
+          {/* 3. OCR Summary */}
+          {hasOcrInfo && (() => {
+            const { label, color } = getOcrStatusLabel();
+            return (
+              <Grid size={{ xs: 12 }}>
+                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                      OCR 요약
+                    </Typography>
+                    <Chip label={label} color={color} size="small" variant="filled" sx={{ fontWeight: 600, fontSize: 11 }} />
+                  </Stack>
+                  <Grid container spacing={2}>
+                    <Grid size={{ xs: 6, sm: 3 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">OCR 요청</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {ocrRequested == null ? "-" : ocrRequested ? "예" : "아니오"}
+                      </Typography>
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 3 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">OCR 적용</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {ocrApplied == null ? "-" : ocrApplied ? "예" : "아니오"}
+                      </Typography>
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 3 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">PDF 추출 엔진</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{ocrEngine || "-"}</Typography>
+                    </Grid>
+                    <Grid size={{ xs: 6, sm: 3 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">OCR Fallback</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {pdfOcrFallback == null ? "-" : pdfOcrFallback ? "예" : "아니오"}
+                      </Typography>
+                    </Grid>
+                    {ocrRequested === true && ocrApplied === false && (
+                      <Grid size={{ xs: 12 }}>
+                        <Typography variant="caption" color="text.secondary" display="block">OCR 미적용 사유</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500, color: ocrUnavailableReason ? "text.primary" : "text.secondary" }}>
+                          {ocrUnavailableReason ||
+                            "추출 엔진이 OCR 없이 텍스트 레이어를 사용했을 수 있습니다."}
+                        </Typography>
+                      </Grid>
+                    )}
+                  </Grid>
+                </Paper>
+              </Grid>
+            );
+          })()}
+
+          {/* 4. Document Metadata */}
           {docMetadata && typeof docMetadata === "object" && Object.keys(docMetadata).length > 0 && (
             <Grid size={{ xs: 12 }}>
               <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
