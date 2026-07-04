@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-07-04
+
+### Added
+
+- 마크다운 생성 및 재추출 화면에서 OCR 모드(AUTO, FORCE, DISABLED)와 Vision LLM 수식 보정(mathVisionCorrection)을 지원하는 추출 옵션 제공.
+- OCR 적용 시 활성화되는 고급 옵션 "Vision LLM 수식 보정 사용" 체크박스(설명 문구 포함) 추가.
+- 마크다운 메타데이터 보기 화면에 "Vision LLM 수식 보정" 상태 카드 및 세부 속성(요청, 적용, Provider, 수식 블록 수, 미적용 사유) 렌더링 추가.
+- 신규 재추출 영역에 "OCR 적용 후 재추출" 및 "수식 OCR 적용 후 재추출" 분리 버튼 제공.
+
+### Verification
+
+- `npm run typecheck` 통과
+
 ## 2026-04-28
 
 ### Changed

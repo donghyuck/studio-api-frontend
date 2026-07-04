@@ -30,6 +30,8 @@ import {
   Switch,
   Container,
   Drawer,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -55,6 +57,7 @@ import {
   reactDocumentConvertApi,
   reactMarkdownDocumentApi,
   reactRetrievalPolicyApi,
+  type OcrMode,
   type DocumentConvertStatus,
   type DocumentConvertJob,
   type MarkdownDocumentDto,
@@ -295,7 +298,9 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [runSkillExtraction, setRunSkillExtraction] = useState<boolean>(false);
   const [skillExtractionMode, setSkillExtractionMode] = useState<'regex' | 'llm' | ''>('');
   const [force, setForce] = useState<boolean>(false);
-  const [ocrRequired, setOcrRequired] = useState<boolean>(false);
+  const [ocrMode, setOcrMode] = useState<OcrMode>("AUTO");
+  const [ocrLanguage, setOcrLanguage] = useState<string>("");
+  const [mathVisionCorrection, setMathVisionCorrection] = useState<boolean>(false);
 
   // Chunking Configuration
   const [chunkingStrategy, setChunkingStrategy] = useState<string>("structure-based");
@@ -824,7 +829,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       if (typeof opts.runChunking === "boolean") setRunChunking(opts.runChunking);
       if (typeof opts.runRagIndex === "boolean") setRunRagIndex(opts.runRagIndex);
       if (typeof opts.runSkillExtraction === "boolean") setRunSkillExtraction(opts.runSkillExtraction);
-      if (typeof opts.ocrRequired === "boolean") setOcrRequired(opts.ocrRequired);
+      if (typeof opts.ocrRequired === "boolean") setOcrMode(opts.ocrRequired ? "FORCE" : "AUTO");
+      if (opts.ocrMode === "FORCE" || opts.ocrMode === "AUTO" || opts.ocrMode === "DISABLED") setOcrMode(opts.ocrMode);
+      if (typeof opts.ocrLanguage === "string") setOcrLanguage(opts.ocrLanguage);
+      if (typeof opts.mathVisionCorrection === "boolean") setMathVisionCorrection(opts.mathVisionCorrection);
       if (typeof opts.skillExtractionMode === "string" && (opts.skillExtractionMode === "regex" || opts.skillExtractionMode === "llm")) {
         setSkillExtractionMode(opts.skillExtractionMode);
       } else {
@@ -1382,7 +1390,12 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       blockifyLlmProvider: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? (blockifyLlmProvider || null) : null,
       blockifyLlmModel: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? (blockifyLlmModel || null) : null,
       blockifyPiiMaskingEnabled: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? blockifyPiiMaskingEnabled : null,
-      ocrRequired: isPdf ? ocrRequired : null,
+      ...(isPdf ? {
+        ocrRequired: ocrMode === "FORCE",
+        ocrMode: ocrMode,
+        mathVisionCorrection: ocrMode === "FORCE" ? mathVisionCorrection : false,
+      } : {}),
+      ...(isPdf && ocrMode === "FORCE" && ocrLanguage ? { ocrLanguage } : {}),
     };
 
     if (runSkillExtraction || forEstimate) {
@@ -1616,7 +1629,12 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         runChunking: false,
         runRagIndex: false,
         runSkillExtraction: false,
-        ocrRequired: isPdf ? ocrRequired : null,
+        ...(isPdf ? {
+          ocrRequired: ocrMode === "FORCE",
+          ocrMode: ocrMode,
+          mathVisionCorrection: ocrMode === "FORCE" ? mathVisionCorrection : false,
+        } : {}),
+        ...(isPdf && ocrMode === "FORCE" && ocrLanguage ? { ocrLanguage } : {}),
       } as any);
       const newDocId = res.document.documentId;
       setDocumentId(newDocId);
@@ -1627,6 +1645,36 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       startPolling(newDocId, attachmentId);
     } catch (err: any) {
       toast.error("Markdown 다시 생성 실패: " + resolveAxiosError(err));
+    } finally {
+      setIsExtracting(false);
+    }
+  }
+
+  async function handleReextractWithOcr(mathCorrection = false) {
+    if (!documentId) return;
+    const ok = window.confirm(
+      mathCorrection 
+        ? "수식 OCR 및 Vision LLM 보정을 적용해서 다시 추출하시겠습니까? 처리 시간이 길어질 수 있습니다." 
+        : "OCR을 적용해서 다시 추출하시겠습니까? 처리 시간이 길어질 수 있습니다."
+    );
+    if (!ok) return;
+    setIsExtracting(true);
+    setReused(null);
+    try {
+      const res = await reactMarkdownDocumentApi.reextract(documentId, {
+        runChunking: false,
+        runRagIndex: false,
+        runSkillExtraction: false,
+        ocrRequired: true,
+        ocrMode: "FORCE",
+        ocrLanguage: ocrLanguage || "kor+eng",
+        mathVisionCorrection: mathCorrection || mathVisionCorrection,
+      });
+      setReused(res.reused);
+      toast.success(mathCorrection ? "수식 OCR 재추출 작업이 시작되었습니다." : "OCR 재추출 작업이 시작되었습니다.");
+      startPolling(documentId, attachmentId);
+    } catch (err: any) {
+      toast.error("재추출 실패: " + resolveAxiosError(err));
     } finally {
       setIsExtracting(false);
     }
@@ -2750,40 +2798,84 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                   </Grid>
 
                   {/* Extraction Options Row */}
-                  <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 2, px: 0.5 }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
-                      추출 옵션
-                    </Typography>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          size="small"
-                          checked={force}
-                          onChange={(e) => setForce(e.target.checked)}
-                          disabled={controlsDisabled || isCanceledRevision}
-                        />
-                      }
-                      label={<Typography variant="body2" sx={{ fontSize: 13 }}>강제 재추출 (force)</Typography>}
-                    />
-                    {isPdf && (
+                  <Stack direction="column" spacing={1} sx={{ mb: 2, px: 0.5 }}>
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                        추출 옵션
+                      </Typography>
                       <FormControlLabel
                         control={
                           <Checkbox
                             size="small"
-                            checked={ocrRequired}
-                            onChange={(e) => setOcrRequired(e.target.checked)}
+                            checked={force}
+                            onChange={(e) => setForce(e.target.checked)}
                             disabled={controlsDisabled || isCanceledRevision}
                           />
                         }
-                        label={
-                          <Typography variant="body2" sx={{ fontSize: 13 }}>
-                            OCR 적용
-                            <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
-                              (PDF 전용)
-                            </Typography>
-                          </Typography>
-                        }
+                        label={<Typography variant="body2" sx={{ fontSize: 13 }}>강제 재추출 (force)</Typography>}
                       />
+                    </Stack>
+                    {isPdf && (
+                      <Stack spacing={0.5}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                            OCR
+                          </Typography>
+                          <ToggleButtonGroup
+                            size="small"
+                            exclusive
+                            value={ocrMode}
+                            onChange={(_, val) => { if (val) setOcrMode(val as OcrMode); }}
+                            disabled={controlsDisabled || isCanceledRevision}
+                            sx={{ height: 28 }}
+                          >
+                            <ToggleButton value="AUTO" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>기본 추출</ToggleButton>
+                            <ToggleButton value="FORCE" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>OCR 적용</ToggleButton>
+                            <ToggleButton value="DISABLED" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>OCR 제외</ToggleButton>
+                          </ToggleButtonGroup>
+                        </Stack>
+                        {ocrMode === "FORCE" && (
+                          <Stack direction="column" spacing={1} sx={{ pl: 4.5 }}>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                              <TextField
+                                size="small"
+                                label="OCR 언어"
+                                placeholder="kor+eng"
+                                value={ocrLanguage}
+                                onChange={(e) => setOcrLanguage(e.target.value)}
+                                disabled={controlsDisabled || isCanceledRevision}
+                                sx={{ width: 160, '& .MuiInputBase-root': { fontSize: 12 } }}
+                              />
+                              <Typography variant="caption" color="text.secondary">
+                                OCR은 처리 시간이 길 수 있습니다. 스캔 PDF, 이미지 PDF, 수학 교재에서만 선택하세요.
+                              </Typography>
+                            </Stack>
+                            <Box sx={{ mt: 1 }}>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
+                                고급 옵션
+                              </Typography>
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    size="small"
+                                    checked={mathVisionCorrection}
+                                    onChange={(e) => setMathVisionCorrection(e.target.checked)}
+                                    disabled={controlsDisabled || isCanceledRevision}
+                                  />
+                                }
+                                label={
+                                  <Typography variant="body2" sx={{ fontSize: 13 }}>
+                                    Vision LLM 수식 보정 사용
+                                  </Typography>
+                                }
+                              />
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ pl: 3.5, mt: -0.5 }}>
+                                수식이 많은 PDF에서 Gemini 등 Vision LLM으로 수식 복원을 보강합니다. 처리 시간이 길어질 수 있습니다.
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        )}
+                      </Stack>
                     )}
                   </Stack>
 
@@ -3048,7 +3140,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5, fontSize: 13 }}>
                                 신규 재추출 (Reextract)
                               </Typography>
-                              <Stack direction="row" spacing={1}>
+                              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ gap: 1 }}>
                                 <Button
                                   size="small"
                                   variant="contained"
@@ -3058,6 +3150,28 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                 >
                                   새로 재추출 실행
                                 </Button>
+                                {isPdf && (
+                                  <>
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      color="secondary"
+                                      disabled={controlsDisabled}
+                                      onClick={() => void handleReextractWithOcr(false)}
+                                    >
+                                      OCR 적용 후 재추출
+                                    </Button>
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      color="info"
+                                      disabled={controlsDisabled}
+                                      onClick={() => void handleReextractWithOcr(true)}
+                                    >
+                                      수식 OCR 적용 후 재추출
+                                    </Button>
+                                  </>
+                                )}
                                 <Button
                                   size="small"
                                   variant="outlined"

@@ -55,6 +55,10 @@ import {
   type MarkdownResourceDto,
   type MarkdownLocatorDto,
   type MarkdownPipelineProgressResponseDto,
+  type MarkdownOcrMetadata,
+  shouldSuggestOcrReextract,
+  ocrBadgeLabel,
+  ocrBadgeColor,
 } from "./api";
 import { useToast } from "@/react/feedback";
 import { API_BASE_URL } from "@/config/backend";
@@ -307,33 +311,72 @@ export function MarkdownViewerDialog({
     const docMetadata = normMeta?.document?.metadata || null;
 
     // OCR info: from normMeta top-level or any resource metadataJson
-    // Try normMeta first, then other resources
-    const ocrMeta: any = normMeta ?? (() => {
+    const ocrRaw: any = normMeta ?? (() => {
       for (const r of resources) {
         const m = parseMetadataJson(r);
-        if (m && (m.ocrApplied != null || m.ocrRequested != null || m.ocrRequired != null)) return m;
+        if (m && (
+          m.ocrApplied != null || m.ocrMode != null ||
+          m.ocrRequested != null || m.ocrRequired != null ||
+          m.ocrRequestedBy != null
+        )) return m;
       }
       return null;
     })();
-    const ocrRequested: boolean | null | undefined = ocrMeta?.ocrRequested ?? ocrMeta?.ocrRequired;
-    const ocrApplied: boolean | null | undefined = ocrMeta?.ocrApplied;
-    const ocrEngine: string | null | undefined = ocrMeta?.ocrEngine ?? ocrMeta?.pdfExtractionEngine;
-    const ocrUnavailableReason: string | null | undefined = ocrMeta?.ocrUnavailableReason;
-    const pdfOcrFallback: boolean | null | undefined = ocrMeta?.pdfOcrFallback;
-    const hasOcrInfo = ocrRequested != null || ocrApplied != null || ocrEngine != null;
 
-    // Determine OCR status label
-    function getOcrStatusLabel(): { label: string; color: "success" | "warning" | "info" | "default" } {
-      if (ocrRequested === true && ocrApplied === true) {
-        return { label: "OCR 적용됨", color: "success" };
-      } else if (ocrRequested === true && ocrApplied === false) {
-        return { label: "OCR 요청됨 / 미적용", color: "warning" };
-      } else if (ocrRequested === false && ocrApplied === true) {
-        return { label: "OCR fallback 적용됨", color: "info" };
-      } else if (ocrRequested === false && ocrApplied === false) {
-        return { label: "OCR 미사용", color: "default" };
+    const ocrMeta: MarkdownOcrMetadata = {
+      ocrMode: ocrRaw?.ocrMode,
+      ocrRequired: ocrRaw?.ocrRequired,
+      ocrRequestedBy: ocrRaw?.ocrRequestedBy,
+      ocrDecisionReason: ocrRaw?.ocrDecisionReason,
+      ocrApplied: ocrRaw?.ocrApplied,
+      ocrLanguage: ocrRaw?.ocrLanguage,
+      ocrEngine: ocrRaw?.ocrEngine ?? ocrRaw?.pdfExtractionEngine,
+      pdfExtractionEngine: ocrRaw?.pdfExtractionEngine,
+      ocrUnavailableReason: ocrRaw?.ocrUnavailableReason,
+      pdfOcrFallback: ocrRaw?.pdfOcrFallback,
+      recommendedRoute: ocrRaw?.recommendedRoute ?? ocrRaw?.pdfRecommendedRoute,
+      actualRoute: ocrRaw?.actualRoute ?? ocrRaw?.pdfActualRoute,
+      pdfRecommendedRoute: ocrRaw?.pdfRecommendedRoute,
+      pdfActualRoute: ocrRaw?.pdfActualRoute,
+      markdownQualityStatus: ocrRaw?.markdownQualityStatus,
+      mathVisionCorrectionRequested: ocrRaw?.mathVisionCorrectionRequested,
+      mathVisionCorrectionApplied: ocrRaw?.mathVisionCorrectionApplied,
+      mathVisionCorrectionProvider: ocrRaw?.mathVisionCorrectionProvider,
+      mathVisionFormulaBlockCount: ocrRaw?.mathVisionFormulaBlockCount,
+      mathVisionCorrectionSkipReason: ocrRaw?.mathVisionCorrectionSkipReason,
+    };
+
+    // backward compat: if no ocrMode but ocrRequired/ocrRequested present
+    if (!ocrMeta.ocrMode && ocrRaw) {
+      const legacyRequested = ocrRaw.ocrRequested ?? ocrRaw.ocrRequired;
+      if (legacyRequested === true) ocrMeta.ocrMode = "FORCE";
+    }
+
+    const hasOcrInfo = ocrRaw != null && (
+      ocrMeta.ocrMode != null || ocrMeta.ocrApplied != null ||
+      ocrMeta.ocrEngine != null || ocrMeta.ocrRequestedBy != null ||
+      ocrMeta.mathVisionCorrectionRequested != null
+    );
+    const suggestOcrReextract = shouldSuggestOcrReextract(ocrMeta);
+
+    function getMathVisionStatus(): { label: string; color: "success" | "warning" | "info" | "default" } {
+      const req = ocrMeta.mathVisionCorrectionRequested;
+      const app = ocrMeta.mathVisionCorrectionApplied;
+      const skip = ocrMeta.mathVisionCorrectionSkipReason;
+      
+      if (req === true) {
+        if (app === true) {
+          return { label: "Vision LLM 보정 적용됨", color: "success" };
+        } else {
+          if (skip === "SERVER_DISABLED") {
+            return { label: "서버 설정상 Vision LLM 보정이 비활성화됨", color: "warning" };
+          } else if (skip === "NO_API_KEY") {
+            return { label: "Vision LLM API key가 설정되지 않음", color: "warning" };
+          }
+          return { label: `Vision LLM 보정 미적용 (${skip || "알 수 없는 이유"})`, color: "warning" };
+        }
       }
-      return { label: "-", color: "default" };
+      return { label: "Vision LLM 보정 미요청", color: "default" };
     }
 
     return (
@@ -417,54 +460,151 @@ export function MarkdownViewerDialog({
           </Grid>
 
           {/* 3. OCR Summary */}
-          {hasOcrInfo && (() => {
-            const { label, color } = getOcrStatusLabel();
-            return (
-              <Grid size={{ xs: 12 }}>
-                <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                      OCR 요약
+          {hasOcrInfo && (
+            <Grid size={{ xs: 12 }}>
+              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    OCR 요약
+                  </Typography>
+                  <Chip
+                    label={ocrBadgeLabel(ocrMeta)}
+                    color={ocrBadgeColor(ocrMeta)}
+                    size="small"
+                    variant="filled"
+                    sx={{ fontWeight: 600, fontSize: 11 }}
+                  />
+                </Stack>
+
+                {suggestOcrReextract && (
+                  <Box sx={{ mb: 2, p: 1.5, bgcolor: "action.hover", borderRadius: 1, border: "1px solid", borderColor: "warning.main" }}>
+                    <Typography variant="caption" sx={{ color: "warning.dark", fontWeight: 600, display: "block" }}>
+                      ⚠ OCR 권장: 다시 추출 시 'OCR 적용 후 재추출'을 사용하면 품질을 개선할 수 있습니다.
                     </Typography>
-                    <Chip label={label} color={color} size="small" variant="filled" sx={{ fontWeight: 600, fontSize: 11 }} />
-                  </Stack>
-                  <Grid container spacing={2}>
-                    <Grid size={{ xs: 6, sm: 3 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">OCR 요청</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {ocrRequested == null ? "-" : ocrRequested ? "예" : "아니오"}
+                    {ocrMeta.ocrDecisionReason && (
+                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                        사유: {ocrMeta.ocrDecisionReason}
                       </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6, sm: 3 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">OCR 적용</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {ocrApplied == null ? "-" : ocrApplied ? "예" : "아니오"}
-                      </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6, sm: 3 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">PDF 추출 엔진</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{ocrEngine || "-"}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6, sm: 3 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">OCR Fallback</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {pdfOcrFallback == null ? "-" : pdfOcrFallback ? "예" : "아니오"}
-                      </Typography>
-                    </Grid>
-                    {ocrRequested === true && ocrApplied === false && (
-                      <Grid size={{ xs: 12 }}>
-                        <Typography variant="caption" color="text.secondary" display="block">OCR 미적용 사유</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500, color: ocrUnavailableReason ? "text.primary" : "text.secondary" }}>
-                          {ocrUnavailableReason ||
-                            "추출 엔진이 OCR 없이 텍스트 레이어를 사용했을 수 있습니다."}
-                        </Typography>
-                      </Grid>
                     )}
+                  </Box>
+                )}
+
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">OCR 모드</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {ocrMeta.ocrMode ?? "-"}
+                    </Typography>
                   </Grid>
-                </Paper>
-              </Grid>
-            );
-          })()}
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">OCR 요청 주체</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {ocrMeta.ocrRequestedBy ?? "-"}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">OCR 적용</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {ocrMeta.ocrApplied == null ? "-" : ocrMeta.ocrApplied ? "예" : "아니오"}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">OCR 언어</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {ocrMeta.ocrLanguage ?? "-"}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">PDF 추출 엔진</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {ocrMeta.ocrEngine ?? "-"}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">OCR Fallback</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {ocrMeta.pdfOcrFallback == null ? "-" : ocrMeta.pdfOcrFallback ? "예" : "아니오"}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">권장 라우트</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {ocrMeta.recommendedRoute ?? ocrMeta.pdfRecommendedRoute ?? "-"}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">실제 처리 라우트</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {ocrMeta.actualRoute ?? ocrMeta.pdfActualRoute ?? "-"}
+                    </Typography>
+                  </Grid>
+                  {ocrMeta.ocrDecisionReason && (
+                    <Grid size={{ xs: 12 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">서버 판단 사유</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500, fontFamily: "monospace", fontSize: 12 }}>
+                        {ocrMeta.ocrDecisionReason}
+                      </Typography>
+                    </Grid>
+                  )}
+                  {ocrMeta.ocrUnavailableReason && (
+                    <Grid size={{ xs: 12 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">OCR 미적용 사유</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {ocrMeta.ocrUnavailableReason}
+                      </Typography>
+                    </Grid>
+                  )}
+                </Grid>
+
+                <Divider sx={{ my: 2.5 }} />
+
+                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                    Vision LLM 수식 보정
+                  </Typography>
+                  {(() => {
+                    const status = getMathVisionStatus();
+                    return <Chip label={status.label} color={status.color} size="small" variant="filled" sx={{ fontWeight: 600, fontSize: 11 }} />;
+                  })()}
+                </Stack>
+
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">Vision 보정 요청</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {ocrMeta.mathVisionCorrectionRequested == null ? "-" : ocrMeta.mathVisionCorrectionRequested ? "예" : "아니오"}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">Vision 보정 적용</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {ocrMeta.mathVisionCorrectionApplied == null ? "-" : ocrMeta.mathVisionCorrectionApplied ? "예" : "아니오"}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">Vision Provider</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                      {ocrMeta.mathVisionCorrectionProvider || "-"}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">보정 수식 블록 수</Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {ocrMeta.mathVisionFormulaBlockCount != null ? `${ocrMeta.mathVisionFormulaBlockCount}개` : "-"}
+                    </Typography>
+                  </Grid>
+                  {ocrMeta.mathVisionCorrectionSkipReason && (
+                    <Grid size={{ xs: 12 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">미적용 사유 (Skip Reason)</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {ocrMeta.mathVisionCorrectionSkipReason}
+                      </Typography>
+                    </Grid>
+                  )}
+                </Grid>
+              </Paper>
+            </Grid>
+          )}
 
           {/* 4. Document Metadata */}
           {docMetadata && typeof docMetadata === "object" && Object.keys(docMetadata).length > 0 && (

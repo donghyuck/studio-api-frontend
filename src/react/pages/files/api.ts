@@ -246,6 +246,60 @@ export interface MarkdownDocumentFromAttachmentResponse {
   reused: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// OCR Mode types & helpers
+// ---------------------------------------------------------------------------
+
+export type OcrMode = "AUTO" | "FORCE" | "DISABLED";
+
+export interface MarkdownOcrMetadata {
+  ocrMode?: OcrMode;
+  ocrRequired?: boolean;
+  ocrRequestedBy?: "NONE" | "CLIENT" | "CLIENT_DISABLED" | "ANALYZER_RECOMMENDED";
+  ocrDecisionReason?: string;
+  ocrApplied?: boolean;
+  ocrLanguage?: string;
+  ocrEngine?: string;
+  pdfExtractionEngine?: string;
+  ocrUnavailableReason?: string;
+  pdfOcrFallback?: boolean;
+  recommendedRoute?: string;
+  actualRoute?: string;
+  pdfRecommendedRoute?: string;
+  pdfActualRoute?: string;
+  markdownQualityStatus?: string;
+  mathVisionCorrectionRequested?: boolean;
+  mathVisionCorrectionApplied?: boolean;
+  mathVisionCorrectionProvider?: string;
+  mathVisionFormulaBlockCount?: number;
+  mathVisionCorrectionSkipReason?: string;
+}
+
+export function shouldSuggestOcrReextract(metadata: MarkdownOcrMetadata): boolean {
+  return (
+    metadata.ocrDecisionReason === "OCR_REQUIRES_CLIENT_FORCE" ||
+    metadata.ocrRequestedBy === "ANALYZER_RECOMMENDED" ||
+    (metadata.recommendedRoute === "MATH_DOCUMENT" && metadata.actualRoute !== "MATH_DOCUMENT") ||
+    (metadata.pdfRecommendedRoute === "MATH_DOCUMENT" && metadata.pdfActualRoute !== "MATH_DOCUMENT")
+  );
+}
+
+export function ocrBadgeLabel(metadata: MarkdownOcrMetadata): string {
+  if (metadata.ocrApplied) return "OCR 적용됨";
+  if (metadata.ocrMode === "DISABLED") return "OCR 제외됨";
+  if (shouldSuggestOcrReextract(metadata)) return "OCR 권장됨";
+  return "기본 추출";
+}
+
+export function ocrBadgeColor(metadata: MarkdownOcrMetadata): "success" | "warning" | "info" | "default" {
+  if (metadata.ocrApplied) return "success";
+  if (metadata.ocrMode === "DISABLED") return "default";
+  if (shouldSuggestOcrReextract(metadata)) return "warning";
+  return "default";
+}
+
+// ---------------------------------------------------------------------------
+
 export interface MarkdownDocumentFromAttachmentRequest {
   attachmentId: number;
   runChunking: boolean;
@@ -264,6 +318,10 @@ export interface MarkdownDocumentFromAttachmentRequest {
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
   skillExtractionMode?: 'regex' | 'llm' | null;
+  ocrMode?: OcrMode;
+  ocrLanguage?: string;
+  ocrRequired?: boolean;
+  mathVisionCorrection?: boolean;
 }
 
 export interface MarkdownDocumentReextractRequest {
@@ -282,6 +340,10 @@ export interface MarkdownDocumentReextractRequest {
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
   skillExtractionMode?: 'regex' | 'llm' | null;
+  ocrMode?: OcrMode;
+  ocrLanguage?: string;
+  ocrRequired?: boolean;
+  mathVisionCorrection?: boolean;
 }
 
 export type MarkdownPipelineExecutionStatus =
@@ -327,6 +389,10 @@ export interface MarkdownResumeRequest {
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
   skillExtractionMode?: 'regex' | 'llm' | null;
+  ocrMode?: OcrMode;
+  ocrLanguage?: string;
+  ocrRequired?: boolean;
+  mathVisionCorrection?: boolean;
 }
 
 export interface MarkdownResumeResultDto {
