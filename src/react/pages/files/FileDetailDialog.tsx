@@ -317,6 +317,52 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [locators, setLocators] = useState<MarkdownLocatorDto[]>([]);
   const [resources, setResources] = useState<MarkdownResourceDto[]>([]);
 
+  const parsedOcrMeta = useMemo(() => {
+    let normMeta: any = null;
+    for (const r of resources) {
+      if (r.resourceType === "normalized_document" || r.resourceType === "NORMALIZED_DOCUMENT") {
+        normMeta = r.metadataJson;
+        if (typeof normMeta === "string") {
+          try {
+            normMeta = JSON.parse(normMeta);
+          } catch {
+            normMeta = null;
+          }
+        }
+        break;
+      }
+    }
+    const ocrRaw = normMeta ?? (() => {
+      for (const r of resources) {
+        let m = r.metadataJson;
+        if (typeof m === "string") {
+          try { m = JSON.parse(m); } catch { m = null; }
+        }
+        if (m && (
+          m.ocrApplied != null || m.ocrMode != null ||
+          m.ocrRequested != null || m.ocrRequired != null ||
+          m.ocrRequestedBy != null
+        )) return m;
+      }
+      return null;
+    })();
+
+    if (!ocrRaw) return null;
+
+    const recommendedRoute = ocrRaw.recommendedRoute ?? ocrRaw.pdfRecommendedRoute;
+    const actualRoute = ocrRaw.actualRoute ?? ocrRaw.pdfActualRoute;
+
+    return {
+      ocrDecisionReason: ocrRaw.ocrDecisionReason as string | undefined,
+      ocrRequestedBy: ocrRaw.ocrRequestedBy as string | undefined,
+      recommendedRoute: recommendedRoute as string | undefined,
+      actualRoute: actualRoute as string | undefined,
+    };
+  }, [resources]);
+
+  const showOcrReextract = parsedOcrMeta?.ocrDecisionReason === "OCR_REQUIRES_CLIENT_FORCE";
+  const showMathReextract = parsedOcrMeta?.recommendedRoute === "MATH_DOCUMENT" && parsedOcrMeta?.actualRoute !== "MATH_DOCUMENT";
+
   // Markdown Viewer States
   const [markdownViewerOpen, setMarkdownViewerOpen] = useState<boolean>(false);
   const [selectedViewerRevisionId, setSelectedViewerRevisionId] = useState<string | undefined>(undefined);
@@ -1650,10 +1696,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     }
   }
 
-  async function handleReextractWithOcr(mathCorrection = false) {
+  async function handleReextractWithOcr(mathVisionCorrectionOverride = false) {
     if (!documentId) return;
     const ok = window.confirm(
-      mathCorrection 
+      mathVisionCorrectionOverride 
         ? "수식 OCR 및 Vision LLM 보정을 적용해서 다시 추출하시겠습니까? 처리 시간이 길어질 수 있습니다." 
         : "OCR을 적용해서 다시 추출하시겠습니까? 처리 시간이 길어질 수 있습니다."
     );
@@ -1668,10 +1714,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         ocrRequired: true,
         ocrMode: "FORCE",
         ocrLanguage: ocrLanguage || "kor+eng",
-        mathVisionCorrection: mathCorrection || mathVisionCorrection,
+        mathVisionCorrection: mathVisionCorrectionOverride || mathVisionCorrection,
       });
       setReused(res.reused);
-      toast.success(mathCorrection ? "수식 OCR 재추출 작업이 시작되었습니다." : "OCR 재추출 작업이 시작되었습니다.");
+      toast.success(mathVisionCorrectionOverride ? "수식 OCR 재추출 작업이 시작되었습니다." : "OCR 재추출 작업이 시작되었습니다.");
       startPolling(documentId, attachmentId);
     } catch (err: any) {
       toast.error("재추출 실패: " + resolveAxiosError(err));
@@ -3150,27 +3196,27 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                 >
                                   새로 재추출 실행
                                 </Button>
-                                {isPdf && (
-                                  <>
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      color="secondary"
-                                      disabled={controlsDisabled}
-                                      onClick={() => void handleReextractWithOcr(false)}
-                                    >
-                                      OCR 적용 후 재추출
-                                    </Button>
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      color="info"
-                                      disabled={controlsDisabled}
-                                      onClick={() => void handleReextractWithOcr(true)}
-                                    >
-                                      수식 OCR 적용 후 재추출
-                                    </Button>
-                                  </>
+                                {isPdf && showOcrReextract && (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="secondary"
+                                    disabled={controlsDisabled}
+                                    onClick={() => void handleReextractWithOcr(false)}
+                                  >
+                                    OCR 적용 후 재추출
+                                  </Button>
+                                )}
+                                {isPdf && showMathReextract && (
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="info"
+                                    disabled={controlsDisabled}
+                                    onClick={() => void handleReextractWithOcr(true)}
+                                  >
+                                    수식 OCR 적용 후 재추출
+                                  </Button>
                                 )}
                                 <Button
                                   size="small"
