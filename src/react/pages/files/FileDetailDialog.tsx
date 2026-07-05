@@ -2849,17 +2849,23 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                       <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                         추출 옵션
                       </Typography>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={force}
-                            onChange={(e) => setForce(e.target.checked)}
-                            disabled={controlsDisabled || isCanceledRevision}
-                          />
-                        }
-                        label={<Typography variant="body2" sx={{ fontSize: 13 }}>강제 재추출 (force)</Typography>}
-                      />
+                      <Tooltip title="이전에 변환 완료된 결과나 캐시가 있더라도 무시하고 처음부터 다시 변환 및 색인을 수행합니다." arrow placement="top-start">
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={force}
+                              onChange={(e) => setForce(e.target.checked)}
+                              disabled={controlsDisabled || isCanceledRevision}
+                            />
+                          }
+                          label={
+                            <Typography variant="body2" sx={{ fontSize: 13, borderBottom: "1px dashed", borderColor: "text.secondary", cursor: "help" }}>
+                              강제 재추출 (force)
+                            </Typography>
+                          }
+                        />
+                      </Tooltip>
                     </Stack>
                     {isPdf && (
                       <Stack spacing={0.5}>
@@ -2875,9 +2881,21 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                             disabled={controlsDisabled || isCanceledRevision}
                             sx={{ height: 28 }}
                           >
-                            <ToggleButton value="AUTO" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>기본 추출</ToggleButton>
-                            <ToggleButton value="FORCE" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>OCR 적용</ToggleButton>
-                            <ToggleButton value="DISABLED" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>OCR 제외</ToggleButton>
+                            <ToggleButton value="AUTO" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>
+                              <Tooltip title="저부하 기본 경로. 수동 OCR을 켜기 전까지 고비용 OCR을 적용하지 않습니다." arrow placement="top">
+                                <span>기본 추출</span>
+                              </Tooltip>
+                            </ToggleButton>
+                            <ToggleButton value="FORCE" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>
+                              <Tooltip title="텍스트가 없는 스캔본이나 한글 이미지 PDF, 수학 교재 등에서 OCR 엔진 작동을 강제합니다." arrow placement="top">
+                                <span>OCR 적용</span>
+                              </Tooltip>
+                            </ToggleButton>
+                            <ToggleButton value="DISABLED" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>
+                              <Tooltip title="서버가 수식을 추천하더라도 무거운 OCR 적용을 완전히 금지합니다." arrow placement="top">
+                                <span>OCR 제외</span>
+                              </Tooltip>
+                            </ToggleButton>
                           </ToggleButtonGroup>
                         </Stack>
                         {ocrMode === "FORCE" && (
@@ -2900,21 +2918,23 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
                                 고급 옵션
                               </Typography>
-                              <FormControlLabel
-                                control={
-                                  <Checkbox
-                                    size="small"
-                                    checked={mathVisionCorrection}
-                                    onChange={(e) => setMathVisionCorrection(e.target.checked)}
-                                    disabled={controlsDisabled || isCanceledRevision}
-                                  />
-                                }
-                                label={
-                                  <Typography variant="body2" sx={{ fontSize: 13 }}>
-                                    Vision LLM 수식 보정 사용
-                                  </Typography>
-                                }
-                              />
+                              <Tooltip title="수식이 많은 과학/수학 분야 PDF에서 Gemini 등의 시각 인공지능을 사용해 수식 기호를 정확하게 복원합니다." arrow placement="top-start">
+                                <FormControlLabel
+                                  control={
+                                    <Checkbox
+                                      size="small"
+                                      checked={mathVisionCorrection}
+                                      onChange={(e) => setMathVisionCorrection(e.target.checked)}
+                                      disabled={controlsDisabled || isCanceledRevision}
+                                    />
+                                  }
+                                  label={
+                                    <Typography variant="body2" sx={{ fontSize: 13, borderBottom: "1px dashed", borderColor: "text.secondary", cursor: "help" }}>
+                                      Vision LLM 수식 보정 사용
+                                    </Typography>
+                                  }
+                                />
+                              </Tooltip>
                               <Typography variant="caption" color="text.secondary" display="block" sx={{ pl: 3.5, mt: -0.5 }}>
                                 수식이 많은 PDF에서 Gemini 등 Vision LLM으로 수식 복원을 보강합니다. 처리 시간이 길어질 수 있습니다.
                               </Typography>
