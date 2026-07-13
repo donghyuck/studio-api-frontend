@@ -1032,6 +1032,11 @@ export function MarkdownViewerDialog({
                       <ReactMarkdown
                         remarkPlugins={[remarkMath]}
                         rehypePlugins={[rehypeKatex]}
+                        components={{
+                          img: ({ src, alt }) => (
+                            <MarkdownImage src={src} alt={alt} documentId={documentId} />
+                          )
+                        }}
                       >
                         {text}
                       </ReactMarkdown>
@@ -1109,5 +1114,114 @@ export function MarkdownViewerDialog({
         </DialogContent>
       </Dialog>
     </Dialog>
+  );
+}
+
+interface MarkdownImageProps {
+  src?: string;
+  alt?: string;
+  documentId: string | null;
+}
+
+function MarkdownImage({ src, alt, documentId }: MarkdownImageProps) {
+  const [blobUrl, setBlobUrl] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<boolean>(false);
+  const token = useAuthStore.getState().token;
+
+  useEffect(() => {
+    if (!src) {
+      setLoading(false);
+      return;
+    }
+
+    let active = true;
+    let resolvedUrl = src;
+
+    // page[n]/image[m] -> pages/{page}/preview mapping
+    const pageImageRegex = /^page(\d+)\/image(\d+)/i;
+    const match = src.match(pageImageRegex);
+    if (match && documentId) {
+      const pageNum = match[1];
+      resolvedUrl = `${API_BASE_URL}/api/markdown-documents/${encodeURIComponent(documentId)}/pages/${pageNum}/preview`;
+    } else if (src.startsWith("/")) {
+      resolvedUrl = `${API_BASE_URL}${src}`;
+    } else if (!src.startsWith("http://") && !src.startsWith("https://") && !src.startsWith("blob:") && documentId) {
+      resolvedUrl = `${API_BASE_URL}/api/markdown-documents/${encodeURIComponent(documentId)}/${src}`;
+    }
+
+    async function loadImage() {
+      try {
+        const headers: Record<string, string> = {
+          Accept: "image/png"
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        
+        const response = await fetch(resolvedUrl, {
+          headers,
+          credentials: "include"
+        });
+
+        if (!response.ok) {
+          throw new Error("Image load failed");
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        if (active) {
+          setBlobUrl(url);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Failed to load markdown image:", err);
+        if (active) {
+          setError(true);
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadImage();
+
+    return () => {
+      active = false;
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [src, documentId, token]);
+
+  if (loading) {
+    return (
+      <Box sx={{ display: "inline-flex", p: 1, bgcolor: "action.hover", borderRadius: 1, my: 1 }}>
+        <CircularProgress size={16} />
+      </Box>
+    );
+  }
+
+  if (error || !blobUrl) {
+    return (
+      <Box sx={{ display: "inline-flex", flexDirection: "column", p: 1.5, border: "1px dashed", borderColor: "error.main", borderRadius: 1.5, bgcolor: "action.hover", color: "error.main", fontSize: "11px", my: 1 }}>
+        <span>이미지 로드 실패</span>
+        <span style={{ fontSize: "9px", opacity: 0.8 }}>{alt || src}</span>
+      </Box>
+    );
+  }
+
+  return (
+    <img
+      src={blobUrl}
+      alt={alt}
+      style={{
+        maxWidth: "100%",
+        height: "auto",
+        display: "block",
+        margin: "8px 0",
+        borderRadius: "4px",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
+      }}
+    />
   );
 }
