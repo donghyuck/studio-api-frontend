@@ -102,6 +102,66 @@ export function MarkdownViewerDialog({
   const [progress, setProgress] = useState<MarkdownPipelineProgressResponseDto | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Page Preview Modal States
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewTitle, setPreviewTitle] = useState("");
+  const [previewBlobUrl, setPreviewBlobUrl] = useState("");
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+
+  const token = useAuthStore.getState().token;
+
+  async function openPagePreview(page: number, bbox?: number[] | null) {
+    if (!documentId) return;
+    setPreviewLoading(true);
+    setPreviewError("");
+    setPreviewOpen(true);
+    setPreviewTitle(`페이지 미리보기 - ${page}페이지` + (bbox ? ` (영역 지정)` : ""));
+
+    let url = `${API_BASE_URL}/api/markdown-documents/${encodeURIComponent(documentId)}/pages/${page}/preview`;
+    if (bbox && bbox.length === 4) {
+      const [x0, y0, x1, y1] = bbox;
+      url += `?x0=${x0}&y0=${y0}&x1=${x1}&y1=${y1}`;
+    }
+
+    try {
+      const headers: Record<string, string> = {
+        Accept: "image/png",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(url, {
+        headers,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error(`이미지 로드 실패 (Status: ${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      setPreviewBlobUrl(prev => {
+        if (prev) URL.revokeObjectURL(prev);
+        return blobUrl;
+      });
+    } catch (err: any) {
+      setPreviewError(err?.message || "미리보기 이미지를 로드하는 중 오류가 발생했습니다.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (previewBlobUrl) {
+        URL.revokeObjectURL(previewBlobUrl);
+      }
+    };
+  }, [previewBlobUrl]);
+
   const abortControllerRef = useRef<AbortController | null>(null);
 
 
@@ -305,6 +365,25 @@ export function MarkdownViewerDialog({
       normMeta.document.blocks.forEach((b: any) => {
         const type = b.type || "UNKNOWN";
         blockCounts[type] = (blockCounts[type] || 0) + 1;
+      });
+    }
+
+    const blocksWithProvenance: any[] = [];
+    if (normMeta?.document?.blocks && Array.isArray(normMeta.document.blocks)) {
+      normMeta.document.blocks.forEach((b: any, idx: number) => {
+        const prov = b.provenance || b.metadata?.provenance || b.metadata || {};
+        const page = prov.pageNumber ?? prov.page ?? b.pageNumber ?? b.page;
+        const bbox = prov.bbox || b.bbox;
+
+        if (page != null) {
+          blocksWithProvenance.push({
+            index: idx,
+            type: b.type || "paragraph",
+            text: b.text || "",
+            page,
+            bbox: Array.isArray(bbox) ? bbox : null
+          });
+        }
       });
     }
 
@@ -652,7 +731,60 @@ export function MarkdownViewerDialog({
             </Grid>
           )}
 
-          {/* 5. Locators */}
+          {/* 5. Blocks with Provenance */}
+          {blocksWithProvenance.length > 0 && (
+            <Grid size={{ xs: 12 }}>
+              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
+                  정규화 블록 상세 정보 (Blocks with Provenance)
+                </Typography>
+                <TableContainer sx={{ maxHeight: 300, overflow: "auto" }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>Index</TableCell>
+                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>Type</TableCell>
+                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>Page</TableCell>
+                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>BBox (x0, y0, x1, y1)</TableCell>
+                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>Text</TableCell>
+                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>Action</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {blocksWithProvenance.map((b) => (
+                        <TableRow key={b.index}>
+                          <TableCell sx={{ fontSize: 12.5 }}>#{b.index}</TableCell>
+                          <TableCell sx={{ fontSize: 12.5 }}>
+                            <Chip label={b.type} size="small" sx={{ height: 20, fontSize: 10.5 }} />
+                          </TableCell>
+                          <TableCell sx={{ fontSize: 12.5 }}>{b.page}페이지</TableCell>
+                          <TableCell sx={{ fontSize: 12.5, fontFamily: "monospace" }}>
+                            {b.bbox ? `${b.bbox.join(", ")}` : "-"}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: 12.5, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {b.text || "-"}
+                          </TableCell>
+                          <TableCell sx={{ fontSize: 12.5 }}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<VisibilityOutlined fontSize="small" />}
+                              onClick={() => void openPagePreview(b.page, b.bbox)}
+                              sx={{ py: 0.25, fontSize: 11 }}
+                            >
+                              위치 보기
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            </Grid>
+          )}
+
+          {/* 6. Locators */}
           <Grid size={{ xs: 12 }}>
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
@@ -670,16 +802,30 @@ export function MarkdownViewerDialog({
                         <TableCell sx={{ fontWeight: 600 }}>Title</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>Locator ID</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>Offsets</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
                       {locators.map((loc) => (
                         <TableRow key={loc.locatorId}>
                           <TableCell sx={{ fontSize: 12.5 }}>{loc.level ?? "-"}</TableCell>
-                          <TableCell sx={{ fontSize: 12.5 }}>{loc.pageNumber ?? "-"}</TableCell>
+                          <TableCell sx={{ fontSize: 12.5 }}>{loc.pageNumber ?? "-"}페이지</TableCell>
                           <TableCell sx={{ fontSize: 12.5 }}>{loc.title || "-"}</TableCell>
                           <TableCell sx={{ fontSize: 12.5 }}>{loc.locatorId || "-"}</TableCell>
                           <TableCell sx={{ fontSize: 12.5 }}>{loc.startOffset} ~ {loc.endOffset}</TableCell>
+                          <TableCell sx={{ fontSize: 12.5 }}>
+                            {loc.pageNumber != null && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<VisibilityOutlined fontSize="small" />}
+                                onClick={() => void openPagePreview(loc.pageNumber!)}
+                                sx={{ py: 0.25, fontSize: 11 }}
+                              >
+                                위치 보기
+                              </Button>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -915,6 +1061,53 @@ export function MarkdownViewerDialog({
           </Box>
         )}
       </DialogContent>
+
+      {/* Page / Crop Preview Dialog */}
+      <Dialog
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle sx={{ p: 2, display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid", borderColor: "divider" }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: 15 }}>
+            {previewTitle}
+          </Typography>
+          <IconButton onClick={() => setPreviewOpen(false)} size="small">
+            <CloseOutlined fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", bgcolor: "action.hover", minHeight: 300 }}>
+          {previewLoading ? (
+            <Stack spacing={1.5} alignItems="center">
+              <CircularProgress size={32} />
+              <Typography variant="body2" color="text.secondary">이미지를 가져오는 중입니다...</Typography>
+            </Stack>
+          ) : previewError ? (
+            <Typography variant="body2" color="error" sx={{ fontWeight: 600 }}>
+              {previewError}
+            </Typography>
+          ) : previewBlobUrl ? (
+            <Box
+              component="img"
+              src={previewBlobUrl}
+              alt="Page Preview"
+              sx={{
+                maxWidth: "100%",
+                maxHeight: "65vh",
+                objectFit: "contain",
+                boxShadow: 3,
+                borderRadius: 1.5,
+                bgcolor: "background.paper",
+                border: "1px solid",
+                borderColor: "divider",
+              }}
+            />
+          ) : (
+            <Typography variant="body2" color="text.secondary">미리보기 파일이 없습니다.</Typography>
+          )}
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
