@@ -1712,6 +1712,25 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
       <Card variant="outlined" sx={{ borderRadius: 2 }}>
         <CardContent>
           <Stack spacing={1.5}>
+            <Box sx={{ mb: 1 }}>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                선택 파일 정보
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 500,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {job
+                  ? `${sourceDisplayName(job)} / ${job.objectType} #${job.objectId}`
+                  : "색인 작업을 선택하지 않으면 전체 RAG 범위에서 검색합니다."}
+              </Typography>
+            </Box>
+
             <Box
               sx={{
                 display: "grid",
@@ -1724,22 +1743,14 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
               }}
             >
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                  선택 파일 정보
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontWeight: 500,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                <AiProviderSelect
+                  provider={chatProvider}
+                  model={chatModel}
+                  onChange={(p, m) => {
+                    setChatProvider(p);
+                    setChatModel(m);
                   }}
-                >
-                  {job
-                    ? `${sourceDisplayName(job)} / ${job.objectType} #${job.objectId}`
-                    : "색인 작업을 선택하지 않으면 전체 RAG 범위에서 검색합니다."}
-                </Typography>
+                />
               </Box>
 
               <Box sx={{ minWidth: 0 }}>
@@ -1772,30 +1783,6 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
                     })}
                   </TextField>
                 ) : null}
-              </Box>
-            </Box>
-
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-                gap: 2,
-                alignItems: "center",
-                mb: 0.5,
-              }}
-            >
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                  답변 생성 Chat 모델
-                </Typography>
-                <AiProviderSelect
-                  provider={chatProvider}
-                  model={chatModel}
-                  onChange={(p, m) => {
-                    setChatProvider(p);
-                    setChatModel(m);
-                  }}
-                />
               </Box>
             </Box>
 

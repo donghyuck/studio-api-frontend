@@ -82,6 +82,7 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
+import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import { reactFilesApi } from "@/react/pages/files/api";
 import { reactObjectTypeApi } from "@/react/pages/objecttype/api";
 import type {
@@ -2994,6 +2995,14 @@ export function RagPage() {
               </Typography>
             </Alert>
             <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} alignItems={{ lg: "flex-start" }}>
+               <AiProviderSelect
+                provider={provider}
+                model={model}
+                onChange={(p, m) => {
+                  setProvider(p);
+                  setModel(m);
+                }}
+              />
               {embeddingOptions.length > 0 ? (
                 <TextField
                   select
@@ -3023,32 +3032,6 @@ export function RagPage() {
                   })}
                 </TextField>
               ) : null}
-              <TextField
-                select
-                label="Provider"
-                value={provider}
-                onChange={(event) => {
-                  const nextProvider = event.target.value;
-                  setProvider(nextProvider);
-                  const match = providers.find((item) => item.name === nextProvider);
-                  setModel(match?.chat.model ?? "");
-                }}
-                fullWidth
-                size="small"
-              >
-                {providers.map((item) => (
-                  <MenuItem key={item.name} value={item.name}>
-                    {item.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                label="Model"
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
-                fullWidth
-                size="small"
-              />
               <Tooltip title="검색 결과로 가져올 최대 Chunk 개수입니다. 값이 클수록 후보 문맥은 많아지지만 노이즈와 비용도 늘 수 있습니다.">
                 <TextField
                   label="topK"

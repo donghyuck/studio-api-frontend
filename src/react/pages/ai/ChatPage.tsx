@@ -37,6 +37,7 @@ import type { ChatMessage, ConversationSummaryDto } from "@/react/pages/ai/compo
 import { ConversationSidebar } from "@/react/pages/ai/components/ConversationSidebar";
 import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
 import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
+import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 
 const CHAT_INPUT_HISTORY_KEY = "ai_chat_input_history";
 
@@ -505,19 +506,14 @@ export function ChatPage() {
             ) : (
               <Alert severity="warning">서버에서 대화 기억 기능이 비활성화되어 있습니다.</Alert>
             )}
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField select label="Provider" value={provider} onChange={(event) => handleProviderChange(event.target.value)} fullWidth size="small">
-                {providers.map((item) => (
-                  <MenuItem key={item.name} value={item.name}>
-                    <Stack spacing={0}>
-                      <Typography variant="body2">{item.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">chat: {item.chat.enabled ? item.chat.model : "disabled"}</Typography>
-                    </Stack>
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth size="small" />
-            </Stack>
+            <AiProviderSelect
+              provider={provider}
+              model={model}
+              onChange={(p, m) => {
+                setProvider(p);
+                setModel(m);
+              }}
+            />
             {selectedProvider ? (
               <Typography variant="caption" color="text.secondary">
                 Embedding: {selectedProvider.embedding.enabled ? selectedProvider.embedding.model : "disabled"}
