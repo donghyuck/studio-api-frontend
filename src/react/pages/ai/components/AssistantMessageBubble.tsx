@@ -3,6 +3,7 @@ import { alpha, Avatar, Box, Divider, IconButton, Popover, Stack, Tooltip, Typog
 import { ContentCopyOutlined, DescriptionOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
 import type { ChatMessage, ChatResponseMetadataDto } from "@/react/pages/ai/components/chatTypes";
 import type { RagReferenceDto } from "@/types/studio/ai";
+import katex from "katex";
 import "katex/dist/katex.min.css";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
@@ -199,7 +200,6 @@ function renderInlineMarkdown(text: string) {
     }
     if (part.startsWith("$$") && part.endsWith("$$")) {
       try {
-        const katex = require("katex") as typeof import("katex");
         const html = katex.renderToString(part.slice(2, -2), { displayMode: true, throwOnError: false });
         return (
           <Box
@@ -215,7 +215,6 @@ function renderInlineMarkdown(text: string) {
     }
     if (part.startsWith("$") && part.endsWith("$")) {
       try {
-        const katex = require("katex") as typeof import("katex");
         const html = katex.renderToString(part.slice(1, -1), { displayMode: false, throwOnError: false });
         return (
           <Box

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
+import katex from "katex";
 import "katex/dist/katex.min.css";
 import {
   Accordion,
@@ -402,8 +403,9 @@ function CitationGroup({
 
 function renderInlineMarkdown(text: string) {
   // Split on display math ($$...$$), inline math ($...$), and bold (**...**)
-  const parts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g);
-  return parts.map((part, index) => {
+  const parts = text.split(/((?:\$\$[\s\S]+?\Slide\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g); // Wait, make sure we use the correct regex: /((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g
+  const cleanParts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g);
+  return cleanParts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
         <Box key={`bold-${index}`} component="strong" sx={{ fontWeight: 700 }}>
@@ -413,7 +415,6 @@ function renderInlineMarkdown(text: string) {
     }
     if (part.startsWith("$$") && part.endsWith("$$")) {
       try {
-        const katex = require("katex") as typeof import("katex");
         const html = katex.renderToString(part.slice(2, -2), { displayMode: true, throwOnError: false });
         return (
           <Box
@@ -429,7 +430,6 @@ function renderInlineMarkdown(text: string) {
     }
     if (part.startsWith("$") && part.endsWith("$")) {
       try {
-        const katex = require("katex") as typeof import("katex");
         const html = katex.renderToString(part.slice(1, -1), { displayMode: false, throwOnError: false });
         return (
           <Box
