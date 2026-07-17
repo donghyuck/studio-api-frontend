@@ -1,4 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import {
   Accordion,
   AccordionDetails,
@@ -1157,23 +1161,32 @@ function ContentPreview({
       <Stack spacing={1}>
         <Typography variant="subtitle2">{title}</Typography>
         <Box
-          component="pre"
           sx={{
             m: 0,
             p: 1,
             minHeight: 120,
             maxHeight: 300,
             overflow: "auto",
-            whiteSpace: "pre-wrap",
-            overflowWrap: "anywhere",
             bgcolor: "action.hover",
             borderRadius: 2,
-            fontFamily: (theme) => theme.typography.fontFamily,
-            fontSize: 12,
+            fontSize: 13,
             lineHeight: 1.7,
+            "& p": { my: 0.5 },
+            "& pre": { overflowX: "auto", bgcolor: "action.selected", p: 1, borderRadius: 1 },
+            "& code": { fontFamily: "monospace", fontSize: "0.88em" },
+            "& .katex-display": { overflowX: "auto", overflowY: "hidden", my: 1 },
+            "& .katex": { fontSize: "1.05em" },
           }}
         >
-          {content?.trim() || "row를 선택하면 전체 내용이 표시됩니다."}
+          {content?.trim() ? (
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {content.trim()}
+            </ReactMarkdown>
+          ) : (
+            <Box component="span" sx={{ color: "text.disabled", fontStyle: "italic" }}>
+              row를 선택하면 전체 내용이 표시됩니다.
+            </Box>
+          )}
         </Box>
         {metadata ? (
           <Box
@@ -1773,6 +1786,29 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
                 fullWidth
                 inputProps={{ "aria-label": "검증 쿼리" }}
               />
+              {/\$/.test(query) && (
+                <Box
+                  sx={{
+                    border: 1,
+                    borderColor: "primary.light",
+                    borderRadius: 1.5,
+                    px: 1.5,
+                    py: 0.75,
+                    bgcolor: "action.hover",
+                    fontSize: 13,
+                    "& .katex-display": { overflowX: "auto", overflowY: "hidden", my: 0.5 },
+                    "& .katex": { fontSize: "1.05em" },
+                    "& p": { m: 0 },
+                  }}
+                >
+                  <Typography variant="caption" color="primary" fontWeight={600} display="block" sx={{ mb: 0.5 }}>
+                    수식 미리보기
+                  </Typography>
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {query}
+                  </ReactMarkdown>
+                </Box>
+              )}
               <TextField
                 label="Top K"
                 value={topK}
