@@ -1156,7 +1156,20 @@ export function MarkdownViewerDialog({
         },
       }}
     >
-      <DialogTitle sx={{ p: 2, display: "flex", alignItems: "center", borderBottom: "1px solid", borderColor: "divider", flexShrink: 0 }}>
+      <DialogTitle
+        sx={{
+          p: 2,
+          display: "flex",
+          alignItems: "center",
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          flexShrink: 0,
+          pr: "16px !important",
+          "& .custom-close-button": {
+            display: "none",
+          },
+        }}
+      >
         <Stack spacing={0.5} sx={{ flexGrow: 1 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: 16 }}>
             마크다운 결과 보기 {fileName && `- ${fileName}`}
