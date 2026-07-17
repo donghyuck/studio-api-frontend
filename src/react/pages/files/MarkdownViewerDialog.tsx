@@ -30,6 +30,10 @@ import {
   TableHead,
   TableRow,
   Card,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  LinearProgress,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -41,6 +45,7 @@ import {
   RefreshOutlined,
   VisibilityOutlined,
   InfoOutlined,
+  ExpandMoreOutlined,
 } from "@mui/icons-material";
 import CodeMirror from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
@@ -553,311 +558,251 @@ export function MarkdownViewerDialog({
       return { label: "Vision LLM 보정 미요청", color: "default" };
     }
 
+    // Extract coverage values safely
+    const pageProvCoverage = ocrRaw?.pageProvenanceCoverage ?? normMeta?.pageProvenanceCoverage ?? null;
+    const mathProvCoverage = ocrRaw?.mathPageProvenanceCoverage ?? normMeta?.mathPageProvenanceCoverage ?? null;
+    const searchableCoverage = ocrRaw?.searchablePageCoverage ?? normMeta?.searchablePageCoverage ?? null;
+
+    // Calculate text mapping percent
+    const textMappingPct = pageProvCoverage != null 
+      ? pageProvCoverage * 100 
+      : (totalCoverageTargetCount > 0 ? (pageConfirmedCount / totalCoverageTargetCount) * 100 : null);
+    
+    // Calculate math mapping percent
+    const mathMappingPct = mathProvCoverage != null ? mathProvCoverage * 100 : null;
+
+    // Calculate searchable percent
+    const searchablePct = searchableCoverage != null ? searchableCoverage * 100 : null;
+
     return (
-      <Box sx={{ p: 3 }}>
-        <Grid container spacing={3}>
-          {/* A. 사용 가능 판정 카드 */}
-          <Grid size={{ xs: 12 }}>
-            <Paper
-              variant="outlined"
-              sx={{
-                p: 2.5,
-                borderRadius: 2,
-                borderLeft: "6px solid",
-                borderColor: `${usageDecisionColor}.main`,
-                bgcolor: `${usageDecisionColor}.lighter` || "action.hover",
-              }}
-            >
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Box sx={{ flexGrow: 1 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: `${usageDecisionColor}.dark`, mb: 0.5 }}>
-                    정규화 품질 상태: {usageDecisionLabel}
+      <Box sx={{ p: 3, display: "flex", flexDirection: "column", gap: 3 }}>
+        {/* A. 종합 품질 및 RAG 색인 판정 카드 */}
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 3,
+            borderRadius: 2,
+            borderLeft: "6px solid",
+            borderColor: `${usageDecisionColor}.main`,
+            bgcolor: `${usageDecisionColor}.lighter` || "action.hover",
+          }}
+        >
+          <Grid container spacing={3} alignItems="center">
+            {markdownQualityScore !== null && (
+              <Grid size={{ xs: 12, sm: 3 }} sx={{ display: "flex", justifyContent: "center" }}>
+                <Box
+                  sx={{
+                    width: 90,
+                    height: 90,
+                    borderRadius: "50%",
+                    border: "5px solid",
+                    borderColor: `${usageDecisionColor}.main`,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    bgcolor: "background.paper",
+                    boxShadow: 1
+                  }}
+                >
+                  <Typography variant="h5" sx={{ fontWeight: 800, color: "text.primary" }}>
+                    {markdownQualityScore}
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {usageDecisionDesc}
+                  <Typography variant="caption" color="text.secondary">
+                    품질 점수
                   </Typography>
                 </Box>
-                {ragIndexEligible !== null && (
-                  <Chip
-                    label={ragIndexEligible ? "RAG 색인 가능" : "RAG 색인 불가"}
-                    color={ragIndexEligible ? "success" : "error"}
-                    variant="filled"
-                    sx={{ fontWeight: 700 }}
-                  />
-                )}
-              </Stack>
-            </Paper>
-          </Grid>
-
-          {/* B. 정규화 요약 */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                <InfoOutlined color="primary" fontSize="small" /> 정규화 상태 상세
-              </Typography>
-              {parseFailed ? (
-                <Typography variant="body2" color="error">메타데이터를 해석할 수 없습니다.</Typography>
-              ) : (
-                <Stack spacing={1.5}>
-                  <Grid container spacing={1.5}>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">정규화 상태 (Normalization Status)</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{normalizationStatus}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">품질 상태 (Quality Status)</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{markdownQualityStatus}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">품질 게이트 (Quality Gate)</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        <Chip
-                          label={qualityGateStatus}
-                          color={qualityGateStatus === "PASSED" ? "success" : qualityGateStatus === "FAILED" ? "error" : "default"}
-                          size="small"
-                          sx={{ height: 20, fontSize: 11, fontWeight: 700 }}
-                        />
-                      </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">품질 스코어 (Quality Score)</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {markdownQualityScore !== null ? `${markdownQualityScore}점` : "-"}
-                      </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">블록 수 / 전체 페이지 수</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {normMeta?.blockCount != null ? `${normMeta.blockCount} Blocks` : "-"} / {normMeta?.pageCount != null ? `${normMeta.pageCount} Pages` : "-"}
-                      </Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">테이블 / 이미지 수</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {normMeta?.tableCount != null ? `${normMeta.tableCount} Tables` : "-"} / {normMeta?.imageCount != null ? `${normMeta.imageCount} Images` : "-"}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-
-                  {allIssues.length > 0 && (
-                    <Box sx={{ mt: 1.5, p: 2, bgcolor: "action.hover", borderRadius: 1.5, border: "1px dashed", borderColor: "warning.main" }}>
-                      <Typography variant="caption" sx={{ fontWeight: 800, color: "warning.dark", display: "block", mb: 1 }}>
-                        품질 경고 상세 ({allIssues.length}개)
-                      </Typography>
-                      {allIssues.map((issue: string, idx: number) => (
-                        <Typography key={idx} variant="caption" color="text.secondary" display="block" sx={{ pl: 1, textIndent: -8 }}>
-                          • {issueLabels[issue] || issue}
-                        </Typography>
-                      ))}
-                    </Box>
+              </Grid>
+            )}
+            <Grid size={{ xs: 12, sm: markdownQualityScore !== null ? 9 : 12 }}>
+              <Stack spacing={1.5}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: `${usageDecisionColor}.dark` }}>
+                    {usageDecisionLabel}
+                  </Typography>
+                  {ragIndexEligible !== null && (
+                    <Chip
+                      label={ragIndexEligible ? "RAG 색인 자동 승인" : "RAG 색인 대상 보류"}
+                      color={ragIndexEligible ? "success" : "error"}
+                      size="small"
+                      sx={{ fontWeight: 700, fontSize: 11 }}
+                    />
                   )}
-                </Stack>
-              )}
-            </Paper>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5 }}>
+                  {usageDecisionDesc}
+                </Typography>
+              </Stack>
+            </Grid>
           </Grid>
+        </Paper>
 
-          {/* C. 블록 통계 */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                블록 분류 (Block Breakdown)
+        {/* B. 원문 연결 및 신뢰성 게이지 (Linear Progress) */}
+        <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
+            <VisibilityOutlined color="primary" fontSize="small" /> 원문 위치 분석 및 신뢰도 (Provenance & Searchability Coverage)
+          </Typography>
+          <Stack spacing={3.5}>
+            {/* 1. 텍스트 매핑 커버리지 */}
+            <Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>텍스트 원문 매핑 신뢰도 (Text Mapping)</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: "primary.main" }}>
+                  {textMappingPct !== null ? `${textMappingPct.toFixed(1)}%` : "판정 불가"}
+                </Typography>
+              </Box>
+              <LinearProgress 
+                variant="determinate" 
+                value={textMappingPct ?? 0} 
+                color="primary" 
+                sx={{ height: 8, borderRadius: 4, bgcolor: "action.hover" }} 
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.8 }}>
+                문서 본문 중 {textMappingPct !== null ? `${textMappingPct.toFixed(1)}%` : "-%"}가 원본 문서의 위치 좌표 및 페이지 정보와 정확히 일치하여 매핑되었습니다.
               </Typography>
-              {Object.keys(blockCounts).length === 0 ? (
-                <Typography variant="body2" color="text.secondary">정량 분석된 블록 정보가 없습니다.</Typography>
-              ) : (
-                <Stack spacing={1} sx={{ maxHeight: 220, overflow: "auto", pr: 0.5 }}>
-                  {Object.entries(blockCounts).map(([type, count]) => (
-                    <Box key={type} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.75, borderBottom: "1px dashed", borderColor: "divider" }}>
-                      <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: 13 }}>{type}</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{count}</Typography>
+            </Box>
+
+            {/* 2. 수학 수식 복원 커버리지 */}
+            <Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>수학 수식 및 기호 복원도 (Math Recovery)</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: "secondary.main" }}>
+                  {ocrRaw?.mathBlockCount === 0 
+                    ? "수식 없음 (일반 문서)" 
+                    : (mathMappingPct !== null ? `${mathMappingPct.toFixed(1)}%` : "판정 불가")}
+                </Typography>
+              </Box>
+              {ocrRaw?.mathBlockCount !== 0 && (
+                <LinearProgress 
+                  variant="determinate" 
+                  value={mathMappingPct ?? 0} 
+                  color="secondary" 
+                  sx={{ height: 8, borderRadius: 4, bgcolor: "action.hover" }} 
+                />
+              )}
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.8 }}>
+                {ocrRaw?.mathBlockCount === 0 
+                  ? "해당 문서에는 복잡한 수학 수식이 검출되지 않았으므로 수식 보정이 제외되었습니다." 
+                  : `문서 내 수학 기호 및 공식들 중 ${mathMappingPct !== null ? `${mathMappingPct.toFixed(1)}%` : "-%"}가 수학 전용 OCR 영역에 완벽히 매핑되어 복원되었습니다.`}
+              </Typography>
+            </Box>
+
+            {/* 3. 검색 색인 적합도 */}
+            <Box>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>검색 적합도 커버리지 (Searchability)</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 800, color: "info.main" }}>
+                  {searchablePct !== null ? `${searchablePct.toFixed(1)}%` : "판정 불가"}
+                </Typography>
+              </Box>
+              <LinearProgress 
+                variant="determinate" 
+                value={searchablePct ?? 0} 
+                color="info" 
+                sx={{ height: 8, borderRadius: 4, bgcolor: "action.hover" }} 
+              />
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.8 }}>
+                정규화된 문서 블록 중 자연어 검색(RAG)에 안전하게 인덱싱하여 활용하기에 적합하다고 판정된 블록들의 비율입니다.
+              </Typography>
+            </Box>
+          </Stack>
+        </Paper>
+
+        {/* C. OCR 및 Vision LLM 설정 요약 카드 */}
+        {hasOcrInfo && (
+          <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                텍스트 추출 및 OCR 사양
+              </Typography>
+              <Chip
+                label={ocrBadgeLabel(ocrMeta)}
+                color={ocrBadgeColor(ocrMeta)}
+                size="small"
+                variant="filled"
+                sx={{ fontWeight: 700, fontSize: 10.5 }}
+              />
+            </Stack>
+
+            <Grid container spacing={2.5} sx={{ mb: 1.5 }}>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <Typography variant="caption" color="text.secondary" display="block">OCR 강제 설정</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{ocrMeta.ocrMode ?? "-"}</Typography>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <Typography variant="caption" color="text.secondary" display="block">OCR 실제 적용</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{ocrMeta.ocrApplied == null ? "-" : ocrMeta.ocrApplied ? "예" : "아니오"}</Typography>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <Typography variant="caption" color="text.secondary" display="block">수식 보정 적용</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{ocrMeta.mathVisionCorrectionApplied == null ? "-" : ocrMeta.mathVisionCorrectionApplied ? "예" : "아니오"}</Typography>
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <Typography variant="caption" color="text.secondary" display="block">처리 엔진</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{ocrMeta.ocrEngine ?? "-"}</Typography>
+              </Grid>
+            </Grid>
+
+            {ocrMeta.mathVisionCorrectionRequested && (
+              <Box sx={{ p: 1.5, bgcolor: "action.hover", borderRadius: 1.5, borderLeft: "4px solid", borderColor: "secondary.main", mt: 1.5 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, color: "secondary.dark", display: "block", mb: 0.5 }}>
+                  Vision LLM 보정 상태
+                </Typography>
+                <Typography variant="body2" sx={{ fontSize: 12.5 }}>
+                  보정 엔진: <strong>{ocrMeta.mathVisionCorrectionProvider || "-"}</strong> / 보정된 수식 블록: <strong>{ocrMeta.mathVisionFormulaBlockCount ?? 0}개</strong>
+                </Typography>
+                {ocrMeta.mathVisionCorrectionSkipReason && (
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                    미적용 사유: {ocrMeta.mathVisionCorrectionSkipReason}
+                  </Typography>
+                )}
+              </Box>
+            )}
+          </Paper>
+        )}
+
+        {/* D. 아코디언 상세 분석 데이터 목록 */}
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, pl: 0.5 }}>
+            상세 원시 데이터 분석 (개발 및 디버깅용 접기)
+          </Typography>
+
+          {/* 1. 품질 이슈 상세 */}
+          {allIssues.length > 0 && (
+            <Accordion variant="outlined" sx={{ borderRadius: 1.5, "&:before": { display: "none" } }}>
+              <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ py: 0.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: "warning.dark" }}>
+                  ⚠ 품질 이상 경고 ({allIssues.length}개 이슈 검출)
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ bgcolor: "action.hover", px: 3, pb: 3.5 }}>
+                <Stack spacing={1}>
+                  {allIssues.map((issue: string, idx: number) => (
+                    <Box key={idx} sx={{ p: 1.5, bgcolor: "background.paper", borderRadius: 1, border: "1px solid", borderColor: "divider" }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary" }}>
+                        {issueLabels[issue] || issue}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        시스템 분류 코드: {issue}
+                      </Typography>
                     </Box>
                   ))}
                 </Stack>
-              )}
-            </Paper>
-          </Grid>
-
-          {/* D. OCR 요약 */}
-          {hasOcrInfo && (
-            <Grid size={{ xs: 12 }}>
-              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                    OCR 요약
-                  </Typography>
-                  <Chip
-                    label={ocrBadgeLabel(ocrMeta)}
-                    color={ocrBadgeColor(ocrMeta)}
-                    size="small"
-                    variant="filled"
-                    sx={{ fontWeight: 600, fontSize: 11 }}
-                  />
-                </Stack>
-
-                {suggestOcrReextract && (
-                  <Box sx={{ mb: 2, p: 1.5, bgcolor: "action.hover", borderRadius: 1, border: "1px solid", borderColor: "warning.main" }}>
-                    <Typography variant="caption" sx={{ color: "warning.dark", fontWeight: 600, display: "block" }}>
-                      ⚠ OCR 권장: 다시 추출 시 'OCR 적용 후 재추출'을 사용하면 품질을 개선할 수 있습니다.
-                    </Typography>
-                    {ocrMeta.ocrDecisionReason && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
-                        사유: {ocrMeta.ocrDecisionReason}
-                      </Typography>
-                    )}
-                  </Box>
-                )}
-
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">OCR 모드</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {ocrMeta.ocrMode ?? "-"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">OCR 요청 주체</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {ocrMeta.ocrRequestedBy ?? "-"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">OCR 적용</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {ocrMeta.ocrApplied == null ? "-" : ocrMeta.ocrApplied ? "예" : "아니오"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">OCR 언어</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {ocrMeta.ocrLanguage ?? "-"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">PDF 추출 엔진</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {ocrMeta.ocrEngine ?? "-"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">OCR Fallback</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {ocrMeta.pdfOcrFallback == null ? "-" : ocrMeta.pdfOcrFallback ? "예" : "아니오"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">권장 라우트</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {ocrMeta.recommendedRoute ?? ocrMeta.pdfRecommendedRoute ?? "-"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">실제 처리 라우트</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {ocrMeta.actualRoute ?? ocrMeta.pdfActualRoute ?? "-"}
-                    </Typography>
-                  </Grid>
-                </Grid>
-
-                <Divider sx={{ my: 2.5 }} />
-
-                <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                    Vision LLM 수식 보정
-                  </Typography>
-                  {(() => {
-                    const status = getMathVisionStatus();
-                    return <Chip label={status.label} color={status.color} size="small" variant="filled" sx={{ fontWeight: 600, fontSize: 11 }} />;
-                  })()}
-                </Stack>
-
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 6, sm: 4 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">Vision 보정 요청</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {ocrMeta.mathVisionCorrectionRequested == null ? "-" : ocrMeta.mathVisionCorrectionRequested ? "예" : "아니오"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 4 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">Vision 보정 적용</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {ocrMeta.mathVisionCorrectionApplied == null ? "-" : ocrMeta.mathVisionCorrectionApplied ? "예" : "아니오"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 4 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">Vision Provider</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {ocrMeta.mathVisionCorrectionProvider || "-"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 4 }}>
-                    <Typography variant="caption" color="text.secondary" display="block">보정 수식 블록 수</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {ocrMeta.mathVisionFormulaBlockCount != null ? `${ocrMeta.mathVisionFormulaBlockCount}개` : "-"}
-                    </Typography>
-                  </Grid>
-                  {ocrMeta.mathVisionCorrectionSkipReason && (
-                    <Grid size={{ xs: 12 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">미적용 사유 (Skip Reason)</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {ocrMeta.mathVisionCorrectionSkipReason}
-                      </Typography>
-                    </Grid>
-                  )}
-                </Grid>
-              </Paper>
-            </Grid>
+              </AccordionDetails>
+            </Accordion>
           )}
 
-          {/* E. 위치 정보 통계 카드 */}
-          <Grid size={{ xs: 12 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2.5, display: "flex", alignItems: "center", gap: 1 }}>
-                <VisibilityOutlined color="primary" fontSize="small" /> 원문 위치 정보 분석 (Provenance & Slide Statistics)
+          {/* 2. 원문 위치 매핑 상세 테이블 */}
+          <Accordion variant="outlined" sx={{ borderRadius: 1.5, "&:before": { display: "none" } }}>
+            <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ py: 0.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                🔍 원문 위치 정보 상세 (Provenance List - 총 {totalProvenanceCount}개)
               </Typography>
-              <Grid container spacing={2} sx={{ mb: 3 }}>
-                <Grid size={{ xs: 6, sm: 3 }}>
-                  <Card variant="outlined" sx={{ p: 1.5, textAlign: "center" }}>
-                    <Typography variant="caption" color="text.secondary">총 위치 정보 수</Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>{totalProvenanceCount}개</Typography>
-                  </Card>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 3 }}>
-                  <Card variant="outlined" sx={{ p: 1.5, textAlign: "center" }}>
-                    <Typography variant="caption" color="text.secondary">페이지 확인 수 (PDF)</Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: "primary.main" }}>
-                      {pageConfirmedCount}개 
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 11 }}>
-                        대상 중 {totalCoverageTargetCount > 0 ? ((pageConfirmedCount / totalCoverageTargetCount) * 100).toFixed(1) : 0}%
-                      </Typography>
-                    </Typography>
-                  </Card>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 3 }}>
-                  <Card variant="outlined" sx={{ p: 1.5, textAlign: "center" }}>
-                    <Typography variant="caption" color="text.secondary">슬라이드 확인 수 (PPTX)</Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: "secondary.main" }}>
-                      {slideConfirmedCount}개
-                      <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 11 }}>
-                        대상 중 {totalCoverageTargetCount > 0 ? ((slideConfirmedCount / totalCoverageTargetCount) * 100).toFixed(1) : 0}%
-                      </Typography>
-                    </Typography>
-                  </Card>
-                </Grid>
-                <Grid size={{ xs: 6, sm: 3 }}>
-                  <Card variant="outlined" sx={{ p: 1.5, textAlign: "center" }}>
-                    <Typography variant="caption" color="text.secondary">확인된 페이지/슬라이드 수</Typography>
-                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
-                      {uniquePages.length > 0 ? `Page: ${uniquePages.length}개` : ""}
-                      {uniqueSlides.length > 0 ? `Slide: ${uniqueSlides.length}개` : ""}
-                      {uniquePages.length === 0 && uniqueSlides.length === 0 ? "0개" : ""}
-                    </Typography>
-                  </Card>
-                </Grid>
-              </Grid>
-
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 2, pb: 3.5 }}>
               {/* 페이지/슬라이드별 블록 개수 히스토그램 형태 표시 */}
               {(uniquePages.length > 0 || uniqueSlides.length > 0) && (
-                <Box sx={{ mb: 3 }}>
+                <Box sx={{ mb: 2 }}>
                   <Typography variant="caption" color="text.secondary" display="block" sx={{ fontWeight: 600, mb: 1 }}>
                     페이지 / 슬라이드별 블록 검출 빈도
                   </Typography>
@@ -886,13 +831,9 @@ export function MarkdownViewerDialog({
                 </Box>
               )}
 
-              {/* 위치 정보 목록 테이블 */}
               <Grid container spacing={2}>
                 <Grid size={{ xs: 12, md: selectedProv ? 7 : 12 }}>
-                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontWeight: 600, mb: 1 }}>
-                    위치 정보 리스트 (행 클릭 시 상세 조회 가능)
-                  </Typography>
-                  <TableContainer sx={{ maxHeight: 350, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+                  <TableContainer sx={{ maxHeight: 300, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
                     <Table size="small" stickyHeader>
                       <TableHead>
                         <TableRow>
@@ -967,13 +908,12 @@ export function MarkdownViewerDialog({
                   </TableContainer>
                 </Grid>
 
-                {/* 상세 카드 */}
                 {selectedProv && (
                   <Grid size={{ xs: 12, md: 5 }}>
                     <Card variant="outlined" sx={{ p: 2, height: "100%", display: "flex", flexDirection: "column" }}>
                       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
                         <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                          선택한 위치 정보 상세
+                          위치 정보 상세
                         </Typography>
                         <IconButton size="small" onClick={() => setSelectedProv(null)}>
                           <CloseOutlined fontSize="small" />
@@ -991,7 +931,7 @@ export function MarkdownViewerDialog({
                           </Typography>
                         </Box>
                         <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">정규화 페이지 / 슬라이드</Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">정규화 위치</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600, color: "primary.main" }}>
                             {selectedProv.resolvedPage != null ? `PDF Page ${selectedProv.resolvedPage}` : ""}
                             {selectedProv.resolvedSlide != null ? `PPTX Slide ${selectedProv.resolvedSlide}` : ""}
@@ -1001,7 +941,7 @@ export function MarkdownViewerDialog({
                         <Box>
                           <Typography variant="caption" color="text.secondary" display="block">BBox 좌표</Typography>
                           <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: 12.5 }}>
-                            {selectedProv.bbox ? `[${selectedProv.bbox.join(", ")}]` : "좌표 없음 (bbox가 없어도 페이지 번호는 유지됩니다)"}
+                            {selectedProv.bbox ? `[${selectedProv.bbox.join(", ")}]` : "좌표 없음"}
                           </Typography>
                         </Box>
                         <Box>
@@ -1015,7 +955,7 @@ export function MarkdownViewerDialog({
                           </Box>
                         )}
                         <Box>
-                          <Typography variant="caption" color="text.secondary" display="block">메타데이터 원본 (metadataJson)</Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">메타데이터 (metadataJson)</Typography>
                           <Box
                             sx={{
                               p: 1,
@@ -1037,28 +977,53 @@ export function MarkdownViewerDialog({
                   </Grid>
                 )}
               </Grid>
-            </Paper>
-          </Grid>
+            </AccordionDetails>
+          </Accordion>
 
-          {/* F. 기존 Locators 목록 보존 */}
-          <Grid size={{ xs: 12 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                문서 목차 위치 (Document Outline Locators)
+          {/* 3. 블록 타입 분류 아코디언 */}
+          <Accordion variant="outlined" sx={{ borderRadius: 1.5, "&:before": { display: "none" } }}>
+            <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ py: 0.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                📊 블록 분류 상세 통계 (Block breakdown)
               </Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 3, pb: 3 }}>
+              {Object.keys(blockCounts).length === 0 ? (
+                <Typography variant="body2" color="text.secondary">정보가 없습니다.</Typography>
+              ) : (
+                <Grid container spacing={2}>
+                  {Object.entries(blockCounts).map(([type, count]) => (
+                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={type}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.75, borderBottom: "1px dashed", borderColor: "divider" }}>
+                        <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: 13 }}>{type}</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{count}개</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
+            </AccordionDetails>
+          </Accordion>
+
+          {/* 4. 문서 목차 정보 아코디언 */}
+          <Accordion variant="outlined" sx={{ borderRadius: 1.5, "&:before": { display: "none" } }}>
+            <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ py: 0.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                📖 문서 목차 구조 상세 (Locators - 총 {locators.length}개)
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 2, pb: 3.5 }}>
               {locators.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">목차 정보가 없습니다.</Typography>
               ) : (
-                <TableContainer sx={{ maxHeight: 200, overflow: "auto" }}>
+                <TableContainer sx={{ maxHeight: 250, overflow: "auto" }}>
                   <Table size="small">
                     <TableHead>
                       <TableRow>
                         <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>Level</TableCell>
                         <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>페이지</TableCell>
                         <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>제목</TableCell>
-                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>Locator ID</TableCell>
-                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>오프셋</TableCell>
-                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>액션</TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>Action</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -1067,8 +1032,6 @@ export function MarkdownViewerDialog({
                           <TableCell sx={{ fontSize: 12 }}>{loc.level ?? "-"}</TableCell>
                           <TableCell sx={{ fontSize: 12 }}>{loc.pageNumber ?? "-"}페이지</TableCell>
                           <TableCell sx={{ fontSize: 12, fontWeight: 500 }}>{loc.title || "-"}</TableCell>
-                          <TableCell sx={{ fontSize: 12, color: "text.secondary" }}>{loc.locatorId || "-"}</TableCell>
-                          <TableCell sx={{ fontSize: 12, color: "text.secondary" }}>{loc.startOffset} ~ {loc.endOffset}</TableCell>
                           <TableCell>
                             {loc.pageNumber != null && (
                               <Button
@@ -1088,35 +1051,39 @@ export function MarkdownViewerDialog({
                   </Table>
                 </TableContainer>
               )}
-            </Paper>
-          </Grid>
+            </AccordionDetails>
+          </Accordion>
 
-          {/* G. 문서 기본 메타데이터 */}
+          {/* 5. 문서 메타데이터 정보 아코디언 */}
           {docMetadata && typeof docMetadata === "object" && Object.keys(docMetadata).length > 0 && (
-            <Grid size={{ xs: 12 }}>
-              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                  문서 정보 (Document Metadata)
+            <Accordion variant="outlined" sx={{ borderRadius: 1.5, "&:before": { display: "none" } }}>
+              <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ py: 0.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  📄 문서 기본 정보 상세 (Document Metadata)
                 </Typography>
-                <Grid container spacing={2}>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 3, pb: 3 }}>
+                <Grid container spacing={2.5}>
                   {Object.entries(docMetadata).map(([key, value]) => (
                     <Grid size={{ xs: 12, sm: 6, md: 4 }} key={key}>
                       <Typography variant="caption" color="text.secondary" display="block">{key}</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: "break-all" }}>{String(value)}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: "break-all" }}>{String(value)}</Typography>
                     </Grid>
                   ))}
                 </Grid>
-              </Paper>
-            </Grid>
+              </AccordionDetails>
+            </Accordion>
           )}
 
-          {/* H. 파이프라인 정보 */}
+          {/* 6. 파이프라인 진행 상태 아코디언 */}
           {progress && (
-            <Grid size={{ xs: 12 }}>
-              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                  파이프라인 진행 상태 (Pipeline Progress)
+            <Accordion variant="outlined" sx={{ borderRadius: 1.5, "&:before": { display: "none" } }}>
+              <AccordionSummary expandIcon={<ExpandMoreOutlined />} sx={{ py: 0.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                  ⚙ 변환 파이프라인 상세 이력 (Pipeline logs)
                 </Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 3, pb: 3 }}>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <Typography variant="caption" color="text.secondary" display="block">Current Stage</Typography>
@@ -1133,10 +1100,10 @@ export function MarkdownViewerDialog({
                     </Grid>
                   )}
                 </Grid>
-              </Paper>
-            </Grid>
+              </AccordionDetails>
+            </Accordion>
           )}
-        </Grid>
+        </Box>
       </Box>
     );
   }
