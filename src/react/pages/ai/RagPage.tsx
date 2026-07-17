@@ -3365,11 +3365,18 @@ export function RagPage() {
                           py: 1,
                           bgcolor: message.role === "user" ? "primary.main" : "action.hover",
                           color: message.role === "user" ? "primary.contrastText" : "text.primary",
-                          whiteSpace: "pre-wrap",
                           fontSize: 13,
+                          lineHeight: 1.75,
+                          "& p": { m: 0, mb: 0.5 },
+                          "& p:last-child": { mb: 0 },
+                          "& strong": { fontWeight: 700 },
+                          "& .katex-display": { overflowX: "auto", overflowY: "hidden", my: 0.75 },
+                          "& .katex": { fontSize: "1.05em" },
                         }}
                       >
-                        {message.content}
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          {message.content}
+                        </ReactMarkdown>
                       </Box>
                     ))
                   )}

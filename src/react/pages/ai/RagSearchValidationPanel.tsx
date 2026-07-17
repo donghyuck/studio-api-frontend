@@ -401,13 +401,47 @@ function CitationGroup({
 }
 
 function renderInlineMarkdown(text: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
+  // Split on display math ($$...$$), inline math ($...$), and bold (**...**)
+  const parts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g);
+  return parts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <Box key={`${part}-${index}`} component="strong" sx={{ fontWeight: 700 }}>
+        <Box key={`bold-${index}`} component="strong" sx={{ fontWeight: 700 }}>
           {part.slice(2, -2)}
         </Box>
       );
+    }
+    if (part.startsWith("$$") && part.endsWith("$$")) {
+      try {
+        const katex = require("katex") as typeof import("katex");
+        const html = katex.renderToString(part.slice(2, -2), { displayMode: true, throwOnError: false });
+        return (
+          <Box
+            key={`displaymath-${index}`}
+            component="span"
+            dangerouslySetInnerHTML={{ __html: html }}
+            sx={{ display: "block", overflowX: "auto", "& .katex": { fontSize: "1.05em" } }}
+          />
+        );
+      } catch {
+        return <Box key={`displaymath-${index}`} component="span">{part}</Box>;
+      }
+    }
+    if (part.startsWith("$") && part.endsWith("$")) {
+      try {
+        const katex = require("katex") as typeof import("katex");
+        const html = katex.renderToString(part.slice(1, -1), { displayMode: false, throwOnError: false });
+        return (
+          <Box
+            key={`inlinemath-${index}`}
+            component="span"
+            dangerouslySetInnerHTML={{ __html: html }}
+            sx={{ "& .katex": { fontSize: "1.05em" } }}
+          />
+        );
+      } catch {
+        return <Box key={`inlinemath-${index}`} component="span">{part}</Box>;
+      }
     }
     return part;
   });
