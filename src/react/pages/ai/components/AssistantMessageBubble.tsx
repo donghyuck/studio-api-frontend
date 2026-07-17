@@ -3,6 +3,7 @@ import { alpha, Avatar, Box, Divider, IconButton, Popover, Stack, Tooltip, Typog
 import { ContentCopyOutlined, DescriptionOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
 import type { ChatMessage, ChatResponseMetadataDto } from "@/react/pages/ai/components/chatTypes";
 import type { RagReferenceDto } from "@/types/studio/ai";
+import "katex/dist/katex.min.css";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -186,14 +187,47 @@ function renderRetrievalDebug(metadata?: ChatResponseMetadataDto) {
 }
 
 function renderInlineMarkdown(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  // Split on display math ($$...$$), inline math ($...$), and bold (**...**)
+  const parts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g);
   return parts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <Box component="strong" key={`${part}-${index}`} sx={{ fontWeight: 700 }}>
+        <Box component="strong" key={`bold-${index}`} sx={{ fontWeight: 700 }}>
           {part.slice(2, -2)}
         </Box>
       );
+    }
+    if (part.startsWith("$$") && part.endsWith("$$")) {
+      try {
+        const katex = require("katex") as typeof import("katex");
+        const html = katex.renderToString(part.slice(2, -2), { displayMode: true, throwOnError: false });
+        return (
+          <Box
+            key={`displaymath-${index}`}
+            component="span"
+            dangerouslySetInnerHTML={{ __html: html }}
+            sx={{ display: "block", overflowX: "auto", my: 1, "& .katex": { fontSize: "1.05em" } }}
+          />
+        );
+      } catch {
+        return <Box key={`displaymath-${index}`} component="span">{part}</Box>;
+      }
+    }
+    if (part.startsWith("$") && part.endsWith("$")) {
+      try {
+        const katex = require("katex") as typeof import("katex");
+        const html = katex.renderToString(part.slice(1, -1), { displayMode: false, throwOnError: false });
+        return (
+          <Box
+            key={`inlinemath-${index}`}
+            component="span"
+            dangerouslySetInnerHTML={{ __html: html }}
+            sx={{ "& .katex": { fontSize: "1.05em" } }}
+          />
+        );
+      } catch {
+        return <Box key={`inlinemath-${index}`} component="span">{part}</Box>;
+      }
     }
     return part;
   });
