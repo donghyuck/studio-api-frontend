@@ -3006,13 +3006,13 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
                     {/* 실행 범위 체크박스들 */}
                     <Grid container spacing={1} sx={{ mb: 2, bgcolor: "action.hover", p: 1.5, borderRadius: 1.5 }}>
-                      <Grid size={{ xs: 6, sm: 4 }}>
+                      <Grid size={{ xs: 6 }}>
                         <FormControlLabel
                           control={<Checkbox size="small" checked disabled />}
                           label={<Typography variant="body2" sx={{ fontSize: 13 }}>Markdown 생성 (필수)</Typography>}
                         />
                       </Grid>
-                      <Grid size={{ xs: 6, sm: 4 }}>
+                      <Grid size={{ xs: 6 }}>
                         <FormControlLabel
                           control={
                             <Checkbox
@@ -3025,7 +3025,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                           label={<Typography variant="body2" sx={{ fontSize: 13 }}>Chunking 분할</Typography>}
                         />
                       </Grid>
-                      <Grid size={{ xs: 6, sm: 4 }}>
+                      <Grid size={{ xs: 6 }}>
                         <FormControlLabel
                           control={
                             <Checkbox
@@ -3038,7 +3038,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                           label={<Typography variant="body2" sx={{ fontSize: 13 }}>RAG 색인</Typography>}
                         />
                       </Grid>
-                      <Grid size={{ xs: 6, sm: 4 }}>
+                      <Grid size={{ xs: 6 }}>
                         <FormControlLabel
                           control={
                             <Checkbox
@@ -3083,73 +3083,66 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                           </Stack>
 
                           {isPdf && (
-                            <Stack spacing={1.5}>
-                              <Stack direction="row" spacing={2} alignItems="center">
-                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                            <Grid container spacing={2}>
+                              <Grid size={{ xs: 12, sm: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
                                   OCR 지정
                                 </Typography>
                                 <Select
                                   size="small"
+                                  fullWidth
                                   value={ocrOverride === null ? "null" : String(ocrOverride)}
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     setOcrOverride(val === "null" ? null : val === "true");
                                   }}
                                   disabled={controlsDisabled || isCanceledRevision}
-                                  sx={{ minWidth: 200 }}
                                 >
-                                  <MenuItem value="null">
-                                    문서 종류 설정 사용 (기본값)
-                                  </MenuItem>
+                                  <MenuItem value="null">기본 프로필 설정 사용</MenuItem>
                                   <MenuItem value="true">강제 사용 (FORCE)</MenuItem>
                                   <MenuItem value="false">사용 안 함 (DISABLED)</MenuItem>
                                 </Select>
-                              </Stack>
+                              </Grid>
 
-                              {ocrMode === "FORCE" && (
-                                <Stack direction="column" spacing={1} sx={{ pl: 2 }}>
-                                  <Stack direction="row" spacing={1} alignItems="center">
-                                    <TextField
-                                      size="small"
-                                      label="OCR 언어"
-                                      placeholder={processingPlan?.effectiveOptions?.ocrLanguage || "kor+eng"}
-                                      value={ocrLanguageOverride ?? ""}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setOcrLanguageOverride(val === "" ? null : val);
-                                      }}
-                                      disabled={controlsDisabled || isCanceledRevision}
-                                      sx={{ width: 160, '& .MuiInputBase-root': { fontSize: 12 } }}
-                                    />
-                                    <Typography variant="caption" color="text.secondary">
-                                      OCR용 언어 코드를 직접 지정할 때 채워주세요. (예: kor, eng, kor+eng)
-                                    </Typography>
-                                  </Stack>
-                                </Stack>
-                              )}
-
-                              <Stack direction="row" spacing={2} alignItems="center">
-                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                              <Grid size={{ xs: 12, sm: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
                                   수식 Vision 보정
                                 </Typography>
                                 <Select
                                   size="small"
+                                  fullWidth
                                   value={mathVisionCorrectionOverride === null ? "null" : String(mathVisionCorrectionOverride)}
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     setMathVisionCorrectionOverride(val === "null" ? null : val === "true");
                                   }}
                                   disabled={controlsDisabled || isCanceledRevision}
-                                  sx={{ minWidth: 200 }}
                                 >
-                                  <MenuItem value="null">
-                                    문서 종류 설정 사용 (기본값)
-                                  </MenuItem>
+                                  <MenuItem value="null">기본 프로필 설정 사용</MenuItem>
                                   <MenuItem value="true">사용</MenuItem>
                                   <MenuItem value="false">사용 안 함</MenuItem>
                                 </Select>
-                              </Stack>
-                            </Stack>
+                              </Grid>
+
+                              {ocrMode === "FORCE" && (
+                                <Grid size={{ xs: 12 }}>
+                                  <TextField
+                                    size="small"
+                                    fullWidth
+                                    label="OCR 언어 지정"
+                                    placeholder={processingPlan?.effectiveOptions?.ocrLanguage || "kor+eng"}
+                                    value={ocrLanguageOverride ?? ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setOcrLanguageOverride(val === "" ? null : val);
+                                    }}
+                                    disabled={controlsDisabled || isCanceledRevision}
+                                    helperText="OCR용 언어 코드를 직접 지정할 때 입력하세요. (예: kor, eng, kor+eng)"
+                                    FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
+                                  />
+                                </Grid>
+                              )}
+                            </Grid>
                           )}
                         </Stack>
 
@@ -3162,9 +3155,9 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                               Chunking 설정 지정
                             </Typography>
                             <Grid container spacing={2}>
-                              <Grid size={{ xs: 6 }}>
-                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                                  전략
+                              <Grid size={{ xs: 12, sm: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                                  청킹 전략
                                 </Typography>
                                 <Select
                                   size="small"
@@ -3173,11 +3166,64 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                   onChange={(e) => setChunkingStrategyOverride(e.target.value === "" ? null : e.target.value)}
                                   disabled={controlsDisabled || isCanceledRevision}
                                 >
-                                  <MenuItem value="">문서 종류 설정 사용 (기본값)</MenuItem>
+                                  <MenuItem value="">기본 프로필 설정 사용</MenuItem>
                                   {availableStrategies.map((s) => (
                                     <MenuItem key={s} value={s}>{strategyLabels[s] || s}</MenuItem>
                                   ))}
                                 </Select>
+                              </Grid>
+
+                              <Grid size={{ xs: 12, sm: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                                  청킹 단위
+                                </Typography>
+                                <Select
+                                  size="small"
+                                  fullWidth
+                                  value={chunkUnitOverride ?? ""}
+                                  onChange={(e) => setChunkUnitOverride(e.target.value === "" ? null : e.target.value)}
+                                  disabled={controlsDisabled || isCanceledRevision}
+                                >
+                                  <MenuItem value="">기본 프로필 설정 사용</MenuItem>
+                                  <MenuItem value="CHARACTER">CHARACTER</MenuItem>
+                                  <MenuItem value="TOKEN">TOKEN</MenuItem>
+                                </Select>
+                              </Grid>
+
+                              <Grid size={{ xs: 12, sm: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                                  최대 청크 크기
+                                </Typography>
+                                <TextField
+                                  size="small"
+                                  type="number"
+                                  fullWidth
+                                  value={chunkMaxSizeOverride ?? ""}
+                                  placeholder={processingPlan?.effectiveOptions?.chunkMaxSize ? String(processingPlan.effectiveOptions.chunkMaxSize) : "기본값"}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setChunkMaxSizeOverride(val === "" ? null : Number(val));
+                                  }}
+                                  disabled={controlsDisabled || isCanceledRevision}
+                                />
+                              </Grid>
+
+                              <Grid size={{ xs: 12, sm: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
+                                  중첩 크기 (Overlap)
+                                </Typography>
+                                <TextField
+                                  size="small"
+                                  type="number"
+                                  fullWidth
+                                  value={chunkOverlapOverride ?? ""}
+                                  placeholder={processingPlan?.effectiveOptions?.chunkOverlap ? String(processingPlan.effectiveOptions.chunkOverlap) : "기본값"}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setChunkOverlapOverride(val === "" ? null : Number(val));
+                                  }}
+                                  disabled={controlsDisabled || isCanceledRevision}
+                                />
                               </Grid>
 
                               {chunkingStrategy === "blockify" && (
@@ -3187,8 +3233,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                       Blockify는 질문·답변 형태의 IdeaBlock을 생성합니다.
                                     </Alert>
                                   </Grid>
-                                  <Grid size={{ xs: 6 }}>
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                  <Grid size={{ xs: 12, sm: 6 }}>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
                                       Blockify LLM Provider
                                     </Typography>
                                     <Select
@@ -3211,8 +3257,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                       ))}
                                     </Select>
                                   </Grid>
-                                  <Grid size={{ xs: 6 }}>
-                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                  <Grid size={{ xs: 12, sm: 6 }}>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5, fontWeight: 600 }}>
                                       Blockify LLM Model
                                     </Typography>
                                     <Select
@@ -3247,55 +3293,6 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                   </Grid>
                                 </>
                               )}
-
-                              <Grid size={{ xs: 6 }}>
-                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                                  단위
-                                </Typography>
-                                <Select
-                                  size="small"
-                                  fullWidth
-                                  value={chunkUnitOverride ?? ""}
-                                  onChange={(e) => setChunkUnitOverride(e.target.value === "" ? null : e.target.value)}
-                                  disabled={controlsDisabled || isCanceledRevision}
-                                >
-                                  <MenuItem value="">문서 종류 설정 사용 (기본값)</MenuItem>
-                                  <MenuItem value="CHARACTER">CHARACTER</MenuItem>
-                                  <MenuItem value="TOKEN">TOKEN</MenuItem>
-                                </Select>
-                              </Grid>
-                              <Grid size={{ xs: 6 }}>
-                                <TextField
-                                  label="최대 크기"
-                                  size="small"
-                                  type="number"
-                                  fullWidth
-                                  value={chunkMaxSizeOverride ?? ""}
-                                  placeholder={processingPlan?.effectiveOptions?.chunkMaxSize ? String(processingPlan.effectiveOptions.chunkMaxSize) : "기본값"}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setChunkMaxSizeOverride(val === "" ? null : Number(val));
-                                  }}
-                                  disabled={controlsDisabled || isCanceledRevision}
-                                  sx={{ mt: 2.2 }}
-                                />
-                              </Grid>
-                              <Grid size={{ xs: 6 }}>
-                                <TextField
-                                  label="중첩 크기"
-                                  size="small"
-                                  type="number"
-                                  fullWidth
-                                  value={chunkOverlapOverride ?? ""}
-                                  placeholder={processingPlan?.effectiveOptions?.chunkOverlap ? String(processingPlan.effectiveOptions.chunkOverlap) : "기본값"}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setChunkOverlapOverride(val === "" ? null : Number(val));
-                                  }}
-                                  disabled={controlsDisabled || isCanceledRevision}
-                                  sx={{ mt: 2.2 }}
-                                />
-                              </Grid>
                             </Grid>
                           </Box>
                         )}
