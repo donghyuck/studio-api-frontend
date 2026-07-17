@@ -216,6 +216,18 @@ export interface MarkdownDocumentRevisionDto {
   lastCompletedPage?: number;
 }
 
+export interface MarkdownProvenanceDto {
+  locatorId: string;
+  locatorType: string;
+  locatorNo?: number | null;
+  page?: number | null;
+  slide?: number | null;
+  bbox?: number[] | null;
+  sourceRef?: string | null;
+  metadataJson?: string | null;
+  confidence?: number | null;
+}
+
 export interface MarkdownLocatorDto {
   locatorId: string;
   documentId: string;
@@ -531,6 +543,9 @@ export const reactMarkdownDocumentApi = {
   },
   async getLocators(documentId: string): Promise<MarkdownLocatorDto[]> {
     return apiRequest<MarkdownLocatorDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/locators`);
+  },
+  async getProvenance(documentId: string): Promise<MarkdownProvenanceDto[]> {
+    return apiRequest<MarkdownProvenanceDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/provenance`);
   },
   async getResources(documentId: string): Promise<MarkdownResourceDto[]> {
     return apiRequest<MarkdownResourceDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/resources`);

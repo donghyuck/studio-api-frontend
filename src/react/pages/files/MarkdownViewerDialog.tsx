@@ -29,6 +29,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Card,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -54,6 +55,7 @@ import {
   reactMarkdownDocumentApi,
   type MarkdownResourceDto,
   type MarkdownLocatorDto,
+  type MarkdownProvenanceDto,
   type MarkdownPipelineProgressResponseDto,
   type MarkdownOcrMetadata,
   shouldSuggestOcrReextract,
@@ -99,6 +101,8 @@ export function MarkdownViewerDialog({
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [resources, setResources] = useState<MarkdownResourceDto[]>([]);
   const [locators, setLocators] = useState<MarkdownLocatorDto[]>([]);
+  const [provenances, setProvenances] = useState<MarkdownProvenanceDto[]>([]);
+  const [selectedProv, setSelectedProv] = useState<any | null>(null);
   const [progress, setProgress] = useState<MarkdownPipelineProgressResponseDto | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -238,13 +242,15 @@ export function MarkdownViewerDialog({
     setMetadataLoading(true);
     setMetadataError(null);
     try {
-      const [resData, locData, progData] = await Promise.all([
+      const [resData, locData, provData, progData] = await Promise.all([
         reactMarkdownDocumentApi.getResources(documentId),
         reactMarkdownDocumentApi.getLocators(documentId),
+        reactMarkdownDocumentApi.getProvenance(documentId).catch(() => []),
         reactMarkdownDocumentApi.getProgress(documentId).catch(() => null),
       ]);
       setResources(resData);
       setLocators(locData);
+      setProvenances(provData || []);
       setProgress(progData);
     } catch (err: any) {
       setMetadataError(err?.message || "메타데이터를 불러오는 도중 오류가 발생했습니다.");
@@ -257,6 +263,7 @@ export function MarkdownViewerDialog({
     // Reset all states when documentId or revisionId changes
     setResources([]);
     setLocators([]);
+    setProvenances([]);
     setProgress(null);
     setMetadataError(null);
     setActiveTab("markdown");
@@ -268,18 +275,15 @@ export function MarkdownViewerDialog({
 
   useEffect(() => {
     if (open && documentId) {
-      if (activeTab === "markdown") {
-        void loadMarkdown();
-      } else if (activeTab === "metadata" && resources.length === 0 && locators.length === 0 && !progress) {
-        void loadMetadata();
-      }
+      void loadMarkdown();
+      void loadMetadata();
     }
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
     };
-  }, [open, activeTab, documentId, revisionId]);
+  }, [open, documentId, revisionId]);
 
   const handleCopy = () => {
     if (!text) return;
@@ -298,14 +302,28 @@ export function MarkdownViewerDialog({
     }
   };
 
-  // Helper parser for resource metadataJson
-  function parseMetadataJson(resource: MarkdownResourceDto): any | null {
-    if (!resource.metadataJson) return null;
+  // Helper parser for safe JSON parsing
+  function parseSafeJson(jsonStr: string | null | undefined): any {
+    if (!jsonStr) return {};
     try {
-      return JSON.parse(resource.metadataJson);
+      return JSON.parse(jsonStr);
     } catch {
-      return null;
+      return {};
     }
+  }
+
+  // Parse page number from sourceRef format page[n]/block[m]
+  function parsePageFromSourceRef(sourceRef: string | null | undefined): number | null {
+    if (!sourceRef) return null;
+    const match = sourceRef.match(/page\[(\d+)\]/i);
+    return match ? parseInt(match[1], 10) : null;
+  }
+
+  // Parse slide number from sourceRef format slide[n]/block[m]
+  function parseSlideFromSourceRef(sourceRef: string | null | undefined): number | null {
+    if (!sourceRef) return null;
+    const match = sourceRef.match(/slide\[(\d+)\]/i);
+    return match ? parseInt(match[1], 10) : null;
   }
 
   // Setup CodeMirror extensions
@@ -352,50 +370,20 @@ export function MarkdownViewerDialog({
 
     if (normResource) {
       if (normResource.metadataJson) {
-        normMeta = parseMetadataJson(normResource);
-        if (!normMeta) {
+        normMeta = parseSafeJson(normResource.metadataJson);
+        if (Object.keys(normMeta).length === 0) {
           parseFailed = true;
         }
       }
     }
 
-    // Block type summary calculation
-    const blockCounts: Record<string, number> = {};
-    if (normMeta?.document?.blocks && Array.isArray(normMeta.document.blocks)) {
-      normMeta.document.blocks.forEach((b: any) => {
-        const type = b.type || "UNKNOWN";
-        blockCounts[type] = (blockCounts[type] || 0) + 1;
-      });
-    }
-
-    const blocksWithProvenance: any[] = [];
-    if (normMeta?.document?.blocks && Array.isArray(normMeta.document.blocks)) {
-      normMeta.document.blocks.forEach((b: any, idx: number) => {
-        const prov = b.provenance || b.metadata?.provenance || b.metadata || {};
-        const page = prov.pageNumber ?? prov.page ?? b.pageNumber ?? b.page;
-        const bbox = prov.bbox || b.bbox;
-
-        if (page != null) {
-          blocksWithProvenance.push({
-            index: idx,
-            type: b.type || "paragraph",
-            text: b.text || "",
-            page,
-            bbox: Array.isArray(bbox) ? bbox : null
-          });
-        }
-      });
-    }
-
-    const docMetadata = normMeta?.document?.metadata || null;
-
-    // OCR info: from normMeta top-level or any resource metadataJson
+    // OCR & Quality metadata parsing
     const ocrRaw: any = normMeta ?? (() => {
       for (const r of resources) {
-        const m = parseMetadataJson(r);
+        const m = parseSafeJson(r.metadataJson);
         if (m && (
           m.ocrApplied != null || m.ocrMode != null ||
-          m.ocrRequested != null || m.ocrRequired != null ||
+          m.ocrRequired != null || m.ocrRequested != null ||
           m.ocrRequestedBy != null
         )) return m;
       }
@@ -425,7 +413,6 @@ export function MarkdownViewerDialog({
       mathVisionCorrectionSkipReason: ocrRaw?.mathVisionCorrectionSkipReason,
     };
 
-    // backward compat: if no ocrMode but ocrRequired/ocrRequested present
     if (!ocrMeta.ocrMode && ocrRaw) {
       const legacyRequested = ocrRaw.ocrRequested ?? ocrRaw.ocrRequired;
       if (legacyRequested === true) ocrMeta.ocrMode = "FORCE";
@@ -436,7 +423,115 @@ export function MarkdownViewerDialog({
       ocrMeta.ocrEngine != null || ocrMeta.ocrRequestedBy != null ||
       ocrMeta.mathVisionCorrectionRequested != null
     );
+
     const suggestOcrReextract = shouldSuggestOcrReextract(ocrMeta);
+
+    // 1. Provenance Page/Slide 파싱 및 통계
+    const parsedProvenances = provenances.map((prov, index) => {
+      const parsedMeta = parseSafeJson(prov.metadataJson);
+      
+      let page: number | null = prov.page ?? parsedMeta.page ?? parsePageFromSourceRef(prov.sourceRef) ?? null;
+      if (page === null && prov.locatorType === "page" && prov.locatorNo != null) {
+        page = prov.locatorNo;
+      }
+      
+      let slide: number | null = prov.slide ?? parsedMeta.slide ?? parseSlideFromSourceRef(prov.sourceRef) ?? null;
+      if (slide === null && prov.locatorType === "slide" && prov.locatorNo != null) {
+        slide = prov.locatorNo;
+      }
+
+      const isCoverageTarget = 
+        prov.locatorType === "NORMALIZED_BLOCK" || 
+        prov.locatorType === "page" || 
+        prov.locatorType === "slide" || 
+        (prov.sourceRef != null && prov.sourceRef.trim() !== "");
+
+      return {
+        ...prov,
+        index,
+        resolvedPage: page,
+        resolvedSlide: slide,
+        isCoverageTarget,
+        bbox: prov.bbox || parsedMeta.bbox || null,
+        confidence: prov.confidence ?? parsedMeta.confidence ?? null,
+      };
+    });
+
+    const totalProvenanceCount = parsedProvenances.length;
+    const coverageTargets = parsedProvenances.filter(p => p.isCoverageTarget);
+    const totalCoverageTargetCount = coverageTargets.length;
+    
+    const pageConfirmedCount = coverageTargets.filter(p => p.resolvedPage != null).length;
+    const slideConfirmedCount = coverageTargets.filter(p => p.resolvedSlide != null).length;
+
+    const uniquePages = Array.from(new Set(parsedProvenances.map(p => p.resolvedPage).filter((p): p is number => p != null))).sort((a, b) => a - b);
+    const uniqueSlides = Array.from(new Set(parsedProvenances.map(p => p.resolvedSlide).filter((s): s is number => s != null))).sort((a, b) => a - b);
+
+    const pageBlockCounts: Record<number, number> = {};
+    const slideBlockCounts: Record<number, number> = {};
+
+    parsedProvenances.forEach(p => {
+      if (p.resolvedPage != null) {
+        pageBlockCounts[p.resolvedPage] = (pageBlockCounts[p.resolvedPage] || 0) + 1;
+      }
+      if (p.resolvedSlide != null) {
+        slideBlockCounts[p.resolvedSlide] = (slideBlockCounts[p.resolvedSlide] || 0) + 1;
+      }
+    });
+
+    // Block type summary calculation
+    const blockCounts: Record<string, number> = {};
+    if (normMeta?.document?.blocks && Array.isArray(normMeta.document.blocks)) {
+      normMeta.document.blocks.forEach((b: any) => {
+        const type = b.type || "UNKNOWN";
+        blockCounts[type] = (blockCounts[type] || 0) + 1;
+      });
+    }
+
+    const docMetadata = normMeta?.document?.metadata || null;
+
+    // Normalization & Quality gate statuses
+    const normalizationStatus = normMeta?.normalizationStatus || ocrRaw?.normalizationStatus || "-";
+    const markdownQualityStatus = ocrRaw?.markdownQualityStatus || "-";
+    const markdownQualityScore = ocrRaw?.markdownQualityScore ?? normMeta?.markdownQualityScore ?? null;
+    const qualityGateStatus = ocrRaw?.qualityGateStatus ?? normMeta?.qualityGateStatus ?? "-";
+    const ragIndexEligible = ocrRaw?.ragIndexEligible ?? normMeta?.ragIndexEligible ?? null;
+
+    const normalizationIssues = normMeta?.normalizationIssues || [];
+    const markdownQualityIssues = ocrRaw?.markdownQualityIssues || [];
+    const allIssues = [...new Set([...normalizationIssues, ...markdownQualityIssues])];
+
+    // 사용 가능 판정 논리
+    let usageDecisionLabel = "판정 불가";
+    let usageDecisionColor: "success" | "warning" | "error" = "warning";
+    let usageDecisionDesc = "품질 분석이 아직 완료되지 않았습니다.";
+
+    if (qualityGateStatus === "PASSED" && ragIndexEligible === true) {
+      if (markdownQualityStatus === "REVIEW_REQUIRED" || normalizationStatus === "REVIEW_REQUIRED") {
+        usageDecisionLabel = "사용 가능 (품질 경고 존재)";
+        usageDecisionColor = "warning";
+        usageDecisionDesc = "품질 게이트를 통과하고 RAG 색인도 가능하지만, 일부 검토가 필요합니다.";
+      } else {
+        usageDecisionLabel = "사용 가능";
+        usageDecisionColor = "success";
+        usageDecisionDesc = "품질 게이트를 충족하며 RAG 및 서비스 색인에 완전히 적합합니다.";
+      }
+    } else if (qualityGateStatus === "FAILED" || ragIndexEligible === false) {
+      usageDecisionLabel = "사용 제한";
+      usageDecisionColor = "error";
+      usageDecisionDesc = "품질 기준에 미달(Gate FAILED)되었거나 RAG 색인 대상에서 제외되었습니다.";
+    } else if (markdownQualityStatus === "REVIEW_REQUIRED" || normalizationStatus === "REVIEW_REQUIRED") {
+      usageDecisionLabel = "사용 가능 (품질 경고 존재)";
+      usageDecisionColor = "warning";
+      usageDecisionDesc = "정규화 결과 분석에 일부 주의/검토 요구 사항이 포함되어 있습니다.";
+    }
+
+    // 이슈 친근한 명칭 변환 딕셔너리
+    const issueLabels: Record<string, string> = {
+      MATH_DOCUMENT_REVIEW_REQUIRED: "수학 기호 및 공식 복원 검토 필요",
+      KOREAN_SPACING_REVIEW_REQUIRED: "한국어 띄어쓰기/맞춤법 보정 검토 필요",
+      PAGE_QUALITY_REVIEW_REQUIRED: "페이지 전반의 추출 품질 검토 필요",
+    };
 
     function getMathVisionStatus(): { label: string; color: "success" | "warning" | "info" | "default" } {
       const req = ocrMeta.mathVisionCorrectionRequested;
@@ -461,53 +556,97 @@ export function MarkdownViewerDialog({
     return (
       <Box sx={{ p: 3 }}>
         <Grid container spacing={3}>
-          {/* 1. Normalization Summary */}
+          {/* A. 사용 가능 판정 카드 */}
+          <Grid size={{ xs: 12 }}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: 2.5,
+                borderRadius: 2,
+                borderLeft: "6px solid",
+                borderColor: `${usageDecisionColor}.main`,
+                bgcolor: `${usageDecisionColor}.lighter` || "action.hover",
+              }}
+            >
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Box sx={{ flexGrow: 1 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: `${usageDecisionColor}.dark`, mb: 0.5 }}>
+                    정규화 품질 상태: {usageDecisionLabel}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {usageDecisionDesc}
+                  </Typography>
+                </Box>
+                {ragIndexEligible !== null && (
+                  <Chip
+                    label={ragIndexEligible ? "RAG 색인 가능" : "RAG 색인 불가"}
+                    color={ragIndexEligible ? "success" : "error"}
+                    variant="filled"
+                    sx={{ fontWeight: 700 }}
+                  />
+                )}
+              </Stack>
+            </Paper>
+          </Grid>
+
+          {/* B. 정규화 요약 */}
           <Grid size={{ xs: 12, md: 6 }}>
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
-                <InfoOutlined color="primary" fontSize="small" /> 정규화 요약 (Normalization Summary)
+                <InfoOutlined color="primary" fontSize="small" /> 정규화 상태 상세
               </Typography>
               {parseFailed ? (
                 <Typography variant="body2" color="error">메타데이터를 해석할 수 없습니다.</Typography>
-              ) : !normMeta ? (
-                <Typography variant="body2" color="text.secondary">정규화 메타데이터가 없습니다.</Typography>
               ) : (
                 <Stack spacing={1.5}>
-                  <Grid container spacing={1}>
+                  <Grid container spacing={1.5}>
                     <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">Schema Version</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{normMeta.schemaVersion || "-"}</Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">정규화 상태 (Normalization Status)</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{normalizationStatus}</Typography>
                     </Grid>
                     <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">Status</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{normMeta.normalizationStatus || "-"}</Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">품질 상태 (Quality Status)</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{markdownQualityStatus}</Typography>
                     </Grid>
                     <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">Source</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>{normMeta.normalizationSource || "-"}</Typography>
-                    </Grid>
-                    <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">Blocks / Pages</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {normMeta.blockCount != null ? `${normMeta.blockCount} Blocks` : "-"} / {normMeta.pageCount != null ? `${normMeta.pageCount} Pages` : "-"}
+                      <Typography variant="caption" color="text.secondary" display="block">품질 게이트 (Quality Gate)</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        <Chip
+                          label={qualityGateStatus}
+                          color={qualityGateStatus === "PASSED" ? "success" : qualityGateStatus === "FAILED" ? "error" : "default"}
+                          size="small"
+                          sx={{ height: 20, fontSize: 11, fontWeight: 700 }}
+                        />
                       </Typography>
                     </Grid>
                     <Grid size={{ xs: 6 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">Tables / Images</Typography>
+                      <Typography variant="caption" color="text.secondary" display="block">품질 스코어 (Quality Score)</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {markdownQualityScore !== null ? `${markdownQualityScore}점` : "-"}
+                      </Typography>
+                    </Grid>
+                    <Grid size={{ xs: 6 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">블록 수 / 전체 페이지 수</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {normMeta.tableCount != null ? `${normMeta.tableCount} Tables` : "-"} / {normMeta.imageCount != null ? `${normMeta.imageCount} Images` : "-"}
+                        {normMeta?.blockCount != null ? `${normMeta.blockCount} Blocks` : "-"} / {normMeta?.pageCount != null ? `${normMeta.pageCount} Pages` : "-"}
+                      </Typography>
+                    </Grid>
+                    <Grid size={{ xs: 6 }}>
+                      <Typography variant="caption" color="text.secondary" display="block">테이블 / 이미지 수</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {normMeta?.tableCount != null ? `${normMeta.tableCount} Tables` : "-"} / {normMeta?.imageCount != null ? `${normMeta.imageCount} Images` : "-"}
                       </Typography>
                     </Grid>
                   </Grid>
 
-                  {normMeta.normalizationIssues && normMeta.normalizationIssues.length > 0 && (
-                    <Box sx={{ mt: 1, p: 1.5, bgcolor: "action.hover", borderRadius: 1 }}>
-                      <Typography variant="caption" sx={{ fontWeight: 700, color: "warning.main", display: "block", mb: 0.5 }}>
-                        정규화 이슈 ({normMeta.normalizationIssues.length}개)
+                  {allIssues.length > 0 && (
+                    <Box sx={{ mt: 1.5, p: 2, bgcolor: "action.hover", borderRadius: 1.5, border: "1px dashed", borderColor: "warning.main" }}>
+                      <Typography variant="caption" sx={{ fontWeight: 800, color: "warning.dark", display: "block", mb: 1 }}>
+                        품질 경고 상세 ({allIssues.length}개)
                       </Typography>
-                      {normMeta.normalizationIssues.map((issue: string, idx: number) => (
-                        <Typography key={idx} variant="caption" color="text.secondary" display="block">
-                          • {issue}
+                      {allIssues.map((issue: string, idx: number) => (
+                        <Typography key={idx} variant="caption" color="text.secondary" display="block" sx={{ pl: 1, textIndent: -8 }}>
+                          • {issueLabels[issue] || issue}
                         </Typography>
                       ))}
                     </Box>
@@ -517,18 +656,18 @@ export function MarkdownViewerDialog({
             </Paper>
           </Grid>
 
-          {/* 2. Block Summary */}
+          {/* C. 블록 통계 */}
           <Grid size={{ xs: 12, md: 6 }}>
             <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                블록 요약 (Block Summary)
+                블록 분류 (Block Breakdown)
               </Typography>
               {Object.keys(blockCounts).length === 0 ? (
-                <Typography variant="body2" color="text.secondary">블록 정보가 없습니다.</Typography>
+                <Typography variant="body2" color="text.secondary">정량 분석된 블록 정보가 없습니다.</Typography>
               ) : (
-                <Stack spacing={1}>
+                <Stack spacing={1} sx={{ maxHeight: 220, overflow: "auto", pr: 0.5 }}>
                   {Object.entries(blockCounts).map(([type, count]) => (
-                    <Box key={type} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.5, borderBottom: "1px dashed", borderColor: "divider" }}>
+                    <Box key={type} sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", py: 0.75, borderBottom: "1px dashed", borderColor: "divider" }}>
                       <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: 13 }}>{type}</Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>{count}</Typography>
                     </Box>
@@ -538,7 +677,7 @@ export function MarkdownViewerDialog({
             </Paper>
           </Grid>
 
-          {/* 3. OCR Summary */}
+          {/* D. OCR 요약 */}
           {hasOcrInfo && (
             <Grid size={{ xs: 12 }}>
               <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
@@ -617,22 +756,6 @@ export function MarkdownViewerDialog({
                       {ocrMeta.actualRoute ?? ocrMeta.pdfActualRoute ?? "-"}
                     </Typography>
                   </Grid>
-                  {ocrMeta.ocrDecisionReason && (
-                    <Grid size={{ xs: 12 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">서버 판단 사유</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500, fontFamily: "monospace", fontSize: 12 }}>
-                        {ocrMeta.ocrDecisionReason}
-                      </Typography>
-                    </Grid>
-                  )}
-                  {ocrMeta.ocrUnavailableReason && (
-                    <Grid size={{ xs: 12 }}>
-                      <Typography variant="caption" color="text.secondary" display="block">OCR 미적용 사유</Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {ocrMeta.ocrUnavailableReason}
-                      </Typography>
-                    </Grid>
-                  )}
                 </Grid>
 
                 <Divider sx={{ my: 2.5 }} />
@@ -685,12 +808,295 @@ export function MarkdownViewerDialog({
             </Grid>
           )}
 
-          {/* 4. Document Metadata */}
+          {/* E. 위치 정보 통계 카드 */}
+          <Grid size={{ xs: 12 }}>
+            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2.5, display: "flex", alignItems: "center", gap: 1 }}>
+                <VisibilityOutlined color="primary" fontSize="small" /> 원문 위치 정보 분석 (Provenance & Slide Statistics)
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid size={{ xs: 6, sm: 3 }}>
+                  <Card variant="outlined" sx={{ p: 1.5, textAlign: "center" }}>
+                    <Typography variant="caption" color="text.secondary">총 위치 정보 수</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>{totalProvenanceCount}개</Typography>
+                  </Card>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 3 }}>
+                  <Card variant="outlined" sx={{ p: 1.5, textAlign: "center" }}>
+                    <Typography variant="caption" color="text.secondary">페이지 확인 수 (PDF)</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: "primary.main" }}>
+                      {pageConfirmedCount}개 
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 11 }}>
+                        대상 중 {totalCoverageTargetCount > 0 ? ((pageConfirmedCount / totalCoverageTargetCount) * 100).toFixed(1) : 0}%
+                      </Typography>
+                    </Typography>
+                  </Card>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 3 }}>
+                  <Card variant="outlined" sx={{ p: 1.5, textAlign: "center" }}>
+                    <Typography variant="caption" color="text.secondary">슬라이드 확인 수 (PPTX)</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5, color: "secondary.main" }}>
+                      {slideConfirmedCount}개
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 11 }}>
+                        대상 중 {totalCoverageTargetCount > 0 ? ((slideConfirmedCount / totalCoverageTargetCount) * 100).toFixed(1) : 0}%
+                      </Typography>
+                    </Typography>
+                  </Card>
+                </Grid>
+                <Grid size={{ xs: 6, sm: 3 }}>
+                  <Card variant="outlined" sx={{ p: 1.5, textAlign: "center" }}>
+                    <Typography variant="caption" color="text.secondary">확인된 페이지/슬라이드 수</Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 0.5 }}>
+                      {uniquePages.length > 0 ? `Page: ${uniquePages.length}개` : ""}
+                      {uniqueSlides.length > 0 ? `Slide: ${uniqueSlides.length}개` : ""}
+                      {uniquePages.length === 0 && uniqueSlides.length === 0 ? "0개" : ""}
+                    </Typography>
+                  </Card>
+                </Grid>
+              </Grid>
+
+              {/* 페이지/슬라이드별 블록 개수 히스토그램 형태 표시 */}
+              {(uniquePages.length > 0 || uniqueSlides.length > 0) && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontWeight: 600, mb: 1 }}>
+                    페이지 / 슬라이드별 블록 검출 빈도
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", maxHeight: 120, overflow: "auto", p: 0.5 }}>
+                    {uniquePages.map(pageNum => (
+                      <Chip
+                        key={`page-${pageNum}`}
+                        label={`Page ${pageNum} (${pageBlockCounts[pageNum]}개)`}
+                        size="small"
+                        variant="outlined"
+                        color="primary"
+                        sx={{ fontSize: 11 }}
+                      />
+                    ))}
+                    {uniqueSlides.map(slideNum => (
+                      <Chip
+                        key={`slide-${slideNum}`}
+                        label={`Slide ${slideNum} (${slideBlockCounts[slideNum]}개)`}
+                        size="small"
+                        variant="outlined"
+                        color="secondary"
+                        sx={{ fontSize: 11 }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
+              {/* 위치 정보 목록 테이블 */}
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 12, md: selectedProv ? 7 : 12 }}>
+                  <Typography variant="caption" color="text.secondary" display="block" sx={{ fontWeight: 600, mb: 1 }}>
+                    위치 정보 리스트 (행 클릭 시 상세 조회 가능)
+                  </Typography>
+                  <TableContainer sx={{ maxHeight: 350, border: "1px solid", borderColor: "divider", borderRadius: 1 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>ID / Type</TableCell>
+                          <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>원문 위치</TableCell>
+                          <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>BBox</TableCell>
+                          <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>Source Ref</TableCell>
+                          <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>Action</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {parsedProvenances.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={5} align="center" sx={{ py: 3, color: "text.secondary" }}>
+                              위치 정보(Provenance) 데이터가 존재하지 않습니다.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          parsedProvenances.map((prov) => {
+                            const isSelected = selectedProv?.index === prov.index;
+                            const displayPageOrSlide = prov.resolvedPage != null 
+                              ? `Page ${prov.resolvedPage}` 
+                              : (prov.resolvedSlide != null ? `Slide ${prov.resolvedSlide}` : "-");
+                            
+                            return (
+                              <TableRow
+                                key={prov.locatorId || prov.index}
+                                hover
+                                selected={isSelected}
+                                onClick={() => setSelectedProv(prov)}
+                                sx={{ cursor: "pointer", "&.Mui-selected": { bgcolor: "action.selected" } }}
+                              >
+                                <TableCell sx={{ fontSize: 12 }}>
+                                  <Typography variant="body2" sx={{ fontSize: 12, fontWeight: 600 }}>
+                                    {prov.locatorId ? `${prov.locatorId.substring(0, 10)}...` : `#${prov.index}`}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary" display="block">
+                                    {prov.locatorType}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 12, fontWeight: 500 }}>
+                                  {displayPageOrSlide}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 11, fontFamily: "monospace" }}>
+                                  {prov.bbox ? `[${prov.bbox.map(n => n.toFixed(1)).join(", ")}]` : "-"}
+                                </TableCell>
+                                <TableCell sx={{ fontSize: 11, fontFamily: "monospace", color: "text.secondary" }}>
+                                  {prov.sourceRef || "-"}
+                                </TableCell>
+                                <TableCell>
+                                  {prov.resolvedPage != null && (
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      startIcon={<VisibilityOutlined sx={{ fontSize: 12 }} />}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        void openPagePreview(prov.resolvedPage!, prov.bbox);
+                                      }}
+                                      sx={{ py: 0.1, px: 1, fontSize: 10.5, height: 22 }}
+                                    >
+                                      위치 보기
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Grid>
+
+                {/* 상세 카드 */}
+                {selectedProv && (
+                  <Grid size={{ xs: 12, md: 5 }}>
+                    <Card variant="outlined" sx={{ p: 2, height: "100%", display: "flex", flexDirection: "column" }}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                          선택한 위치 정보 상세
+                        </Typography>
+                        <IconButton size="small" onClick={() => setSelectedProv(null)}>
+                          <CloseOutlined fontSize="small" />
+                        </IconButton>
+                      </Box>
+                      <Stack spacing={1.5} sx={{ flexGrow: 1, overflow: "auto" }}>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">Locator ID</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, wordBreak: "break-all" }}>{selectedProv.locatorId}</Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">Type / No</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {selectedProv.locatorType} (No: {selectedProv.locatorNo ?? "-"})
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">정규화 페이지 / 슬라이드</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, color: "primary.main" }}>
+                            {selectedProv.resolvedPage != null ? `PDF Page ${selectedProv.resolvedPage}` : ""}
+                            {selectedProv.resolvedSlide != null ? `PPTX Slide ${selectedProv.resolvedSlide}` : ""}
+                            {selectedProv.resolvedPage == null && selectedProv.resolvedSlide == null ? "미지정" : ""}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">BBox 좌표</Typography>
+                          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: 12.5 }}>
+                            {selectedProv.bbox ? `[${selectedProv.bbox.join(", ")}]` : "좌표 없음 (bbox가 없어도 페이지 번호는 유지됩니다)"}
+                          </Typography>
+                        </Box>
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">Source Reference</Typography>
+                          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: 12.5 }}>{selectedProv.sourceRef || "-"}</Typography>
+                        </Box>
+                        {selectedProv.confidence != null && (
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block">신뢰도 (Confidence)</Typography>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>{(selectedProv.confidence * 100).toFixed(1)}%</Typography>
+                          </Box>
+                        )}
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">메타데이터 원본 (metadataJson)</Typography>
+                          <Box
+                            sx={{
+                              p: 1,
+                              bgcolor: "action.hover",
+                              borderRadius: 1,
+                              fontSize: 11,
+                              fontFamily: "monospace",
+                              maxHeight: 120,
+                              overflow: "auto",
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-all"
+                            }}
+                          >
+                            {selectedProv.metadataJson || "{}"}
+                          </Box>
+                        </Box>
+                      </Stack>
+                    </Card>
+                  </Grid>
+                )}
+              </Grid>
+            </Paper>
+          </Grid>
+
+          {/* F. 기존 Locators 목록 보존 */}
+          <Grid size={{ xs: 12 }}>
+            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
+                문서 목차 위치 (Document Outline Locators)
+              </Typography>
+              {locators.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">목차 정보가 없습니다.</Typography>
+              ) : (
+                <TableContainer sx={{ maxHeight: 200, overflow: "auto" }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>Level</TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>페이지</TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>제목</TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>Locator ID</TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>오프셋</TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>액션</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {locators.map((loc) => (
+                        <TableRow key={loc.locatorId}>
+                          <TableCell sx={{ fontSize: 12 }}>{loc.level ?? "-"}</TableCell>
+                          <TableCell sx={{ fontSize: 12 }}>{loc.pageNumber ?? "-"}페이지</TableCell>
+                          <TableCell sx={{ fontSize: 12, fontWeight: 500 }}>{loc.title || "-"}</TableCell>
+                          <TableCell sx={{ fontSize: 12, color: "text.secondary" }}>{loc.locatorId || "-"}</TableCell>
+                          <TableCell sx={{ fontSize: 12, color: "text.secondary" }}>{loc.startOffset} ~ {loc.endOffset}</TableCell>
+                          <TableCell>
+                            {loc.pageNumber != null && (
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<VisibilityOutlined sx={{ fontSize: 12 }} />}
+                                onClick={() => void openPagePreview(loc.pageNumber!)}
+                                sx={{ py: 0.1, px: 1, fontSize: 10.5, height: 22 }}
+                              >
+                                위치 보기
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </Paper>
+          </Grid>
+
+          {/* G. 문서 기본 메타데이터 */}
           {docMetadata && typeof docMetadata === "object" && Object.keys(docMetadata).length > 0 && (
             <Grid size={{ xs: 12 }}>
               <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                  문서 메타데이터 (Document Metadata)
+                  문서 정보 (Document Metadata)
                 </Typography>
                 <Grid container spacing={2}>
                   {Object.entries(docMetadata).map(([key, value]) => (
@@ -704,7 +1110,7 @@ export function MarkdownViewerDialog({
             </Grid>
           )}
 
-          {/* 4. Pipeline Progress */}
+          {/* H. 파이프라인 정보 */}
           {progress && (
             <Grid size={{ xs: 12 }}>
               <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
@@ -730,110 +1136,6 @@ export function MarkdownViewerDialog({
               </Paper>
             </Grid>
           )}
-
-          {/* 5. Blocks with Provenance */}
-          {blocksWithProvenance.length > 0 && (
-            <Grid size={{ xs: 12 }}>
-              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                  정규화 블록 상세 정보 (Blocks with Provenance)
-                </Typography>
-                <TableContainer sx={{ maxHeight: 300, overflow: "auto" }}>
-                  <Table size="small" stickyHeader>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>Index</TableCell>
-                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>Type</TableCell>
-                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>Page</TableCell>
-                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>BBox (x0, y0, x1, y1)</TableCell>
-                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>Text</TableCell>
-                        <TableCell sx={{ fontWeight: 600, bgcolor: "background.paper" }}>Action</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {blocksWithProvenance.map((b) => (
-                        <TableRow key={b.index}>
-                          <TableCell sx={{ fontSize: 12.5 }}>#{b.index}</TableCell>
-                          <TableCell sx={{ fontSize: 12.5 }}>
-                            <Chip label={b.type} size="small" sx={{ height: 20, fontSize: 10.5 }} />
-                          </TableCell>
-                          <TableCell sx={{ fontSize: 12.5 }}>{b.page}페이지</TableCell>
-                          <TableCell sx={{ fontSize: 12.5, fontFamily: "monospace" }}>
-                            {b.bbox ? `${b.bbox.join(", ")}` : "-"}
-                          </TableCell>
-                          <TableCell sx={{ fontSize: 12.5, maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {b.text || "-"}
-                          </TableCell>
-                          <TableCell sx={{ fontSize: 12.5 }}>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={<VisibilityOutlined fontSize="small" />}
-                              onClick={() => void openPagePreview(b.page, b.bbox)}
-                              sx={{ py: 0.25, fontSize: 11 }}
-                            >
-                              위치 보기
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              </Paper>
-            </Grid>
-          )}
-
-          {/* 6. Locators */}
-          <Grid size={{ xs: 12 }}>
-            <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                위치 정보 (Locators)
-              </Typography>
-              {locators.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">Locator 정보가 없습니다.</Typography>
-              ) : (
-                <TableContainer>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell sx={{ fontWeight: 600 }}>Level</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Page Number</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Title</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Locator ID</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Offsets</TableCell>
-                        <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {locators.map((loc) => (
-                        <TableRow key={loc.locatorId}>
-                          <TableCell sx={{ fontSize: 12.5 }}>{loc.level ?? "-"}</TableCell>
-                          <TableCell sx={{ fontSize: 12.5 }}>{loc.pageNumber ?? "-"}페이지</TableCell>
-                          <TableCell sx={{ fontSize: 12.5 }}>{loc.title || "-"}</TableCell>
-                          <TableCell sx={{ fontSize: 12.5 }}>{loc.locatorId || "-"}</TableCell>
-                          <TableCell sx={{ fontSize: 12.5 }}>{loc.startOffset} ~ {loc.endOffset}</TableCell>
-                          <TableCell sx={{ fontSize: 12.5 }}>
-                            {loc.pageNumber != null && (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                startIcon={<VisibilityOutlined fontSize="small" />}
-                                onClick={() => void openPagePreview(loc.pageNumber!)}
-                                sx={{ py: 0.25, fontSize: 11 }}
-                              >
-                                위치 보기
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </Paper>
-          </Grid>
         </Grid>
       </Box>
     );
@@ -865,11 +1167,18 @@ export function MarkdownViewerDialog({
             </Typography>
           )}
         </Stack>
-        <Tooltip title={isFullscreen ? "창 모드" : "전체화면"}>
-          <IconButton size="small" onClick={() => setIsFullscreen((v) => !v)} sx={{ mr: 0.5 }}>
-            {isFullscreen ? <FullscreenExitOutlined fontSize="small" /> : <FullscreenOutlined fontSize="small" />}
-          </IconButton>
-        </Tooltip>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Tooltip title={isFullscreen ? "창 모드" : "전체화면"}>
+            <IconButton size="small" onClick={() => setIsFullscreen((v) => !v)}>
+              {isFullscreen ? <FullscreenExitOutlined fontSize="small" /> : <FullscreenOutlined fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="닫기">
+            <IconButton size="small" onClick={onClose}>
+              <CloseOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       </DialogTitle>
 
       <DialogContent sx={{ p: 0, display: "flex", flexDirection: "column", flexGrow: 1, overflow: "hidden" }}>
