@@ -330,10 +330,11 @@ export interface MarkdownDocumentFromAttachmentRequest {
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
   skillExtractionMode?: 'regex' | 'llm' | null;
-  ocrMode?: OcrMode;
-  ocrLanguage?: string;
-  ocrRequired?: boolean;
-  mathVisionCorrection?: boolean;
+  ocrMode?: OcrMode | null;
+  ocrLanguage?: string | null;
+  ocrRequired?: boolean | null;
+  mathVisionCorrection?: boolean | null;
+  documentProfile?: string | null;
 }
 
 export interface MarkdownDocumentReextractRequest {
@@ -352,10 +353,61 @@ export interface MarkdownDocumentReextractRequest {
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
   skillExtractionMode?: 'regex' | 'llm' | null;
-  ocrMode?: OcrMode;
-  ocrLanguage?: string;
-  ocrRequired?: boolean;
-  mathVisionCorrection?: boolean;
+  ocrMode?: OcrMode | null;
+  ocrLanguage?: string | null;
+  ocrRequired?: boolean | null;
+  mathVisionCorrection?: boolean | null;
+  documentProfile?: string | null;
+}
+
+export interface MarkdownDocumentProfileDescriptor {
+  id: string;
+  displayName: string;
+  description: string;
+  version: string;
+  costTier: string;
+  supportedFormats: string[];
+  chunkingStrategy: string;
+  chunkMaxSize: number;
+  chunkOverlap: number;
+  chunkUnit: string;
+  ocrRequired: boolean;
+  ocrLanguage: string | null;
+  ocrMode: string;
+  mathVisionCorrection: boolean;
+}
+
+export interface MarkdownPipelineOptionsDto {
+  runChunking: boolean;
+  runRagIndex: boolean;
+  runSkillExtraction: boolean;
+  chunkingStrategy: string | null;
+  chunkMaxSize: number | null;
+  chunkOverlap: number | null;
+  chunkUnit: string | null;
+  blockifyLlmProvider: string | null;
+  blockifyLlmModel: string | null;
+  blockifyPiiMaskingEnabled: boolean | null;
+  embeddingProfileId: string | null;
+  embeddingProvider: string | null;
+  embeddingModel: string | null;
+  embeddingDimension: number | null;
+  ocrRequired: boolean | null;
+  ocrLanguage: string | null;
+  ocrMode: string | null;
+  mathVisionCorrection: boolean | null;
+  requestedDocumentProfile?: string | null;
+  resolvedDocumentProfile?: string | null;
+  documentProfileVersion?: string | null;
+}
+
+export interface MarkdownProcessingPlan {
+  requestedDocumentProfile: string | null;
+  resolvedDocumentProfile: string | null;
+  profileVersion: string | null;
+  resolutionReason: string | null;
+  costTier: string;
+  effectiveOptions: MarkdownPipelineOptionsDto;
 }
 
 export type MarkdownPipelineExecutionStatus =
@@ -495,6 +547,14 @@ export const reactMarkdownDocumentApi = {
 
   async extractFromAttachment(request: MarkdownDocumentFromAttachmentRequest): Promise<MarkdownDocumentFromAttachmentResponse> {
     return apiRequest<MarkdownDocumentFromAttachmentResponse>("post", "/api/markdown-documents/from-attachment", {
+      data: request,
+    });
+  },
+  async getProfiles(): Promise<MarkdownDocumentProfileDescriptor[]> {
+    return apiRequest<MarkdownDocumentProfileDescriptor[]>("get", "/api/markdown-documents/profiles");
+  },
+  async getProcessingPlan(request: MarkdownDocumentReextractRequest): Promise<MarkdownProcessingPlan> {
+    return apiRequest<MarkdownProcessingPlan>("post", "/api/markdown-documents/processing-plan", {
       data: request,
     });
   },

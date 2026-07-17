@@ -70,6 +70,9 @@ import {
   type RetrievalPolicyDto,
   type RetrievalPolicyUsageDto,
   type RetrievalPolicySummaryDto,
+  type MarkdownDocumentProfileDescriptor,
+  type MarkdownProcessingPlan,
+  type MarkdownDocumentReextractRequest,
 } from "@/react/pages/files/api";
 import { RagEvaluationAnalysisDialog } from "./RagEvaluationAnalysisDialog";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
@@ -298,20 +301,112 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [runSkillExtraction, setRunSkillExtraction] = useState<boolean>(false);
   const [skillExtractionMode, setSkillExtractionMode] = useState<'regex' | 'llm' | ''>('');
   const [force, setForce] = useState<boolean>(false);
-  const [ocrMode, setOcrMode] = useState<OcrMode>("AUTO");
-  const [ocrLanguage, setOcrLanguage] = useState<string>("");
-  const [mathVisionCorrection, setMathVisionCorrection] = useState<boolean>(false);
+  const [profiles, setProfiles] = useState<MarkdownDocumentProfileDescriptor[]>([]);
+  const [documentProfile, setDocumentProfile] = useState<string>("AUTO");
+  const [processingPlan, setProcessingPlan] = useState<MarkdownProcessingPlan | null>(null);
 
-  // Chunking Configuration
-  const [chunkingStrategy, setChunkingStrategy] = useState<string>("structure-based");
-  const [chunkMaxSize, setChunkMaxSize] = useState<number | string>(800);
-  const [chunkOverlap, setChunkOverlap] = useState<number | string>(100);
-  const [chunkUnit, setChunkUnit] = useState<string>("TOKEN");
-  const [chunkConfig, setChunkConfig] = useState<RagChunkConfigResponseDto | null>(null);
+  // Overrides
+  const [ocrOverride, setOcrOverride] = useState<boolean | null>(null);
+  const [mathVisionCorrectionOverride, setMathVisionCorrectionOverride] = useState<boolean | null>(null);
+  const [chunkingStrategyOverride, setChunkingStrategyOverride] = useState<string | null>(null);
+  const [chunkMaxSizeOverride, setChunkMaxSizeOverride] = useState<number | string | null>(null);
+  const [chunkOverlapOverride, setChunkOverlapOverride] = useState<number | string | null>(null);
+  const [chunkUnitOverride, setChunkUnitOverride] = useState<string | null>(null);
+  const [ocrLanguageOverride, setOcrLanguageOverride] = useState<string | null>(null);
 
   // RAG Configuration
+  const [chunkConfig, setChunkConfig] = useState<RagChunkConfigResponseDto | null>(null);
   const [selectedEmbeddingOption, setSelectedEmbeddingOption] = useState<EmbeddingOption | null>(null);
   const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
+
+  // Derived Effective Options
+  const chunkingStrategy = chunkingStrategyOverride ?? processingPlan?.effectiveOptions?.chunkingStrategy ?? "structure-based";
+  const chunkMaxSize = chunkMaxSizeOverride ?? processingPlan?.effectiveOptions?.chunkMaxSize ?? 800;
+  const chunkOverlap = chunkOverlapOverride ?? processingPlan?.effectiveOptions?.chunkOverlap ?? 100;
+  const chunkUnit = chunkUnitOverride ?? processingPlan?.effectiveOptions?.chunkUnit ?? "TOKEN";
+  const ocrMode: OcrMode = ocrOverride === true ? "FORCE" : ocrOverride === false ? "DISABLED" : "AUTO";
+  const ocrLanguage = ocrLanguageOverride ?? processingPlan?.effectiveOptions?.ocrLanguage ?? "";
+  const mathVisionCorrection = mathVisionCorrectionOverride ?? processingPlan?.effectiveOptions?.mathVisionCorrection ?? false;
+
+  // Load profiles
+  useEffect(() => {
+    if (open) {
+      reactMarkdownDocumentApi.getProfiles()
+        .then((res) => {
+          setProfiles(res);
+        })
+        .catch((err) => {
+          console.error("Failed to load profiles:", err);
+        });
+    }
+  }, [open]);
+
+  // Fetch processing plan whenever options change
+  const fetchPlan = useCallback(async () => {
+    if (!open || !attachmentId) return;
+    try {
+      const payload: MarkdownDocumentReextractRequest = {
+        documentProfile: documentProfile || "AUTO",
+        runChunking,
+        runRagIndex,
+        runSkillExtraction,
+        chunkingStrategy: chunkingStrategyOverride,
+        chunkMaxSize: chunkMaxSizeOverride === "" || chunkMaxSizeOverride === null ? null : Number(chunkMaxSizeOverride),
+        chunkOverlap: chunkOverlapOverride === "" || chunkOverlapOverride === null ? null : Number(chunkOverlapOverride),
+        chunkUnit: chunkUnitOverride,
+        ocrLanguage: ocrLanguageOverride,
+        ocrRequired: ocrOverride,
+        ocrMode: ocrOverride === true ? "FORCE" : ocrOverride === false ? "DISABLED" : null,
+        mathVisionCorrection: mathVisionCorrectionOverride,
+        skillExtractionMode: skillExtractionMode || null,
+      };
+
+      if (selectedEmbeddingOption?.profileId) {
+        payload.embeddingProfileId = selectedEmbeddingOption.profileId;
+      } else if (selectedEmbeddingOption) {
+        payload.embeddingProvider = selectedEmbeddingOption.provider || null;
+        payload.embeddingModel = selectedEmbeddingOption.model || null;
+        payload.embeddingDimension = selectedEmbeddingOption.dimension ?? null;
+      }
+
+      const plan = await reactMarkdownDocumentApi.getProcessingPlan(payload);
+      setProcessingPlan(plan);
+    } catch (error) {
+      console.error("Failed to fetch processing plan:", error);
+    }
+  }, [
+    open,
+    attachmentId,
+    documentProfile,
+    runChunking,
+    runRagIndex,
+    runSkillExtraction,
+    chunkingStrategyOverride,
+    chunkMaxSizeOverride,
+    chunkOverlapOverride,
+    chunkUnitOverride,
+    ocrLanguageOverride,
+    ocrOverride,
+    mathVisionCorrectionOverride,
+    skillExtractionMode,
+    selectedEmbeddingOption,
+  ]);
+
+  useEffect(() => {
+    void fetchPlan();
+  }, [fetchPlan]);
+
+  const handleProfileChange = (profile: string) => {
+    setDocumentProfile(profile);
+    // Reset overrides
+    setOcrOverride(null);
+    setMathVisionCorrectionOverride(null);
+    setChunkingStrategyOverride(null);
+    setChunkMaxSizeOverride(null);
+    setChunkOverlapOverride(null);
+    setChunkUnitOverride(null);
+    setOcrLanguageOverride(null);
+  };
 
   // Locators & Resources
   const [locators, setLocators] = useState<MarkdownLocatorDto[]>([]);
@@ -559,7 +654,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       setChunkConfig(res);
       const defaultStrategy = res.chunking.previewStrategy || res.chunking.strategy;
       if (defaultStrategy) {
-        setChunkingStrategy(defaultStrategy);
+        setChunkingStrategyOverride(null);
       }
     } catch {
       // Ignore
@@ -875,15 +970,51 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       if (typeof opts.runChunking === "boolean") setRunChunking(opts.runChunking);
       if (typeof opts.runRagIndex === "boolean") setRunRagIndex(opts.runRagIndex);
       if (typeof opts.runSkillExtraction === "boolean") setRunSkillExtraction(opts.runSkillExtraction);
-      if (typeof opts.ocrRequired === "boolean") setOcrMode(opts.ocrRequired ? "FORCE" : "AUTO");
-      if (opts.ocrMode === "FORCE" || opts.ocrMode === "AUTO" || opts.ocrMode === "DISABLED") setOcrMode(opts.ocrMode);
-      if (typeof opts.ocrLanguage === "string") setOcrLanguage(opts.ocrLanguage);
-      if (typeof opts.mathVisionCorrection === "boolean") setMathVisionCorrection(opts.mathVisionCorrection);
+      
+      if (typeof opts.documentProfile === "string") {
+        setDocumentProfile(opts.documentProfile);
+      } else {
+        setDocumentProfile("AUTO");
+      }
+
+      if (typeof opts.ocrRequired === "boolean") {
+        setOcrOverride(opts.ocrRequired);
+      } else if (opts.ocrMode === "FORCE" || opts.ocrMode === "AUTO" || opts.ocrMode === "DISABLED") {
+        setOcrOverride(opts.ocrMode === "FORCE" ? true : opts.ocrMode === "DISABLED" ? false : null);
+      } else {
+        setOcrOverride(null);
+      }
+
+      if (typeof opts.ocrLanguage === "string") {
+        setOcrLanguageOverride(opts.ocrLanguage);
+      } else {
+        setOcrLanguageOverride(null);
+      }
+
+      if (typeof opts.mathVisionCorrection === "boolean") {
+        setMathVisionCorrectionOverride(opts.mathVisionCorrection);
+      } else {
+        setMathVisionCorrectionOverride(null);
+      }
+
       if (typeof opts.skillExtractionMode === "string" && (opts.skillExtractionMode === "regex" || opts.skillExtractionMode === "llm")) {
         setSkillExtractionMode(opts.skillExtractionMode);
       } else {
         setSkillExtractionMode("");
       }
+    } else {
+      setDocumentProfile("AUTO");
+      setOcrOverride(null);
+      setMathVisionCorrectionOverride(null);
+      setOcrLanguageOverride(null);
+      setChunkingStrategyOverride(null);
+      setChunkMaxSizeOverride(null);
+      setChunkOverlapOverride(null);
+      setChunkUnitOverride(null);
+      setRunChunking(true);
+      setRunRagIndex(true);
+      setRunSkillExtraction(false);
+      setSkillExtractionMode("");
     }
 
     let strategy = opts && typeof opts.chunkingStrategy === "string" && opts.chunkingStrategy ? opts.chunkingStrategy : null;
@@ -896,10 +1027,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     if (overlap === null && latestRagJob?.chunkOverlap != null) overlap = latestRagJob.chunkOverlap;
     if (!unit && latestRagJob?.chunkUnit) unit = latestRagJob.chunkUnit;
 
-    if (strategy) setChunkingStrategy(strategy);
-    if (maxSize !== null) setChunkMaxSize(maxSize);
-    if (overlap !== null) setChunkOverlap(overlap);
-    if (unit) setChunkUnit(unit);
+    setChunkingStrategyOverride(strategy);
+    setChunkMaxSizeOverride(maxSize);
+    setChunkOverlapOverride(overlap);
+    setChunkUnitOverride(unit);
 
     let llmProvider = opts && typeof opts.blockifyLlmProvider === "string" ? opts.blockifyLlmProvider : null;
     let llmModel = opts && typeof opts.blockifyLlmModel === "string" ? opts.blockifyLlmModel : null;
@@ -1410,8 +1541,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   };
 
   const buildPayload = (forEstimate = false) => {
-    const maxSize = chunkMaxSize === "" ? null : Number(chunkMaxSize);
-    const overlap = chunkOverlap === "" ? null : Number(chunkOverlap);
+    const maxSize = chunkMaxSizeOverride === "" || chunkMaxSizeOverride === null ? null : Number(chunkMaxSizeOverride);
+    const overlap = chunkOverlapOverride === "" || chunkOverlapOverride === null ? null : Number(chunkOverlapOverride);
 
     if (runChunking) {
       if (maxSize !== null && (isNaN(maxSize) || maxSize <= 0)) {
@@ -1426,22 +1557,23 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     }
 
     const payload: Record<string, any> = {
+      documentProfile: documentProfile || "AUTO",
       runChunking,
       runRagIndex,
       runSkillExtraction,
-      chunkingStrategy: (runChunking || forEstimate) ? (chunkingStrategy || null) : null,
+      chunkingStrategy: (runChunking || forEstimate) ? (chunkingStrategyOverride || null) : null,
       chunkMaxSize: (runChunking || forEstimate) ? (maxSize || null) : null,
       chunkOverlap: (runChunking || forEstimate) ? (overlap || null) : null,
-      chunkUnit: (runChunking || forEstimate) ? (chunkUnit || null) : null,
+      chunkUnit: (runChunking || forEstimate) ? (chunkUnitOverride || null) : null,
       blockifyLlmProvider: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? (blockifyLlmProvider || null) : null,
       blockifyLlmModel: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? (blockifyLlmModel || null) : null,
       blockifyPiiMaskingEnabled: (runChunking || forEstimate) && chunkingStrategy === "blockify" ? blockifyPiiMaskingEnabled : null,
       ...(isPdf ? {
-        ocrRequired: ocrMode === "FORCE",
-        ocrMode: ocrMode,
-        mathVisionCorrection: ocrMode === "FORCE" ? mathVisionCorrection : false,
+        ocrRequired: ocrOverride,
+        ocrMode: ocrOverride === true ? "FORCE" : ocrOverride === false ? "DISABLED" : null,
+        mathVisionCorrection: mathVisionCorrectionOverride,
       } : {}),
-      ...(isPdf && ocrMode === "FORCE" && ocrLanguage ? { ocrLanguage } : {}),
+      ...(isPdf && ocrOverride === true && ocrLanguage ? { ocrLanguage } : {}),
     };
 
     if (runSkillExtraction || forEstimate) {
@@ -1518,10 +1650,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
         if (estimateRes && estimateRes.recommended) {
           const rec = estimateRes.recommended;
-          if (rec.chunkingStrategy) setChunkingStrategy(rec.chunkingStrategy);
-          if (rec.chunkMaxSize != null) setChunkMaxSize(rec.chunkMaxSize);
-          if (rec.chunkOverlap != null) setChunkOverlap(rec.chunkOverlap);
-          if (rec.chunkUnit) setChunkUnit(rec.chunkUnit);
+          if (rec.chunkingStrategy) setChunkingStrategyOverride(rec.chunkingStrategy);
+          if (rec.chunkMaxSize != null) setChunkMaxSizeOverride(rec.chunkMaxSize);
+          if (rec.chunkOverlap != null) setChunkOverlapOverride(rec.chunkOverlap);
+          if (rec.chunkUnit) setChunkUnitOverride(rec.chunkUnit);
 
           if (rec.embeddingProfileId) {
             const opt = embeddingOptions.find(o => o.profileId === rec.embeddingProfileId);
@@ -1599,10 +1731,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
           resultMsg += `- 사유: ${estimateRes.reason}\n`;
         }
 
-        if (recommended.chunkingStrategy) setChunkingStrategy(recommended.chunkingStrategy);
-        if (recommended.chunkMaxSize != null) setChunkMaxSize(recommended.chunkMaxSize);
-        if (recommended.chunkOverlap != null) setChunkOverlap(recommended.chunkOverlap);
-        if (recommended.chunkUnit) setChunkUnit(recommended.chunkUnit);
+        if (recommended.chunkingStrategy) setChunkingStrategyOverride(recommended.chunkingStrategy);
+        if (recommended.chunkMaxSize != null) setChunkMaxSizeOverride(recommended.chunkMaxSize);
+        if (recommended.chunkOverlap != null) setChunkOverlapOverride(recommended.chunkOverlap);
+        if (recommended.chunkUnit) setChunkUnitOverride(recommended.chunkUnit);
 
         if (recommended.embeddingProfileId) {
           const opt = embeddingOptions.find(o => o.profileId === recommended.embeddingProfileId);
@@ -1624,6 +1756,17 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
   async function handleExtractMarkdown() {
     if (!attachmentId || !file) return;
+
+    // Check cost/time warning
+    const isHighCost =
+      processingPlan?.costTier === "HIGH" ||
+      processingPlan?.effectiveOptions?.mathVisionCorrection === true;
+    if (isHighCost) {
+      const ok = window.confirm(
+        "이 설정(HIGH 비용 등급 또는 Vision 수식 보정 활성화)은 비용이 많이 발생하거나 처리 시간이 길어질 수 있습니다. 그래도 진행하시겠습니까?"
+      );
+      if (!ok) return;
+    }
 
     const execute = async (payloadOverride?: any) => {
       let optionsPayload;
@@ -1671,16 +1814,17 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     try {
       const res = await reactMarkdownDocumentApi.extractFromAttachment({
         attachmentId,
+        documentProfile: documentProfile || "AUTO",
         force: true,
         runChunking: false,
         runRagIndex: false,
         runSkillExtraction: false,
         ...(isPdf ? {
-          ocrRequired: ocrMode === "FORCE",
-          ocrMode: ocrMode,
-          mathVisionCorrection: ocrMode === "FORCE" ? mathVisionCorrection : false,
+          ocrRequired: ocrOverride,
+          ocrMode: ocrOverride === true ? "FORCE" : ocrOverride === false ? "DISABLED" : null,
+          mathVisionCorrection: mathVisionCorrectionOverride,
         } : {}),
-        ...(isPdf && ocrMode === "FORCE" && ocrLanguage ? { ocrLanguage } : {}),
+        ...(isPdf && ocrOverride === true && ocrLanguage ? { ocrLanguage } : {}),
       } as any);
       const newDocId = res.document.documentId;
       setDocumentId(newDocId);
@@ -1708,6 +1852,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     setReused(null);
     try {
       const res = await reactMarkdownDocumentApi.reextract(documentId, {
+        documentProfile: documentProfile || "AUTO",
         runChunking: false,
         runRagIndex: false,
         runSkillExtraction: false,
@@ -1728,8 +1873,20 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
   async function handleReextractMarkdown() {
     if (!documentId) return;
-    const ok = window.confirm("기존 결과와 관계없이 새로 변환 및 색인을 진행하시겠습니까?");
-    if (!ok) return;
+
+    // Check cost/time warning
+    const isHighCost =
+      processingPlan?.costTier === "HIGH" ||
+      processingPlan?.effectiveOptions?.mathVisionCorrection === true;
+    if (isHighCost) {
+      const ok = window.confirm(
+        "이 설정(HIGH 비용 등급 또는 Vision 수식 보정 활성화)은 비용이 많이 발생하거나 처리 시간이 길어질 수 있습니다. 그래도 진행하시겠습니까?"
+      );
+      if (!ok) return;
+    } else {
+      const ok = window.confirm("기존 결과와 관계없이 새로 변환 및 색인을 진행하시겠습니까?");
+      if (!ok) return;
+    }
 
     const execute = async (payloadOverride?: any) => {
       let optionsPayload;
@@ -2793,351 +2950,470 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                   {/* Pipeline Step Checklist */}
                   <Box id="section-pipelineConfig" sx={{ mt: 1 }}>
                     <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 1, fontWeight: 700, fontSize: 13.5 }}>
-                      파이프라인 단계 선택
+                      지식 파이프라인 설정
                     </Typography>
-                    <Grid container spacing={1} sx={{ mb: 2, bgcolor: "action.hover", p: 1.5, borderRadius: 1.5 }}>
-                    <Grid size={{ xs: 6, sm: 4 }}>
-                      <FormControlLabel
-                        control={<Checkbox size="small" checked disabled />}
-                        label={<Typography variant="body2" sx={{ fontSize: 13 }}>Markdown 생성 (필수)</Typography>}
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 6, sm: 4 }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={runChunking}
-                            onChange={(e) => handleRunChunkingChange(e.target.checked)}
-                            disabled={controlsDisabled || isCanceledRevision}
-                          />
-                        }
-                        label={<Typography variant="body2" sx={{ fontSize: 13 }}>Chunking 분할</Typography>}
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 6, sm: 4 }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={runRagIndex}
-                            onChange={(e) => handleRunRagIndexChange(e.target.checked)}
-                            disabled={controlsDisabled || isCanceledRevision}
-                          />
-                        }
-                        label={<Typography variant="body2" sx={{ fontSize: 13 }}>RAG 색인</Typography>}
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 6, sm: 4 }}>
-                      <FormControlLabel
-                        control={
-                          <Checkbox
-                            size="small"
-                            checked={runSkillExtraction}
-                            onChange={(e) => handleRunSkillExtractionChange(e.target.checked)}
-                            disabled={controlsDisabled || isCanceledRevision}
-                          />
-                        }
-                        label={<Typography variant="body2" sx={{ fontSize: 13 }}>Skill 추출</Typography>}
-                      />
-                    </Grid>
-                  </Grid>
 
-                  {/* Extraction Options Row */}
-                  <Stack direction="column" spacing={1} sx={{ mb: 2, px: 0.5 }}>
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
-                        추출 옵션
-                      </Typography>
-                      <Tooltip title="이전에 변환 완료된 결과나 캐시가 있더라도 무시하고 처음부터 다시 변환 및 색인을 수행합니다." arrow placement="top-start">
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              size="small"
-                              checked={force}
-                              onChange={(e) => setForce(e.target.checked)}
-                              disabled={controlsDisabled || isCanceledRevision}
-                            />
-                          }
-                          label={
-                            <Typography variant="body2" sx={{ fontSize: 13, borderBottom: "1px dashed", borderColor: "text.secondary", cursor: "help" }}>
-                              강제 재추출 (force)
-                            </Typography>
-                          }
-                        />
-                      </Tooltip>
-                    </Stack>
-                    {isPdf && (
-                      <Stack spacing={0.5}>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
-                            OCR
-                          </Typography>
-                          <ToggleButtonGroup
-                            size="small"
-                            exclusive
-                            value={ocrMode}
-                            onChange={(_, val) => { if (val) setOcrMode(val as OcrMode); }}
-                            disabled={controlsDisabled || isCanceledRevision}
-                            sx={{ height: 28 }}
-                          >
-                            <ToggleButton value="AUTO" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>
-                              <Tooltip title="저부하 기본 경로. 수동 OCR을 켜기 전까지 고비용 OCR을 적용하지 않습니다." arrow placement="top">
-                                <span>기본 추출</span>
-                              </Tooltip>
-                            </ToggleButton>
-                            <ToggleButton value="FORCE" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>
-                              <Tooltip title="텍스트가 없는 스캔본이나 한글 이미지 PDF, 수학 교재 등에서 OCR 엔진 작동을 강제합니다." arrow placement="top">
-                                <span>OCR 적용</span>
-                              </Tooltip>
-                            </ToggleButton>
-                            <ToggleButton value="DISABLED" sx={{ fontSize: 11, px: 1.5, textTransform: "none" }}>
-                              <Tooltip title="서버가 수식을 추천하더라도 무거운 OCR 적용을 완전히 금지합니다." arrow placement="top">
-                                <span>OCR 제외</span>
-                              </Tooltip>
-                            </ToggleButton>
-                          </ToggleButtonGroup>
-                        </Stack>
-                        {ocrMode === "FORCE" && (
-                          <Stack direction="column" spacing={1} sx={{ pl: 4.5 }}>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                              <TextField
-                                size="small"
-                                label="OCR 언어"
-                                placeholder="kor+eng"
-                                value={ocrLanguage}
-                                onChange={(e) => setOcrLanguage(e.target.value)}
-                                disabled={controlsDisabled || isCanceledRevision}
-                                sx={{ width: 160, '& .MuiInputBase-root': { fontSize: 12 } }}
-                              />
-                              <Typography variant="caption" color="text.secondary">
-                                OCR은 처리 시간이 길 수 있습니다. 스캔 PDF, 이미지 PDF, 수학 교재에서만 선택하세요.
-                              </Typography>
-                            </Stack>
-                            <Box sx={{ mt: 1 }}>
-                              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, display: "block", mb: 0.5 }}>
-                                고급 옵션
-                              </Typography>
-                              <Tooltip title="수식이 많은 과학/수학 분야 PDF에서 Gemini 등의 시각 인공지능을 사용해 수식 기호를 정확하게 복원합니다." arrow placement="top-start">
-                                <FormControlLabel
-                                  control={
-                                    <Checkbox
-                                      size="small"
-                                      checked={mathVisionCorrection}
-                                      onChange={(e) => setMathVisionCorrection(e.target.checked)}
-                                      disabled={controlsDisabled || isCanceledRevision}
-                                    />
-                                  }
-                                  label={
-                                    <Typography variant="body2" sx={{ fontSize: 13, borderBottom: "1px dashed", borderColor: "text.secondary", cursor: "help" }}>
-                                      Vision LLM 수식 보정 사용
-                                    </Typography>
-                                  }
-                                />
-                              </Tooltip>
-                              <Typography variant="caption" color="text.secondary" display="block" sx={{ pl: 3.5, mt: -0.5 }}>
-                                수식이 많은 PDF에서 Gemini 등 Vision LLM으로 수식 복원을 보강합니다. 처리 시간이 길어질 수 있습니다.
-                              </Typography>
-                            </Box>
-                          </Stack>
-                        )}
-                      </Stack>
-                    )}
-                  </Stack>
-
-
-                  {/* Chunking Configuration Form */}
-                  {runChunking && (
-                    <Box sx={{ mb: 2, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "background.default" }}>
-                      <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, fontSize: 13 }}>
-                        Chunking 설정
-                      </Typography>
-                      <Grid container spacing={2}>
-                        <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                            전략
-                          </Typography>
-                          <Select
-                            size="small"
-                            fullWidth
-                            value={chunkingStrategy}
-                            onChange={(e) => setChunkingStrategy(e.target.value)}
-                            disabled={controlsDisabled || isCanceledRevision}
-                          >
-                            {availableStrategies.map((s) => (
-                              <MenuItem key={s} value={s}>{strategyLabels[s] || s}</MenuItem>
-                            ))}
-                          </Select>
-                        </Grid>
-                        {chunkingStrategy === "blockify" && (
-                          <>
-                            <Grid size={{ xs: 12 }}>
-                              <Alert severity="info" sx={{ fontSize: 11, py: 1 }}>
-                                Blockify는 질문·답변 형태의 IdeaBlock을 생성합니다.
-                              </Alert>
-                            </Grid>
-                            <Grid size={{ xs: 6 }}>
-                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                                Blockify LLM Provider
-                              </Typography>
-                              <Select
-                                size="small"
-                                fullWidth
-                                value={blockifyLlmProvider}
-                                onChange={(e) => {
-                                  const prov = e.target.value;
-                                  setBlockifyLlmProvider(prov);
-                                  const match = aiInfo?.providers.find((p) => p.name === prov);
-                                  if (match?.chat?.model) {
-                                    setBlockifyLlmModel(match.chat.model);
-                                  }
-                                }}
-                                disabled={controlsDisabled || isCanceledRevision}
-                              >
-                                <MenuItem value="">(서버 기본값)</MenuItem>
-                                {aiInfo?.providers.map((p) => (
-                                  <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>
-                                ))}
-                              </Select>
-                            </Grid>
-                            <Grid size={{ xs: 6 }}>
-                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                                Blockify LLM Model
-                              </Typography>
-                              <Select
-                                size="small"
-                                fullWidth
-                                value={blockifyLlmModel}
-                                onChange={(e) => setBlockifyLlmModel(e.target.value)}
-                                disabled={controlsDisabled || isCanceledRevision || !blockifyLlmProvider}
-                              >
-                                <MenuItem value="">(서버 기본값)</MenuItem>
-                                {(() => {
-                                  const selectedProv = aiInfo?.providers.find((p) => p.name === blockifyLlmProvider);
-                                  if (!selectedProv) return null;
-                                  return (
-                                    <MenuItem value={selectedProv.chat.model}>{selectedProv.chat.model}</MenuItem>
-                                  );
-                                })()}
-                              </Select>
-                            </Grid>
-                            <Grid size={{ xs: 12 }}>
-                              <FormControlLabel
-                                control={
-                                  <Switch
-                                    size="small"
-                                    checked={blockifyPiiMaskingEnabled}
-                                    onChange={(e) => setBlockifyPiiMaskingEnabled(e.target.checked)}
-                                    disabled={controlsDisabled || isCanceledRevision}
-                                  />
-                                }
-                                label={<Typography variant="body2" sx={{ fontSize: 13 }}>개인정보 마스킹 활성화</Typography>}
-                              />
-                            </Grid>
-                          </>
-                        )}
-                        <Grid size={{ xs: 6 }}>
-                          <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                            단위
-                          </Typography>
-                          <Select
-                            size="small"
-                            fullWidth
-                            value={chunkUnit}
-                            onChange={(e) => setChunkUnit(e.target.value)}
-                            disabled={controlsDisabled || isCanceledRevision}
-                          >
-                            <MenuItem value="CHARACTER">CHARACTER</MenuItem>
-                            <MenuItem value="TOKEN">TOKEN</MenuItem>
-                          </Select>
-                        </Grid>
-                        <Grid size={{ xs: 6 }}>
-                          <TextField
-                            label="최대 크기"
-                            size="small"
-                            type="number"
-                            fullWidth
-                            value={chunkMaxSize}
-                            onChange={(e) => setChunkMaxSize(e.target.value)}
-                            disabled={controlsDisabled || isCanceledRevision}
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 6 }}>
-                          <TextField
-                            label="중첩 크기"
-                            size="small"
-                            type="number"
-                            fullWidth
-                            value={chunkOverlap}
-                            onChange={(e) => setChunkOverlap(e.target.value)}
-                            disabled={controlsDisabled || isCanceledRevision}
-                          />
-                        </Grid>
-                      </Grid>
-                    </Box>
-                  )}
-
-                  {/* RAG Configuration Form */}
-                  {runRagIndex && (
-                    <Box sx={{ mb: 2, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "background.default" }}>
-                      <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, fontSize: 13 }}>
-                        RAG 색인 설정
-                      </Typography>
-                      {embeddingOptions.length > 0 ? (
-                        <TextField
-                          select
-                          label="임베딩 모델 / 프로파일"
-                          size="small"
-                          fullWidth
-                          value={selectedEmbeddingOption ? embeddingOptionKey(selectedEmbeddingOption) : ""}
-                          onChange={(e) => {
-                            const matched = embeddingOptions.find((o) => embeddingOptionKey(o) === e.target.value);
-                            if (matched) setSelectedEmbeddingOption(matched);
-                          }}
-                          disabled={controlsDisabled || isCanceledRevision}
-                          helperText={
-                            selectedEmbeddingOption?.profileId
-                              ? `Profile 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
-                              : `직접 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
-                          }
-                          FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
-                        >
-                          {embeddingOptions.map((opt) => (
-                            <MenuItem key={embeddingOptionKey(opt)} value={embeddingOptionKey(opt)}>
-                              {embeddingOptionLabel(opt)}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>
-                          임베딩 모델 로딩 중...
-                        </Typography>
-                      )}
-                    </Box>
-                  )}
-
-                  {/* Skill Configuration Form */}
-                  {runSkillExtraction && (
-                    <Box sx={{ mb: 2, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "background.default" }}>
-                      <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, fontSize: 13 }}>
-                        Skill 추출 설정
-                      </Typography>
+                    {/* 프로필 선택 dropdown */}
+                    <Box sx={{ mb: 2 }}>
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                        스킬 후보 추출 방식
+                        문서 종류
                       </Typography>
                       <Select
                         size="small"
                         fullWidth
-                        value={skillExtractionMode}
-                        onChange={(e) => setSkillExtractionMode(e.target.value as any)}
+                        value={documentProfile}
+                        onChange={(e) => handleProfileChange(e.target.value)}
                         disabled={controlsDisabled || isCanceledRevision}
                       >
-                        <MenuItem value="">서버 기본값 사용</MenuItem>
-                        <MenuItem value="regex">규칙 기반 추출 (regex)</MenuItem>
-                        <MenuItem value="llm">LLM 기반 추출 (llm)</MenuItem>
+                        <MenuItem value="AUTO">자동 감지 (AUTO)</MenuItem>
+                        {profiles.filter(p => p.id !== "AUTO").map((p) => (
+                          <MenuItem key={p.id} value={p.id}>
+                            {p.displayName}
+                          </MenuItem>
+                        ))}
                       </Select>
+
+                      {/* 프로필 정보 카드 */}
+                      {(() => {
+                        const selectedProfileObj = profiles.find(p => p.id === documentProfile);
+                        if (!selectedProfileObj || selectedProfileObj.id === "AUTO") return null;
+                        return (
+                          <Box sx={{ mt: 1.5, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover" }}>
+                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13 }}>
+                                {selectedProfileObj.displayName}
+                              </Typography>
+                              <Chip
+                                label={selectedProfileObj.costTier}
+                                size="small"
+                                color={
+                                  selectedProfileObj.costTier === "HIGH" ? "error" :
+                                  selectedProfileObj.costTier === "MEDIUM" ? "warning" : "success"
+                                }
+                                sx={{ height: 18, fontSize: 9, fontWeight: 700 }}
+                              />
+                            </Stack>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12, mb: 1 }}>
+                              {selectedProfileObj.description}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 10 }}>
+                              지원 파일 형식: {selectedProfileObj.supportedFormats.join(", ")}
+                            </Typography>
+                          </Box>
+                        );
+                      })()}
                     </Box>
-                  )}
+
+                    {/* 실행 범위 체크박스들 */}
+                    <Grid container spacing={1} sx={{ mb: 2, bgcolor: "action.hover", p: 1.5, borderRadius: 1.5 }}>
+                      <Grid size={{ xs: 6, sm: 4 }}>
+                        <FormControlLabel
+                          control={<Checkbox size="small" checked disabled />}
+                          label={<Typography variant="body2" sx={{ fontSize: 13 }}>Markdown 생성 (필수)</Typography>}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 4 }}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={runChunking}
+                              onChange={(e) => handleRunChunkingChange(e.target.checked)}
+                              disabled={controlsDisabled || isCanceledRevision}
+                            />
+                          }
+                          label={<Typography variant="body2" sx={{ fontSize: 13 }}>Chunking 분할</Typography>}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 4 }}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={runRagIndex}
+                              onChange={(e) => handleRunRagIndexChange(e.target.checked)}
+                              disabled={controlsDisabled || isCanceledRevision}
+                            />
+                          }
+                          label={<Typography variant="body2" sx={{ fontSize: 13 }}>RAG 색인</Typography>}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 6, sm: 4 }}>
+                        <FormControlLabel
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={runSkillExtraction}
+                              onChange={(e) => handleRunSkillExtractionChange(e.target.checked)}
+                              disabled={controlsDisabled || isCanceledRevision}
+                            />
+                          }
+                          label={<Typography variant="body2" sx={{ fontSize: 13 }}>Skill 추출</Typography>}
+                        />
+                      </Grid>
+                    </Grid>
+
+                    {/* 접힌 고급 설정 영역 Accordion */}
+                    <Accordion disableGutters variant="outlined" sx={{ mt: 2, borderRadius: 1.5, overflow: "hidden" }}>
+                      <AccordionSummary expandIcon={<ExpandMoreOutlined fontSize="small" />}>
+                        <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 13 }}>고급 설정 (수동 지정)</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails sx={{ pt: 1, pb: 2, px: 2 }}>
+                        
+                        {/* 강제 추출 (force) 및 OCR Toggle */}
+                        <Stack direction="column" spacing={2} sx={{ mb: 2 }}>
+                          <Stack direction="row" spacing={2} alignItems="center">
+                            <Tooltip title="이전에 변환 완료된 결과나 캐시가 있더라도 무시하고 처음부터 다시 변환 및 색인을 수행합니다." arrow placement="top-start">
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    size="small"
+                                    checked={force}
+                                    onChange={(e) => setForce(e.target.checked)}
+                                    disabled={controlsDisabled || isCanceledRevision}
+                                  />
+                                }
+                                label={
+                                  <Typography variant="body2" sx={{ fontSize: 13, borderBottom: "1px dashed", borderColor: "text.secondary", cursor: "help" }}>
+                                    강제 재추출 (force)
+                                  </Typography>
+                                }
+                              />
+                            </Tooltip>
+                          </Stack>
+
+                          {isPdf && (
+                            <Stack spacing={1.5}>
+                              <Stack direction="row" spacing={2} alignItems="center">
+                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                                  OCR 지정
+                                </Typography>
+                                <Select
+                                  size="small"
+                                  value={ocrOverride === null ? "null" : String(ocrOverride)}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setOcrOverride(val === "null" ? null : val === "true");
+                                  }}
+                                  disabled={controlsDisabled || isCanceledRevision}
+                                  sx={{ minWidth: 200 }}
+                                >
+                                  <MenuItem value="null">
+                                    문서 종류 설정 사용 (기본값)
+                                  </MenuItem>
+                                  <MenuItem value="true">강제 사용 (FORCE)</MenuItem>
+                                  <MenuItem value="false">사용 안 함 (DISABLED)</MenuItem>
+                                </Select>
+                              </Stack>
+
+                              {ocrMode === "FORCE" && (
+                                <Stack direction="column" spacing={1} sx={{ pl: 2 }}>
+                                  <Stack direction="row" spacing={1} alignItems="center">
+                                    <TextField
+                                      size="small"
+                                      label="OCR 언어"
+                                      placeholder={processingPlan?.effectiveOptions?.ocrLanguage || "kor+eng"}
+                                      value={ocrLanguageOverride ?? ""}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setOcrLanguageOverride(val === "" ? null : val);
+                                      }}
+                                      disabled={controlsDisabled || isCanceledRevision}
+                                      sx={{ width: 160, '& .MuiInputBase-root': { fontSize: 12 } }}
+                                    />
+                                    <Typography variant="caption" color="text.secondary">
+                                      OCR용 언어 코드를 직접 지정할 때 채워주세요. (예: kor, eng, kor+eng)
+                                    </Typography>
+                                  </Stack>
+                                </Stack>
+                              )}
+
+                              <Stack direction="row" spacing={2} alignItems="center">
+                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
+                                  수식 Vision 보정
+                                </Typography>
+                                <Select
+                                  size="small"
+                                  value={mathVisionCorrectionOverride === null ? "null" : String(mathVisionCorrectionOverride)}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setMathVisionCorrectionOverride(val === "null" ? null : val === "true");
+                                  }}
+                                  disabled={controlsDisabled || isCanceledRevision}
+                                  sx={{ minWidth: 200 }}
+                                >
+                                  <MenuItem value="null">
+                                    문서 종류 설정 사용 (기본값)
+                                  </MenuItem>
+                                  <MenuItem value="true">사용</MenuItem>
+                                  <MenuItem value="false">사용 안 함</MenuItem>
+                                </Select>
+                              </Stack>
+                            </Stack>
+                          )}
+                        </Stack>
+
+                        <Divider sx={{ my: 1.5 }} />
+
+                        {/* Chunking 설정 수동 지정 */}
+                        {runChunking && (
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, fontSize: 13 }}>
+                              Chunking 설정 지정
+                            </Typography>
+                            <Grid container spacing={2}>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                  전략
+                                </Typography>
+                                <Select
+                                  size="small"
+                                  fullWidth
+                                  value={chunkingStrategyOverride ?? ""}
+                                  onChange={(e) => setChunkingStrategyOverride(e.target.value === "" ? null : e.target.value)}
+                                  disabled={controlsDisabled || isCanceledRevision}
+                                >
+                                  <MenuItem value="">문서 종류 설정 사용 (기본값)</MenuItem>
+                                  {availableStrategies.map((s) => (
+                                    <MenuItem key={s} value={s}>{strategyLabels[s] || s}</MenuItem>
+                                  ))}
+                                </Select>
+                              </Grid>
+
+                              {chunkingStrategy === "blockify" && (
+                                <>
+                                  <Grid size={{ xs: 12 }}>
+                                    <Alert severity="info" sx={{ fontSize: 11, py: 0.5 }}>
+                                      Blockify는 질문·답변 형태의 IdeaBlock을 생성합니다.
+                                    </Alert>
+                                  </Grid>
+                                  <Grid size={{ xs: 6 }}>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                      Blockify LLM Provider
+                                    </Typography>
+                                    <Select
+                                      size="small"
+                                      fullWidth
+                                      value={blockifyLlmProvider}
+                                      onChange={(e) => {
+                                        const prov = e.target.value;
+                                        setBlockifyLlmProvider(prov);
+                                        const match = aiInfo?.providers.find((p) => p.name === prov);
+                                        if (match?.chat?.model) {
+                                          setBlockifyLlmModel(match.chat.model);
+                                        }
+                                      }}
+                                      disabled={controlsDisabled || isCanceledRevision}
+                                    >
+                                      <MenuItem value="">(서버 기본값)</MenuItem>
+                                      {aiInfo?.providers.map((p) => (
+                                        <MenuItem key={p.name} value={p.name}>{p.name}</MenuItem>
+                                      ))}
+                                    </Select>
+                                  </Grid>
+                                  <Grid size={{ xs: 6 }}>
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                      Blockify LLM Model
+                                    </Typography>
+                                    <Select
+                                      size="small"
+                                      fullWidth
+                                      value={blockifyLlmModel}
+                                      onChange={(e) => setBlockifyLlmModel(e.target.value)}
+                                      disabled={controlsDisabled || isCanceledRevision || !blockifyLlmProvider}
+                                    >
+                                      <MenuItem value="">(서버 기본값)</MenuItem>
+                                      {(() => {
+                                        const selectedProv = aiInfo?.providers.find((p) => p.name === blockifyLlmProvider);
+                                        if (!selectedProv) return null;
+                                        return (
+                                          <MenuItem value={selectedProv.chat.model}>{selectedProv.chat.model}</MenuItem>
+                                        );
+                                      })()}
+                                    </Select>
+                                  </Grid>
+                                  <Grid size={{ xs: 12 }}>
+                                    <FormControlLabel
+                                      control={
+                                        <Switch
+                                          size="small"
+                                          checked={blockifyPiiMaskingEnabled}
+                                          onChange={(e) => setBlockifyPiiMaskingEnabled(e.target.checked)}
+                                          disabled={controlsDisabled || isCanceledRevision}
+                                        />
+                                      }
+                                      label={<Typography variant="body2" sx={{ fontSize: 13 }}>개인정보 마스킹 활성화</Typography>}
+                                    />
+                                  </Grid>
+                                </>
+                              )}
+
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                                  단위
+                                </Typography>
+                                <Select
+                                  size="small"
+                                  fullWidth
+                                  value={chunkUnitOverride ?? ""}
+                                  onChange={(e) => setChunkUnitOverride(e.target.value === "" ? null : e.target.value)}
+                                  disabled={controlsDisabled || isCanceledRevision}
+                                >
+                                  <MenuItem value="">문서 종류 설정 사용 (기본값)</MenuItem>
+                                  <MenuItem value="CHARACTER">CHARACTER</MenuItem>
+                                  <MenuItem value="TOKEN">TOKEN</MenuItem>
+                                </Select>
+                              </Grid>
+                              <Grid size={{ xs: 6 }}>
+                                <TextField
+                                  label="최대 크기"
+                                  size="small"
+                                  type="number"
+                                  fullWidth
+                                  value={chunkMaxSizeOverride ?? ""}
+                                  placeholder={processingPlan?.effectiveOptions?.chunkMaxSize ? String(processingPlan.effectiveOptions.chunkMaxSize) : "기본값"}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setChunkMaxSizeOverride(val === "" ? null : Number(val));
+                                  }}
+                                  disabled={controlsDisabled || isCanceledRevision}
+                                  sx={{ mt: 2.2 }}
+                                />
+                              </Grid>
+                              <Grid size={{ xs: 6 }}>
+                                <TextField
+                                  label="중첩 크기"
+                                  size="small"
+                                  type="number"
+                                  fullWidth
+                                  value={chunkOverlapOverride ?? ""}
+                                  placeholder={processingPlan?.effectiveOptions?.chunkOverlap ? String(processingPlan.effectiveOptions.chunkOverlap) : "기본값"}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setChunkOverlapOverride(val === "" ? null : Number(val));
+                                  }}
+                                  disabled={controlsDisabled || isCanceledRevision}
+                                  sx={{ mt: 2.2 }}
+                                />
+                              </Grid>
+                            </Grid>
+                          </Box>
+                        )}
+
+                        <Divider sx={{ my: 1.5 }} />
+
+                        {/* RAG 색인 설정 */}
+                        {runRagIndex && (
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, fontSize: 13 }}>
+                              RAG 색인 설정 (임베딩)
+                            </Typography>
+                            {embeddingOptions.length > 0 ? (
+                              <TextField
+                                select
+                                label="임베딩 모델 / 프로파일"
+                                size="small"
+                                fullWidth
+                                value={selectedEmbeddingOption ? embeddingOptionKey(selectedEmbeddingOption) : ""}
+                                onChange={(e) => {
+                                  const matched = embeddingOptions.find((o) => embeddingOptionKey(o) === e.target.value);
+                                  if (matched) setSelectedEmbeddingOption(matched);
+                                }}
+                                disabled={controlsDisabled || isCanceledRevision}
+                                helperText={
+                                  selectedEmbeddingOption?.profileId
+                                    ? `Profile 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
+                                    : `직접 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
+                                }
+                                FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
+                              >
+                                {embeddingOptions.map((opt) => (
+                                  <MenuItem key={embeddingOptionKey(opt)} value={embeddingOptionKey(opt)}>
+                                    {embeddingOptionLabel(opt)}
+                                  </MenuItem>
+                                ))}
+                              </TextField>
+                            ) : (
+                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>
+                                임베딩 모델 로딩 중...
+                              </Typography>
+                            )}
+                          </Box>
+                        )}
+
+                        <Divider sx={{ my: 1.5 }} />
+
+                        {/* Skill 추출 설정 */}
+                        {runSkillExtraction && (
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, fontSize: 13 }}>
+                              Skill 추출 설정
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                              스킬 후보 추출 방식
+                            </Typography>
+                            <Select
+                              size="small"
+                              fullWidth
+                              value={skillExtractionMode}
+                              onChange={(e) => setSkillExtractionMode(e.target.value as any)}
+                              disabled={controlsDisabled || isCanceledRevision}
+                            >
+                              <MenuItem value="">서버 기본값 사용</MenuItem>
+                              <MenuItem value="regex">규칙 기반 추출 (regex)</MenuItem>
+                              <MenuItem value="llm">LLM 기반 추출 (llm)</MenuItem>
+                            </Select>
+                          </Box>
+                        )}
+
+                        {/* 적용 예정 옵션 미리보기 (Processing Plan) */}
+                        {processingPlan && (
+                          <Box sx={{ mt: 3, p: 2, border: "1px dashed", borderColor: "primary.main", borderRadius: 1.5, bgcolor: "action.hover" }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, fontSize: 12.5, color: "primary.main" }}>
+                              ⚙️ 최종 적용 예정 옵션 미리보기 (Processing Plan)
+                            </Typography>
+                            <Grid container spacing={1}>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">분석 프로필</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 11.5 }}>
+                                  {processingPlan.resolvedDocumentProfile || "-"}
+                                </Typography>
+                              </Grid>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">비용 등급</Typography>
+                                <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 11.5 }}>
+                                  {processingPlan.costTier || "-"}
+                                </Typography>
+                              </Grid>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">청킹 전략</Typography>
+                                <Typography variant="body2" sx={{ fontSize: 11.5 }}>
+                                  {strategyLabels[processingPlan.effectiveOptions?.chunkingStrategy || ""] || processingPlan.effectiveOptions?.chunkingStrategy || "-"}
+                                </Typography>
+                              </Grid>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">청킹 크기/중첩/단위</Typography>
+                                <Typography variant="body2" sx={{ fontSize: 11.5 }}>
+                                  {processingPlan.effectiveOptions?.chunkMaxSize || "-"} / {processingPlan.effectiveOptions?.chunkOverlap || "-"} / {processingPlan.effectiveOptions?.chunkUnit || "-"}
+                                </Typography>
+                              </Grid>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">OCR 여부/모드/언어</Typography>
+                                <Typography variant="body2" sx={{ fontSize: 11.5 }}>
+                                  {processingPlan.effectiveOptions?.ocrRequired ? "사용" : "사용 안 함"} ({processingPlan.effectiveOptions?.ocrMode || "-"}) / {processingPlan.effectiveOptions?.ocrLanguage || "-"}
+                                </Typography>
+                              </Grid>
+                              <Grid size={{ xs: 6 }}>
+                                <Typography variant="caption" color="text.secondary" display="block">수식 Vision 보정</Typography>
+                                <Typography variant="body2" sx={{ fontSize: 11.5 }}>
+                                  {processingPlan.effectiveOptions?.mathVisionCorrection ? "활성화" : "비활성화"}
+                                </Typography>
+                              </Grid>
+                            </Grid>
+                          </Box>
+                        )}
+                      </AccordionDetails>
+                    </Accordion>
 
                   {/* Actions Trigger Panel */}
                   <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
