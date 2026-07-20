@@ -753,6 +753,12 @@ export interface MarkdownPipelineEstimateRequest {
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
+  skillExtractionMode?: 'regex' | 'llm' | null;
+  ocrMode?: OcrMode | null;
+  ocrLanguage?: string | null;
+  ocrRequired?: boolean | null;
+  mathVisionCorrection?: boolean | null;
+  documentProfile?: string | null;
 }
 
 export interface MarkdownPipelineEstimateResponse {

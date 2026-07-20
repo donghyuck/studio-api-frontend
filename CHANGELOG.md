@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-07-20
+
+### Added
+
+- 마크다운 상세 드로어 내 RAG Q&A (Ask Gemini) 질문답변 탭 및 스크롤 이동 플로팅 화살표 버튼 추가.
+- Q&A 답변 생성 시 토큰 사용량(Token Usage) 및 응답 속도(Latency) 실시간 표기 지원.
+- RAG 색인 완료 시 임베딩 프로파일 및 문서 종류 선택 드롭다운 변경 비활성화(disabled) 잠금 처리.
+- 파이프라인 부하 추산(estimate) API DTO 및 페이로드 누락 필드 매핑 보강.
+- 자동 감지(AUTO) 및 프로필 변경 시 추천 처리 계획(processingPlan.effectiveOptions) 체크박스 실시간 동기화.
+
+### Verification
+
+- `npm run typecheck` 통과
+- `git diff --check` 통과
+
 ## 2026-07-04
 
 ### Added

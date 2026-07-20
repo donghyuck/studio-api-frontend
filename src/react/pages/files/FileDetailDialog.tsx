@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Accordion,
@@ -32,6 +32,8 @@ import {
   Drawer,
   ToggleButton,
   ToggleButtonGroup,
+  Tab,
+  Tabs,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -46,6 +48,7 @@ import {
   Cancel,
   ArrowBackIosNewOutlined,
   VisibilityOutlined,
+  ArrowDownwardOutlined,
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import { useAuthStore } from "@/react/auth/store";
@@ -56,7 +59,6 @@ import {
   reactFilesApi,
   reactDocumentConvertApi,
   reactMarkdownDocumentApi,
-  reactRetrievalPolicyApi,
   type OcrMode,
   type DocumentConvertStatus,
   type DocumentConvertJob,
@@ -74,7 +76,10 @@ import {
   type MarkdownProcessingPlan,
   type MarkdownDocumentReextractRequest,
 } from "@/react/pages/files/api";
-import { RagEvaluationAnalysisDialog } from "./RagEvaluationAnalysisDialog";
+import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
+import { AssistantMessageBubble } from "../ai/components/AssistantMessageBubble";
+import { UserMessageBubble } from "../ai/components/UserMessageBubble";
+import type { ChatMessage } from "../ai/components/chatTypes";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { resolveAxiosError } from "@/utils/helpers";
 import type { AttachmentDto } from "@/types/studio/files";
@@ -273,23 +278,6 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [downloadLinkUrl, setDownloadLinkUrl] = useState<string | null>(null);
   const [downloadLinkExpiresAt, setDownloadLinkExpiresAt] = useState<string | null>(null);
 
-  // RAG Retrieval Policy States
-  const [retrievalPolicy, setRetrievalPolicy] = useState<RetrievalPolicyDto | null>(null);
-  const [policyUsageSummary, setPolicyUsageSummary] = useState<RetrievalPolicySummaryDto | null>(null);
-  const [policyUsages, setPolicyUsages] = useState<RetrievalPolicyUsageDto[]>([]);
-  const [policyLoading, setPolicyLoading] = useState(false);
-  const [policySaving, setPolicySaving] = useState(false);
-  const [isAnalysisDialogOpen, setIsAnalysisDialogOpen] = useState(false);
-
-  // Policy Form Fields (For manual editing)
-  const [policyStrategy, setPolicyStrategy] = useState<string>("hybrid");
-  const [policyStructureTopK, setPolicyStructureTopK] = useState<number | string>(5);
-  const [policyIdeaBlockTopK, setPolicyIdeaBlockTopK] = useState<number | string>(5);
-  const [policyFinalTopK, setPolicyFinalTopK] = useState<number | string>(5);
-  const [policyMinScore, setPolicyMinScore] = useState<number | string>(0.6);
-  const [policyDedupe, setPolicyDedupe] = useState<boolean>(true);
-  const [policyDistilledBoost, setPolicyDistilledBoost] = useState<number | string>(0.03);
-
   // Markdown Document Pipeline States
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [markdownDocument, setMarkdownDocument] = useState<MarkdownDocumentDto | null>(null);
@@ -300,6 +288,9 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [runRagIndex, setRunRagIndex] = useState<boolean>(true);
   const [runSkillExtraction, setRunSkillExtraction] = useState<boolean>(false);
   const [skillExtractionMode, setSkillExtractionMode] = useState<'regex' | 'llm' | ''>('');
+  const [userHasOverriddenChunking, setUserHasOverriddenChunking] = useState<boolean>(false);
+  const [userHasOverriddenRagIndex, setUserHasOverriddenRagIndex] = useState<boolean>(false);
+  const [userHasOverriddenSkillExtraction, setUserHasOverriddenSkillExtraction] = useState<boolean>(false);
   const [force, setForce] = useState<boolean>(false);
   const [profiles, setProfiles] = useState<MarkdownDocumentProfileDescriptor[]>([]);
   const [documentProfile, setDocumentProfile] = useState<string>("AUTO");
@@ -396,6 +387,22 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     void fetchPlan();
   }, [fetchPlan]);
 
+  // Synchronize pipeline stages with server recommendations (effectiveOptions)
+  // unless the user has manually overridden them.
+  useEffect(() => {
+    if (!processingPlan?.effectiveOptions) return;
+    const eff = processingPlan.effectiveOptions;
+    if (!userHasOverriddenChunking && typeof eff.runChunking === "boolean" && runChunking !== eff.runChunking) {
+      setRunChunking(eff.runChunking);
+    }
+    if (!userHasOverriddenRagIndex && typeof eff.runRagIndex === "boolean" && runRagIndex !== eff.runRagIndex) {
+      setRunRagIndex(eff.runRagIndex);
+    }
+    if (!userHasOverriddenSkillExtraction && typeof eff.runSkillExtraction === "boolean" && runSkillExtraction !== eff.runSkillExtraction) {
+      setRunSkillExtraction(eff.runSkillExtraction);
+    }
+  }, [processingPlan, userHasOverriddenChunking, userHasOverriddenRagIndex, userHasOverriddenSkillExtraction, runChunking, runRagIndex, runSkillExtraction]);
+
   const handleProfileChange = (profile: string) => {
     setDocumentProfile(profile);
     // Reset overrides
@@ -406,6 +413,17 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     setChunkOverlapOverride(null);
     setChunkUnitOverride(null);
     setOcrLanguageOverride(null);
+
+    // Reset user stage overrides when switching profiles
+    setUserHasOverriddenChunking(false);
+    setUserHasOverriddenRagIndex(false);
+    setUserHasOverriddenSkillExtraction(false);
+
+    // Default to running Chunking and RAG, since it is a new profile setup
+    setRunChunking(true);
+    setRunRagIndex(true);
+    setRunSkillExtraction(false);
+    setSkillExtractionMode("");
   };
 
   // Locators & Resources
@@ -517,6 +535,15 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [blockifyLlmModel, setBlockifyLlmModel] = useState<string>("");
   const [blockifyPiiMaskingEnabled, setBlockifyPiiMaskingEnabled] = useState<boolean>(true);
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
+  const [currentTab, setCurrentTab] = useState<"info" | "qa">("info");
+  const [qaProvider, setQaProvider] = useState<string>("");
+  const [qaModel, setQaModel] = useState<string>("");
+  const [qaMessages, setQaMessages] = useState<ChatMessage[]>([]);
+  const [qaInput, setQaInput] = useState<string>("");
+  const [qaSending, setQaSending] = useState<boolean>(false);
+  const [qaError, setQaError] = useState<string | null>(null);
+  const [showScrollToBottomBtn, setShowScrollToBottomBtn] = useState<boolean>(false);
+  const qaMessageListRef = useRef<HTMLDivElement | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
 
   function clearThumbnail() {
@@ -530,108 +557,6 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       return null;
     });
   }
-
-  const loadPolicyInfo = useCallback(async () => {
-    if (!attachmentId) return;
-    setPolicyLoading(true);
-    try {
-      let currentPolicy: RetrievalPolicyDto | null = null;
-      try {
-        currentPolicy = await reactRetrievalPolicyApi.getPolicy("attachment", attachmentId);
-        setRetrievalPolicy(currentPolicy);
-      } catch (err: any) {
-        const status = err?.response?.status ?? err?.status;
-        if (status === 404) {
-          setRetrievalPolicy(null);
-        } else {
-          console.error("Failed to load retrieval policy", err);
-        }
-      }
-
-      if (currentPolicy) {
-        setPolicyStrategy(currentPolicy.retrievalStrategy);
-        const opts = currentPolicy.retrievalOptions || {};
-        setPolicyStructureTopK(opts.structureTopK ?? 5);
-        setPolicyIdeaBlockTopK(opts.ideaBlockTopK ?? 5);
-        setPolicyFinalTopK(opts.finalTopK ?? 5);
-        setPolicyMinScore(opts.minScore ?? 0.6);
-        setPolicyDedupe(opts.dedupe !== false);
-        setPolicyDistilledBoost(opts.distilledScoreBoost ?? 0.03);
-      }
-
-      try {
-        const summary = await reactRetrievalPolicyApi.getSummary("attachment", attachmentId);
-        setPolicyUsageSummary(summary);
-      } catch {
-        setPolicyUsageSummary(null);
-      }
-
-      try {
-        const usages = await reactRetrievalPolicyApi.getUsage("attachment", attachmentId);
-        setPolicyUsages(usages);
-      } catch {
-        setPolicyUsages([]);
-      }
-    } finally {
-      setPolicyLoading(false);
-    }
-  }, [attachmentId]);
-
-  const handleSavePolicy = async () => {
-    setPolicySaving(true);
-    try {
-      const payload: RetrievalPolicyDto = {
-        objectType: "attachment",
-        objectId: String(attachmentId),
-        retrievalStrategy: policyStrategy,
-        retrievalOptions: {
-          structureTopK: Number(policyStructureTopK),
-          ideaBlockTopK: Number(policyIdeaBlockTopK),
-          finalTopK: Number(policyFinalTopK),
-          minScore: Number(policyMinScore),
-          dedupe: policyDedupe,
-          distilledScoreBoost: Number(policyDistilledBoost),
-        },
-        questionSetId: retrievalPolicy?.questionSetId,
-        evaluationRunId: retrievalPolicy?.evaluationRunId,
-      };
-      await reactRetrievalPolicyApi.savePolicy(payload);
-      toast.success("RAG 검색 운영 정책을 성공적으로 저장했습니다.");
-      void loadPolicyInfo();
-    } catch (err) {
-      toast.error("정책 저장 실패: " + resolveAxiosError(err));
-    } finally {
-      setPolicySaving(false);
-    }
-  };
-
-  const handleApplyRecommendation = async (questionSetId: string) => {
-    setPolicySaving(true);
-    try {
-      const payload = {
-        questionSetId,
-        objectType: "attachment",
-        objectId: String(attachmentId),
-      };
-      await reactRetrievalPolicyApi.applyRecommendation(payload);
-      toast.success("최적 평가 추천 전략을 검색 운영 정책으로 저장했습니다.");
-      void loadPolicyInfo();
-    } catch (err) {
-      toast.error("추천 전략 반영 실패: " + resolveAxiosError(err));
-    } finally {
-      setPolicySaving(false);
-    }
-  };
-
-  useEffect(() => {
-    if (open && attachmentId) {
-      void loadPolicyInfo();
-    } else {
-      setRetrievalPolicy(null);
-      setPolicyUsageSummary(null);
-      setPolicyUsages([]);
-    }
-  }, [open, attachmentId, loadPolicyInfo]);
 
   // Load embedding options and chunking config on mount
   const loadEmbeddingOptions = useCallback(async () => {
@@ -667,9 +592,11 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       setAiInfo(res);
       if (res.defaultProvider) {
         setBlockifyLlmProvider(res.defaultProvider);
+        setQaProvider(res.defaultProvider);
         const match = res.providers.find((p) => p.name === res.defaultProvider);
         if (match?.chat?.model) {
           setBlockifyLlmModel(match.chat.model);
+          setQaModel(match.chat.model);
         }
       }
     } catch {
@@ -684,6 +611,16 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       void loadProviders();
     }
   }, [open, attachmentId, loadEmbeddingOptions, loadChunkConfig, loadProviders]);
+
+  useEffect(() => {
+    if (!open) {
+      setCurrentTab("info");
+      setQaMessages([]);
+      setQaInput("");
+      setQaSending(false);
+      setQaError(null);
+    }
+  }, [open]);
 
   const availableStrategies = useMemo(() => {
     const serverStrategies = chunkConfig?.chunking.availableStrategies ?? ["fixed-size", "recursive", "structure-based"];
@@ -1515,6 +1452,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   }
 
   const handleRunChunkingChange = (checked: boolean) => {
+    setUserHasOverriddenChunking(true);
     setRunChunking(checked);
     if (!checked) {
       setRunRagIndex(false);
@@ -1524,6 +1462,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
 
   const handleRunRagIndexChange = (checked: boolean) => {
+    setUserHasOverriddenRagIndex(true);
     setRunRagIndex(checked);
     if (checked) {
       setRunChunking(true);
@@ -1533,6 +1472,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   };
 
   const handleRunSkillExtractionChange = (checked: boolean) => {
+    setUserHasOverriddenSkillExtraction(true);
     setRunSkillExtraction(checked);
     if (checked) {
       setRunRagIndex(true);
@@ -1639,6 +1579,15 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
           embeddingProvider: payload.embeddingProvider,
           embeddingModel: payload.embeddingModel,
           embeddingDimension: payload.embeddingDimension,
+          blockifyLlmProvider: payload.blockifyLlmProvider,
+          blockifyLlmModel: payload.blockifyLlmModel,
+          blockifyPiiMaskingEnabled: payload.blockifyPiiMaskingEnabled,
+          ocrRequired: payload.ocrRequired,
+          ocrMode: payload.ocrMode,
+          ocrLanguage: payload.ocrLanguage,
+          mathVisionCorrection: payload.mathVisionCorrection,
+          documentProfile: payload.documentProfile,
+          skillExtractionMode: payload.skillExtractionMode,
         };
 
         let estimateRes;
@@ -1715,6 +1664,15 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         embeddingProvider: payload.embeddingProvider,
         embeddingModel: payload.embeddingModel,
         embeddingDimension: payload.embeddingDimension,
+        blockifyLlmProvider: payload.blockifyLlmProvider,
+        blockifyLlmModel: payload.blockifyLlmModel,
+        blockifyPiiMaskingEnabled: payload.blockifyPiiMaskingEnabled,
+        ocrRequired: payload.ocrRequired,
+        ocrMode: payload.ocrMode,
+        ocrLanguage: payload.ocrLanguage,
+        mathVisionCorrection: payload.mathVisionCorrection,
+        documentProfile: payload.documentProfile,
+        skillExtractionMode: payload.skillExtractionMode,
       };
 
       let estimateRes;
@@ -2535,6 +2493,140 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
   const [activeSection, setActiveSection] = useState<string>("info");
 
+  const isRagCompleted = useMemo(() => {
+    return (ragMetadata as any)?.indexed === true || latestRagJob?.status === "SUCCEEDED";
+  }, [ragMetadata, latestRagJob?.status]);
+
+  const lastQaAssistantMessage = useMemo(() => {
+    return [...qaMessages].reverse().find((m) => m.role === "assistant");
+  }, [qaMessages]);
+
+  const submitQaQuestion = async (trimmed: string, baseMessages: ChatMessage[], appendUserMessage: boolean) => {
+    if (!trimmed || qaSending || !file) return;
+
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: "user",
+      content: trimmed,
+      createdAt: new Date().toISOString(),
+    };
+
+    const nextMessages = appendUserMessage ? [...baseMessages, userMsg] : baseMessages;
+    setQaMessages(nextMessages);
+    setQaInput("");
+    setQaSending(true);
+    setQaError(null);
+
+    try {
+      const requestMessages = nextMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      }));
+
+      const embeddingProfileId = latestRagJob?.embeddingProfileId || (ragMetadata as any)?.embeddingProfileId || undefined;
+      const embeddingProvider = latestRagJob?.embeddingProvider || (ragMetadata as any)?.embeddingProvider || undefined;
+      const embeddingModel = latestRagJob?.embeddingModel || (ragMetadata as any)?.embeddingModel || undefined;
+
+      const payload: any = {
+        chat: {
+          provider: qaProvider || undefined,
+          model: qaModel || undefined,
+          messages: requestMessages,
+          systemPrompt: "제공된 RAG 문서 내용에 근거해서만 답변하세요. 문서에서 확인할 수 없는 내용은 확인할 수 없다고 답변하세요.",
+        },
+        ragQuery: trimmed,
+        objectType: "attachment",
+        objectId: String(file.attachmentId),
+        topK: 5,
+        minScore: 0.35,
+        debug: true,
+      };
+
+      if (embeddingProfileId) {
+        payload.embeddingProfileId = embeddingProfileId;
+      } else if (embeddingProvider && embeddingModel) {
+        payload.embeddingProvider = embeddingProvider;
+        payload.embeddingModel = embeddingModel;
+      }
+
+      const res = await reactAiApi.sendRagChat(payload);
+      const assistant = [...(res.messages ?? [])].reverse().find(m => m.role === "assistant");
+
+      setQaMessages([
+        ...nextMessages,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: assistant?.content ?? "",
+          createdAt: new Date().toISOString(),
+          model: res.metadata?.resolvedModel || res.model || qaModel,
+          metadata: res.metadata,
+        }
+      ]);
+    } catch (err: any) {
+      const msg = resolveAxiosError(err);
+      setQaError(msg);
+      setQaMessages([
+        ...nextMessages,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: `오류가 발생했습니다: ${msg}`,
+          createdAt: new Date().toISOString(),
+          metadata: { finishReason: "error" },
+        }
+      ]);
+    } finally {
+      setQaSending(false);
+    }
+  };
+
+  const handleSendQa = async () => {
+    const trimmed = qaInput.trim();
+    if (!trimmed || qaSending) return;
+    await submitQaQuestion(trimmed, qaMessages, true);
+  };
+
+  const handleQaRegenerate = async () => {
+    if (qaSending) return;
+    const lastUserIdx = [...qaMessages].map((m) => m.role).lastIndexOf("user");
+    if (lastUserIdx < 0) return;
+    const baseMessages = qaMessages.slice(0, lastUserIdx + 1);
+    const lastUser = baseMessages[lastUserIdx];
+    await submitQaQuestion(lastUser.content, baseMessages, false);
+  };
+
+  const handleQaRetryLastUser = () => {
+    const lastUser = [...qaMessages].reverse().find((item) => item.role === "user");
+    if (lastUser?.content) {
+      setQaInput(lastUser.content);
+    }
+  };
+
+  const handleQaScroll = () => {
+    const container = qaMessageListRef.current;
+    if (!container) return;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+    setShowScrollToBottomBtn(!isNearBottom);
+  };
+
+  const scrollToBottom = () => {
+    const container = qaMessageListRef.current;
+    if (container) {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (currentTab === "qa") {
+      scrollToBottom();
+    }
+  }, [qaMessages, currentTab]);
+
   return (
     <Drawer
       anchor="right"
@@ -2599,7 +2691,21 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         </Stack>
       </Box>
 
-      <Box sx={{ p: 3, flexGrow: 1, overflow: "auto" }}>
+      {file && isRagCompleted && (
+        <Box sx={{ borderBottom: 1, borderColor: "divider", bgcolor: "background.paper", flexShrink: 0 }}>
+          <Tabs
+            value={currentTab}
+            onChange={(_, newValue) => setCurrentTab(newValue)}
+            sx={{ px: 3 }}
+          >
+            <Tab label="상세 정보" value="info" sx={{ textTransform: "none", fontWeight: 700 }} />
+            <Tab label="문서 Q&A (Ask Gemini)" value="qa" sx={{ textTransform: "none", fontWeight: 700 }} />
+          </Tabs>
+        </Box>
+      )}
+
+      {currentTab === "info" && (
+        <Box sx={{ p: 3, flexGrow: 1, overflow: "auto" }}>
         {loading ? (
           <Box sx={{ display: "flex", justifyContent: "center", mt: 10 }}>
             <CircularProgress />
@@ -2963,7 +3069,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                         fullWidth
                         value={documentProfile}
                         onChange={(e) => handleProfileChange(e.target.value)}
-                        disabled={controlsDisabled || isCanceledRevision}
+                        disabled={controlsDisabled || isCanceledRevision || isRagCompleted}
                       >
                         <MenuItem value="AUTO">자동 감지 (AUTO)</MenuItem>
                         {profiles.filter(p => p.id !== "AUTO").map((p) => (
@@ -3316,7 +3422,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                   const matched = embeddingOptions.find((o) => embeddingOptionKey(o) === e.target.value);
                                   if (matched) setSelectedEmbeddingOption(matched);
                                 }}
-                                disabled={controlsDisabled || isCanceledRevision}
+                                disabled={controlsDisabled || isCanceledRevision || isRagCompleted}
                                 helperText={
                                   selectedEmbeddingOption?.profileId
                                     ? `Profile 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
@@ -3713,440 +3819,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                     );
                   })()}
                   </Box>
-
-                  {/* Metadata Table */}
-                  {documentId && (
-                    <Stack spacing={2} sx={{ mt: 2 }}>
-                      <Box id="section-metadata">
-                        <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 0.8, fontWeight: 700, fontSize: 13.5 }}>
-                          상세 메타데이터
-                        </Typography>
-                        <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 1 }}>
-                          <Table size="small">
-                            <TableBody>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, width: "32%", fontSize: 12.5 }}>1. Markdown Document ID</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>{documentId}</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>2. Revision ID</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>{latestRevision?.revisionId || "-"}</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>3. 추출 상태 (Revision status)</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>{latestRevision?.status || "-"}</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>4. Pipeline 상태 / 현재 단계</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>
-                                  {pipelineExecution ? `${pipelineExecution.status} / ${pipelineExecution.currentStage}` : "-"}
-                                </TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>5. 마지막 성공 단계</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>{pipelineExecution?.lastCompletedStage || "-"}</TableCell>
-                              </TableRow>
-                              
-                              {/* 정규화 요약 정보 추가 */}
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>6. 정규화 상태</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>
-                                  <Chip
-                                    size="small"
-                                    label={getNormalizationBadge(normalizedRes)}
-                                    color={
-                                      !normalizedRes ? "default" :
-                                      normalizedMeta?.normalizationStatus === "VALID" ? "success" : "warning"
-                                    }
-                                    sx={{ height: 20, fontSize: 11 }}
-                                  />
-                                </TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>7. 정규화 경로</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>
-                                  {getNormalizationSourceLabel(normalizedMeta?.normalizationSource)}
-                                </TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>8. 정규화 Block 수</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>{normalizedMeta?.blockCount != null ? `${normalizedMeta.blockCount}개` : "-"}</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>9. 정규화 Table 수</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>{normalizedMeta?.tableCount != null ? `${normalizedMeta.tableCount}개` : "-"}</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>10. 정규화 Image 수</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>{normalizedMeta?.imageCount != null ? `${normalizedMeta.imageCount}개` : "-"}</TableCell>
-                              </TableRow>
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>11. 정규화 Page 수</TableCell>
-                                <TableCell sx={{ fontSize: 12.5 }}>{normalizedMeta?.pageCount != null ? `${normalizedMeta.pageCount}개` : "-"}</TableCell>
-                              </TableRow>
-
-                              <TableRow>
-                                <TableCell sx={{ bgcolor: "action.hover", fontWeight: 600, fontSize: 12.5 }}>적용된 파이프라인 옵션</TableCell>
-                                <TableCell sx={{ fontSize: 12.5, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>
-                                  {latestRevision?.optionsJson ? (
-                                    (() => {
-                                      try {
-                                        return JSON.stringify(JSON.parse(latestRevision.optionsJson), null, 2);
-                                      } catch {
-                                        return latestRevision.optionsJson;
-                                      }
-                                    })()
-                                  ) : (
-                                    `Chunking: ${runChunking ? "Y" : "N"}\n` +
-                                    `RAG 색인: ${runRagIndex ? "Y" : "N"}\n` +
-                                    `Skill 추출: ${runSkillExtraction ? "Y" : "N"}`
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-
-                        {/* 정규화 이슈 상세 목록 아코디언 */}
-                        {normalizedMeta?.normalizationIssues && normalizedMeta.normalizationIssues.length > 0 && (
-                          <Accordion disableGutters variant="outlined" sx={{ mt: 1.5, borderRadius: 1, overflow: "hidden" }}>
-                            <AccordionSummary expandIcon={<ExpandMoreOutlined fontSize="small" />}>
-                              <Typography variant="caption" sx={{ fontWeight: 600, color: "warning.main", display: "flex", alignItems: "center", gap: 0.5 }}>
-                                ⚠️ 정규화 이슈 감지됨 ({normalizedMeta.normalizationIssues.length}개)
-                              </Typography>
-                            </AccordionSummary>
-                            <AccordionDetails sx={{ pt: 0, pb: 1 }}>
-                              <Stack spacing={0.5}>
-                                {normalizedMeta.normalizationIssues.map((issue: string, idx: number) => (
-                                  <Typography key={`${issue}-${idx}`} variant="caption" color="text.secondary" display="block">
-                                    • {issue}
-                                  </Typography>
-                                ))}
-                              </Stack>
-                            </AccordionDetails>
-                          </Accordion>
-                        )}
-                      </Box>
-
-                      {/* Revision 이력 Table */}
-                      <Box id="section-revisionHistory">
-                        <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 0.8, fontWeight: 700, fontSize: 13.5 }}>
-                          Revision 이력
-                        </Typography>
-                        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200, borderRadius: 1 }}>
-                          <Table size="small" stickyHeader>
-                            <TableHead>
-                              <TableRow>
-                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>버전 (Rev ID)</TableCell>
-                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>상태</TableCell>
-                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>생성 시간</TableCell>
-                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>오류 내용</TableCell>
-                                <TableCell sx={{ fontSize: 12, fontWeight: 600, width: 80 }}>액션</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {revisions.map((rev) => (
-                                <TableRow key={rev.revisionId} hover>
-                                  <TableCell sx={{ fontSize: 12 }}>{rev.revisionId.substring(0, 8)}</TableCell>
-                                  <TableCell sx={{ fontSize: 12 }}>
-                                    <Chip
-                                      label={rev.status}
-                                      size="small"
-                                      color={
-                                        rev.status === "COMPLETED" ? "success" :
-                                        rev.status === "FAILED" ? "error" :
-                                        rev.status === "CANCELED" ? "default" : "primary"
-                                      }
-                                      sx={{ height: 18, fontSize: 10 }}
-                                    />
-                                  </TableCell>
-                                  <TableCell sx={{ fontSize: 12 }}>{formatDate(rev.createdAt)}</TableCell>
-                                  <TableCell sx={{ fontSize: 12, color: "error.main" }}>{rev.errorMessage || "-"}</TableCell>
-                                  <TableCell sx={{ fontSize: 12, py: 0.25 }}>
-                                    {rev.status === "COMPLETED" && (
-                                      <Button
-                                        size="small"
-                                        variant="outlined"
-                                        onClick={() => {
-                                          setSelectedViewerRevisionId(rev.revisionId);
-                                          setMarkdownViewerOpen(true);
-                                        }}
-                                        sx={{ height: 20, fontSize: 10.5, py: 0 }}
-                                      >
-                                        보기
-                                      </Button>
-                                    )}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      </Box>
-
-                      {/* RAG Job 이력 Table */}
-                      <Box id="section-ragJobHistory">
-                        <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 0.8, fontWeight: 700, fontSize: 13.5 }}>
-                          RAG Job 이력
-                        </Typography>
-                        <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200, borderRadius: 1 }}>
-                          <Table size="small" stickyHeader>
-                            <TableHead>
-                              <TableRow>
-                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>임베딩 모델</TableCell>
-                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>상태</TableCell>
-                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>청크 (색인/총)</TableCell>
-                                <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>실패 사유</TableCell>
-                              </TableRow>
-                            </TableHead>
-                            <TableBody>
-                              {ragJobs.map((job) => (
-                                <TableRow key={job.jobId} hover>
-                                  <TableCell sx={{ fontSize: 12 }}>{job.embeddingModel || "-"}</TableCell>
-                                  <TableCell sx={{ fontSize: 12 }}>
-                                    <Chip
-                                      label={job.status}
-                                      size="small"
-                                      color={
-                                        job.status === "SUCCEEDED" ? "success" :
-                                        job.status === "FAILED" ? "error" :
-                                        job.status === "CANCELLED" ? "default" : "primary"
-                                      }
-                                      sx={{ height: 18, fontSize: 10 }}
-                                    />
-                                  </TableCell>
-                                  <TableCell sx={{ fontSize: 12 }}>{job.indexedCount} / {job.chunkCount}</TableCell>
-                                  <TableCell sx={{ fontSize: 12, color: "error.main" }}>{job.errorMessage || "-"}</TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </TableContainer>
-                      </Box>
-                    </Stack>
-                  )}
                 </Box>
               </Paper>
-
-              {/* Card 4: RAG 검색 운영 정책 Panel */}
-              <Paper id="section-retrievalPolicy" variant="outlined" sx={{ p: 2.5, mb: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                  RAG 검색 운영 정책
-                </Typography>
-
-                <Stack spacing={3.5}>
-                  {/* Section A: 수동 저장 및 편집 */}
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 1.5, fontWeight: 700, fontSize: 13.5 }}>
-                      운영 정책 설정 및 편집
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <Grid size={{ xs: 6 }}>
-                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                          검색 전략 (Strategy)
-                        </Typography>
-                        <Select
-                          size="small"
-                          fullWidth
-                          value={policyStrategy}
-                          onChange={(e) => setPolicyStrategy(e.target.value)}
-                          disabled={policySaving || policyLoading}
-                        >
-                          <MenuItem value="hybrid">Hybrid</MenuItem>
-                          <MenuItem value="structure">Structure</MenuItem>
-                          <MenuItem value="ideaBlock">IdeaBlock</MenuItem>
-                        </Select>
-                      </Grid>
-                      <Grid size={{ xs: 6 }}>
-                        <TextField
-                          label="최종 반환 수 (finalTopK)"
-                          size="small"
-                          type="number"
-                          fullWidth
-                          value={policyFinalTopK}
-                          onChange={(e) => setPolicyFinalTopK(e.target.value)}
-                          disabled={policySaving || policyLoading}
-                        />
-                      </Grid>
-                      <Grid size={{ xs: 4 }}>
-                        <TextField
-                          label="구조 Top K"
-                          size="small"
-                          type="number"
-                          fullWidth
-                          value={policyStructureTopK}
-                          onChange={(e) => setPolicyStructureTopK(e.target.value)}
-                          disabled={policySaving || policyLoading}
-                        />
-                      </Grid>
-                      <Grid size={{ xs: 4 }}>
-                        <TextField
-                          label="아이디어 블록 Top K"
-                          size="small"
-                          type="number"
-                          fullWidth
-                          value={policyIdeaBlockTopK}
-                          onChange={(e) => setPolicyIdeaBlockTopK(e.target.value)}
-                          disabled={policySaving || policyLoading}
-                        />
-                      </Grid>
-                      <Grid size={{ xs: 4 }}>
-                        <TextField
-                          label="최소 점수 (minScore)"
-                          size="small"
-                          type="number"
-                          inputProps={{ step: "0.1" }}
-                          fullWidth
-                          value={policyMinScore}
-                          onChange={(e) => setPolicyMinScore(e.target.value)}
-                          disabled={policySaving || policyLoading}
-                        />
-                      </Grid>
-                      <Grid size={{ xs: 6 }}>
-                        <TextField
-                          label="정제 부스트 (distilledScoreBoost)"
-                          size="small"
-                          type="number"
-                          inputProps={{ step: "0.01" }}
-                          fullWidth
-                          value={policyDistilledBoost}
-                          onChange={(e) => setPolicyDistilledBoost(e.target.value)}
-                          disabled={policySaving || policyLoading}
-                        />
-                      </Grid>
-                      <Grid size={{ xs: 6 }} sx={{ display: "flex", alignItems: "center" }}>
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              size="small"
-                              checked={policyDedupe}
-                              onChange={(e) => setPolicyDedupe(e.target.checked)}
-                              disabled={policySaving || policyLoading}
-                            />
-                          }
-                          label={<Typography variant="body2" sx={{ fontSize: 13 }}>중복 제거 (dedupe)</Typography>}
-                        />
-                      </Grid>
-                    </Grid>
-
-                    <Stack direction="row" spacing={1.5} sx={{ mt: 2 }} justifyContent="flex-end">
-                      {retrievalPolicy?.questionSetId && (
-                        <>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="info"
-                            onClick={() => setIsAnalysisDialogOpen(true)}
-                          >
-                            평가 분석 보기
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="secondary"
-                            onClick={() => void handleApplyRecommendation(retrievalPolicy.questionSetId!)}
-                            disabled={policySaving || policyLoading}
-                          >
-                            평가 최적 추천 전략 적용
-                          </Button>
-                        </>
-                      )}
-                      <Button
-                        size="small"
-                        variant="contained"
-                        onClick={handleSavePolicy}
-                        disabled={policySaving || policyLoading}
-                      >
-                        {policySaving ? "저장 중..." : "수동 정책 저장"}
-                      </Button>
-                    </Stack>
-                  </Box>
-
-                  <Divider />
-
-                  {/* Section B: 정책 사용 요약 */}
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 1.5, fontWeight: 700, fontSize: 13.5 }}>
-                      정책 사용 요약 (Usage Summary)
-                    </Typography>
-                    {policyUsageSummary ? (
-                      <Grid container spacing={2}>
-                        <Grid size={{ xs: 3 }}>
-                          <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", bgcolor: "action.hover" }}>
-                            <Typography variant="caption" color="text.secondary" display="block">총 사용 횟수</Typography>
-                            <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600, fontSize: 16 }}>{policyUsageSummary.usageCount}회</Typography>
-                          </Paper>
-                        </Grid>
-                        <Grid size={{ xs: 3 }}>
-                          <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", bgcolor: "action.hover" }}>
-                            <Typography variant="caption" color="text.secondary" display="block">평균 결과 수</Typography>
-                            <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600, fontSize: 16 }}>{policyUsageSummary.averageResultCount?.toFixed(1) ?? "-"}개</Typography>
-                          </Paper>
-                        </Grid>
-                        <Grid size={{ xs: 3 }}>
-                          <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", bgcolor: "action.hover" }}>
-                            <Typography variant="caption" color="text.secondary" display="block">평균 지연시간</Typography>
-                            <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600, fontSize: 16 }}>{policyUsageSummary.averageElapsedMs?.toFixed(1) ?? "-"}ms</Typography>
-                          </Paper>
-                        </Grid>
-                        <Grid size={{ xs: 3 }}>
-                          <Paper variant="outlined" sx={{ p: 1.5, textAlign: "center", bgcolor: "action.hover" }}>
-                            <Typography variant="caption" color="text.secondary" display="block">no-context 건수</Typography>
-                            <Typography variant="h6" sx={{ mt: 0.5, fontWeight: 600, fontSize: 16, color: "warning.main" }}>{policyUsageSummary.skippedChatCount}회</Typography>
-                          </Paper>
-                        </Grid>
-                      </Grid>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 1.5 }}>
-                        정책 사용 통계 내역이 없습니다.
-                      </Typography>
-                    )}
-                  </Box>
-
-                  <Divider />
-
-                  {/* Section C: 정책 사용 이력 */}
-                  <Box>
-                    <Typography variant="body2" color="text.secondary" display="block" sx={{ mb: 1.5, fontWeight: 700, fontSize: 13.5 }}>
-                      최근 정책 사용 이력 (Recent Policy Usage)
-                    </Typography>
-                    {policyUsages.length > 0 ? (
-                      <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 200, borderRadius: 1 }}>
-                        <Table size="small" stickyHeader>
-                          <TableHead>
-                            <TableRow>
-                              <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>사용 ID</TableCell>
-                              <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>적용 전략</TableCell>
-                              <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>결과 수</TableCell>
-                              <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>지연시간</TableCell>
-                              <TableCell sx={{ fontSize: 12, fontWeight: 600 }}>사용 시각</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {policyUsages.map((usage) => (
-                              <TableRow key={usage.usageId} hover>
-                                <TableCell sx={{ fontSize: 12 }}>{usage.usageId.substring(0, 8)}</TableCell>
-                                <TableCell sx={{ fontSize: 12 }}>
-                                  <Chip label={usage.retrievalStrategy} size="small" color="primary" sx={{ height: 18, fontSize: 10 }} />
-                                </TableCell>
-                                <TableCell sx={{ fontSize: 12 }}>{usage.resultCount ?? 0}개</TableCell>
-                                <TableCell sx={{ fontSize: 12 }}>{usage.elapsedMs ?? "-"} ms</TableCell>
-                                <TableCell sx={{ fontSize: 12 }}>{formatDate(usage.createdAt)}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </TableContainer>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
-                        최근 사용 이력이 존재하지 않습니다.
-                      </Typography>
-                    )}
-                  </Box>
-                </Stack>
-              </Paper>
-          </Container>
-        </Stack>
+            </Container>
+          </Stack>
 
         {/* 2. TOC contents aside panel */}
         <Box
@@ -4238,83 +3914,12 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
             >
               실행 및 설정
             </Button>
-            <Button
-              size="small"
-              variant="text"
-              sx={{
-                justifyContent: "flex-start",
-                color: activeSection === "metadata" ? "primary.main" : "text.secondary",
-                fontWeight: activeSection === "metadata" ? 700 : 500,
-                borderLeft: activeSection === "metadata" ? "2.5px solid" : "2.5px solid transparent",
-                borderColor: activeSection === "metadata" ? "primary.main" : "transparent",
-                pl: 1.5,
-                py: 0.6,
-                fontSize: 13.5,
-                textTransform: "none",
-              }}
-              onClick={() => handleScrollToSection("metadata")}
-            >
-              상세 메타데이터
-            </Button>
-            <Button
-              size="small"
-              variant="text"
-              sx={{
-                justifyContent: "flex-start",
-                color: activeSection === "revisionHistory" ? "primary.main" : "text.secondary",
-                fontWeight: activeSection === "revisionHistory" ? 700 : 500,
-                borderLeft: activeSection === "revisionHistory" ? "2.5px solid" : "2.5px solid transparent",
-                borderColor: activeSection === "revisionHistory" ? "primary.main" : "transparent",
-                pl: 1.5,
-                py: 0.6,
-                fontSize: 13.5,
-                textTransform: "none",
-              }}
-              onClick={() => handleScrollToSection("revisionHistory")}
-            >
-              Revision 이력
-            </Button>
-            <Button
-              size="small"
-              variant="text"
-              sx={{
-                justifyContent: "flex-start",
-                color: activeSection === "ragJobHistory" ? "primary.main" : "text.secondary",
-                fontWeight: activeSection === "ragJobHistory" ? 700 : 500,
-                borderLeft: activeSection === "ragJobHistory" ? "2.5px solid" : "2.5px solid transparent",
-                borderColor: activeSection === "ragJobHistory" ? "primary.main" : "transparent",
-                pl: 1.5,
-                py: 0.6,
-                fontSize: 13.5,
-                textTransform: "none",
-              }}
-              onClick={() => handleScrollToSection("ragJobHistory")}
-            >
-              RAG Job 이력
-            </Button>
-            <Button
-              size="small"
-              variant="text"
-              sx={{
-                justifyContent: "flex-start",
-                color: activeSection === "retrievalPolicy" ? "primary.main" : "text.secondary",
-                fontWeight: activeSection === "retrievalPolicy" ? 700 : 500,
-                borderLeft: activeSection === "retrievalPolicy" ? "2.5px solid" : "2.5px solid transparent",
-                borderColor: activeSection === "retrievalPolicy" ? "primary.main" : "transparent",
-                pl: 1.5,
-                py: 0.6,
-                fontSize: 13.5,
-                textTransform: "none",
-              }}
-              onClick={() => handleScrollToSection("retrievalPolicy")}
-            >
-              RAG 검색 운영 정책
-            </Button>
           </Stack>
         </Box>
       </Box>
     )}
-      </Box>
+        </Box>
+      )}
 
       {/* Reader / Convert Dialogs */}
       {file && (
@@ -4354,12 +3959,168 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
               }}
             />
           )}
-          {retrievalPolicy?.questionSetId && (
-            <RagEvaluationAnalysisDialog
-              open={isAnalysisDialogOpen}
-              questionSetId={retrievalPolicy.questionSetId}
-              onClose={() => setIsAnalysisDialogOpen(false)}
-            />
+
+          {currentTab === "qa" && file && (
+            <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, height: "calc(100vh - 120px)", overflow: "hidden" }}>
+              {/* Chat config row */}
+              <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider", bgcolor: "action.hover" }}>
+                <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+                  {/* Chat model selection */}
+                  <Box sx={{ flex: 1, maxWidth: 450 }}>
+                    <AiProviderSelect
+                      provider={qaProvider}
+                      model={qaModel}
+                      onChange={(p, m) => {
+                        setQaProvider(p);
+                        setQaModel(m);
+                      }}
+                    />
+                  </Box>
+                  {/* Embedding profile display (readonly) */}
+                  <Box sx={{ textAlign: "right" }}>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      RAG 임베딩 모델 (수정 불가)
+                    </Typography>
+                    <Chip
+                      label={latestRagJob?.embeddingModel || String(ragMetadata?.embeddingModel || "-")}
+                      size="small"
+                      variant="outlined"
+                      sx={{ mt: 0.5, fontWeight: 600, bgcolor: "background.paper" }}
+                    />
+                  </Box>
+                </Stack>
+              </Box>
+
+              {/* Chat messages list */}
+              <Box sx={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column" }}>
+                <Box
+                  ref={qaMessageListRef}
+                  onScroll={handleQaScroll}
+                  sx={{ flex: 1, overflow: "auto", p: 3, display: "flex", flexDirection: "column", gap: 2, bgcolor: "background.default" }}
+                >
+                  {qaMessages.length === 0 ? (
+                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", opacity: 0.7 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
+                        문서 Q&A (Ask Gemini)
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" align="center">
+                        이 문서의 내용을 기반으로 RAG 질문과 답변을 생성할 수 있습니다.<br />
+                        질문을 입력하여 대화를 시작해 보세요.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    qaMessages.map((msg, idx) => {
+                      if (msg.role === "assistant") {
+                        return (
+                          <AssistantMessageBubble
+                            key={msg.id}
+                            message={msg}
+                            sending={qaSending}
+                            isLastAssistant={idx === qaMessages.length - 1}
+                            onCopy={(content) => void navigator.clipboard.writeText(content)}
+                            onRegenerate={handleQaRegenerate}
+                            onRetryLastUser={handleQaRetryLastUser}
+                          />
+                        );
+                      }
+                      return (
+                        <UserMessageBubble
+                          key={msg.id}
+                          message={msg}
+                          onCopy={(content) => void navigator.clipboard.writeText(content)}
+                          onEdit={(id, content) => {
+                            setQaInput(content);
+                            setQaMessages((prev) => {
+                              const idx = prev.findIndex((m) => m.id === id);
+                              return idx >= 0 ? prev.slice(0, idx) : prev;
+                            });
+                          }}
+                        />
+                      );
+                    })
+                  )}
+                  {qaSending && (
+                    <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
+                      <CircularProgress size={20} />
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Floating scroll to bottom button */}
+                {showScrollToBottomBtn && (
+                  <IconButton
+                    onClick={scrollToBottom}
+                    sx={{
+                      position: "absolute",
+                      bottom: 16,
+                      right: 24,
+                      bgcolor: "background.paper",
+                      color: "text.primary",
+                      boxShadow: 3,
+                      "&:hover": {
+                        bgcolor: "action.hover",
+                      },
+                      width: 36,
+                      height: 36,
+                      borderRadius: "50%",
+                      border: "1px solid",
+                      borderColor: "divider",
+                      zIndex: 10,
+                    }}
+                    size="small"
+                  >
+                    <ArrowDownwardOutlined fontSize="small" />
+                  </IconButton>
+                )}
+              </Box>
+
+              {/* Input field */}
+              <Box sx={{ p: 2, borderTop: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}>
+                {lastQaAssistantMessage?.metadata && (
+                  <Stack direction="row" spacing={2} sx={{ mb: 1.25, px: 0.5 }} alignItems="center">
+                    {lastQaAssistantMessage.metadata.tokenUsage && (
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+                        토큰량: <strong>{lastQaAssistantMessage.metadata.tokenUsage.totalTokens}</strong> tokens
+                        (입력: {lastQaAssistantMessage.metadata.tokenUsage.inputTokens} /
+                         출력: {lastQaAssistantMessage.metadata.tokenUsage.outputTokens})
+                      </Typography>
+                    )}
+                    {lastQaAssistantMessage.metadata.latencyMs != null && (
+                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+                        응답 속도: <strong>{(lastQaAssistantMessage.metadata.latencyMs / 1000).toFixed(2)}</strong>초 ({lastQaAssistantMessage.metadata.latencyMs}ms)
+                      </Typography>
+                    )}
+                  </Stack>
+                )}
+                <Stack direction="row" spacing={1} alignItems="flex-end">
+                  <TextField
+                    placeholder="문서에 대해 질문해보세요... (Shift+Enter 줄바꿈, Enter 전송)"
+                    multiline
+                    maxRows={4}
+                    size="small"
+                    fullWidth
+                    value={qaInput}
+                    onChange={(e) => setQaInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return;
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        void handleSendQa();
+                      }
+                    }}
+                    disabled={qaSending}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={handleSendQa}
+                    disabled={qaSending || !qaInput.trim()}
+                    sx={{ height: 40, minWidth: 70 }}
+                  >
+                    전송
+                  </Button>
+                </Stack>
+              </Box>
+            </Box>
           )}
         </>
       )}
