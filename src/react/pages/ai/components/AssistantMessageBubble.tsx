@@ -3,6 +3,8 @@ import { alpha, Avatar, Box, Divider, IconButton, Popover, Stack, Tooltip, Typog
 import { ContentCopyOutlined, DescriptionOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
 import type { ChatMessage, ChatResponseMetadataDto } from "@/react/pages/ai/components/chatTypes";
 import type { RagReferenceDto } from "@/types/studio/ai";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -186,14 +188,45 @@ function renderRetrievalDebug(metadata?: ChatResponseMetadataDto) {
 }
 
 function renderInlineMarkdown(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  // Split on display math ($$...$$), inline math ($...$), and bold (**...**)
+  const parts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g);
   return parts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <Box component="strong" key={`${part}-${index}`} sx={{ fontWeight: 700 }}>
+        <Box component="strong" key={`bold-${index}`} sx={{ fontWeight: 700 }}>
           {part.slice(2, -2)}
         </Box>
       );
+    }
+    if (part.startsWith("$$") && part.endsWith("$$")) {
+      try {
+        const html = katex.renderToString(part.slice(2, -2), { displayMode: true, throwOnError: false });
+        return (
+          <Box
+            key={`displaymath-${index}`}
+            component="span"
+            dangerouslySetInnerHTML={{ __html: html }}
+            sx={{ display: "block", overflowX: "auto", my: 1, "& .katex": { fontSize: "1.05em" } }}
+          />
+        );
+      } catch {
+        return <Box key={`displaymath-${index}`} component="span">{part}</Box>;
+      }
+    }
+    if (part.startsWith("$") && part.endsWith("$")) {
+      try {
+        const html = katex.renderToString(part.slice(1, -1), { displayMode: false, throwOnError: false });
+        return (
+          <Box
+            key={`inlinemath-${index}`}
+            component="span"
+            dangerouslySetInnerHTML={{ __html: html }}
+            sx={{ "& .katex": { fontSize: "1.05em" } }}
+          />
+        );
+      } catch {
+        return <Box key={`inlinemath-${index}`} component="span">{part}</Box>;
+      }
     }
     return part;
   });
@@ -424,11 +457,11 @@ export function AssistantMessageBubble({
                           ) : null}
                         </Stack>
                         <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>
-                          {formatReferenceTitle(reference)}
+                          {renderInlineMarkdown(formatReferenceTitle(reference))}
                         </Typography>
                         {formatReferenceSummary(reference) ? (
                           <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere", fontSize: 12.5 }}>
-                            {formatReferenceSummary(reference)}
+                            {renderInlineMarkdown(formatReferenceSummary(reference))}
                           </Typography>
                         ) : null}
 
@@ -474,17 +507,17 @@ export function AssistantMessageBubble({
 
                                 {meta.criticalQuestion && (
                                   <Typography variant="body2" sx={{ fontSize: 11.5, fontWeight: 600 }}>
-                                    <span style={{ color: "#7C3AED" }}>Q.</span> {String(meta.criticalQuestion)}
+                                    <span style={{ color: "#7C3AED" }}>Q.</span> {renderInlineMarkdown(String(meta.criticalQuestion))}
                                   </Typography>
                                 )}
                                 {meta.trustedAnswer && (
                                   <Typography variant="body2" sx={{ fontSize: 11.5 }}>
-                                    <span style={{ color: "#059669" }}>A.</span> {String(meta.trustedAnswer)}
+                                    <span style={{ color: "#059669" }}>A.</span> {renderInlineMarkdown(String(meta.trustedAnswer))}
                                   </Typography>
                                 )}
                                 {meta.sourceEvidence && (
                                   <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10.5, fontStyle: "italic", mt: 0.25, display: "block" }}>
-                                    원문 근거: {String(meta.sourceEvidence)}
+                                    원문 근거: {renderInlineMarkdown(String(meta.sourceEvidence))}
                                   </Typography>
                                 )}
                                 {(meta.entityName || meta.keywords || meta.tags) && (

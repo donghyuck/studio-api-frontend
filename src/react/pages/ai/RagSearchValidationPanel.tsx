@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import {
   Accordion,
   AccordionDetails,
@@ -33,7 +38,9 @@ import {
   getChunkStrategyDisplay,
   getChunkQualityIssueText,
   getProvenanceBadges,
-  formatStrategyName
+  formatStrategyName,
+  getChunkNormalizationBadge,
+  getNormalizationSourceLabel
 } from "./chunkMetaHelper";
 import type {
   AiInfoResponse,
@@ -395,13 +402,46 @@ function CitationGroup({
 }
 
 function renderInlineMarkdown(text: string) {
-  return text.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
+  // Split on display math ($$...$$), inline math ($...$), and bold (**...**)
+  const parts = text.split(/((?:\$\$[\s\S]+?\Slide\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g); // Wait, make sure we use the correct regex: /((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g
+  const cleanParts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g);
+  return cleanParts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
-        <Box key={`${part}-${index}`} component="strong" sx={{ fontWeight: 700 }}>
+        <Box key={`bold-${index}`} component="strong" sx={{ fontWeight: 700 }}>
           {part.slice(2, -2)}
         </Box>
       );
+    }
+    if (part.startsWith("$$") && part.endsWith("$$")) {
+      try {
+        const html = katex.renderToString(part.slice(2, -2), { displayMode: true, throwOnError: false });
+        return (
+          <Box
+            key={`displaymath-${index}`}
+            component="span"
+            dangerouslySetInnerHTML={{ __html: html }}
+            sx={{ display: "block", overflowX: "auto", "& .katex": { fontSize: "1.05em" } }}
+          />
+        );
+      } catch {
+        return <Box key={`displaymath-${index}`} component="span">{part}</Box>;
+      }
+    }
+    if (part.startsWith("$") && part.endsWith("$")) {
+      try {
+        const html = katex.renderToString(part.slice(1, -1), { displayMode: false, throwOnError: false });
+        return (
+          <Box
+            key={`inlinemath-${index}`}
+            component="span"
+            dangerouslySetInnerHTML={{ __html: html }}
+            sx={{ "& .katex": { fontSize: "1.05em" } }}
+          />
+        );
+      } catch {
+        return <Box key={`inlinemath-${index}`} component="span">{part}</Box>;
+      }
     }
     return part;
   });
@@ -789,6 +829,23 @@ function ReferenceDocuments({
                       {row.metadata.chunkQualityStatus === "REVIEW_REQUIRED" && (
                         <Chip size="small" color="error" label="Review required" sx={{ height: 16, fontSize: 8.5 }} />
                       )}
+                      {getChunkNormalizationBadge(row.metadata) && (
+                        <Chip
+                          size="small"
+                          color={row.metadata.normalizedSnapshotUsed === true ? "success" : "default"}
+                          variant="outlined"
+                          label={getChunkNormalizationBadge(row.metadata)}
+                          sx={{ height: 16, fontSize: 8.5 }}
+                        />
+                      )}
+                      {row.metadata.normalizationStatus === "REVIEW_REQUIRED" && (
+                        <Chip
+                          size="small"
+                          color="warning"
+                          label="Normalization review"
+                          sx={{ height: 16, fontSize: 8.5 }}
+                        />
+                      )}
                     </Stack>
 
                     <Box sx={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 8px", mt: 0.5 }}>
@@ -816,6 +873,26 @@ function ReferenceDocuments({
                           <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>
                             {String(row.metadata.fallbackStatus)} {row.metadata.fallbackReason ? `(${String(row.metadata.fallbackReason)})` : ""}
                           </Typography>
+                        </>
+                      )}
+                      {row.metadata.normalizedSnapshotUsed != null && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Normalized Input:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>
+                            {row.metadata.normalizedSnapshotUsed ? "True (Normalized blocks)" : "False (Markdown fallback)"}
+                          </Typography>
+                        </>
+                      )}
+                      {row.metadata.normalizationStatus && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Normalization Status:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>{String(row.metadata.normalizationStatus)}</Typography>
+                        </>
+                      )}
+                      {row.metadata.normalizationSource && (
+                        <>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 9.5 }} fontWeight={600}>Normalization Source:</Typography>
+                          <Typography variant="caption" color="text.primary" sx={{ fontSize: 9.5 }}>{getNormalizationSourceLabel(row.metadata.normalizationSource as string)}</Typography>
                         </>
                       )}
                       {row.metadata.chunkQualityIssues && (row.metadata.chunkQualityIssues as string[]).length > 0 && (
@@ -1118,23 +1195,32 @@ function ContentPreview({
       <Stack spacing={1}>
         <Typography variant="subtitle2">{title}</Typography>
         <Box
-          component="pre"
           sx={{
             m: 0,
             p: 1,
             minHeight: 120,
             maxHeight: 300,
             overflow: "auto",
-            whiteSpace: "pre-wrap",
-            overflowWrap: "anywhere",
             bgcolor: "action.hover",
             borderRadius: 2,
-            fontFamily: (theme) => theme.typography.fontFamily,
-            fontSize: 12,
+            fontSize: 13,
             lineHeight: 1.7,
+            "& p": { my: 0.5 },
+            "& pre": { overflowX: "auto", bgcolor: "action.selected", p: 1, borderRadius: 1 },
+            "& code": { fontFamily: "monospace", fontSize: "0.88em" },
+            "& .katex-display": { overflowX: "auto", overflowY: "hidden", my: 1 },
+            "& .katex": { fontSize: "1.05em" },
           }}
         >
-          {content?.trim() || "row를 선택하면 전체 내용이 표시됩니다."}
+          {content?.trim() ? (
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {content.trim()}
+            </ReactMarkdown>
+          ) : (
+            <Box component="span" sx={{ color: "text.disabled", fontStyle: "italic" }}>
+              row를 선택하면 전체 내용이 표시됩니다.
+            </Box>
+          )}
         </Box>
         {metadata ? (
           <Box
@@ -1626,6 +1712,25 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
       <Card variant="outlined" sx={{ borderRadius: 2 }}>
         <CardContent>
           <Stack spacing={1.5}>
+            <Box sx={{ mb: 1 }}>
+              <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                선택 파일 정보
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 500,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {job
+                  ? `${sourceDisplayName(job)} / ${job.objectType} #${job.objectId}`
+                  : "색인 작업을 선택하지 않으면 전체 RAG 범위에서 검색합니다."}
+              </Typography>
+            </Box>
+
             <Box
               sx={{
                 display: "grid",
@@ -1638,22 +1743,14 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
               }}
             >
               <Box sx={{ minWidth: 0 }}>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                  선택 파일 정보
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{
-                    fontWeight: 500,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                <AiProviderSelect
+                  provider={chatProvider}
+                  model={chatModel}
+                  onChange={(p, m) => {
+                    setChatProvider(p);
+                    setChatModel(m);
                   }}
-                >
-                  {job
-                    ? `${sourceDisplayName(job)} / ${job.objectType} #${job.objectId}`
-                    : "색인 작업을 선택하지 않으면 전체 RAG 범위에서 검색합니다."}
-                </Typography>
+                />
               </Box>
 
               <Box sx={{ minWidth: 0 }}>
@@ -1689,30 +1786,6 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
               </Box>
             </Box>
 
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-                gap: 2,
-                alignItems: "center",
-                mb: 0.5,
-              }}
-            >
-              <Box sx={{ minWidth: 0 }}>
-                <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                  답변 생성 Chat 모델
-                </Typography>
-                <AiProviderSelect
-                  provider={chatProvider}
-                  model={chatModel}
-                  onChange={(p, m) => {
-                    setChatProvider(p);
-                    setChatModel(m);
-                  }}
-                />
-              </Box>
-            </Box>
-
             <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }}>
               <TextField
                 value={query}
@@ -1734,6 +1807,29 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
                 fullWidth
                 inputProps={{ "aria-label": "검증 쿼리" }}
               />
+              {/\$/.test(query) && (
+                <Box
+                  sx={{
+                    border: 1,
+                    borderColor: "primary.light",
+                    borderRadius: 1.5,
+                    px: 1.5,
+                    py: 0.75,
+                    bgcolor: "action.hover",
+                    fontSize: 13,
+                    "& .katex-display": { overflowX: "auto", overflowY: "hidden", my: 0.5 },
+                    "& .katex": { fontSize: "1.05em" },
+                    "& p": { m: 0 },
+                  }}
+                >
+                  <Typography variant="caption" color="primary" fontWeight={600} display="block" sx={{ mb: 0.5 }}>
+                    수식 미리보기
+                  </Typography>
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {query}
+                  </ReactMarkdown>
+                </Box>
+              )}
               <TextField
                 label="Top K"
                 value={topK}

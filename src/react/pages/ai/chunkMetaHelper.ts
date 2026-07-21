@@ -248,3 +248,84 @@ export function getChunkQualityIssueText(issue: string): string {
 
 export const getChunkStrategyDisplay = getStrategyFlowLabel;
 export const hasChunkProvenance = hasProvenance;
+
+export type NormalizationStatus = "VALID" | "REVIEW_REQUIRED";
+
+export type NormalizationSource =
+  | "NATIVE_PARSED_FILE"
+  | "PANDOC_MARKDOWN"
+  | "MARKDOWN_FALLBACK";
+
+export interface NormalizedDocumentResourceMetadata {
+  schemaVersion?: "normalized-document-v1";
+  normalizationStatus?: NormalizationStatus;
+  normalizationIssues?: string[];
+  normalizationSource?: NormalizationSource;
+  blockCount?: number;
+  tableCount?: number;
+  imageCount?: number;
+  pageCount?: number;
+}
+
+export interface ChunkNormalizationMetadata {
+  normalizedSnapshotUsed?: boolean;
+  normalizationStatus?: NormalizationStatus;
+  normalizationIssues?: string[];
+  normalizationSource?: NormalizationSource;
+}
+
+export function findNormalizedDocumentResource(resources?: any[]): any | null {
+  if (!resources || !Array.isArray(resources)) return null;
+  return resources.find(
+    (res) =>
+      res.resourceType === "NORMALIZED_DOCUMENT" &&
+      (res.metadataJson?.schemaVersion === "normalized-document-v1" ||
+       (typeof res.metadataJson === "string" && res.metadataJson.includes("normalized-document-v1")))
+  ) || null;
+}
+
+export function getNormalizationBadge(resource?: any): string {
+  if (!resource) return "정규화 정보 없음";
+  let meta = resource.metadataJson;
+  if (typeof meta === "string") {
+    try {
+      meta = JSON.parse(meta);
+    } catch {
+      return "정규화 정보 없음";
+    }
+  }
+  const status = meta?.normalizationStatus;
+  if (status === "VALID") return "정규화 완료";
+  if (status === "REVIEW_REQUIRED") return "정규화 검토 필요";
+  return "정규화 정보 없음";
+}
+
+export function getNormalizationSourceLabel(source?: string): string {
+  if (!source) return "-";
+  switch (source) {
+    case "NATIVE_PARSED_FILE":
+      return "Native extraction";
+    case "PANDOC_MARKDOWN":
+      return "Pandoc markdown";
+    case "MARKDOWN_FALLBACK":
+      return "Markdown fallback";
+    default:
+      return source;
+  }
+}
+
+export function getChunkNormalizationBadge(metadata?: any): string | undefined {
+  if (!metadata) return undefined;
+  if (metadata.normalizedSnapshotUsed === true) {
+    return "Normalized blocks";
+  }
+  if (metadata.normalizedSnapshotUsed === false) {
+    return "Markdown fallback";
+  }
+  return undefined;
+}
+
+export function hasNormalizedChunkInput(metadata?: any): boolean {
+  return metadata?.normalizedSnapshotUsed === true;
+}
+

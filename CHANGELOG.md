@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-07-20
+
+### Added
+
+- 마크다운 상세 드로어 내 RAG Q&A (Ask Gemini) 질문답변 탭 및 스크롤 이동 플로팅 화살표 버튼 추가.
+- Q&A 답변 생성 시 토큰 사용량(Token Usage) 및 응답 속도(Latency) 실시간 표기 지원.
+- RAG 색인 완료 시 임베딩 프로파일 및 문서 종류 선택 드롭다운 변경 비활성화(disabled) 잠금 처리.
+- 파이프라인 부하 추산(estimate) API DTO 및 페이로드 누락 필드 매핑 보강.
+- 자동 감지(AUTO) 및 프로필 변경 시 추천 처리 계획(processingPlan.effectiveOptions) 체크박스 실시간 동기화.
+
+### Verification
+
+- `npm run typecheck` 통과
+- `git diff --check` 통과
+
+## 2026-07-04
+
+### Added
+
+- 마크다운 생성 및 재추출 화면에서 OCR 모드(AUTO, FORCE, DISABLED)와 Vision LLM 수식 보정(mathVisionCorrection)을 지원하는 추출 옵션 제공.
+- OCR 적용 시 활성화되는 고급 옵션 "Vision LLM 수식 보정 사용" 체크박스(설명 문구 포함) 추가.
+- 마크다운 메타데이터 보기 화면에 "Vision LLM 수식 보정" 상태 카드 및 세부 속성(요청, 적용, Provider, 수식 블록 수, 미적용 사유) 렌더링 추가.
+- 신규 재추출 영역에 "OCR 적용 후 재추출" 및 "수식 OCR 적용 후 재추출" 분리 버튼 제공.
+
+### Verification
+
+- `npm run typecheck` 통과
+
 ## 2026-04-28
 
 ### Changed

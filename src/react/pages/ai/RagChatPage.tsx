@@ -22,6 +22,7 @@ import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
 import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
+import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import type { ChatMessage } from "@/react/pages/ai/components/chatTypes";
 import type { AiInfoResponse, ChatMessageDto, ProviderInfo } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
@@ -332,19 +333,14 @@ export function RagChatPage() {
         <DialogTitle>AI RAG Chat 설정</DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-              <TextField select label="Provider" value={provider} onChange={(event) => handleProviderChange(event.target.value)} fullWidth size="small">
-                {providers.map((item) => (
-                  <MenuItem key={item.name} value={item.name}>
-                    <Stack spacing={0}>
-                      <Typography variant="body2">{item.name}</Typography>
-                      <Typography variant="caption" color="text.secondary">chat: {item.chat.enabled ? item.chat.model : "disabled"}</Typography>
-                    </Stack>
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField label="Model" value={model} onChange={(event) => setModel(event.target.value)} fullWidth size="small" />
-            </Stack>
+            <AiProviderSelect
+              provider={provider}
+              model={model}
+              onChange={(p, m) => {
+                setProvider(p);
+                setModel(m);
+              }}
+            />
             {embeddingOptions.length > 0 ? (
               <TextField
                 select

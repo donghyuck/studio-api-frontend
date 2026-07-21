@@ -349,6 +349,10 @@ export const reactAiApi = {
 
 export interface EmbeddingOption {
   profileId: string | null;
+  modelId?: string | null;
+  displayName?: string | null;
+  embeddingSpaceId?: string | null;
+  aliases?: string[];
   provider: string;
   providerType: string | null;
   model: string;

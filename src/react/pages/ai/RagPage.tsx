@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 import { useNavigate } from "react-router-dom";
 import {
   Alert,
@@ -69,12 +73,16 @@ import {
   getProvenanceBadges,
   hasProvenance,
   summarizeChunkQuality,
-  recommendChunkingActions
+  recommendChunkingActions,
+  getChunkNormalizationBadge,
+  hasNormalizedChunkInput,
+  getNormalizationSourceLabel
 } from "./chunkMetaHelper";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
+import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import { reactFilesApi } from "@/react/pages/files/api";
 import { reactObjectTypeApi } from "@/react/pages/objecttype/api";
 import type {
@@ -425,6 +433,9 @@ function SearchResultDetail({
     { key: "fallbackTo", label: "Fallback 대상 전략", value: metadata.fallbackTo ? formatStrategyName(metadata.fallbackTo) : undefined },
     { key: "fallbackReason", label: "Fallback 사유", value: metadata.fallbackReason },
     { key: "chunkQualityStatus", label: "품질 검증 상태", value: qualityStatus },
+    { key: "normalizedSnapshotUsed", label: "정규화 블록 사용 여부 (Normalized input)", value: metadata.normalizedSnapshotUsed != null ? (metadata.normalizedSnapshotUsed ? "True (Normalized blocks)" : "False (Markdown fallback)") : undefined },
+    { key: "normalizationStatus", label: "정규화 품질 상태 (Normalization status)", value: metadata.normalizationStatus },
+    { key: "normalizationSource", label: "정규화 경로 (Normalization source)", value: getNormalizationSourceLabel(metadata.normalizationSource) },
     { key: "blockifyFingerprint", label: "Blockify Fingerprint", value: metadata.blockifyFingerprint },
     { key: "promptVersion", label: "Prompt Version", value: metadata.promptVersion },
     { key: "generatorModel", label: "Generator Model", value: metadata.generatorModel },
@@ -449,26 +460,53 @@ function SearchResultDetail({
             {qualityStatus === "REVIEW_REQUIRED" && (
               <Chip size="small" color="error" label="Review required" sx={{ height: 20, fontSize: 10 }} />
             )}
+            {getChunkNormalizationBadge(metadata) && (
+              <Chip
+                size="small"
+                color={metadata.normalizedSnapshotUsed === true ? "success" : "default"}
+                variant="outlined"
+                label={getChunkNormalizationBadge(metadata)}
+                sx={{ height: 20, fontSize: 10 }}
+              />
+            )}
+            {metadata.normalizationStatus === "REVIEW_REQUIRED" && (
+              <Chip
+                size="small"
+                color="warning"
+                variant="filled"
+                label="Normalization review"
+                sx={{ height: 20, fontSize: 10 }}
+              />
+            )}
           </Stack>
         </Stack>
 
         <Box
-          component="pre"
           sx={{
             m: 0,
             maxHeight: 260,
             overflow: "auto",
-            whiteSpace: "pre-wrap",
-            overflowWrap: "anywhere",
             borderRadius: 2,
             bgcolor: "action.hover",
             p: 1,
-            fontFamily: (theme) => theme.typography.fontFamily,
-            fontSize: 12,
+            fontSize: 13,
             lineHeight: 1.7,
+            "& p": { my: 0.5 },
+            "& pre": { overflowX: "auto", bgcolor: "action.selected", p: 1, borderRadius: 1 },
+            "& code": { fontFamily: "monospace", fontSize: "0.88em" },
+            "& .katex-display": { overflowX: "auto", overflowY: "hidden", my: 1 },
+            "& .katex": { fontSize: "1.05em" },
           }}
         >
-          {content?.trim() || "검색 결과 row를 선택하면 전체 콘텐츠가 여기에 표시됩니다."}
+          {content?.trim() ? (
+            <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+              {content.trim()}
+            </ReactMarkdown>
+          ) : (
+            <Box component="span" sx={{ color: "text.disabled", fontStyle: "italic" }}>
+              검색 결과 row를 선택하면 전체 콘텐츠가 여기에 표시됩니다.
+            </Box>
+          )}
         </Box>
 
         {qualityIssues.length > 0 && (
@@ -2957,6 +2995,14 @@ export function RagPage() {
               </Typography>
             </Alert>
             <Stack direction={{ xs: "column", lg: "row" }} spacing={1.5} alignItems={{ lg: "flex-start" }}>
+               <AiProviderSelect
+                provider={provider}
+                model={model}
+                onChange={(p, m) => {
+                  setProvider(p);
+                  setModel(m);
+                }}
+              />
               {embeddingOptions.length > 0 ? (
                 <TextField
                   select
@@ -2986,32 +3032,6 @@ export function RagPage() {
                   })}
                 </TextField>
               ) : null}
-              <TextField
-                select
-                label="Provider"
-                value={provider}
-                onChange={(event) => {
-                  const nextProvider = event.target.value;
-                  setProvider(nextProvider);
-                  const match = providers.find((item) => item.name === nextProvider);
-                  setModel(match?.chat.model ?? "");
-                }}
-                fullWidth
-                size="small"
-              >
-                {providers.map((item) => (
-                  <MenuItem key={item.name} value={item.name}>
-                    {item.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                label="Model"
-                value={model}
-                onChange={(event) => setModel(event.target.value)}
-                fullWidth
-                size="small"
-              />
               <Tooltip title="검색 결과로 가져올 최대 Chunk 개수입니다. 값이 클수록 후보 문맥은 많아지지만 노이즈와 비용도 늘 수 있습니다.">
                 <TextField
                   label="topK"
@@ -3114,6 +3134,29 @@ export function RagPage() {
                   },
                 }}
               />
+              {/\$/.test(query) && (
+                <Box
+                  sx={{
+                    border: 1,
+                    borderColor: "primary.light",
+                    borderRadius: 1.5,
+                    px: 1.5,
+                    py: 0.75,
+                    bgcolor: "action.hover",
+                    fontSize: 13,
+                    "& .katex-display": { overflowX: "auto", overflowY: "hidden", my: 0.5 },
+                    "& .katex": { fontSize: "1.05em" },
+                    "& p": { m: 0 },
+                  }}
+                >
+                  <Typography variant="caption" color="primary" fontWeight={600} display="block" sx={{ mb: 0.5 }}>
+                    수식 미리보기
+                  </Typography>
+                  <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {query}
+                  </ReactMarkdown>
+                </Box>
+              )}
               <Accordion variant="outlined" disableGutters>
                 <AccordionSummary expandIcon={<ExpandMoreOutlined />}>
                   <Stack spacing={0.25}>
@@ -3305,11 +3348,18 @@ export function RagPage() {
                           py: 1,
                           bgcolor: message.role === "user" ? "primary.main" : "action.hover",
                           color: message.role === "user" ? "primary.contrastText" : "text.primary",
-                          whiteSpace: "pre-wrap",
                           fontSize: 13,
+                          lineHeight: 1.75,
+                          "& p": { m: 0, mb: 0.5 },
+                          "& p:last-child": { mb: 0 },
+                          "& strong": { fontWeight: 700 },
+                          "& .katex-display": { overflowX: "auto", overflowY: "hidden", my: 0.75 },
+                          "& .katex": { fontSize: "1.05em" },
                         }}
                       >
-                        {message.content}
+                        <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+                          {message.content}
+                        </ReactMarkdown>
                       </Box>
                     ))
                   )}

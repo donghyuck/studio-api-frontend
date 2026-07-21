@@ -3,6 +3,8 @@ import { apiRequest } from "@/react/query/fetcher";
 import { apiClient } from "@/react/api/client";
 import type { RagIndexRequestDto } from "@/types/studio/ai";
 import type { AttachmentDto } from "@/types/studio/files";
+import { API_BASE_URL } from "@/config/backend";
+import { useAuthStore } from "@/react/auth/store";
 
 export interface PaginatedFilesResponse {
   content: AttachmentDto[];
@@ -214,6 +216,18 @@ export interface MarkdownDocumentRevisionDto {
   lastCompletedPage?: number;
 }
 
+export interface MarkdownProvenanceDto {
+  locatorId: string;
+  locatorType: string;
+  locatorNo?: number | null;
+  page?: number | null;
+  slide?: number | null;
+  bbox?: number[] | null;
+  sourceRef?: string | null;
+  metadataJson?: string | null;
+  confidence?: number | null;
+}
+
 export interface MarkdownLocatorDto {
   locatorId: string;
   documentId: string;
@@ -235,6 +249,7 @@ export interface MarkdownResourceDto {
   contentType: string;
   sizeBytes: number;
   resourceType: string;
+  metadataJson?: any;
 }
 
 export interface MarkdownDocumentFromAttachmentResponse {
@@ -242,6 +257,60 @@ export interface MarkdownDocumentFromAttachmentResponse {
   revision: MarkdownDocumentRevisionDto;
   reused: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// OCR Mode types & helpers
+// ---------------------------------------------------------------------------
+
+export type OcrMode = "AUTO" | "FORCE" | "DISABLED";
+
+export interface MarkdownOcrMetadata {
+  ocrMode?: OcrMode;
+  ocrRequired?: boolean;
+  ocrRequestedBy?: "NONE" | "CLIENT" | "CLIENT_DISABLED" | "ANALYZER_RECOMMENDED";
+  ocrDecisionReason?: string;
+  ocrApplied?: boolean;
+  ocrLanguage?: string;
+  ocrEngine?: string;
+  pdfExtractionEngine?: string;
+  ocrUnavailableReason?: string;
+  pdfOcrFallback?: boolean;
+  recommendedRoute?: string;
+  actualRoute?: string;
+  pdfRecommendedRoute?: string;
+  pdfActualRoute?: string;
+  markdownQualityStatus?: string;
+  mathVisionCorrectionRequested?: boolean;
+  mathVisionCorrectionApplied?: boolean;
+  mathVisionCorrectionProvider?: string;
+  mathVisionFormulaBlockCount?: number;
+  mathVisionCorrectionSkipReason?: string;
+}
+
+export function shouldSuggestOcrReextract(metadata: MarkdownOcrMetadata): boolean {
+  return (
+    metadata.ocrDecisionReason === "OCR_REQUIRES_CLIENT_FORCE" ||
+    metadata.ocrRequestedBy === "ANALYZER_RECOMMENDED" ||
+    (metadata.recommendedRoute === "MATH_DOCUMENT" && metadata.actualRoute !== "MATH_DOCUMENT") ||
+    (metadata.pdfRecommendedRoute === "MATH_DOCUMENT" && metadata.pdfActualRoute !== "MATH_DOCUMENT")
+  );
+}
+
+export function ocrBadgeLabel(metadata: MarkdownOcrMetadata): string {
+  if (metadata.ocrApplied) return "OCR 적용됨";
+  if (metadata.ocrMode === "DISABLED") return "OCR 제외됨";
+  if (shouldSuggestOcrReextract(metadata)) return "OCR 권장됨";
+  return "기본 추출";
+}
+
+export function ocrBadgeColor(metadata: MarkdownOcrMetadata): "success" | "warning" | "info" | "default" {
+  if (metadata.ocrApplied) return "success";
+  if (metadata.ocrMode === "DISABLED") return "default";
+  if (shouldSuggestOcrReextract(metadata)) return "warning";
+  return "default";
+}
+
+// ---------------------------------------------------------------------------
 
 export interface MarkdownDocumentFromAttachmentRequest {
   attachmentId: number;
@@ -257,10 +326,16 @@ export interface MarkdownDocumentFromAttachmentRequest {
   blockifyLlmModel?: string | null;
   blockifyPiiMaskingEnabled?: boolean | null;
   embeddingProfileId?: string | null;
+  embeddingModelId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
   skillExtractionMode?: 'regex' | 'llm' | null;
+  ocrMode?: OcrMode | null;
+  ocrLanguage?: string | null;
+  ocrRequired?: boolean | null;
+  mathVisionCorrection?: boolean | null;
+  documentProfile?: string | null;
 }
 
 export interface MarkdownDocumentReextractRequest {
@@ -275,10 +350,66 @@ export interface MarkdownDocumentReextractRequest {
   blockifyLlmModel?: string | null;
   blockifyPiiMaskingEnabled?: boolean | null;
   embeddingProfileId?: string | null;
+  embeddingModelId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
   skillExtractionMode?: 'regex' | 'llm' | null;
+  ocrMode?: OcrMode | null;
+  ocrLanguage?: string | null;
+  ocrRequired?: boolean | null;
+  mathVisionCorrection?: boolean | null;
+  documentProfile?: string | null;
+}
+
+export interface MarkdownDocumentProfileDescriptor {
+  id: string;
+  displayName: string;
+  description: string;
+  version: string;
+  costTier: string;
+  supportedFormats: string[];
+  chunkingStrategy: string;
+  chunkMaxSize: number;
+  chunkOverlap: number;
+  chunkUnit: string;
+  ocrRequired: boolean;
+  ocrLanguage: string | null;
+  ocrMode: string;
+  mathVisionCorrection: boolean;
+}
+
+export interface MarkdownPipelineOptionsDto {
+  runChunking: boolean;
+  runRagIndex: boolean;
+  runSkillExtraction: boolean;
+  chunkingStrategy: string | null;
+  chunkMaxSize: number | null;
+  chunkOverlap: number | null;
+  chunkUnit: string | null;
+  blockifyLlmProvider: string | null;
+  blockifyLlmModel: string | null;
+  blockifyPiiMaskingEnabled: boolean | null;
+  embeddingProfileId: string | null;
+  embeddingProvider: string | null;
+  embeddingModel: string | null;
+  embeddingDimension: number | null;
+  ocrRequired: boolean | null;
+  ocrLanguage: string | null;
+  ocrMode: string | null;
+  mathVisionCorrection: boolean | null;
+  requestedDocumentProfile?: string | null;
+  resolvedDocumentProfile?: string | null;
+  documentProfileVersion?: string | null;
+}
+
+export interface MarkdownProcessingPlan {
+  requestedDocumentProfile: string | null;
+  resolvedDocumentProfile: string | null;
+  profileVersion: string | null;
+  resolutionReason: string | null;
+  costTier: string;
+  effectiveOptions: MarkdownPipelineOptionsDto;
 }
 
 export type MarkdownPipelineExecutionStatus =
@@ -320,10 +451,15 @@ export interface MarkdownResumeRequest {
   blockifyLlmModel?: string | null;
   blockifyPiiMaskingEnabled?: boolean | null;
   embeddingProfileId?: string;
+  embeddingModelId?: string;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
   skillExtractionMode?: 'regex' | 'llm' | null;
+  ocrMode?: OcrMode;
+  ocrLanguage?: string;
+  ocrRequired?: boolean;
+  mathVisionCorrection?: boolean;
 }
 
 export interface MarkdownResumeResultDto {
@@ -336,6 +472,7 @@ export interface MarkdownResumeResultDto {
 
 export interface MarkdownRagReindexRequest {
   embeddingProfileId?: string | null;
+  embeddingModelId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
@@ -417,6 +554,14 @@ export const reactMarkdownDocumentApi = {
       data: request,
     });
   },
+  async getProfiles(): Promise<MarkdownDocumentProfileDescriptor[]> {
+    return apiRequest<MarkdownDocumentProfileDescriptor[]>("get", "/api/markdown-documents/profiles");
+  },
+  async getProcessingPlan(request: MarkdownDocumentFromAttachmentRequest): Promise<MarkdownProcessingPlan> {
+    return apiRequest<MarkdownProcessingPlan>("post", "/api/markdown-documents/processing-plan", {
+      data: request,
+    });
+  },
   async getDocument(documentId: string): Promise<MarkdownDocumentDto> {
     return apiRequest<MarkdownDocumentDto>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}`);
   },
@@ -463,6 +608,9 @@ export const reactMarkdownDocumentApi = {
   async getLocators(documentId: string): Promise<MarkdownLocatorDto[]> {
     return apiRequest<MarkdownLocatorDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/locators`);
   },
+  async getProvenance(documentId: string): Promise<MarkdownProvenanceDto[]> {
+    return apiRequest<MarkdownProvenanceDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/provenance`);
+  },
   async getResources(documentId: string): Promise<MarkdownResourceDto[]> {
     return apiRequest<MarkdownResourceDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/resources`);
   },
@@ -490,6 +638,56 @@ export const reactMarkdownDocumentApi = {
     return apiRequest<IdeaBlockMergeApplyBatchResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/ideablocks/merge-auto-apply`, {
       data: request,
     });
+  },
+
+  async getMarkdownText(documentId: string, revisionId?: string): Promise<string> {
+    const path = revisionId
+      ? `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/markdown`
+      : `/api/markdown-documents/${encodeURIComponent(documentId)}/markdown`;
+    const token = useAuthStore.getState().token;
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: {
+        Accept: "text/markdown",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const message = response.headers.get("content-type")?.includes("application/json")
+        ? (await response.json().catch(() => ({})))?.message
+        : await response.text().catch(() => "");
+      throw new Error(message || `Markdown fetch failed: ${response.status}`);
+    }
+    return response.text();
+  },
+
+  async downloadMarkdown(documentId: string, revisionId?: string, filename?: string): Promise<void> {
+    const path = revisionId
+      ? `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/markdown`
+      : `/api/markdown-documents/${encodeURIComponent(documentId)}/markdown`;
+    const token = useAuthStore.getState().token;
+    const response = await fetch(`${API_BASE_URL}${path}?download=true`, {
+      headers: {
+        Accept: "text/markdown",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: "include",
+    });
+    if (!response.ok) {
+      const message = response.headers.get("content-type")?.includes("application/json")
+        ? (await response.json().catch(() => ({})))?.message
+        : await response.text().catch(() => "");
+      throw new Error(message || `Markdown download failed: ${response.status}`);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename || `${documentId}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
   },
   async createEvaluation(request: RagEvaluationRequest): Promise<RagEvaluationRunResponse> {
     return apiRequest<RagEvaluationRunResponse>("post", "/api/ai/chat/rag/evaluations", {
@@ -559,20 +757,43 @@ export interface MarkdownPipelineEstimateRequest {
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
+  skillExtractionMode?: 'regex' | 'llm' | null;
+  ocrMode?: OcrMode | null;
+  ocrLanguage?: string | null;
+  ocrRequired?: boolean | null;
+  mathVisionCorrection?: boolean | null;
+  documentProfile?: string | null;
 }
 
 export interface MarkdownPipelineEstimateResponse {
+  documentId?: string | null;
+  revisionId?: string | null;
+  sourceFileName?: string | null;
+  sourceFormat?: string | null;
+  sourceSizeBytes?: number;
+  pageCount?: number;
+  markdownLength?: number;
+  estimatedChunkCount: number;
+  estimatedEmbeddingRequests: number;
+  embeddingBatchSize: number;
+  estimateBasis?: 'SOURCE_SIZE' | 'REVISION_CONTENT' | string;
+  confidence?: 'LOW' | 'MEDIUM' | 'HIGH' | string;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
   recommended: {
     chunkingStrategy?: string;
     chunkMaxSize?: number;
     chunkOverlap?: number;
     chunkUnit?: string;
-    embeddingProfileId?: string;
-    embeddingProvider?: string;
-    embeddingModel?: string;
-    embeddingDimension?: number;
+    estimatedChunkCount?: number;
+    estimatedEmbeddingRequests?: number;
   };
+  embedding?: {
+    profileId?: string | null;
+    provider?: string | null;
+    model?: string | null;
+    dimension?: number | null;
+  } | null;
+  warnings?: Array<{ code: string; message: string }>;
   reason?: string | null;
 }
 
