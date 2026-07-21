@@ -326,6 +326,7 @@ export interface MarkdownDocumentFromAttachmentRequest {
   blockifyLlmModel?: string | null;
   blockifyPiiMaskingEnabled?: boolean | null;
   embeddingProfileId?: string | null;
+  embeddingModelId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
@@ -349,6 +350,7 @@ export interface MarkdownDocumentReextractRequest {
   blockifyLlmModel?: string | null;
   blockifyPiiMaskingEnabled?: boolean | null;
   embeddingProfileId?: string | null;
+  embeddingModelId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
@@ -449,6 +451,7 @@ export interface MarkdownResumeRequest {
   blockifyLlmModel?: string | null;
   blockifyPiiMaskingEnabled?: boolean | null;
   embeddingProfileId?: string;
+  embeddingModelId?: string;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
@@ -469,6 +472,7 @@ export interface MarkdownResumeResultDto {
 
 export interface MarkdownRagReindexRequest {
   embeddingProfileId?: string | null;
+  embeddingModelId?: string | null;
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
@@ -762,17 +766,34 @@ export interface MarkdownPipelineEstimateRequest {
 }
 
 export interface MarkdownPipelineEstimateResponse {
+  documentId?: string | null;
+  revisionId?: string | null;
+  sourceFileName?: string | null;
+  sourceFormat?: string | null;
+  sourceSizeBytes?: number;
+  pageCount?: number;
+  markdownLength?: number;
+  estimatedChunkCount: number;
+  estimatedEmbeddingRequests: number;
+  embeddingBatchSize: number;
+  estimateBasis?: 'SOURCE_SIZE' | 'REVISION_CONTENT' | string;
+  confidence?: 'LOW' | 'MEDIUM' | 'HIGH' | string;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
   recommended: {
     chunkingStrategy?: string;
     chunkMaxSize?: number;
     chunkOverlap?: number;
     chunkUnit?: string;
-    embeddingProfileId?: string;
-    embeddingProvider?: string;
-    embeddingModel?: string;
-    embeddingDimension?: number;
+    estimatedChunkCount?: number;
+    estimatedEmbeddingRequests?: number;
   };
+  embedding?: {
+    profileId?: string | null;
+    provider?: string | null;
+    model?: string | null;
+    dimension?: number | null;
+  } | null;
+  warnings?: Array<{ code: string; message: string }>;
   reason?: string | null;
 }
 

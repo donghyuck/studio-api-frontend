@@ -74,6 +74,7 @@ import {
   type RetrievalPolicySummaryDto,
   type MarkdownDocumentProfileDescriptor,
   type MarkdownProcessingPlan,
+  type MarkdownPipelineEstimateResponse,
   type MarkdownDocumentReextractRequest,
 } from "@/react/pages/files/api";
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
@@ -295,6 +296,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [profiles, setProfiles] = useState<MarkdownDocumentProfileDescriptor[]>([]);
   const [documentProfile, setDocumentProfile] = useState<string>("AUTO");
   const [processingPlan, setProcessingPlan] = useState<MarkdownProcessingPlan | null>(null);
+  const [pipelineEstimate, setPipelineEstimate] = useState<MarkdownPipelineEstimateResponse | null>(null);
+  const [pipelineEstimateLoading, setPipelineEstimateLoading] = useState(false);
+  const [pipelineEstimateError, setPipelineEstimateError] = useState<string | null>(null);
+  const pipelineEstimateRequestId = useRef(0);
 
   // Overrides
   const [ocrOverride, setOcrOverride] = useState<boolean | null>(null);
@@ -318,6 +323,16 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const ocrMode: OcrMode = ocrOverride === true ? "FORCE" : ocrOverride === false ? "DISABLED" : "AUTO";
   const ocrLanguage = ocrLanguageOverride ?? processingPlan?.effectiveOptions?.ocrLanguage ?? "";
   const mathVisionCorrection = mathVisionCorrectionOverride ?? processingPlan?.effectiveOptions?.mathVisionCorrection ?? false;
+  const hasEstimatedChunkingRecommendation = useMemo(() => {
+    const recommended = pipelineEstimate?.recommended;
+    if (!runChunking || !recommended) return false;
+    return Boolean(
+      (recommended.chunkingStrategy && recommended.chunkingStrategy !== chunkingStrategy) ||
+      (recommended.chunkMaxSize != null && recommended.chunkMaxSize !== Number(chunkMaxSize)) ||
+      (recommended.chunkOverlap != null && recommended.chunkOverlap !== Number(chunkOverlap)) ||
+      (recommended.chunkUnit && recommended.chunkUnit !== chunkUnit)
+    );
+  }, [pipelineEstimate, runChunking, chunkingStrategy, chunkMaxSize, chunkOverlap, chunkUnit]);
 
   // Load profiles
   useEffect(() => {
@@ -352,7 +367,9 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         skillExtractionMode: skillExtractionMode || null,
       };
 
-      if (selectedEmbeddingOption?.profileId) {
+      if (selectedEmbeddingOption?.modelId) {
+        payload.embeddingModelId = selectedEmbeddingOption.modelId;
+      } else if (selectedEmbeddingOption?.profileId) {
         payload.embeddingProfileId = selectedEmbeddingOption.profileId;
       } else if (selectedEmbeddingOption) {
         payload.embeddingProvider = selectedEmbeddingOption.provider || null;
@@ -564,10 +581,6 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       const res = await reactAiApi.getEmbeddingOptions();
       const opts = res.options ?? [];
       setEmbeddingOptions(opts);
-      const defaultOpt = opts.find((o) => o.defaultProfile) ?? opts.find((o) => o.defaultProvider) ?? opts[0];
-      if (defaultOpt) {
-        setSelectedEmbeddingOption(defaultOpt);
-      }
     } catch {
       // Ignore
     }
@@ -637,11 +650,9 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     "blockify": "Blockify / IdeaBlock",
   };
 
-  const embeddingOptionKey = (opt: EmbeddingOption) => opt.profileId || `${opt.provider}:${opt.model}`;
+  const embeddingOptionKey = (opt: EmbeddingOption) => opt.modelId || opt.profileId || `${opt.provider}:${opt.model}`;
   const embeddingOptionLabel = (opt: EmbeddingOption) =>
-    opt.profileId
-      ? `${opt.profileId} (${opt.provider} – ${opt.model})`
-      : `${opt.provider} – ${opt.model} (${opt.dimension}d)`;
+    opt.displayName || `${opt.model} (${opt.dimension} dimensions)`;
 
   useEffect(() => {
     if (markdownStatus === "COMPLETED" && documentId) {
@@ -952,6 +963,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       setRunRagIndex(true);
       setRunSkillExtraction(false);
       setSkillExtractionMode("");
+      setSelectedEmbeddingOption(null);
     }
 
     let strategy = opts && typeof opts.chunkingStrategy === "string" && opts.chunkingStrategy ? opts.chunkingStrategy : null;
@@ -997,10 +1009,15 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       model = latestRagJob.embeddingModel || null;
     }
 
+    if (!profileId && !(provider && model)) {
+      setSelectedEmbeddingOption(null);
+    }
+
     if (embeddingOptions.length > 0 && (profileId || (provider && model))) {
       let matched: EmbeddingOption | undefined;
       if (profileId) {
-        matched = embeddingOptions.find((o) => o.profileId === profileId);
+        matched = embeddingOptions.find((o) =>
+          o.modelId === profileId || o.profileId === profileId || o.aliases?.includes(profileId));
       }
       if (!matched && provider && model) {
         matched = embeddingOptions.find((o) => o.provider === provider && o.model === model);
@@ -1496,6 +1513,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       }
     }
 
+    if (runRagIndex && !forEstimate && !selectedEmbeddingOption) {
+      throw new Error("RAG 색인에 사용할 임베딩 모델을 선택해야 합니다.");
+    }
+
     const payload: Record<string, any> = {
       documentProfile: documentProfile || "AUTO",
       runChunking,
@@ -1521,7 +1542,12 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     }
 
     if (runRagIndex || forEstimate) {
-      if (selectedEmbeddingOption?.profileId) {
+      if (selectedEmbeddingOption?.modelId) {
+        payload.embeddingModelId = selectedEmbeddingOption.modelId;
+        payload.embeddingProvider = null;
+        payload.embeddingModel = null;
+        payload.embeddingDimension = selectedEmbeddingOption.dimension ?? null;
+      } else if (selectedEmbeddingOption?.profileId) {
         payload.embeddingProfileId = selectedEmbeddingOption.profileId;
         payload.embeddingProvider = null;
         payload.embeddingModel = null;
@@ -1547,27 +1573,21 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     return payload;
   };
 
-  function getErrorMessageByStatus(status: number, originalMsg: string): string {
-    if (status === 400) return `옵션 조합 오류: ${originalMsg}`;
-    if (status === 401 || status === 403) return `권한이 부족합니다.`;
-    if (status === 404) return `대상을 찾을 수 없습니다.`;
-    if (status === 409) return `상태 충돌 발생 (처리 중이거나 이미 완료됨)`;
-    if (status >= 500) return `서버 또는 파이프라인 장애 발생.`;
-    return originalMsg;
-  }
+  useEffect(() => {
+    const requestId = ++pipelineEstimateRequestId.current;
+    if (!open || !attachmentId) {
+      setPipelineEstimate(null);
+      setPipelineEstimateLoading(false);
+      setPipelineEstimateError(null);
+      return;
+    }
 
-  async function runPipelineWithEstimate(executeAction: (payloadOverride?: any) => Promise<void>) {
-    const metadata = (ragMetadata || {}) as any;
-    const shouldEstimate =
-      (file?.size ?? 0) >= 10 * 1024 * 1024 ||
-      (metadata.pageCount ?? 0) >= 100 ||
-      (metadata.markdownLength ?? 0) >= 1024 * 1024;
-
-    if (shouldEstimate) {
-      setIsExtracting(true);
+    setPipelineEstimateLoading(true);
+    setPipelineEstimateError(null);
+    const timer = window.setTimeout(async () => {
       try {
         const payload = buildPayload(true);
-        const estimateReq = {
+        const estimateRequest = {
           runChunking,
           runRagIndex,
           runSkillExtraction,
@@ -1589,127 +1609,66 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
           documentProfile: payload.documentProfile,
           skillExtractionMode: payload.skillExtractionMode,
         };
-
-        let estimateRes;
-        if (!markdownDocument?.currentRevisionId) {
-          estimateRes = await reactMarkdownDocumentApi.estimatePipelineByAttachment(attachmentId, estimateReq);
-        } else {
-          estimateRes = await reactMarkdownDocumentApi.estimatePipeline(markdownDocument.documentId, estimateReq);
+        const estimate = markdownDocument?.currentRevisionId
+          ? await reactMarkdownDocumentApi.estimatePipeline(markdownDocument.documentId, estimateRequest)
+          : await reactMarkdownDocumentApi.estimatePipelineByAttachment(attachmentId, estimateRequest);
+        if (pipelineEstimateRequestId.current === requestId) {
+          setPipelineEstimate(estimate);
         }
-
-        if (estimateRes && estimateRes.recommended) {
-          const rec = estimateRes.recommended;
-          if (rec.chunkingStrategy) setChunkingStrategyOverride(rec.chunkingStrategy);
-          if (rec.chunkMaxSize != null) setChunkMaxSizeOverride(rec.chunkMaxSize);
-          if (rec.chunkOverlap != null) setChunkOverlapOverride(rec.chunkOverlap);
-          if (rec.chunkUnit) setChunkUnitOverride(rec.chunkUnit);
-
-          if (rec.embeddingProfileId) {
-            const opt = embeddingOptions.find(o => o.profileId === rec.embeddingProfileId);
-            if (opt) setSelectedEmbeddingOption(opt);
-          } else if (rec.embeddingProvider && rec.embeddingModel) {
-            const opt = embeddingOptions.find(o => o.provider === rec.embeddingProvider && o.model === rec.embeddingModel);
-            if (opt) setSelectedEmbeddingOption(opt);
-          }
-
-          const newPayload = {
-            runChunking,
-            runRagIndex,
-            runSkillExtraction,
-            chunkingStrategy: rec.chunkingStrategy ?? payload.chunkingStrategy,
-            chunkMaxSize: rec.chunkMaxSize ?? payload.chunkMaxSize,
-            chunkOverlap: rec.chunkOverlap ?? payload.chunkOverlap,
-            chunkUnit: rec.chunkUnit ?? payload.chunkUnit,
-            embeddingProfileId: rec.embeddingProfileId ?? payload.embeddingProfileId,
-            embeddingProvider: rec.embeddingProvider ?? payload.embeddingProvider,
-            embeddingModel: rec.embeddingModel ?? payload.embeddingModel,
-            embeddingDimension: rec.embeddingDimension ?? payload.embeddingDimension,
-          };
-
-          await executeAction(newPayload);
-          return;
+      } catch (error) {
+        if (pipelineEstimateRequestId.current === requestId) {
+          setPipelineEstimate(null);
+          setPipelineEstimateError(resolveAxiosError(error));
         }
-      } catch (err: any) {
-        console.warn("Pipeline estimation failed, proceeding without estimate:", err);
-        const status = err?.response?.status;
-        const data = err?.response?.data;
-        const code = data?.code || data?.message;
-        if (code === "markdown.source.too-large" || status === 413) {
-          toast.error("허용 크기를 초과했습니다.");
-          setIsExtracting(false);
-          return;
-        }
-        // 추산 실패는 치명적 오류가 아님 - 추산 없이 계속 실행
       } finally {
-        setIsExtracting(false);
-      }
-    }
-
-    await executeAction();
-  }
-
-  async function handleManualEstimate() {
-    setIsExtracting(true);
-    try {
-      const payload = buildPayload(true);
-      const estimateReq = {
-        runChunking,
-        runRagIndex,
-        runSkillExtraction,
-        chunkingStrategy: payload.chunkingStrategy,
-        chunkMaxSize: payload.chunkMaxSize,
-        chunkOverlap: payload.chunkOverlap,
-        chunkUnit: payload.chunkUnit,
-        embeddingProfileId: payload.embeddingProfileId,
-        embeddingProvider: payload.embeddingProvider,
-        embeddingModel: payload.embeddingModel,
-        embeddingDimension: payload.embeddingDimension,
-        blockifyLlmProvider: payload.blockifyLlmProvider,
-        blockifyLlmModel: payload.blockifyLlmModel,
-        blockifyPiiMaskingEnabled: payload.blockifyPiiMaskingEnabled,
-        ocrRequired: payload.ocrRequired,
-        ocrMode: payload.ocrMode,
-        ocrLanguage: payload.ocrLanguage,
-        mathVisionCorrection: payload.mathVisionCorrection,
-        documentProfile: payload.documentProfile,
-        skillExtractionMode: payload.skillExtractionMode,
-      };
-
-      let estimateRes;
-      if (!markdownDocument?.currentRevisionId) {
-        estimateRes = await reactMarkdownDocumentApi.estimatePipelineByAttachment(attachmentId, estimateReq);
-      } else {
-        estimateRes = await reactMarkdownDocumentApi.estimatePipeline(markdownDocument.documentId, estimateReq);
-      }
-
-      if (estimateRes) {
-        const recommended = estimateRes.recommended || {};
-        let resultMsg = `[부하 추산 결과]\n- 위험도 (Risk Level): ${estimateRes.riskLevel}\n`;
-        if (estimateRes.reason) {
-          resultMsg += `- 사유: ${estimateRes.reason}\n`;
+        if (pipelineEstimateRequestId.current === requestId) {
+          setPipelineEstimateLoading(false);
         }
-
-        if (recommended.chunkingStrategy) setChunkingStrategyOverride(recommended.chunkingStrategy);
-        if (recommended.chunkMaxSize != null) setChunkMaxSizeOverride(recommended.chunkMaxSize);
-        if (recommended.chunkOverlap != null) setChunkOverlapOverride(recommended.chunkOverlap);
-        if (recommended.chunkUnit) setChunkUnitOverride(recommended.chunkUnit);
-
-        if (recommended.embeddingProfileId) {
-          const opt = embeddingOptions.find(o => o.profileId === recommended.embeddingProfileId);
-          if (opt) setSelectedEmbeddingOption(opt);
-        } else if (recommended.embeddingProvider && recommended.embeddingModel) {
-          const opt = embeddingOptions.find(o => o.provider === recommended.embeddingProvider && o.model === recommended.embeddingModel);
-          if (opt) setSelectedEmbeddingOption(opt);
-        }
-
-        toast.success("추천 설정이 적용되었습니다.");
-        window.alert(resultMsg + `\n추천 설정이 적용되었습니다.`);
       }
-    } catch (err: any) {
-      toast.error("부하 추산 실패: " + resolveAxiosError(err));
-    } finally {
-      setIsExtracting(false);
-    }
+    }, 450);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    open,
+    attachmentId,
+    markdownDocument?.currentRevisionId,
+    markdownDocument?.documentId,
+    documentProfile,
+    runChunking,
+    runRagIndex,
+    runSkillExtraction,
+    skillExtractionMode,
+    chunkingStrategyOverride,
+    chunkMaxSizeOverride,
+    chunkOverlapOverride,
+    chunkUnitOverride,
+    blockifyLlmProvider,
+    blockifyLlmModel,
+    blockifyPiiMaskingEnabled,
+    ocrOverride,
+    ocrLanguageOverride,
+    mathVisionCorrectionOverride,
+    selectedEmbeddingOption,
+  ]);
+
+  const applyEstimatedChunkingRecommendation = () => {
+    const recommended = pipelineEstimate?.recommended;
+    if (!recommended) return;
+    if (recommended.chunkingStrategy) setChunkingStrategyOverride(recommended.chunkingStrategy);
+    if (recommended.chunkMaxSize != null) setChunkMaxSizeOverride(recommended.chunkMaxSize);
+    if (recommended.chunkOverlap != null) setChunkOverlapOverride(recommended.chunkOverlap);
+    if (recommended.chunkUnit) setChunkUnitOverride(recommended.chunkUnit);
+    setUserHasOverriddenChunking(true);
+    toast.success("권장 청킹 설정을 적용했습니다.");
+  };
+
+  function getErrorMessageByStatus(status: number, originalMsg: string): string {
+    if (status === 400) return `옵션 조합 오류: ${originalMsg}`;
+    if (status === 401 || status === 403) return `권한이 부족합니다.`;
+    if (status === 404) return `대상을 찾을 수 없습니다.`;
+    if (status === 409) return `상태 충돌 발생 (처리 중이거나 이미 완료됨)`;
+    if (status >= 500) return `서버 또는 파이프라인 장애 발생.`;
+    return originalMsg;
   }
 
   async function handleExtractMarkdown() {
@@ -1718,7 +1677,9 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     // Check cost/time warning
     const isHighCost =
       processingPlan?.costTier === "HIGH" ||
-      processingPlan?.effectiveOptions?.mathVisionCorrection === true;
+      processingPlan?.effectiveOptions?.mathVisionCorrection === true ||
+      pipelineEstimate?.riskLevel === "HIGH" ||
+      pipelineEstimate?.riskLevel === "VERY_HIGH";
     if (isHighCost) {
       const ok = window.confirm(
         "이 설정(HIGH 비용 등급 또는 Vision 수식 보정 활성화)은 비용이 많이 발생하거나 처리 시간이 길어질 수 있습니다. 그래도 진행하시겠습니까?"
@@ -1763,7 +1724,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       }
     };
 
-    await runPipelineWithEstimate(execute);
+    await execute();
   }
 
   async function handleRecreateMarkdownFromCanceled() {
@@ -1835,7 +1796,9 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     // Check cost/time warning
     const isHighCost =
       processingPlan?.costTier === "HIGH" ||
-      processingPlan?.effectiveOptions?.mathVisionCorrection === true;
+      processingPlan?.effectiveOptions?.mathVisionCorrection === true ||
+      pipelineEstimate?.riskLevel === "HIGH" ||
+      pipelineEstimate?.riskLevel === "VERY_HIGH";
     if (isHighCost) {
       const ok = window.confirm(
         "이 설정(HIGH 비용 등급 또는 Vision 수식 보정 활성화)은 비용이 많이 발생하거나 처리 시간이 길어질 수 있습니다. 그래도 진행하시겠습니까?"
@@ -1872,7 +1835,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       }
     };
 
-    await runPipelineWithEstimate(execute);
+    await execute();
   }
 
   async function handleCancelMarkdown() {
@@ -1959,7 +1922,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       toast.error("RAG 색인을 재지정할 임베딩 옵션을 선택해 주세요.");
       return;
     }
-    const label = selectedEmbeddingOption.profileId || `${selectedEmbeddingOption.provider}:${selectedEmbeddingOption.model}`;
+    const label = selectedEmbeddingOption.displayName || selectedEmbeddingOption.modelId
+      || selectedEmbeddingOption.profileId || `${selectedEmbeddingOption.provider}:${selectedEmbeddingOption.model}`;
     const ok = window.confirm(`선택한 임베딩(${label})으로 RAG 색인을 재지정하시겠습니까?`);
     if (!ok) return;
 
@@ -1969,7 +1933,12 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         runSkillExtraction: runSkillExtraction,
       };
 
-      if (selectedEmbeddingOption.profileId) {
+      if (selectedEmbeddingOption.modelId) {
+        payload.embeddingModelId = selectedEmbeddingOption.modelId;
+        payload.embeddingProvider = null;
+        payload.embeddingModel = null;
+        payload.embeddingDimension = selectedEmbeddingOption.dimension ?? null;
+      } else if (selectedEmbeddingOption.profileId) {
         payload.embeddingProfileId = selectedEmbeddingOption.profileId;
         payload.embeddingProvider = null;
         payload.embeddingModel = null;
@@ -3159,6 +3128,56 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                       </Grid>
                     </Grid>
 
+                    {runRagIndex && (
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 0.75, fontWeight: 700, fontSize: 13.5 }}>
+                          RAG 검색 모델 <Box component="span" sx={{ color: "error.main" }}>*</Box>
+                        </Typography>
+                        {embeddingOptions.length > 0 ? (
+                          <TextField
+                            select
+                            label="임베딩 모델 선택"
+                            size="small"
+                            fullWidth
+                            required
+                            value={selectedEmbeddingOption ? embeddingOptionKey(selectedEmbeddingOption) : ""}
+                            onChange={(e) => {
+                              const matched = embeddingOptions.find((o) => embeddingOptionKey(o) === e.target.value);
+                              setSelectedEmbeddingOption(matched ?? null);
+                            }}
+                            disabled={controlsDisabled || isCanceledRevision || isRagCompleted}
+                            error={!selectedEmbeddingOption}
+                            helperText={
+                              selectedEmbeddingOption
+                                ? `${selectedEmbeddingOption.provider} · ${selectedEmbeddingOption.model} · dimension ${selectedEmbeddingOption.dimension ?? "-"}`
+                                : "색인과 검색 질의에 동일하게 사용할 모델을 명시적으로 선택하세요."
+                            }
+                          >
+                            <MenuItem value="" disabled>임베딩 모델을 선택하세요</MenuItem>
+                            {embeddingOptions.map((opt) => (
+                              <MenuItem key={embeddingOptionKey(opt)} value={embeddingOptionKey(opt)}>
+                                {embeddingOptionLabel(opt)}
+                              </MenuItem>
+                            ))}
+                          </TextField>
+                        ) : (
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <CircularProgress size={14} />
+                            <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>
+                              임베딩 모델을 불러오는 중입니다.
+                            </Typography>
+                          </Stack>
+                        )}
+                        {selectedEmbeddingOption && (
+                          <Alert severity="info" icon={false} sx={{ mt: 1, py: 0.25, px: 1.25 }}>
+                            <Typography variant="caption">
+                              선택한 모델은 이 문서의 벡터 색인 기준이 됩니다. 모델을 변경하면 전체 재색인이 필요합니다.
+                            </Typography>
+                          </Alert>
+                        )}
+                      </Box>
+                    )}
+
                     {/* 접힌 고급 설정 영역 Accordion */}
                     <Accordion disableGutters variant="outlined" sx={{ mt: 2, borderRadius: 1.5, overflow: "hidden" }}>
                       <AccordionSummary expandIcon={<ExpandMoreOutlined fontSize="small" />}>
@@ -3405,47 +3424,6 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
                         <Divider sx={{ my: 1.5 }} />
 
-                        {/* RAG 색인 설정 */}
-                        {runRagIndex && (
-                          <Box sx={{ mb: 2 }}>
-                            <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, fontSize: 13 }}>
-                              RAG 색인 설정 (임베딩)
-                            </Typography>
-                            {embeddingOptions.length > 0 ? (
-                              <TextField
-                                select
-                                label="임베딩 모델 / 프로파일"
-                                size="small"
-                                fullWidth
-                                value={selectedEmbeddingOption ? embeddingOptionKey(selectedEmbeddingOption) : ""}
-                                onChange={(e) => {
-                                  const matched = embeddingOptions.find((o) => embeddingOptionKey(o) === e.target.value);
-                                  if (matched) setSelectedEmbeddingOption(matched);
-                                }}
-                                disabled={controlsDisabled || isCanceledRevision || isRagCompleted}
-                                helperText={
-                                  selectedEmbeddingOption?.profileId
-                                    ? `Profile 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
-                                    : `직접 방식 · dimension: ${selectedEmbeddingOption.dimension ?? "-"}`
-                                }
-                                FormHelperTextProps={{ sx: { m: 0, mt: 0.5, fontSize: 10 } }}
-                              >
-                                {embeddingOptions.map((opt) => (
-                                  <MenuItem key={embeddingOptionKey(opt)} value={embeddingOptionKey(opt)}>
-                                    {embeddingOptionLabel(opt)}
-                                  </MenuItem>
-                                ))}
-                              </TextField>
-                            ) : (
-                              <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>
-                                임베딩 모델 로딩 중...
-                              </Typography>
-                            )}
-                          </Box>
-                        )}
-
-                        <Divider sx={{ my: 1.5 }} />
-
                         {/* Skill 추출 설정 */}
                         {runSkillExtraction && (
                           <Box sx={{ mb: 2 }}>
@@ -3518,6 +3496,71 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                       </AccordionDetails>
                     </Accordion>
 
+                    <Box sx={{ mt: 2, mb: 2, pt: 1.5, borderTop: "1px solid", borderColor: "divider" }}>
+                      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 700, fontSize: 13.5 }}>
+                          예상 처리량
+                        </Typography>
+                        {pipelineEstimateLoading ? (
+                          <Stack direction="row" spacing={0.75} alignItems="center">
+                            <CircularProgress size={13} />
+                            <Typography variant="caption" color="text.secondary">자동 계산 중</Typography>
+                          </Stack>
+                        ) : pipelineEstimate ? (
+                          <Chip
+                            size="small"
+                            label={`위험도 ${pipelineEstimate.riskLevel}`}
+                            color={
+                              pipelineEstimate.riskLevel === "VERY_HIGH" || pipelineEstimate.riskLevel === "HIGH"
+                                ? "error"
+                                : pipelineEstimate.riskLevel === "MEDIUM" ? "warning" : "success"
+                            }
+                            sx={{ height: 22, fontSize: 10 }}
+                          />
+                        ) : null}
+                      </Stack>
+
+                      {pipelineEstimateError ? (
+                        <Alert severity="warning" sx={{ py: 0.25 }}>
+                          예상 처리량을 계산하지 못했습니다. 현재 설정으로 실행할 수는 있습니다.
+                        </Alert>
+                      ) : pipelineEstimate ? (
+                        <>
+                          <Grid container spacing={1.25}>
+                            <Grid size={{ xs: 4 }}>
+                              <Typography variant="caption" color="text.secondary" display="block">예상 청크</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{pipelineEstimate.estimatedChunkCount ?? 0}개</Typography>
+                            </Grid>
+                            <Grid size={{ xs: 4 }}>
+                              <Typography variant="caption" color="text.secondary" display="block">임베딩 요청</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>{runRagIndex ? `${pipelineEstimate.estimatedEmbeddingRequests ?? 0}회` : "사용 안 함"}</Typography>
+                            </Grid>
+                            <Grid size={{ xs: 4 }}>
+                              <Typography variant="caption" color="text.secondary" display="block">계산 기준</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                {pipelineEstimate.estimateBasis === "REVISION_CONTENT" ? "실제 Markdown" : "원본 크기 (예비)"}
+                              </Typography>
+                            </Grid>
+                          </Grid>
+                          {pipelineEstimate.estimateBasis !== "REVISION_CONTENT" && (
+                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                              Markdown 생성 후 실제 내용 기준으로 다시 자동 계산됩니다.
+                            </Typography>
+                          )}
+                          {hasEstimatedChunkingRecommendation && pipelineEstimate.recommended && (
+                            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} sx={{ mt: 1.25 }}>
+                              <Typography variant="caption" color="text.secondary">
+                                권장 청킹: {pipelineEstimate.recommended.chunkMaxSize ?? "기본"} / 중첩 {pipelineEstimate.recommended.chunkOverlap ?? "기본"} / {pipelineEstimate.recommended.chunkUnit ?? "기본"}
+                              </Typography>
+                              <Button size="small" variant="text" onClick={applyEstimatedChunkingRecommendation}>
+                                권장 설정 적용
+                              </Button>
+                            </Stack>
+                          )}
+                        </>
+                      ) : null}
+                    </Box>
+
                   {/* Actions Trigger Panel */}
                   <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
                     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
@@ -3548,18 +3591,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                         <Button
                           size="small"
                           variant="contained"
-                          disabled={controlsDisabled}
+                          disabled={controlsDisabled || (runRagIndex && !selectedEmbeddingOption)}
                           onClick={handleExtractMarkdown}
                         >
-                          Markdown 변환
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          disabled={controlsDisabled}
-                          onClick={handleManualEstimate}
-                        >
-                          부하 추산
+                          {runChunking || runRagIndex || runSkillExtraction ? "지식 파이프라인 생성" : "Markdown 생성"}
                         </Button>
                       </Stack>
                     ) : (
@@ -3590,7 +3625,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                   size="small"
                                   variant="contained"
                                   color="warning"
-                                  disabled={controlsDisabled}
+                                  disabled={controlsDisabled || (runRagIndex && !selectedEmbeddingOption)}
                                   onClick={handleReextractMarkdown}
                                 >
                                   새로 재추출 실행
@@ -3600,7 +3635,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                     size="small"
                                     variant="outlined"
                                     color="secondary"
-                                    disabled={controlsDisabled}
+                                    disabled={controlsDisabled || (runRagIndex && !selectedEmbeddingOption)}
                                     onClick={() => void handleReextractWithOcr(false)}
                                   >
                                     OCR 적용 후 재추출
@@ -3611,21 +3646,12 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                     size="small"
                                     variant="outlined"
                                     color="info"
-                                    disabled={controlsDisabled}
+                                    disabled={controlsDisabled || (runRagIndex && !selectedEmbeddingOption)}
                                     onClick={() => void handleReextractWithOcr(true)}
                                   >
                                     수식 OCR 적용 후 재추출
                                   </Button>
                                 )}
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  color="warning"
-                                  disabled={controlsDisabled}
-                                  onClick={handleManualEstimate}
-                                >
-                                  부하 추산
-                                </Button>
                               </Stack>
                             </Box>
 
@@ -3711,7 +3737,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                                 if (normalizedRes) {
                                   let meta = normalizedRes.metadataJson;
                                   if (typeof meta === "string") {
-                                    try { meta = JSON.parse(meta); } catch {}
+                                    try { meta = JSON.parse(meta); } catch { meta = null; }
                                   }
                                   const status = meta?.normalizationStatus;
                                   return status === "REVIEW_REQUIRED" ? "정규화 검토 필요" : "정규화 완료";
