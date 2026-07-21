@@ -75,6 +75,7 @@ import {
   type MarkdownDocumentProfileDescriptor,
   type MarkdownProcessingPlan,
   type MarkdownPipelineEstimateResponse,
+  type MarkdownDocumentFromAttachmentRequest,
   type MarkdownDocumentReextractRequest,
 } from "@/react/pages/files/api";
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
@@ -351,7 +352,9 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const fetchPlan = useCallback(async () => {
     if (!open || !attachmentId) return;
     try {
-      const payload: MarkdownDocumentReextractRequest = {
+      const payload: MarkdownDocumentFromAttachmentRequest = {
+        attachmentId,
+        force: false,
         documentProfile: documentProfile || "AUTO",
         runChunking,
         runRagIndex,

@@ -557,7 +557,7 @@ export const reactMarkdownDocumentApi = {
   async getProfiles(): Promise<MarkdownDocumentProfileDescriptor[]> {
     return apiRequest<MarkdownDocumentProfileDescriptor[]>("get", "/api/markdown-documents/profiles");
   },
-  async getProcessingPlan(request: MarkdownDocumentReextractRequest): Promise<MarkdownProcessingPlan> {
+  async getProcessingPlan(request: MarkdownDocumentFromAttachmentRequest): Promise<MarkdownProcessingPlan> {
     return apiRequest<MarkdownProcessingPlan>("post", "/api/markdown-documents/processing-plan", {
       data: request,
     });
