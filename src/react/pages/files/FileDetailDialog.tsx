@@ -78,6 +78,10 @@ import {
   type MarkdownPipelineEstimateResponse,
   type MarkdownDocumentFromAttachmentRequest,
   type MarkdownDocumentReextractRequest,
+  type DocumentMetadataSchema,
+  type DocumentMetadataArtifact,
+  type DocumentSemanticTypeSelection,
+  type MetadataEnrichmentMode,
 } from "@/react/pages/files/api";
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import { AssistantMessageBubble } from "../ai/components/AssistantMessageBubble";
@@ -97,47 +101,12 @@ import { findNormalizedDocumentResource, getNormalizationBadge, getNormalization
 const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
 const THUMBNAIL_RETRY_LIMIT = 8;
 
-const documentProfileGuides: Record<string, { label: string; description: string }> = {
-  AUTO: {
-    label: "자동 감지",
-    description: "파일 형식과 구조를 감지해 추출기와 청킹 전략을 자동 선택합니다. 현재 기본 프로필은 일반 문서입니다.",
-  },
-  GENERAL_DOCUMENT: {
-    label: "일반 문서",
-    description: "보고서·계약서 등 일반 문서에 적합합니다.",
-  },
-  PROFESSIONAL_BOOK: {
-    label: "전문 서적",
-    description: "인문·사회·전문 단행본처럼 긴 장·절의 문맥을 보존해야 하는 문서에 적합합니다.",
-  },
-  TEXTBOOK: {
-    label: "교재",
-    description: "단원·개념·예제·문제 구조가 있는 교재에 적합합니다.",
-  },
-  MATH_TEXTBOOK: {
-    label: "수학 교재",
-    description: "수식이 많은 교재에 적합합니다. OCR과 수식 Vision 보정을 강제로 적용합니다.",
-  },
-  SCANNED_DOCUMENT: {
-    label: "스캔 문서",
-    description: "텍스트 레이어가 없는 스캔 PDF·이미지에 적합합니다. OCR을 강제로 적용합니다.",
-  },
-  PRESENTATION: {
-    label: "프레젠테이션",
-    description: "PPTX 슬라이드 문서에 적합합니다.",
-  },
-  TECHNICAL_MANUAL: {
-    label: "기술 매뉴얼",
-    description: "절차·코드·표·경고가 많은 매뉴얼에 적합합니다.",
-  },
-};
-
 function documentProfileLabel(profile: MarkdownDocumentProfileDescriptor) {
-  return documentProfileGuides[profile.id]?.label ?? profile.displayName;
+  return profile.displayName;
 }
 
 function documentProfileDescription(profile: MarkdownDocumentProfileDescriptor) {
-  return documentProfileGuides[profile.id]?.description ?? profile.description;
+  return profile.description;
 }
 
 function documentProfileSettings(profile: MarkdownDocumentProfileDescriptor) {
@@ -382,6 +351,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [force, setForce] = useState<boolean>(false);
   const [profiles, setProfiles] = useState<MarkdownDocumentProfileDescriptor[]>([]);
   const [documentProfile, setDocumentProfile] = useState<string>("AUTO");
+  const [metadataSchemas, setMetadataSchemas] = useState<DocumentMetadataSchema[]>([]);
+  const [documentSemanticType, setDocumentSemanticType] = useState<DocumentSemanticTypeSelection>("AUTO");
+  const [metadataEnrichmentMode, setMetadataEnrichmentMode] = useState<MetadataEnrichmentMode>("AUTO");
+  const [documentMetadata, setDocumentMetadata] = useState<DocumentMetadataArtifact | null>(null);
   const [processingPlan, setProcessingPlan] = useState<MarkdownProcessingPlan | null>(null);
   const [pipelineEstimate, setPipelineEstimate] = useState<MarkdownPipelineEstimateResponse | null>(null);
   const [pipelineEstimateLoading, setPipelineEstimateLoading] = useState(false);
@@ -424,9 +397,13 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   // Load profiles
   useEffect(() => {
     if (open) {
-      reactMarkdownDocumentApi.getProfiles()
-        .then((res) => {
-          setProfiles(res);
+      Promise.all([
+        reactMarkdownDocumentApi.getProfiles(),
+        reactMarkdownDocumentApi.getMetadataSchemas(),
+      ])
+        .then(([profileResponse, schemaResponse]) => {
+          setProfiles(profileResponse);
+          setMetadataSchemas(schemaResponse);
         })
         .catch((err) => {
           console.error("Failed to load profiles:", err);
@@ -442,6 +419,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         attachmentId,
         force: false,
         documentProfile: documentProfile || "AUTO",
+        documentSemanticType,
+        metadataEnrichmentMode,
         runChunking,
         runRagIndex,
         runSkillExtraction,
@@ -477,6 +456,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     open,
     attachmentId,
     documentProfile,
+    documentSemanticType,
+    metadataEnrichmentMode,
     runChunking,
     runRagIndex,
     runSkillExtraction,
@@ -819,6 +800,25 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       setResources([]);
     }
   }, [markdownStatus, documentId]);
+
+  useEffect(() => {
+    if (markdownStatus !== "COMPLETED" || !documentId) {
+      setDocumentMetadata(null);
+      return;
+    }
+    let active = true;
+    reactMarkdownDocumentApi
+      .getMetadata(documentId, latestRevision?.revisionId ?? markdownDocument?.currentRevisionId)
+      .then((metadata) => {
+        if (active) setDocumentMetadata(metadata);
+      })
+      .catch(() => {
+        if (active) setDocumentMetadata(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [markdownStatus, documentId, latestRevision?.revisionId, markdownDocument?.currentRevisionId]);
 
   useEffect(() => {
     if (latestRagJob?.jobId && latestRagJob.status === "SUCCEEDED" && (chunkingStrategy === "blockify" || latestRagJob.chunkingStrategy === "blockify")) {
@@ -1691,6 +1691,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
     const payload: Record<string, any> = {
       documentProfile: documentProfile || "AUTO",
+      documentSemanticType,
+      metadataEnrichmentMode,
       runChunking,
       runRagIndex,
       runSkillExtraction,
@@ -1787,6 +1789,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
           ocrLanguage: payload.ocrLanguage,
           mathVisionCorrection: payload.mathVisionCorrection,
           documentProfile: payload.documentProfile,
+          documentSemanticType: payload.documentSemanticType,
+          metadataEnrichmentMode: payload.metadataEnrichmentMode,
           skillExtractionMode: payload.skillExtractionMode,
         };
         const estimate = markdownDocument?.currentRevisionId
@@ -1814,6 +1818,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     markdownDocument?.currentRevisionId,
     markdownDocument?.documentId,
     documentProfile,
+    documentSemanticType,
+    metadataEnrichmentMode,
     runChunking,
     runRagIndex,
     runSkillExtraction,
@@ -1914,6 +1920,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       const res = await reactMarkdownDocumentApi.extractFromAttachment({
         attachmentId,
         documentProfile: documentProfile || "AUTO",
+        documentSemanticType,
+        metadataEnrichmentMode,
         force: true,
         runChunking: false,
         runRagIndex: false,
@@ -1952,6 +1960,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     try {
       const res = await reactMarkdownDocumentApi.reextract(documentId, {
         documentProfile: documentProfile || "AUTO",
+        documentSemanticType,
+        metadataEnrichmentMode,
         runChunking: false,
         runRagIndex: false,
         runSkillExtraction: false,
@@ -2648,8 +2658,21 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [activeSection, setActiveSection] = useState<string>("info");
 
   const isRagCompleted = useMemo(() => {
-    return (ragMetadata as any)?.indexed === true || latestRagJob?.status === "SUCCEEDED";
-  }, [ragMetadata, latestRagJob?.status]);
+    return (
+      ragIndexed ||
+      (ragMetadata as any)?.indexed === true ||
+      latestRagJob?.status === "SUCCEEDED" ||
+      pipelineExecution?.lastCompletedStage === "RAG_INDEX" ||
+      pipelineExecution?.lastCompletedStage === "SKILL_EXTRACTION" ||
+      pipelineExecution?.status === "COMPLETED"
+    );
+  }, [ragIndexed, ragMetadata, latestRagJob?.status, pipelineExecution]);
+
+  useEffect(() => {
+    if (!isRagCompleted && currentTab === "qa") {
+      setCurrentTab("info");
+    }
+  }, [isRagCompleted, currentTab]);
 
   const lastQaAssistantMessage = useMemo(() => {
     return [...qaMessages].reverse().find((m) => m.role === "assistant");
@@ -2850,7 +2873,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         </Stack>
       </Box>
 
-      {file && (
+      {file && isRagCompleted && (
         <Box sx={{ borderBottom: 1, borderColor: "divider", bgcolor: "background.paper", flexShrink: 0 }}>
           <Tabs
             value={currentTab}
@@ -3215,7 +3238,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                     {/* 프로필 선택 dropdown */}
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
-                        문서 종류
+                        문서 처리 프로필
                       </Typography>
                       <Select
                         size="small"
@@ -3225,19 +3248,18 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                         disabled={controlsDisabled || isCanceledRevision}
                         renderValue={(selected) => {
                           const selectedProfile = profiles.find((profile) => profile.id === selected);
-                          const guide = documentProfileGuides[String(selected)];
                           return selectedProfile
                             ? `${documentProfileLabel(selectedProfile)} (${selectedProfile.id})`
-                            : `${guide?.label ?? selected} (${selected})`;
+                            : String(selected);
                         }}
                       >
                         <MenuItem value="AUTO" sx={{ py: 1 }}>
                           <Stack spacing={0.25}>
                             <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              자동 감지 (AUTO)
+                              서버 권장 프로필 (AUTO)
                             </Typography>
                             <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "normal" }}>
-                              {documentProfileGuides.AUTO.description}
+                              파일 형식과 구조에 따라 서버가 처리 프로필을 결정합니다.
                             </Typography>
                           </Stack>
                         </MenuItem>
@@ -3290,6 +3312,90 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                           </Box>
                         );
                       })()}
+                    </Box>
+
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 0.5 }}>
+                        문서 의미 유형
+                      </Typography>
+                      <Select
+                        size="small"
+                        fullWidth
+                        value={documentSemanticType}
+                        onChange={(event) =>
+                          setDocumentSemanticType(event.target.value as DocumentSemanticTypeSelection)
+                        }
+                        disabled={controlsDisabled || isCanceledRevision}
+                      >
+                        <MenuItem value="AUTO">
+                          <Stack>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>자동 감지 (AUTO)</Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              감지 결과를 BOOK, REPORT 같은 의미 유형으로 저장합니다. 처리 프로필과 청킹 방식은 바꾸지 않습니다.
+                            </Typography>
+                          </Stack>
+                        </MenuItem>
+                        {metadataSchemas.map((schema) => (
+                          <MenuItem key={schema.semanticType} value={schema.semanticType} sx={{ py: 1 }}>
+                            <Stack spacing={0.25}>
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {schema.displayName} ({schema.semanticType})
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "normal" }}>
+                                {schema.description}
+                              </Typography>
+                              <Typography variant="caption" color="primary.main" sx={{ whiteSpace: "normal" }}>
+                                {schema.fields
+                                  .filter((field) => field.required || field.recommended)
+                                  .map((field) => field.label)
+                                  .join(", ")}
+                              </Typography>
+                            </Stack>
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      <FormControlLabel
+                        sx={{ mt: 1 }}
+                        control={
+                          <Select
+                            size="small"
+                            value={metadataEnrichmentMode}
+                            onChange={(event) =>
+                              setMetadataEnrichmentMode(event.target.value as MetadataEnrichmentMode)
+                            }
+                            disabled={controlsDisabled || isCanceledRevision}
+                            sx={{ minWidth: 140 }}
+                          >
+                            <MenuItem value="OFF">규칙만 사용</MenuItem>
+                            <MenuItem value="AUTO">필요 시 AI 보강</MenuItem>
+                            <MenuItem value="REQUIRED">AI 보강 필수</MenuItem>
+                          </Select>
+                        }
+                        label={<Typography variant="caption">메타데이터 보강 방식</Typography>}
+                      />
+                      {documentMetadata ? (
+                        <Box sx={{ mt: 1.5, p: 1.5, border: "1px solid", borderColor: "divider", borderRadius: 1.5 }}>
+                          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
+                            <Chip
+                              size="small"
+                              label={documentMetadata.classification.effectiveSemanticType ?? "UNKNOWN"}
+                            />
+                            <Chip size="small" variant="outlined" label={documentMetadata.quality} />
+                          </Stack>
+                          {Object.entries(documentMetadata.fields).map(([fieldId, field]) => (
+                            <Box key={fieldId} sx={{ mb: 0.75 }}>
+                              <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                                {metadataSchemas
+                                  .flatMap((schema) => schema.fields)
+                                  .find((descriptor) => descriptor.fieldId === fieldId)?.label ?? fieldId}
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {(field.normalizedValues ?? field.rawValues ?? []).join(", ")}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      ) : null}
                     </Box>
 
                     {/* 실행 범위 체크박스들 */}
