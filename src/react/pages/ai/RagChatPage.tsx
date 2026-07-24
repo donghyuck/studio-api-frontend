@@ -24,7 +24,14 @@ import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
 import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import type { ChatMessage } from "@/react/pages/ai/components/chatTypes";
-import type { AiInfoResponse, ChatMessageDto, ProviderInfo } from "@/types/studio/ai";
+import type {
+  AiInfoResponse,
+  ChatMessageDto,
+  ChatRagRequestDto,
+  ChatStreamUsageEventDto,
+  ProviderInfo,
+  TokenUsageDto,
+} from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
 
 const RAG_CHAT_INPUT_HISTORY_KEY = "ai_rag_chat_input_history";
@@ -41,10 +48,28 @@ function numberOrUndefined(value: string) {
   return Number.isFinite(nextValue) ? nextValue : undefined;
 }
 
+function normalizeStreamUsage(payload: ChatStreamUsageEventDto): TokenUsageDto | undefined {
+  const usage = payload.metadata?.tokenUsage ?? payload;
+  const hasUsage =
+    usage.inputTokens !== undefined ||
+    usage.outputTokens !== undefined ||
+    usage.totalTokens !== undefined;
+  if (!hasUsage) return undefined;
+
+  const inputTokens = usage.inputTokens ?? 0;
+  const outputTokens = usage.outputTokens ?? 0;
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: usage.totalTokens ?? inputTokens + outputTokens,
+  };
+}
+
 export function RagChatPage() {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
-  const [provider, setProvider] = useState("");
-  const [model, setModel] = useState("");
+  const [provider, setProvider] = useState("google-ai");
+  const [model, setModel] = useState("gemini-2.5-flash");
+  const [deploymentId, setDeploymentId] = useState("chat-default");
   const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
   const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
   const [systemPrompt, setSystemPrompt] = useState(
@@ -58,6 +83,7 @@ export function RagChatPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [modelAnchorEl, setModelAnchorEl] = useState<HTMLElement | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [streamStatus, setStreamStatus] = useState<string | null>(null);
   const [topK, setTopK] = useState("5"); // changed default topK to 5
   const [minScore, setMinScore] = useState("0.35");
   const [debug, setDebug] = useState(true); // changed default debug to true for leg visualization
@@ -149,19 +175,31 @@ export function RagChatPage() {
     const nextMessages = appendUserMessage ? [...baseMessages, userMessage] : baseMessages;
     const requestMessages = (memoryEnabled ? [userMessage] : nextMessages).map(toRequestMessage);
     const requestId = crypto.randomUUID();
+    const assistantMessageId = crypto.randomUUID();
     activeRequestIdRef.current = requestId;
     const numericTopK = numberOrUndefined(topK);
     const numericMinScore = numberOrUndefined(minScore);
 
-    setMessages(nextMessages);
+    setMessages([
+      ...nextMessages,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+        model,
+      },
+    ]);
     setInput("");
     setSending(true);
     setError(null);
+    setStreamStatus("문서 근거를 검색하고 있습니다.");
     setInput("");
 
     try {
-      const payload: any = {
+      const payload: ChatRagRequestDto = {
         chat: {
+          deploymentId: deploymentId || "chat-default",
           provider: provider || undefined,
           model: model || undefined,
           messages: requestMessages,
@@ -184,52 +222,100 @@ export function RagChatPage() {
         debug,
       };
       if (selectedOption) {
-        if (selectedOption.profileId) {
+        if (selectedOption.deploymentId) {
+          payload.embeddingDeploymentId = selectedOption.deploymentId;
+        } else if (selectedOption.profileId) {
           payload.embeddingProfileId = selectedOption.profileId;
         } else {
           payload.embeddingProvider = selectedOption.provider;
           payload.embeddingModel = selectedOption.model;
         }
       }
-      const response = await reactAiApi.sendRagChat(payload);
-      if (activeRequestIdRef.current !== requestId) return;
-
-      const assistant = [...(response.messages ?? [])].reverse().find((item) => item.role === "assistant");
-      const nextConversationId = response.metadata?.conversationId ?? response.conversationId;
-      if (nextConversationId) {
-        setConversationId(nextConversationId);
-      }
-      setMessages([
-        ...nextMessages,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: assistant?.content ?? "",
-          createdAt: new Date().toISOString(),
-          model: response.metadata?.resolvedModel ?? response.model ?? model,
-          metadata: nextConversationId
-            ? { ...(response.metadata ?? {}), conversationId: nextConversationId }
-            : response.metadata,
+      await reactAiApi.sendRagChatStream(payload, {
+        onRagStatus: (streamPayload) => {
+          if (activeRequestIdRef.current !== requestId) return;
+          if (streamPayload.stage === "retrieval_complete") {
+            const count = streamPayload.resultCount ?? 0;
+            setStreamStatus(`근거 ${count}건 검색 완료 · 답변을 생성하고 있습니다.`);
+          } else {
+            setStreamStatus("문서 근거를 검색하고 있습니다.");
+          }
         },
-      ]);
+        onDelta: (streamPayload) => {
+          if (activeRequestIdRef.current !== requestId) return;
+          setStreamStatus(null);
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === assistantMessageId
+                ? { ...message, content: `${message.content}${streamPayload.delta ?? streamPayload.content ?? ""}` }
+                : message
+            )
+          );
+        },
+        onUsage: (streamPayload) => {
+          if (activeRequestIdRef.current !== requestId) return;
+          const tokenUsage = normalizeStreamUsage(streamPayload);
+          if (!tokenUsage) return;
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === assistantMessageId
+                ? {
+                    ...message,
+                    metadata: {
+                      ...(message.metadata ?? {}),
+                      tokenUsage,
+                    },
+                  }
+                : message
+            )
+          );
+        },
+        onComplete: (streamPayload) => {
+          if (activeRequestIdRef.current !== requestId) return;
+          setStreamStatus(null);
+          const metadata = streamPayload.metadata ?? {};
+          const nextConversationId = streamPayload.conversationId ?? metadata.conversationId;
+          if (nextConversationId) {
+            setConversationId(nextConversationId);
+          }
+          setMessages((current) =>
+            current.map((message) =>
+              message.id === assistantMessageId
+                ? {
+                    ...message,
+                    model: streamPayload.resolvedModel ?? metadata.resolvedModel ?? streamPayload.model ?? model,
+                    metadata: {
+                      ...(message.metadata ?? {}),
+                      ...metadata,
+                      ...(nextConversationId ? { conversationId: nextConversationId } : {}),
+                    },
+                  }
+                : message
+            )
+          );
+        },
+      });
     } catch (sendError) {
       if (activeRequestIdRef.current !== requestId) return;
       const message = resolveAxiosError(sendError);
       setError(message);
-      setMessages([
-        ...nextMessages,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: `오류: ${message}`,
-          createdAt: new Date().toISOString(),
-          metadata: { finishReason: "error" },
-        },
-      ]);
+      setStreamStatus(null);
+      setMessages((current) =>
+        current.map((item) =>
+          item.id === assistantMessageId
+            ? {
+                ...item,
+                content: `오류: ${message}`,
+                metadata: { ...(item.metadata ?? {}), finishReason: "error" },
+              }
+            : item
+        )
+      );
     } finally {
       if (activeRequestIdRef.current === requestId) {
         activeRequestIdRef.current = null;
         setSending(false);
+        setStreamStatus(null);
         setInput("");
       }
     }
@@ -252,6 +338,7 @@ export function RagChatPage() {
     setMessages([]);
     setInput("");
     setError(null);
+    setStreamStatus(null);
   }
 
   async function handleCopyMessage(content: string) {
@@ -325,6 +412,7 @@ export function RagChatPage() {
       />
 
       {error ? <Alert severity="error">{error}</Alert> : null}
+      {streamStatus ? <Alert severity="info">{streamStatus}</Alert> : null}
       {shouldShowConfigurationWarning ? (
         <Alert severity="warning">AI RAG Chat을 사용하려면 Provider와 Model 설정이 필요합니다.</Alert>
       ) : null}
@@ -336,9 +424,11 @@ export function RagChatPage() {
             <AiProviderSelect
               provider={provider}
               model={model}
-              onChange={(p, m) => {
+              deploymentId={deploymentId}
+              onChange={(p, m, d) => {
                 setProvider(p);
                 setModel(m);
+                if (d) setDeploymentId(d);
               }}
             />
             {embeddingOptions.length > 0 ? (

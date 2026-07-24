@@ -1071,6 +1071,11 @@ function ChunkInspector({
 
 function embeddingDisplay(job: RagIndexJobDto | null) {
   if (!job) return "-";
+  if (job.embeddingDeploymentId) {
+    return job.embeddingModel
+      ? `${job.embeddingModel} (${job.embeddingDeploymentId})`
+      : job.embeddingDeploymentId;
+  }
   if (job.embeddingProfileId) {
     return job.embeddingProfileId;
   }
@@ -1255,20 +1260,26 @@ export function RagJobDetailPage() {
       const provider = job?.embeddingProvider;
       const model = job?.embeddingModel;
       const profileId = job?.embeddingProfileId;
+      const deploymentId = job?.embeddingDeploymentId;
 
       const sampleChunk = chunks.find((chunk) => chunk.metadata || chunk.embeddingModel || chunk.tokenizerProvider);
       const chunkProvider = sampleChunk?.embeddingProvider ?? metadataValue(sampleChunk?.metadata, ["embeddingProvider"]);
       const chunkModel = sampleChunk?.embeddingModel ?? metadataValue(sampleChunk?.metadata, ["embeddingModel"]);
       const chunkProfileId = metadataValue(sampleChunk?.metadata, ["embeddingProfileId"]);
+      const chunkDeploymentId = metadataValue(sampleChunk?.metadata, ["embeddingDeploymentId"]);
 
+      const effDeploymentId = deploymentId || chunkDeploymentId;
       const effProfileId = profileId || chunkProfileId;
       const effProvider = provider || chunkProvider;
       const effModel = model || chunkModel;
 
-      if (effProfileId || (effProvider && effModel)) {
+      if (effDeploymentId || effProfileId || (effProvider && effModel)) {
         const matched = embeddingOptions.find((o) => {
+          if (effDeploymentId) {
+            return o.deploymentId === effDeploymentId;
+          }
           if (effProfileId) {
-            return o.profileId === effProfileId;
+            return o.profileId === effProfileId || o.modelId === effProfileId || o.aliases?.includes(String(effProfileId));
           }
           return o.provider === effProvider && o.model === effModel;
         });
@@ -1310,6 +1321,7 @@ export function RagJobDetailPage() {
       let response: RagIndexJobDto;
       const hasChanged = Boolean(
         (originalOption && selectedOption && (
+          selectedOption.deploymentId !== originalOption.deploymentId ||
           selectedOption.profileId !== originalOption.profileId ||
           selectedOption.provider !== originalOption.provider ||
           selectedOption.model !== originalOption.model
@@ -1332,7 +1344,9 @@ export function RagJobDetailPage() {
         if (job.chunkUnit) payload.chunkUnit = job.chunkUnit;
 
         if (selectedOption) {
-          if (selectedOption.profileId) {
+          if (selectedOption.deploymentId) {
+            payload.embeddingDeploymentId = selectedOption.deploymentId;
+          } else if (selectedOption.profileId) {
             payload.embeddingProfileId = selectedOption.profileId;
           } else {
             payload.embeddingProvider = selectedOption.provider;

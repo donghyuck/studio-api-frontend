@@ -1,26 +1,44 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Menu,
   MenuItem,
+  Paper,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
+  Typography,
 } from "@mui/material";
-import { AddOutlined } from "@mui/icons-material";
+import {
+  AccountTreeOutlined,
+  AddOutlined,
+  DragIndicatorOutlined,
+  FolderOutlined,
+  FolderSpecialOutlined,
+  InsertDriveFileOutlined,
+  OpenInNewOutlined,
+  TableChartOutlined,
+} from "@mui/icons-material";
+import { SimpleTreeView } from "@mui/x-tree-view/SimpleTreeView";
+import { TreeItem } from "@mui/x-tree-view/TreeItem";
+import { WorkspaceFilesPanel } from "@/react/pages/workspaces/WorkspaceFilesPanel";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { useToast } from "@/react/feedback";
 import { reactCompanyApi } from "@/react/pages/companies/api";
-import type { WorkspaceRef, WorkspaceVisibility } from "@/types/studio/workspace";
+import type { WorkspaceRef, WorkspaceTreeNode, WorkspaceVisibility } from "@/types/studio/workspace";
 import type { CompanyDto } from "@/types/studio/company";
 import { reactWorkspaceApi } from "@/react/pages/workspaces/api";
 import { resolveAxiosError } from "@/utils/helpers";
@@ -379,8 +397,280 @@ export function WorkspaceListPage() {
     setSearchParams(nextParams, { replace: true });
   }
 
+  const [viewMode, setViewMode] = useState<"tree" | "table">("tree");
+  const [treeItems, setTreeItems] = useState<WorkspaceRef[]>([]);
+  const [treeLoading, setTreeLoading] = useState(false);
+
+  const loadTreeData = useCallback(async () => {
+    setTreeLoading(true);
+    try {
+      const res = await reactWorkspaceApi.list({
+        page: 0,
+        size: 1000,
+        q: keywordInput.trim() || undefined,
+        archived: archivedInput === "" ? undefined : archivedInput === "true",
+        companyId: companyInput ? Number(companyInput) : undefined,
+      });
+      setTreeItems(res.content ?? []);
+    } catch {
+      setTreeItems([]);
+    } finally {
+      setTreeLoading(false);
+    }
+  }, [keywordInput, archivedInput, companyInput]);
+
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
+
+  const selectedWorkspace = useMemo(() => {
+    return treeItems.find((item) => item.id === selectedWorkspaceId) ?? null;
+  }, [treeItems, selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (treeItems.length > 0 && selectedWorkspaceId == null) {
+      setSelectedWorkspaceId(treeItems[0].id);
+    }
+  }, [treeItems, selectedWorkspaceId]);
+
+  const toast = useToast();
+  const [draggedWorkspace, setDraggedWorkspace] = useState<WorkspaceRef | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<number | "root" | null>(null);
+  const [changingParent, setChangingParent] = useState(false);
+
+  function isNodeDescendant(dragId: number, targetNode: WorkspaceTreeNode): boolean {
+    if (targetNode.workspace.id === dragId) return true;
+    return targetNode.children.some((child) => isNodeDescendant(dragId, child));
+  }
+
+  async function handleMoveWorkspace(workspaceId: number, newParentId: number | null) {
+    if (changingParent) return;
+    setChangingParent(true);
+    try {
+      await reactWorkspaceApi.changeParent(workspaceId, { newParentId });
+      toast.success("작업공간의 부모 계층 위치가 변경되었습니다.");
+      await loadTreeData();
+    } catch (err) {
+      toast.error(resolveAxiosError(err) || "작업공간 위치 변경에 실패했습니다.");
+    } finally {
+      setChangingParent(false);
+      setDraggedWorkspace(null);
+      setDropTargetId(null);
+    }
+  }
+
+  const treeNodes = useMemo<WorkspaceTreeNode[]>(() => {
+    if (treeItems.length === 0) return [];
+    const itemMap = new Map<number, WorkspaceTreeNode>();
+    treeItems.forEach((item) => {
+      itemMap.set(item.id, { workspace: item, children: [] });
+    });
+
+    const roots: WorkspaceTreeNode[] = [];
+    treeItems.forEach((item) => {
+      const node = itemMap.get(item.id)!;
+      if (item.parentId && itemMap.has(item.parentId)) {
+        itemMap.get(item.parentId)!.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+    return roots;
+  }, [treeItems]);
+
+  const allNodeIds = useMemo<string[]>(() => {
+    return treeItems.map((item) => String(item.id));
+  }, [treeItems]);
+
+  function renderWorkspaceTreeNode(node: WorkspaceTreeNode) {
+    const item = node.workspace;
+    const hasChildren = node.children.length > 0;
+    const company = companies.find((c) => c.companyId === item.companyId);
+    const isDraggingMe = draggedWorkspace?.id === item.id;
+    const isDropTargetMe = dropTargetId === item.id;
+
+    const isValidDropTarget =
+      draggedWorkspace != null &&
+      draggedWorkspace.id !== item.id &&
+      draggedWorkspace.parentId !== item.id &&
+      !isNodeDescendant(draggedWorkspace.id, node);
+
+    const isSelectedMe = selectedWorkspaceId === item.id;
+
+    return (
+      <TreeItem
+        key={item.id}
+        itemId={String(item.id)}
+        label={
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="space-between"
+            spacing={1.5}
+            draggable
+            onClick={() => setSelectedWorkspaceId(item.id)}
+            onDragStart={(e) => {
+              e.stopPropagation();
+              setDraggedWorkspace(item);
+              e.dataTransfer.setData("text/plain", String(item.id));
+              e.dataTransfer.effectAllowed = "move";
+            }}
+            onDragEnd={(e) => {
+              e.stopPropagation();
+              setDraggedWorkspace(null);
+              setDropTargetId(null);
+            }}
+            onDragOver={(e) => {
+              if (isValidDropTarget) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = "move";
+                if (dropTargetId !== item.id) setDropTargetId(item.id);
+              }
+            }}
+            onDragLeave={(e) => {
+              e.stopPropagation();
+              if (dropTargetId === item.id) setDropTargetId(null);
+            }}
+            onDrop={(e) => {
+              if (isValidDropTarget && draggedWorkspace) {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleMoveWorkspace(draggedWorkspace.id, item.id);
+              }
+            }}
+            sx={{
+              py: 0.75,
+              px: 1,
+              borderRadius: 1.25,
+              width: "100%",
+              cursor: isDraggingMe ? "grabbing" : "pointer",
+              opacity: isDraggingMe ? 0.4 : 1,
+              bgcolor: isSelectedMe
+                ? (theme) => (theme.palette.mode === "dark" ? "rgba(144, 202, 249, 0.16)" : "rgba(25, 118, 210, 0.08)")
+                : isDropTargetMe
+                ? "primary.50"
+                : "transparent",
+              border: "1.5px solid",
+              borderColor: isSelectedMe
+                ? "primary.main"
+                : isDropTargetMe
+                ? "primary.main"
+                : "transparent",
+              transition: "all 150ms ease",
+              "&:hover": {
+                bgcolor: isSelectedMe
+                  ? (theme) => (theme.palette.mode === "dark" ? "rgba(144, 202, 249, 0.24)" : "rgba(25, 118, 210, 0.12)")
+                  : "action.hover",
+                "& .drag-handle": { opacity: 1 },
+              },
+            }}
+          >
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+              <Tooltip title="드래그하여 다른 작업공간의 하위로 이동">
+                <DragIndicatorOutlined
+                  className="drag-handle"
+                  fontSize="small"
+                  sx={{
+                    color: "text.disabled",
+                    opacity: 0.5,
+                    cursor: "grab",
+                    fontSize: 16,
+                  }}
+                />
+              </Tooltip>
+              {item.parentId == null ? (
+                <FolderSpecialOutlined color="primary" fontSize="small" />
+              ) : (
+                <FolderOutlined color="action" fontSize="small" />
+              )}
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: item.parentId == null ? 700 : 500,
+                  color: item.archived ? "text.disabled" : "text.primary",
+                  fontSize: 13.5,
+                }}
+              >
+                {item.name}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: 11 }}>
+                ({item.slug})
+              </Typography>
+              {company ? (
+                <Chip
+                  size="small"
+                  label={companyLabel(company)}
+                  sx={{ height: 18, fontSize: 10, bgcolor: "action.hover" }}
+                />
+              ) : null}
+            </Stack>
+
+            <Stack direction="row" alignItems="center" spacing={1}>
+              {isDropTargetMe && (
+                <Chip
+                  size="small"
+                  color="primary"
+                  label="하위로 이동"
+                  sx={{ height: 20, fontSize: 10, fontWeight: 700 }}
+                />
+              )}
+              <Chip
+                size="small"
+                variant="outlined"
+                label={visibilityLabel(item.visibility)}
+                sx={{ height: 20, fontSize: 10.5 }}
+              />
+              <Chip
+                size="small"
+                label={item.archived ? "비활성" : "활성"}
+                sx={{
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  height: 20,
+                  borderRadius: "4px",
+                  bgcolor: item.archived ? "action.hover" : "rgba(46, 125, 50, 0.08)",
+                  color: item.archived ? "text.secondary" : "success.main",
+                  border: "1px solid",
+                  borderColor: item.archived ? "divider" : "rgba(46, 125, 50, 0.2)",
+                }}
+              />
+              {hasChildren && (
+                <Chip
+                  size="small"
+                  label={`하위 ${node.children.length}개`}
+                  color="primary"
+                  variant="outlined"
+                  sx={{ height: 20, fontSize: 10, fontWeight: 700 }}
+                />
+              )}
+              <Button
+                size="small"
+                variant="text"
+                endIcon={<OpenInNewOutlined fontSize="small" />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/application/workspaces/${item.id}`, {
+                    state: { from: `${location.pathname}${location.search}` },
+                  });
+                }}
+                sx={{ fontSize: 11.5, py: 0, px: 1, height: 24, fontWeight: 600 }}
+              >
+                상세
+              </Button>
+            </Stack>
+          </Stack>
+        }
+      >
+        {node.children.map(renderWorkspaceTreeNode)}
+      </TreeItem>
+    );
+  }
+
   function handleRefresh() {
-    gridRef.current?.refresh();
+    if (viewMode === "tree") {
+      void loadTreeData();
+    } else {
+      gridRef.current?.refresh();
+    }
   }
 
   const statusLabel = archivedInput === "true" ? "비활성" : archivedInput === "false" ? "활성" : "전체";
@@ -389,7 +679,7 @@ export function WorkspaceListPage() {
   return (
     <Stack spacing={0.5}>
       <PageToolbar
-        hasGrid
+        hasGrid={viewMode === "table"}
         breadcrumbs={["애플리케이션", "작업공간"]}
         label="작업공간 tree와 멤버 권한을 관리합니다."
         searchPlaceholder="이름, slug, path 검색"
@@ -417,6 +707,31 @@ export function WorkspaceListPage() {
         }
         filterActions={
           <>
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={(_, next) => next && setViewMode(next)}
+              size="small"
+              sx={{ height: 32 }}
+            >
+              <ToggleButton value="tree" sx={{ px: 1.25, py: 0.5 }}>
+                <Tooltip title="트리 뷰 (부모-자식 계층 구조)">
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <AccountTreeOutlined fontSize="small" />
+                    <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 11.5 }}>트리</Typography>
+                  </Stack>
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton value="table" sx={{ px: 1.25, py: 0.5 }}>
+                <Tooltip title="테이블 뷰 (그리드 목록)">
+                  <Stack direction="row" spacing={0.5} alignItems="center">
+                    <TableChartOutlined fontSize="small" />
+                    <Typography variant="caption" sx={{ fontWeight: 600, fontSize: 11.5 }}>테이블</Typography>
+                  </Stack>
+                </Tooltip>
+              </ToggleButton>
+            </ToggleButtonGroup>
+
             <Button
               variant="outlined"
               size="small"
@@ -468,12 +783,123 @@ export function WorkspaceListPage() {
           </>
         }
       />
-      <PageableGridContent<WorkspaceRef>
-        ref={gridRef}
-        datasource={dataSource}
-        columns={columnDefs}
-        options={{ tooltipShowDelay: 300 }}
-      />
+
+      {viewMode === "table" ? (
+        <PageableGridContent<WorkspaceRef>
+          ref={gridRef}
+          datasource={dataSource}
+          columns={columnDefs}
+          options={{ tooltipShowDelay: 300 }}
+        />
+      ) : (
+        <Paper
+          variant="outlined"
+          sx={{
+            p: 2.5,
+            borderRadius: 2,
+            minHeight: 400,
+            bgcolor: "background.paper",
+          }}
+        >
+          {draggedWorkspace && draggedWorkspace.parentId != null && (
+            <Paper
+              variant="outlined"
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dropTargetId !== "root") setDropTargetId("root");
+              }}
+              onDragLeave={() => {
+                if (dropTargetId === "root") setDropTargetId(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                void handleMoveWorkspace(draggedWorkspace.id, null);
+              }}
+              sx={{
+                mb: 2,
+                p: 1.5,
+                textAlign: "center",
+                borderRadius: 2,
+                borderStyle: "dashed",
+                borderColor: dropTargetId === "root" ? "primary.main" : "divider",
+                bgcolor: dropTargetId === "root" ? "primary.50" : "action.hover",
+                transition: "all 150ms ease",
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 600, color: dropTargetId === "root" ? "primary.main" : "text.secondary" }}>
+                📌 여기로 드롭하면 최상위(Root) 작업공간으로 이동합니다
+              </Typography>
+            </Paper>
+          )}
+
+          {treeLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 8 }}>
+              <CircularProgress size={28} />
+            </Box>
+          ) : treeNodes.length > 0 ? (
+            <SimpleTreeView
+              defaultExpandedItems={allNodeIds}
+              sx={{
+                "& .MuiTreeItem-content": {
+                  borderRadius: 1.5,
+                  my: 0.25,
+                  "&:hover": { bgcolor: "action.hover" },
+                  "&.Mui-selected": { bgcolor: "action.selected" },
+                },
+              }}
+            >
+              {treeNodes.map(renderWorkspaceTreeNode)}
+            </SimpleTreeView>
+          ) : (
+            <Box sx={{ textAlign: "center", py: 8 }}>
+              <Typography color="text.secondary" variant="body2">
+                조회된 작업공간이 없습니다.
+              </Typography>
+            </Box>
+          )}
+        </Paper>
+      )}
+
+      {viewMode === "tree" && (
+        <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, bgcolor: "background.paper" }}>
+          {selectedWorkspace ? (
+            <Stack spacing={2}>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap" gap={1}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <InsertDriveFileOutlined color="primary" />
+                  <Typography variant="h6" sx={{ fontWeight: 700, fontSize: 16 }}>
+                    [{selectedWorkspace.name}] 소속 파일 목록
+                  </Typography>
+                  <Chip size="small" label={selectedWorkspace.slug} sx={{ height: 20, fontSize: 11 }} />
+                  <Chip size="small" variant="outlined" label={`ID: #${selectedWorkspace.id}`} sx={{ height: 20, fontSize: 10.5 }} />
+                </Stack>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  endIcon={<OpenInNewOutlined fontSize="small" />}
+                  onClick={() =>
+                    navigate(`/application/workspaces/${selectedWorkspace.id}`, {
+                      state: { from: `${location.pathname}${location.search}` },
+                    })
+                  }
+                  sx={{ fontSize: 12, height: 28 }}
+                >
+                  작업공간 상세 이동
+                </Button>
+              </Stack>
+
+              <WorkspaceFilesPanel workspaceId={selectedWorkspace.id} />
+            </Stack>
+          ) : (
+            <Box sx={{ py: 4, textAlign: "center" }}>
+              <Typography color="text.secondary" variant="body2">
+                💡 상단 트리에서 작업공간을 선택하면 하단에 소속 파일 목록이 표시됩니다.
+              </Typography>
+            </Box>
+          )}
+        </Paper>
+      )}
       <WorkspaceCreateDialog
         open={createOpen}
         companies={companies}

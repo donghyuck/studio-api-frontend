@@ -76,6 +76,8 @@ async function getAccessTokenForFetch() {
   return token;
 }
 
+let embeddingOptionsCachePromise: Promise<{ options: EmbeddingOption[] }> | null = null;
+
 export const reactAiApi = {
   sendChat(req: ChatRequestDto) {
     return apiRequest<ChatResponseDto>("post", `${BASE}/chat`, { data: req });
@@ -83,6 +85,22 @@ export const reactAiApi = {
 
   sendRagChat(req: ChatRagRequestDto) {
     return apiRequest<ChatResponseDto>("post", `${BASE}/chat/rag`, { data: req });
+  },
+
+  fetchDeployments(params?: { workload?: string }) {
+    return apiRequest<any[]>("get", `${MGMT_BASE}/deployments`, { params });
+  },
+
+  sendRagChatStream(
+    req: ChatRagRequestDto,
+    handlers: {
+      onDelta?: (payload: ChatStreamDeltaEventDto) => void;
+      onUsage?: (payload: ChatStreamUsageEventDto) => void;
+      onComplete?: (payload: ChatStreamCompleteEventDto) => void;
+      onRagStatus?: (payload: any) => void;
+    }
+  ) {
+    return this.sendChatStream(req as any, handlers);
   },
 
   fetchProviders() {
@@ -343,11 +361,19 @@ export const reactAiApi = {
   },
 
   getEmbeddingOptions() {
-    return apiRequest<{ options: EmbeddingOption[] }>("get", `${BASE}/embedding-options`);
+    if (!embeddingOptionsCachePromise) {
+      embeddingOptionsCachePromise = apiRequest<{ options: EmbeddingOption[] }>("get", `${BASE}/embedding-options`).catch((err) => {
+        embeddingOptionsCachePromise = null;
+        throw err;
+      });
+    }
+    return embeddingOptionsCachePromise;
   },
 };
 
 export interface EmbeddingOption {
+  deploymentId?: string | null;
+  catalogId?: string | null;
   profileId: string | null;
   modelId?: string | null;
   displayName?: string | null;

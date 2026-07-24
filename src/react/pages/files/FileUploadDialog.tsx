@@ -154,11 +154,13 @@ export function FileUploadDialog({
       return;
     }
 
+    reset(initialObjectType, initialObjectId);
+
     reactObjectTypeApi
       .list({ status: "ACTIVE" })
       .then((items) => setObjectTypes(items))
       .catch((loadError) => setError(resolveAxiosError(loadError)));
-  }, [open]);
+  }, [open, initialObjectType, initialObjectId]);
 
   useEffect(() => {
     if (!open || objectType === "") {
@@ -219,6 +221,10 @@ export function FileUploadDialog({
           return false;
         }
         for (const file of uppy.getFiles()) {
+          uppy.setFileMeta(file.id, {
+            objectType: Number(objectTypeRef.current),
+            objectId: Number(objectIdRef.current),
+          });
           const policyError = validateFileAgainstPolicy(
             {
               name: file.name,
@@ -253,15 +259,6 @@ export function FileUploadDialog({
         return token ? { Authorization: `Bearer ${token}` } : {};
       },
       withCredentials: true,
-    });
-
-    uppy.on("upload", () => {
-      for (const file of uppy.getFiles()) {
-        uppy.setFileMeta(file.id, {
-          objectType: Number(objectTypeRef.current),
-          objectId: Number(objectIdRef.current),
-        });
-      }
     });
 
     uppy.on("complete", (result) => {

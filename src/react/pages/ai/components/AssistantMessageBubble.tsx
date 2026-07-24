@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { alpha, Avatar, Box, Divider, IconButton, Popover, Stack, Tooltip, Typography, Chip } from "@mui/material";
-import { ContentCopyOutlined, DescriptionOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
+import { useMemo, useState } from "react";
+import { alpha, Avatar, Box, Chip, Divider, IconButton, Paper, Popover, Stack, Tooltip, Typography } from "@mui/material";
+import { CloseOutlined, ContentCopyOutlined, DescriptionOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
 import type { ChatMessage, ChatResponseMetadataDto } from "@/react/pages/ai/components/chatTypes";
 import type { RagReferenceDto } from "@/types/studio/ai";
 import katex from "katex";
@@ -39,37 +39,153 @@ function metadataValue(reference: RagReferenceDto, keys: string[]) {
 }
 
 function formatLocationFromSourceRef(sourceRef: string) {
-  const pageMatch = sourceRef.match(/page\[(\d+)]/i) ?? sourceRef.match(/\bpage\s*[:#-]?\s*(\d+)/i);
+  if (!sourceRef) return "";
+  const pageMatch =
+    sourceRef.match(/page[=\s[:#-]?\s*(\d+)/i) ??
+    sourceRef.match(/#p(?:age)?=?(\d+)/i) ??
+    sourceRef.match(/[\/_.-]p(?:age)?[-_]?(\d+)/i) ??
+    sourceRef.match(/:(\d+)$/);
   if (pageMatch?.[1]) {
     return `페이지 ${pageMatch[1]}`;
   }
-  const slideMatch = sourceRef.match(/slide\[(\d+)]/i) ?? sourceRef.match(/\bslide\s*[:#-]?\s*(\d+)/i);
+  const slideMatch = sourceRef.match(/slide[=\s[:#-]?\s*(\d+)/i);
   if (slideMatch?.[1]) {
     return `슬라이드 ${slideMatch[1]}`;
   }
   return "";
 }
 
+function extractReferenceContent(reference: RagReferenceDto): string {
+  if (!reference) return "";
+
+  const directKeys = [
+    "content",
+    "page_content",
+    "pageContent",
+    "text",
+    "chunkText",
+    "chunk_text",
+    "chunkContent",
+    "chunk_content",
+    "textContent",
+    "text_content",
+    "snippet",
+    "excerpt",
+    "body",
+    "document",
+    "documentText",
+    "document_text",
+    "matchedText",
+    "rawText",
+    "raw_text",
+    "passage",
+    "sentence",
+    "description",
+    "sourceEvidence",
+    "trustedAnswer",
+    "criticalQuestion",
+  ];
+
+  for (const key of directKeys) {
+    const val = (reference as any)[key];
+    if (typeof val === "string" && val.trim()) {
+      return val.trim();
+    }
+  }
+
+  const subObjects = [
+    reference.metadata,
+    (reference as any).raw,
+    (reference as any).payload,
+    (reference as any).data,
+  ].filter(Boolean);
+
+  for (const sub of subObjects) {
+    for (const key of directKeys) {
+      const val = (sub as any)[key];
+      if (typeof val === "string" && val.trim()) {
+        return val.trim();
+      }
+    }
+  }
+
+  if (reference.metadata && typeof reference.metadata === "object") {
+    for (const [k, v] of Object.entries(reference.metadata)) {
+      if (
+        typeof v === "string" &&
+        v.length > 15 &&
+        !k.toLowerCase().includes("id") &&
+        !k.toLowerCase().includes("name") &&
+        !k.toLowerCase().includes("path") &&
+        !k.toLowerCase().includes("url")
+      ) {
+        return v.trim();
+      }
+    }
+  }
+
+  return "";
+}
+
 function normalizeReference(reference: RagReferenceDto, fallbackIndex: number): NormalizedRagReference {
   const title =
     reference.sourceName ||
-    metadataValue(reference, ["sourceName", "fileName", "filename", "originalFilename", "documentName", "title"]) ||
+    metadataValue(reference, [
+      "sourceName",
+      "fileName",
+      "filename",
+      "originalFilename",
+      "documentName",
+      "title",
+      "name",
+      "file_name",
+    ]) ||
     reference.documentId ||
     `근거 ${reference.index ?? fallbackIndex}`;
-  const page = reference.page ?? reference.pageNumber ?? metadataValue(reference, ["page", "pageNumber", "page_number"]);
-  const slide = reference.slide ?? reference.slideNumber ?? metadataValue(reference, ["slide", "slideNumber", "slide_number"]);
-  const sourceRef = reference.sourceRef || reference.sourceRefs || metadataValue(reference, ["sourceRef", "sourceRefs"]);
-  const chunk =
-    (page != null && page !== "" ? `페이지 ${stringifyValue(page)}` : "") ||
-    (slide != null && slide !== "" ? `슬라이드 ${stringifyValue(slide)}` : "") ||
-    (sourceRef ? formatLocationFromSourceRef(sourceRef) : "");
+
+  const page =
+    reference.page ??
+    reference.pageNumber ??
+    metadataValue(reference, ["page", "pageNumber", "page_number", "pageNo", "page_no", "pageNum", "page_index", "pageIndex"]);
+  const slide =
+    reference.slide ??
+    reference.slideNumber ??
+    metadataValue(reference, ["slide", "slideNumber", "slide_number", "slideNo", "slideIndex"]);
+  const chunkOrder =
+    reference.chunkOrder ??
+    metadataValue(reference, ["chunkOrder", "chunk_order", "chunkIndex", "chunk_index", "chunkNo", "order"]);
+  const section =
+    reference.section ??
+    reference.heading ??
+    metadataValue(reference, ["section", "heading", "header", "topic"]);
+  const sourceRef =
+    reference.sourceRef ||
+    reference.sourceRefs ||
+    metadataValue(reference, ["sourceRef", "sourceRefs", "location", "path", "url"]);
+
+  const locationParts: string[] = [];
+  if (page != null && page !== "") {
+    locationParts.push(`페이지 ${stringifyValue(page)}`);
+  } else if (slide != null && slide !== "") {
+    locationParts.push(`슬라이드 ${stringifyValue(slide)}`);
+  } else if (sourceRef) {
+    const loc = formatLocationFromSourceRef(sourceRef);
+    if (loc) locationParts.push(loc);
+  }
+
+  if (section != null && section !== "") {
+    locationParts.push(`섹션 ${stringifyValue(section)}`);
+  }
+
+  const chunk = locationParts.join(" · ");
+  const content = extractReferenceContent(reference);
 
   return {
     index: reference.index ?? fallbackIndex,
     title,
     chunk,
     score: reference.score,
-    content: reference.content,
+    content,
     raw: reference,
   };
 }
@@ -78,7 +194,6 @@ function getRagReferences(metadata?: ChatResponseMetadataDto): NormalizedRagRefe
   const references = metadata?.ragReferences;
   return Array.isArray(references)
     ? references
-        .slice(0, 5)
         .filter((reference): reference is RagReferenceDto => typeof reference === "object" && reference !== null)
         .map((reference, index) => normalizeReference(reference, index + 1))
     : [];
@@ -172,7 +287,7 @@ function renderRetrievalDebug(metadata?: ChatResponseMetadataDto) {
         [RAG 검색 진단 디버그]
       </Typography>
       <Typography variant="caption" color="text.secondary" sx={{ display: "block", fontSize: 10, mb: 0.5 }}>
-        전략: {retrieval.requestedStrategy ?? "-"} (실제: {retrieval.resolvedStrategy ?? "-"}) · 최종 컨텍스트 Chunk 수: {retrieval.finalCount ?? 0}
+        전략: {retrieval.requestedStrategy ?? "-"} (실제: {retrieval.resolvedStrategy ?? "-"}) · 최종 검색 수: {retrieval.finalCount ?? 0}
       </Typography>
       {Array.isArray(retrieval.legs) && retrieval.legs.length > 0 && (
         <Stack spacing={0.25}>
@@ -187,9 +302,13 @@ function renderRetrievalDebug(metadata?: ChatResponseMetadataDto) {
   );
 }
 
-function renderInlineMarkdown(text: string) {
-  // Split on display math ($$...$$), inline math ($...$), and bold (**...**)
-  const parts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*))/g);
+function renderInlineMarkdown(
+  text: string,
+  onCitationClick?: (indices: number[], event: React.MouseEvent<HTMLElement>) => void,
+  ragReferences?: NormalizedRagReference[]
+) {
+  // Split on display math ($$...$$), inline math ($...$), bold (**...**), and bracketed citations ([1], [1, 2], [1, 2, 3])
+  const parts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*|\[\d+(?:\s*,\s*\d+)*\]))/g);
   return parts.map((part, index) => {
     if (part.startsWith("**") && part.endsWith("**")) {
       return (
@@ -197,6 +316,87 @@ function renderInlineMarkdown(text: string) {
           {part.slice(2, -2)}
         </Box>
       );
+    }
+    const citationMatch = part.match(/^\[(\d+(?:\s*,\s*\d+)*)\]$/);
+    if (citationMatch) {
+      const numbers = citationMatch[1].split(",").map((n) => parseInt(n.trim(), 10));
+      const matchingRefs = ragReferences?.filter((r) => numbers.includes(r.index ?? -1));
+
+      const badge = (
+        <Box
+          component="span"
+          key={`cite-${index}`}
+          onClick={(e) => {
+            if (onCitationClick) {
+              onCitationClick(numbers, e);
+            }
+          }}
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            mx: 0.3,
+            px: 0.6,
+            py: 0.1,
+            borderRadius: "4px",
+            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
+            color: "primary.main",
+            fontWeight: 700,
+            fontSize: "0.82em",
+            cursor: onCitationClick ? "pointer" : "inherit",
+            verticalAlign: "baseline",
+            lineHeight: 1.2,
+            transition: "all 120ms ease",
+            "&:hover": onCitationClick
+              ? { bgcolor: "primary.main", color: "#fff" }
+              : {},
+          }}
+        >
+          {part}
+        </Box>
+      );
+
+      if (matchingRefs && matchingRefs.length > 0) {
+        return (
+          <Tooltip
+            key={`cite-tooltip-${index}`}
+            arrow
+            placement="top"
+            title={
+              <Box sx={{ p: 0.5, maxWidth: 300 }}>
+                {matchingRefs.map((r, i) => (
+                  <Box key={i} sx={{ mb: i < matchingRefs.length - 1 ? 1 : 0 }}>
+                    <Typography variant="caption" component="div" sx={{ fontWeight: 800, fontSize: 11.5, color: "#fff" }}>
+                      근거 {r.index ?? i + 1}: {r.title} {r.chunk ? `(${r.chunk})` : ""}
+                    </Typography>
+                    {r.content ? (
+                      <Typography
+                        variant="caption"
+                        component="div"
+                        sx={{
+                          color: "rgba(255, 255, 255, 0.85)",
+                          fontSize: 11,
+                          mt: 0.25,
+                          lineHeight: 1.45,
+                          display: "-webkit-box",
+                          WebkitLineClamp: 3,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        "{r.content.trim()}"
+                      </Typography>
+                    ) : null}
+                  </Box>
+                ))}
+              </Box>
+            }
+          >
+            {badge}
+          </Tooltip>
+        );
+      }
+
+      return badge;
     }
     if (part.startsWith("$$") && part.endsWith("$$")) {
       try {
@@ -258,9 +458,26 @@ export function AssistantMessageBubble({
   onRetryLastUser,
 }: Props) {
   const [sourceAnchorEl, setSourceAnchorEl] = useState<HTMLElement | null>(null);
+  const [selectedCitationIndices, setSelectedCitationIndices] = useState<number[] | null>(null);
   const isErrorMessage =
     message.metadata?.finishReason === "error" || message.content.startsWith("오류:");
   const ragReferences = getRagReferences(message.metadata);
+
+  const displayedReferences = useMemo(() => {
+    if (!selectedCitationIndices || selectedCitationIndices.length === 0) {
+      return ragReferences;
+    }
+    const filtered = ragReferences.filter((ref) =>
+      selectedCitationIndices.includes(ref.index ?? -1)
+    );
+    return filtered.length > 0 ? filtered : ragReferences;
+  }, [ragReferences, selectedCitationIndices]);
+
+  const popoverTitle =
+    selectedCitationIndices && selectedCitationIndices.length > 0
+      ? `근거 ${selectedCitationIndices.join(", ")}`
+      : `전체 출처 (${ragReferences.length}개)`;
+
   const sourcePopoverOpen = Boolean(sourceAnchorEl);
 
   return (
@@ -294,7 +511,18 @@ export function AssistantMessageBubble({
             Assistant{message.model ? ` · ${message.model}` : ""}
           </Typography>
           <Typography component="div" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14, lineHeight: 1.75 }}>
-            {message.content ? renderInlineMarkdown(message.content) : (sending ? "응답 생성 중..." : "")}
+            {message.content
+              ? renderInlineMarkdown(
+                  message.content,
+                  (indices, event) => {
+                    setSourceAnchorEl(event.currentTarget);
+                    setSelectedCitationIndices(indices);
+                  },
+                  ragReferences
+                )
+              : sending
+              ? "응답 생성 중..."
+              : ""}
           </Typography>
           {renderTokenUsage(message.metadata)}
           {renderRetrievalDebug(message.metadata)}
@@ -333,7 +561,10 @@ export function AssistantMessageBubble({
             <Box
               component="button"
               type="button"
-              onClick={(event) => setSourceAnchorEl(event.currentTarget)}
+              onClick={(event) => {
+                setSourceAnchorEl(event.currentTarget);
+                setSelectedCitationIndices(null);
+              }}
               sx={{
                 display: "inline-flex",
                 alignItems: "center",
@@ -388,53 +619,59 @@ export function AssistantMessageBubble({
               slotProps={{
                 paper: {
                   sx: {
-                    width: 520,
+                    width: 540,
                     maxWidth: "calc(100vw - 32px)",
-                    maxHeight: 520,
-                    borderRadius: "8px",
-                    boxShadow: 8,
+                    maxHeight: 560,
+                    borderRadius: "12px",
+                    boxShadow: "0 12px 32px rgba(0, 0, 0, 0.15)",
                     overflow: "hidden",
+                    border: "1px solid",
+                    borderColor: "divider",
                   },
                 },
               }}
             >
-              <Box sx={{ px: 2, py: 1.25, borderBottom: "1px solid", borderColor: "divider" }}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  출처
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2.5, py: 1.5, borderBottom: "1px solid", borderColor: "divider" }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 800, fontSize: 15 }}>
+                  {popoverTitle}
                 </Typography>
-              </Box>
-              <Stack divider={<Divider />} sx={{ maxHeight: 460, overflowY: "auto" }}>
-                {ragReferences.map((reference) => {
+                <IconButton size="small" onClick={() => setSourceAnchorEl(null)}>
+                  <CloseOutlined fontSize="small" />
+                </IconButton>
+              </Stack>
+              <Stack divider={<Divider />} sx={{ maxHeight: 490, overflowY: "auto" }}>
+                {displayedReferences.map((reference) => {
                   const percent = scorePercent(reference.score);
                   return (
-                    <Stack key={`${reference.index}-${reference.title}-${reference.chunk}`} direction="row" spacing={1.5} sx={{ px: 2, py: 1.75 }}>
+                    <Stack key={`${reference.index}-${reference.title}-${reference.chunk}`} direction="row" spacing={1.75} sx={{ px: 2.5, py: 2 }}>
                       <Box
                         sx={{
-                          width: 28,
-                          height: 28,
+                          width: 32,
+                          height: 32,
                           borderRadius: "50%",
                           display: "inline-flex",
                           alignItems: "center",
                           justifyContent: "center",
-                          bgcolor: "action.hover",
+                          bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                          color: "primary.main",
                           flex: "0 0 auto",
                         }}
                       >
-                        <DescriptionOutlined sx={{ fontSize: 17 }} />
+                        <DescriptionOutlined sx={{ fontSize: 18 }} />
                       </Box>
-                      <Stack spacing={0.5} sx={{ minWidth: 0, flex: 1 }}>
-                        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
-                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                      <Stack spacing={0.75} sx={{ minWidth: 0, flex: 1 }}>
+                        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "text.primary", fontSize: 13.5 }}>
                             {reference.index ? `근거 ${reference.index}` : "근거"}
                           </Typography>
                           {percent != null ? (
                             <Stack direction="row" spacing={0.75} alignItems="center">
-                              <Typography variant="caption" sx={{ color: scoreColor(percent), fontWeight: 700 }}>
+                              <Typography variant="caption" sx={{ color: scoreColor(percent), fontWeight: 700, fontSize: 11.5 }}>
                                 관련도 {percent}%
                               </Typography>
                               <Box
                                 sx={{
-                                  width: 54,
+                                  width: 60,
                                   height: 5,
                                   borderRadius: 999,
                                   bgcolor: "action.hover",
@@ -450,20 +687,58 @@ export function AssistantMessageBubble({
                                   }}
                                 />
                               </Box>
-                              <Typography variant="caption" color="text.secondary">
-                                {scoreLabel(percent)}
-                              </Typography>
+                              <Chip
+                                label={scoreLabel(percent)}
+                                size="small"
+                                sx={{
+                                  height: 18,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  bgcolor: (theme) => alpha(scoreColor(percent) === "success.main" ? theme.palette.success.main : scoreColor(percent) === "primary.main" ? theme.palette.primary.main : theme.palette.warning.main, 0.12),
+                                  color: scoreColor(percent),
+                                }}
+                              />
                             </Stack>
                           ) : null}
                         </Stack>
-                        <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere" }}>
-                          {renderInlineMarkdown(formatReferenceTitle(reference))}
+                        <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary", fontSize: 13.5, overflowWrap: "anywhere", lineHeight: 1.5 }}>
+                          {formatReferenceTitle(reference)}
                         </Typography>
-                        {formatReferenceSummary(reference) ? (
-                          <Typography variant="body2" color="text.secondary" sx={{ overflowWrap: "anywhere", fontSize: 12.5 }}>
-                            {renderInlineMarkdown(formatReferenceSummary(reference))}
-                          </Typography>
-                        ) : null}
+                        {(() => {
+                          const summary = formatReferenceSummary(reference);
+                          const meta = reference.raw?.metadata || {};
+                          const fallbackText =
+                            summary ||
+                            (meta.sourceEvidence ? String(meta.sourceEvidence) : "") ||
+                            (meta.trustedAnswer ? String(meta.trustedAnswer) : "") ||
+                            (reference.chunk ? `원문 위치: ${reference.chunk}` : "원문 본문 검색 결과 수신됨");
+
+                          return (
+                            <Paper
+                              variant="outlined"
+                              sx={{
+                                p: 1.25,
+                                mt: 0.5,
+                                bgcolor: (theme) => (theme.palette.mode === "dark" ? "action.hover" : "#f8fafc"),
+                                borderColor: "divider",
+                                borderRadius: 1.5,
+                              }}
+                            >
+                              <Typography
+                                variant="body2"
+                                color={summary ? "text.primary" : "text.secondary"}
+                                sx={{
+                                  overflowWrap: "anywhere",
+                                  fontSize: 12.5,
+                                  lineHeight: 1.6,
+                                  fontStyle: summary ? "normal" : "italic",
+                                }}
+                              >
+                                {summary ? `"${summary}"` : `📄 ${fallbackText}`}
+                              </Typography>
+                            </Paper>
+                          );
+                        })()}
 
                         {/* IdeaBlock 특정 필드 노출 */}
                         {(() => {

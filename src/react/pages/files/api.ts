@@ -325,6 +325,7 @@ export interface MarkdownDocumentFromAttachmentRequest {
   blockifyLlmProvider?: string | null;
   blockifyLlmModel?: string | null;
   blockifyPiiMaskingEnabled?: boolean | null;
+  embeddingDeploymentId?: string | null;
   embeddingProfileId?: string | null;
   embeddingModelId?: string | null;
   embeddingProvider?: string | null;
@@ -349,6 +350,7 @@ export interface MarkdownDocumentReextractRequest {
   blockifyLlmProvider?: string | null;
   blockifyLlmModel?: string | null;
   blockifyPiiMaskingEnabled?: boolean | null;
+  embeddingDeploymentId?: string | null;
   embeddingProfileId?: string | null;
   embeddingModelId?: string | null;
   embeddingProvider?: string | null;
@@ -369,7 +371,7 @@ export interface MarkdownDocumentProfileDescriptor {
   version: string;
   costTier: string;
   supportedFormats: string[];
-  chunkingStrategy: string;
+  chunkingStrategy: string | null;
   chunkMaxSize: number;
   chunkOverlap: number;
   chunkUnit: string;
@@ -390,6 +392,7 @@ export interface MarkdownPipelineOptionsDto {
   blockifyLlmProvider: string | null;
   blockifyLlmModel: string | null;
   blockifyPiiMaskingEnabled: boolean | null;
+  embeddingDeploymentId?: string | null;
   embeddingProfileId: string | null;
   embeddingProvider: string | null;
   embeddingModel: string | null;
@@ -443,13 +446,14 @@ export interface MarkdownResumeRequest {
   runChunking?: boolean;
   runRagIndex?: boolean;
   runSkillExtraction?: boolean;
-  chunkingStrategy?: string;
+  chunkingStrategy?: string | null;
   chunkMaxSize?: number;
   chunkOverlap?: number;
   chunkUnit?: string;
   blockifyLlmProvider?: string | null;
   blockifyLlmModel?: string | null;
   blockifyPiiMaskingEnabled?: boolean | null;
+  embeddingDeploymentId?: string;
   embeddingProfileId?: string;
   embeddingModelId?: string;
   embeddingProvider?: string | null;
@@ -471,6 +475,7 @@ export interface MarkdownResumeResultDto {
 }
 
 export interface MarkdownRagReindexRequest {
+  embeddingDeploymentId?: string | null;
   embeddingProfileId?: string | null;
   embeddingModelId?: string | null;
   embeddingProvider?: string | null;
@@ -780,10 +785,10 @@ export interface MarkdownPipelineEstimateResponse {
   confidence?: 'LOW' | 'MEDIUM' | 'HIGH' | string;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'VERY_HIGH';
   recommended: {
-    chunkingStrategy?: string;
-    chunkMaxSize?: number;
-    chunkOverlap?: number;
-    chunkUnit?: string;
+    chunkingStrategy?: string | null;
+    chunkMaxSize?: number | null;
+    chunkOverlap?: number | null;
+    chunkUnit?: string | null;
     estimatedChunkCount?: number;
     estimatedEmbeddingRequests?: number;
   };

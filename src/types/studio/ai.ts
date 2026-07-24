@@ -8,8 +8,9 @@ export interface ChatMessageDto {
 }
 
 export interface ChatRequestDto {
+  deploymentId?: string; // 표준 계약: 백엔드 배포 ID (예: "chat-default", "chat-pro", "local-gemma-v1")
   provider?: string; // 선택: 백엔드에서 지원 시
-  model?: string; // 예: "gpt-4o-mini" 또는 "gemini-2.0-flash"
+  model?: string; // 예: "gpt-4o-mini" 또는 "gemini-2.5-flash"
   messages: ChatMessageDto[];
   systemPrompt?: string; // 선택
   temperature?: number; // 선택
@@ -18,6 +19,26 @@ export interface ChatRequestDto {
   maxOutputTokens?: number; // 선택
   stopSequences?: string[]; // 선택
   memory?: ChatMemoryOptionsDto;
+}
+
+export interface AiDeploymentDto {
+  deploymentId: string;
+  model: string;
+  provider: string;
+  workload?: "CHAT" | "EMBEDDING" | string;
+  dimension?: number;
+  modality?: string;
+  embeddingSpace?: string;
+  displayName?: string;
+  isDefault?: boolean;
+}
+
+export interface AiModelDto {
+  modelId: string;
+  model: string;
+  provider: string;
+  workloads?: string[];
+  effective?: boolean;
 }
 
 export interface ChatMemoryOptionsDto {
@@ -54,6 +75,7 @@ export interface RagReferenceDto {
   chunkId?: string;
   chunkOrder?: number | string;
   score?: number;
+  excerpt?: string;
   content?: string;
   page?: number | string;
   pageNumber?: number | string;
@@ -75,9 +97,19 @@ export interface ChatRagRequestDto {
   embeddingProfileId?: string;
   embeddingProvider?: string;
   embeddingModel?: string;
+  embeddingDeploymentId?: string;
   topK?: number;
   minScore?: number;
   debug?: boolean;
+  retrievalStrategy?: string;
+  retrievalOptions?: {
+    structureTopK?: number;
+    ideaBlockTopK?: number;
+    finalTopK?: number;
+    minScore?: number;
+    dedupe?: boolean;
+    includeDebugChunks?: boolean;
+  };
 }
 
 export interface TokenUsageDto {
@@ -145,6 +177,21 @@ export interface ChatStreamCompleteEventDto {
   fallbackUsed?: boolean;
   finishReason?: string;
   metadata?: ChatResponseMetadataDto;
+}
+
+export interface ChatStreamErrorEventDto {
+  type?: string;
+  requestId?: string;
+  errorMessage?: string;
+  metadata?: ChatResponseMetadataDto;
+}
+
+export interface RagStreamStatusEventDto {
+  type?: string;
+  requestId?: string;
+  stage?: "retrieval_started" | "retrieval_complete" | string;
+  retrievalMs?: number;
+  resultCount?: number;
 }
 
 export interface ConversationSummaryDto {
@@ -485,6 +532,7 @@ export interface RagIndexRequestDto {
   objectId?: string;
   metadata?: Record<string, any>;
   keywords?: string[];
+  embeddingDeploymentId?: string;
   embeddingProfileId?: string;
   embeddingProvider?: string;
   embeddingModel?: string;
@@ -543,6 +591,9 @@ export interface RagIndexJobDto {
   embeddingProfileId?: string;
   embeddingProvider?: string;
   embeddingModel?: string;
+  embeddingDeploymentId?: string;
+  catalogId?: string;
+  embeddingSpaceId?: string;
 }
 export type RagIndexJobListResponseDto = PageDto<RagIndexJobDto>;
 

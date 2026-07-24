@@ -82,8 +82,9 @@ function toRequestMessage(message: ChatMessage): ChatMessageDto {
 
 export function ChatPage() {
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
-  const [provider, setProvider] = useState("");
-  const [model, setModel] = useState("");
+  const [provider, setProvider] = useState("google-ai");
+  const [model, setModel] = useState("gemini-2.5-flash");
+  const [deploymentId, setDeploymentId] = useState("chat-default");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [memoryEnabled, setMemoryEnabled] = useState(false);
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
@@ -276,6 +277,7 @@ export function ChatPage() {
     try {
       await reactAiApi.sendChatStream(
         {
+          deploymentId: deploymentId || "chat-default",
           provider: provider || undefined,
           model: model || undefined,
           messages: requestMessages,
@@ -509,9 +511,11 @@ export function ChatPage() {
             <AiProviderSelect
               provider={provider}
               model={model}
-              onChange={(p, m) => {
+              deploymentId={deploymentId}
+              onChange={(p, m, d) => {
                 setProvider(p);
                 setModel(m);
+                if (d) setDeploymentId(d);
               }}
             />
             {selectedProvider ? (
