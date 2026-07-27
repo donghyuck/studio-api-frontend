@@ -840,6 +840,6 @@ export function AssistantMessageBubble({
           </>
         ) : null}
       </Stack>
-    </Stack>
+    </Box>
   );
 }
