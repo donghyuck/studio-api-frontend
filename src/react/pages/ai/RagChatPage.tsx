@@ -283,6 +283,10 @@ export function RagChatPage() {
               message.id === assistantMessageId
                 ? {
                     ...message,
+                    content:
+                      typeof metadata.canonicalContent === "string"
+                        ? metadata.canonicalContent
+                        : message.content,
                     model: streamPayload.resolvedModel ?? metadata.resolvedModel ?? streamPayload.model ?? model,
                     metadata: {
                       ...(message.metadata ?? {}),

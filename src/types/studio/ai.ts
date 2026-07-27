@@ -70,12 +70,19 @@ export interface ChatResponseMetadataDto {
 
 export interface RagReferenceDto {
   index?: number;
+  citationIndex?: number;
+  evidenceId?: string;
   documentId?: string;
+  revisionId?: string;
   sourceName?: string;
+  originalFileName?: string;
+  title?: string;
+  documentSemanticType?: string;
   chunkId?: string;
   chunkOrder?: number | string;
   score?: number;
   excerpt?: string;
+  exactText?: string;
   content?: string;
   page?: number | string;
   pageNumber?: number | string;
@@ -85,6 +92,25 @@ export interface RagReferenceDto {
   sourceRefs?: string;
   section?: string;
   heading?: string;
+  evidenceKind?: string;
+  supportStatus?: "SOURCE_VERIFIED" | "INFERRED" | "INDEX_VALID" | string;
+  startOffset?: number;
+  endOffset?: number;
+  truncated?: boolean;
+  blockIds?: string[];
+  spanChunkId?: string;
+  spans?: Array<{
+    exactText: string;
+    chunkId?: string;
+    sourceRef?: string;
+    page?: number;
+    slide?: number;
+    section?: string;
+    startOffset?: number;
+    endOffset?: number;
+    truncated?: boolean;
+    blockIds?: string[];
+  }>;
   metadata?: Record<string, unknown>;
 }
 

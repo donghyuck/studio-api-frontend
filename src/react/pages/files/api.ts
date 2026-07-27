@@ -263,6 +263,69 @@ export interface MarkdownDocumentFromAttachmentResponse {
 // ---------------------------------------------------------------------------
 
 export type OcrMode = "AUTO" | "FORCE" | "DISABLED";
+export type DocumentSemanticTypeSelection =
+  | "AUTO"
+  | "GENERAL"
+  | "BOOK"
+  | "ACADEMIC_PAPER"
+  | "THESIS"
+  | "REPORT"
+  | "POLICY"
+  | "MANUAL"
+  | "PRESENTATION"
+  | "UNKNOWN";
+export type MetadataEnrichmentMode = "OFF" | "AUTO" | "REQUIRED";
+
+export interface DocumentMetadataFieldDescriptor {
+  fieldId: string;
+  label: string;
+  description: string;
+  required: boolean;
+  recommended: boolean;
+  multiValued: boolean;
+  valueType: string;
+}
+
+export interface DocumentMetadataSchema {
+  semanticType: Exclude<DocumentSemanticTypeSelection, "AUTO">;
+  displayName: string;
+  description: string;
+  fields: DocumentMetadataFieldDescriptor[];
+}
+
+export interface DocumentMetadataArtifact {
+  artifactId: string;
+  revisionId: string;
+  schemaVersion: string;
+  extractorVersion: string;
+  fingerprint: string;
+  classification: {
+    requestedSemanticType?: string;
+    detectedSemanticType?: string;
+    effectiveSemanticType?: string;
+    subject?: string;
+    confidence?: number;
+  };
+  quality: string;
+  fields: Record<string, {
+    fieldId: string;
+    rawValues?: string[];
+    normalizedValues?: string[];
+    confidence: number;
+    provenance: string;
+    evidence?: Array<{
+      exactText: string;
+      sourceRef?: string;
+      blockId?: string;
+      page?: number;
+      slide?: number;
+      section?: string;
+      startOffset?: number;
+      endOffset?: number;
+    }>;
+  }>;
+  warnings: string[];
+}
 
 export interface MarkdownOcrMetadata {
   ocrMode?: OcrMode;
@@ -337,6 +400,8 @@ export interface MarkdownDocumentFromAttachmentRequest {
   ocrRequired?: boolean | null;
   mathVisionCorrection?: boolean | null;
   documentProfile?: string | null;
+  documentSemanticType?: DocumentSemanticTypeSelection | null;
+  metadataEnrichmentMode?: MetadataEnrichmentMode | null;
 }
 
 export interface MarkdownDocumentReextractRequest {
@@ -362,6 +427,8 @@ export interface MarkdownDocumentReextractRequest {
   ocrRequired?: boolean | null;
   mathVisionCorrection?: boolean | null;
   documentProfile?: string | null;
+  documentSemanticType?: DocumentSemanticTypeSelection | null;
+  metadataEnrichmentMode?: MetadataEnrichmentMode | null;
 }
 
 export interface MarkdownDocumentProfileDescriptor {
@@ -423,6 +490,7 @@ export type MarkdownPipelineExecutionStatus =
   | "UNKNOWN";
 
 export type MarkdownPipelineStage =
+  | "METADATA_ENRICHMENT"
   | "CHUNKING"
   | "RAG_INDEX"
   | "SKILL_EXTRACTION"
@@ -464,6 +532,8 @@ export interface MarkdownResumeRequest {
   ocrLanguage?: string;
   ocrRequired?: boolean;
   mathVisionCorrection?: boolean;
+  documentSemanticType?: DocumentSemanticTypeSelection;
+  metadataEnrichmentMode?: MetadataEnrichmentMode;
 }
 
 export interface MarkdownResumeResultDto {
@@ -561,6 +631,20 @@ export const reactMarkdownDocumentApi = {
   },
   async getProfiles(): Promise<MarkdownDocumentProfileDescriptor[]> {
     return apiRequest<MarkdownDocumentProfileDescriptor[]>("get", "/api/markdown-documents/profiles");
+  },
+  async getMetadataSchemas(): Promise<DocumentMetadataSchema[]> {
+    const response = await apiRequest<{ schemaVersion: string; schemas: DocumentMetadataSchema[] }>(
+      "get",
+      "/api/document-metadata/schemas"
+    );
+    return response.schemas;
+  },
+  async getMetadata(documentId: string, revisionId?: string): Promise<DocumentMetadataArtifact> {
+    return apiRequest<DocumentMetadataArtifact>(
+      "get",
+      `/api/markdown-documents/${encodeURIComponent(documentId)}/metadata`,
+      { params: revisionId ? { revisionId } : undefined }
+    );
   },
   async getProcessingPlan(request: MarkdownDocumentFromAttachmentRequest): Promise<MarkdownProcessingPlan> {
     return apiRequest<MarkdownProcessingPlan>("post", "/api/markdown-documents/processing-plan", {
