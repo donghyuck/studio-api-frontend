@@ -2820,6 +2820,9 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
           p: 0,
           display: "flex",
           flexDirection: "column",
+          borderRadius: "12px 0 0 12px",
+          borderTopRightRadius: 0,
+          borderBottomRightRadius: 0,
         },
       }}
     >
