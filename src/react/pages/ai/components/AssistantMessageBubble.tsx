@@ -14,10 +14,12 @@ function formatNumber(value?: number) {
 
 interface NormalizedRagReference {
   index?: number;
+  evidenceId?: string;
   title?: string;
   chunk?: string;
   score?: number;
   content?: string;
+  supportStatus?: string;
   raw?: RagReferenceDto;
 }
 
@@ -57,6 +59,13 @@ function formatLocationFromSourceRef(sourceRef: string) {
 
 function extractReferenceContent(reference: RagReferenceDto): string {
   if (!reference) return "";
+  if (typeof reference.exactText === "string" && reference.exactText.trim()) {
+    return reference.exactText;
+  }
+  const exactSpan = reference.spans?.find((span) => typeof span.exactText === "string" && span.exactText.length > 0);
+  if (exactSpan) {
+    return exactSpan.exactText;
+  }
 
   const directKeys = [
     "content",
@@ -181,11 +190,13 @@ function normalizeReference(reference: RagReferenceDto, fallbackIndex: number): 
   const content = extractReferenceContent(reference);
 
   return {
-    index: reference.index ?? fallbackIndex,
+    index: reference.citationIndex ?? reference.index ?? fallbackIndex,
+    evidenceId: reference.evidenceId,
     title,
     chunk,
     score: reference.score,
     content,
+    supportStatus: reference.supportStatus,
     raw: reference,
   };
 }
@@ -481,78 +492,79 @@ export function AssistantMessageBubble({
   const sourcePopoverOpen = Boolean(sourceAnchorEl);
 
   return (
-    <Stack spacing={0.5} alignItems="flex-start" sx={{ width: "100%" }}>
-      <Stack direction="row" spacing={1.25} alignItems="flex-start" sx={{ maxWidth: { xs: "100%", md: "82%" } }}>
+    <Box sx={{ width: "100%", py: 0.5 }}>
+      <Stack direction="row" spacing={1.25} alignItems="center" sx={{ mb: 1 }}>
         <Avatar
           sx={{
-            width: 28,
-            height: 28,
-            fontSize: 12,
+            width: 26,
+            height: 26,
+            fontSize: 11,
             fontWeight: 800,
-            bgcolor: (theme) => alpha(theme.palette.primary.main, theme.palette.mode === "dark" ? 0.32 : 0.12),
+            bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(144, 202, 249, 0.16)" : "rgba(25, 118, 210, 0.08)"),
             color: "primary.main",
-          }}
-        >
-          AI
-        </Avatar>
-        <Box
-          sx={{
-            px: 2,
-            py: 1.5,
-            borderRadius: "8px",
-            bgcolor: "background.paper",
-            color: "text.primary",
             border: "1px solid",
-            borderColor: "divider",
-            boxShadow: (theme) => `0 8px 24px ${alpha(theme.palette.common.black, theme.palette.mode === "dark" ? 0.22 : 0.06)}`,
+            borderColor: (theme) => alpha(theme.palette.primary.main, 0.25),
           }}
         >
-          <Typography variant="caption" color="text.secondary">
-            Assistant{message.model ? ` · ${message.model}` : ""}
-          </Typography>
-          <Typography component="div" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14, lineHeight: 1.75 }}>
-            {message.content
-              ? renderInlineMarkdown(
-                  message.content,
-                  (indices, event) => {
-                    setSourceAnchorEl(event.currentTarget);
-                    setSelectedCitationIndices(indices);
-                  },
-                  ragReferences
-                )
-              : sending
-              ? "응답 생성 중..."
-              : ""}
-          </Typography>
-          {renderTokenUsage(message.metadata)}
-          {renderRetrievalDebug(message.metadata)}
-          {renderRetrievalPolicy(message.metadata)}
-        </Box>
+          ✦
+        </Avatar>
+        <Typography variant="subtitle2" component="div" sx={{ fontWeight: 700, fontSize: 13, color: "text.primary", display: "flex", alignItems="center", gap: 1 }}>
+          Assistant
+          {message.model && (
+            <Chip
+              size="small"
+              variant="outlined"
+              label={message.model}
+              sx={{ height: 18, fontSize: 10, fontWeight: 500, borderColor: "divider", color: "text.secondary" }}
+            />
+          )}
+        </Typography>
       </Stack>
-      <Stack direction="row" spacing={0.5} alignItems="center" sx={{ pl: 5 }}>
+
+      <Box sx={{ width: "100%", color: "text.primary", pl: 0 }}>
+        <Typography component="div" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14.5, lineHeight: 1.8 }}>
+          {message.content
+            ? renderInlineMarkdown(
+                message.content,
+                (indices, event) => {
+                  setSourceAnchorEl(event.currentTarget);
+                  setSelectedCitationIndices(indices);
+                },
+                ragReferences
+              )
+            : sending
+            ? "응답 생성 중..."
+            : ""}
+        </Typography>
+        {renderTokenUsage(message.metadata)}
+        {renderRetrievalDebug(message.metadata)}
+        {renderRetrievalPolicy(message.metadata)}
+      </Box>
+
+      <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" sx={{ mt: 1.5, pt: 1, borderTop: "1px solid", borderColor: (theme) => alpha(theme.palette.divider, 0.6) }}>
         {message.createdAt ? (
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11, mr: 0.5 }}>
             {formatMessageTime(message.createdAt)}
           </Typography>
         ) : null}
         <Tooltip title="복사">
-          <IconButton size="small" onClick={() => onCopy(message.content)}>
-            <ContentCopyOutlined fontSize="inherit" />
+          <IconButton size="small" onClick={() => onCopy(message.content)} sx={{ opacity: 0.75, "&:hover": { opacity: 1 } }}>
+            <ContentCopyOutlined fontSize="small" sx={{ fontSize: 16 }} />
           </IconButton>
         </Tooltip>
         {isLastAssistant ? (
           <Tooltip title="답변 다시 생성">
             <span>
-              <IconButton size="small" disabled={sending} onClick={onRegenerate}>
-                <SyncOutlined fontSize="inherit" />
+              <IconButton size="small" disabled={sending} onClick={onRegenerate} sx={{ opacity: 0.75, "&:hover": { opacity: 1 } }}>
+                <SyncOutlined fontSize="small" sx={{ fontSize: 16 }} />
               </IconButton>
             </span>
           </Tooltip>
         ) : null}
         {isErrorMessage ? (
           <Tooltip title="마지막 질문 다시 보내기">
-            <IconButton size="small" onClick={onRetryLastUser}>
-              <RefreshOutlined fontSize="inherit" />
+            <IconButton size="small" onClick={onRetryLastUser} sx={{ opacity: 0.75, "&:hover": { opacity: 1 } }}>
+              <RefreshOutlined fontSize="small" sx={{ fontSize: 16 }} />
             </IconButton>
           </Tooltip>
         ) : null}
@@ -569,19 +581,21 @@ export function AssistantMessageBubble({
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 0.75,
-                border: 0,
-                px: 1,
-                py: 0.45,
+                border: "1px solid",
+                borderColor: "divider",
+                px: 1.25,
+                py: 0.35,
                 ml: 0.5,
                 borderRadius: "999px",
-                bgcolor: "transparent",
-                color: "text.secondary",
+                bgcolor: "background.paper",
+                color: "text.primary",
                 cursor: "pointer",
                 font: "inherit",
-                transition: "background-color 120ms ease, color 120ms ease",
+                transition: "all 150ms ease",
                 "&:hover": {
-                  bgcolor: "action.selected",
-                  color: "text.primary",
+                  bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08),
+                  borderColor: "primary.main",
+                  color: "primary.main",
                 },
               }}
             >
@@ -590,8 +604,8 @@ export function AssistantMessageBubble({
                   <Box
                     key={`${reference.index}-${reference.title}-${reference.chunk}`}
                     sx={{
-                      width: 19,
-                      height: 19,
+                      width: 18,
+                      height: 18,
                       borderRadius: "50%",
                       display: "inline-flex",
                       alignItems: "center",
@@ -602,11 +616,11 @@ export function AssistantMessageBubble({
                       boxShadow: 0.5,
                     }}
                   >
-                    <DescriptionOutlined sx={{ fontSize: 13 }} />
+                    <DescriptionOutlined sx={{ fontSize: 12 }} />
                   </Box>
                 ))}
               </Stack>
-              <Typography variant="caption" color="inherit" sx={{ fontWeight: 600 }}>
+              <Typography variant="caption" color="inherit" sx={{ fontWeight: 600, fontSize: 11 }}>
                 출처
               </Typography>
             </Box>
@@ -699,6 +713,15 @@ export function AssistantMessageBubble({
                                 }}
                               />
                             </Stack>
+                          ) : null}
+                          {reference.supportStatus ? (
+                            <Chip
+                              size="small"
+                              variant="outlined"
+                              color={reference.supportStatus === "SOURCE_VERIFIED" ? "success" : "warning"}
+                              label={reference.supportStatus === "SOURCE_VERIFIED" ? "원문 확인" : reference.supportStatus}
+                              sx={{ height: 18, fontSize: 10 }}
+                            />
                           ) : null}
                         </Stack>
                         <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary", fontSize: 13.5, overflowWrap: "anywhere", lineHeight: 1.5 }}>
