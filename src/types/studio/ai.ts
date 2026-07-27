@@ -65,7 +65,29 @@ export interface ChatResponseMetadataDto {
   responseId?: string;
   finishReason?: string;
   ragReferences?: RagReferenceDto[];
+  canonicalContent?: string;
+  answerPolicy?: ResolvedRagAnswerPolicyDto;
+  answerPolicyValidationStatus?: string;
   [key: string]: unknown;
+}
+
+export type RagAnswerMode = "STRICT_GROUNDED" | "GROUNDED_INFERENCE";
+
+export interface ResolvedRagAnswerPolicyDto {
+  requestedMode?: RagAnswerMode | null;
+  effectiveMode: RagAnswerMode;
+  source: "SERVER_DEFAULT" | "REQUEST";
+  clamped: boolean;
+  reasonCode: "NONE" | "SERVER_MAXIMUM" | "CLIENT_SELECTION_DISABLED" | string;
+  policyVersion: string;
+}
+
+export interface RagAnswerPolicyCapabilitiesDto {
+  defaultMode: RagAnswerMode;
+  maximumMode: RagAnswerMode;
+  clientSelectionEnabled: boolean;
+  policyVersion: string;
+  availableModes: RagAnswerMode[];
 }
 
 export interface RagReferenceDto {
@@ -136,6 +158,7 @@ export interface ChatRagRequestDto {
     dedupe?: boolean;
     includeDebugChunks?: boolean;
   };
+  answerMode?: RagAnswerMode;
 }
 
 export interface TokenUsageDto {
@@ -239,6 +262,11 @@ export interface ConversationDeleteResponseDto {
 
 export interface RegenerateRequestDto {
   conversationId: string;
+}
+
+export interface RagRegenerateRequestDto {
+  conversationId: string;
+  rag: ChatRagRequestDto;
 }
 
 export interface AclActionMaskDto {

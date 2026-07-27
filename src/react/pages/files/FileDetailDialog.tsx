@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { alpha } from "@mui/material/styles";
 import {
   Accordion,
   AccordionDetails,
@@ -50,12 +51,20 @@ import {
   VisibilityOutlined,
   ArrowDownwardOutlined,
   AutoFixHighOutlined,
+  LockOutlined,
+  DescriptionOutlined,
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import { useAuthStore } from "@/react/auth/store";
 import { useToast } from "@/react/feedback";
 import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
-import type { RagChunkConfigResponseDto, AiInfoResponse } from "@/types/studio/ai";
+import type {
+  RagChunkConfigResponseDto,
+  AiInfoResponse,
+  ChatRagRequestDto,
+  RagAnswerMode,
+  RagAnswerPolicyCapabilitiesDto,
+} from "@/types/studio/ai";
 import {
   reactFilesApi,
   reactDocumentConvertApi,
@@ -85,6 +94,7 @@ import {
 } from "@/react/pages/files/api";
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import { AssistantMessageBubble } from "../ai/components/AssistantMessageBubble";
+import { RagAnswerModeSelector } from "../ai/components/RagAnswerModeSelector";
 import { UserMessageBubble } from "../ai/components/UserMessageBubble";
 import type { ChatMessage } from "../ai/components/chatTypes";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
@@ -666,6 +676,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [qaInput, setQaInput] = useState<string>("");
   const [qaSending, setQaSending] = useState<boolean>(false);
   const [qaError, setQaError] = useState<string | null>(null);
+  const [qaAnswerPolicy, setQaAnswerPolicy] = useState<RagAnswerPolicyCapabilitiesDto | null>(null);
+  const [qaAnswerMode, setQaAnswerMode] = useState<RagAnswerMode>("STRICT_GROUNDED");
   const [showScrollToBottomBtn, setShowScrollToBottomBtn] = useState<boolean>(false);
   const qaMessageListRef = useRef<HTMLDivElement | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
@@ -727,13 +739,22 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
     }
   }, []);
 
+  const loadRagAnswerPolicy = useCallback(async () => {
+    try {
+      setQaAnswerPolicy(await reactAiApi.fetchRagAnswerPolicy());
+    } catch {
+      // The server still enforces its default policy if capabilities cannot be loaded.
+    }
+  }, []);
+
   useEffect(() => {
     if (open && attachmentId) {
       void loadEmbeddingOptions();
       void loadChunkConfig();
       void loadProviders();
+      void loadRagAnswerPolicy();
     }
-  }, [open, attachmentId, loadEmbeddingOptions, loadChunkConfig, loadProviders]);
+  }, [open, attachmentId, loadEmbeddingOptions, loadChunkConfig, loadProviders, loadRagAnswerPolicy]);
 
   useEffect(() => {
     if (!open) {
@@ -742,6 +763,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       setQaInput("");
       setQaSending(false);
       setQaError(null);
+      setQaAnswerMode("STRICT_GROUNDED");
     }
   }, [open]);
 
@@ -2706,13 +2728,12 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       const embeddingProvider = latestRagJob?.embeddingProvider || (ragMetadata as any)?.embeddingProvider || undefined;
       const embeddingModel = latestRagJob?.embeddingModel || (ragMetadata as any)?.embeddingModel || undefined;
 
-      const payload: any = {
+      const payload: ChatRagRequestDto = {
         chat: {
           deploymentId: qaDeploymentId || "chat-default",
           provider: qaProvider || undefined,
           model: qaModel || undefined,
           messages: requestMessages,
-          systemPrompt: "제공된 RAG 문서 내용에 근거해서만 답변하세요. 문서에서 확인할 수 없는 내용은 확인할 수 없다고 답변하세요.",
         },
         ragQuery: trimmed,
         objectType: "attachment",
@@ -2720,6 +2741,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         topK: 5,
         minScore: 0.35,
         debug: true,
+        answerMode: qaAnswerMode,
       };
 
       if (embeddingDeploymentId) {
@@ -2826,13 +2848,23 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         },
       }}
     >
-      <Box sx={{ p: 2, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid", borderColor: "divider", flexShrink: 0 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Typography variant="subtitle1" sx={{ fontWeight: 700, fontSize: 16 }}>
-            {file ? `${file.name} 상세 정보` : "파일 상세 정보"}
-          </Typography>
+      <Box sx={{ px: 3, py: 2, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid", borderColor: "divider", bgcolor: "background.paper", flexShrink: 0 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0, flex: 1, mr: 2 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: "8px", bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08), color: "primary.main", flexShrink: 0 }}>
+            <DescriptionOutlined fontSize="small" />
+          </Box>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography variant="subtitle1" noWrap sx={{ fontWeight: 700, fontSize: 16, color: "text.primary" }}>
+              {file ? file.name : "파일 상세 정보"}
+            </Typography>
+            {file && (
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11, display: "flex", alignItems: "center", gap: 0.75 }}>
+                {file.contentType || "첨부파일"} {file.size ? `· ${formatFileSize(file.size)}` : ""}
+              </Typography>
+            )}
+          </Box>
         </Stack>
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
           {file && (
             <>
               {isPdf && (
@@ -2840,7 +2872,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                   size="small"
                   variant="outlined"
                   onClick={() => setPdfReaderOpen(true)}
-                  sx={{ height: 28, fontSize: 12 }}
+                  sx={{ height: 32, fontSize: 12, borderRadius: "8px", textTransform: "none", fontWeight: 600 }}
                 >
                   미리보기 (PDF)
                 </Button>
@@ -2850,7 +2882,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                   size="small"
                   variant="outlined"
                   onClick={() => setEpubReaderOpen(true)}
-                  sx={{ height: 28, fontSize: 12 }}
+                  sx={{ height: 32, fontSize: 12, borderRadius: "8px", textTransform: "none", fontWeight: 600 }}
                 >
                   미리보기 (EPUB)
                 </Button>
@@ -2861,18 +2893,22 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                 component="a"
                 href={`/api/mgmt/files/${file.attachmentId}/download`}
                 download={file.name}
-                sx={{ height: 28, fontSize: 12 }}
+                sx={{ height: 32, fontSize: 12, borderRadius: "8px", textTransform: "none", fontWeight: 600 }}
               >
                 다운로드
               </Button>
             </>
           )}
-          <IconButton size="small" onClick={refreshDetail}>
-            <RefreshOutlined fontSize="small" />
-          </IconButton>
-          <IconButton size="small" onClick={onClose}>
-            <CloseOutlined fontSize="small" />
-          </IconButton>
+          <Tooltip title="새로고침">
+            <IconButton size="small" onClick={refreshDetail} sx={{ border: "1px solid", borderColor: "divider", borderRadius: "8px", width: 32, height: 32 }}>
+              <RefreshOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="닫기">
+            <IconButton size="small" onClick={onClose} sx={{ border: "1px solid", borderColor: "divider", borderRadius: "8px", width: 32, height: 32 }}>
+              <CloseOutlined fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Stack>
       </Box>
 
@@ -4389,10 +4425,29 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
           {currentTab === "qa" && file && (
             <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, height: "calc(100vh - 120px)", overflow: "hidden" }}>
               {/* Chat config row */}
-              <Box sx={{ p: 2, borderBottom: "1px solid", borderColor: "divider", bgcolor: "action.hover" }}>
-                <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+              <Paper
+                elevation={0}
+                variant="outlined"
+                sx={{
+                  mx: 3,
+                  mt: 2,
+                  mb: 1.5,
+                  p: 2,
+                  borderRadius: "10px",
+                  bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.paper" : "rgba(248, 250, 252, 0.9)"),
+                  borderColor: (theme) => alpha(theme.palette.divider, 0.8),
+                  boxShadow: (theme) => `0 2px 8px ${alpha(theme.palette.common.black, 0.03)}`,
+                }}
+              >
+                <Stack
+                  direction={{ xs: "column", md: "row" }}
+                  spacing={2}
+                  alignItems="center"
+                  justifyContent="space-between"
+                  sx={{ width: "100%" }}
+                >
                   {/* Chat model selection */}
-                  <Box sx={{ flex: 1, maxWidth: 450 }}>
+                  <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>
                     <AiProviderSelect
                       provider={qaProvider}
                       model={qaModel}
@@ -4404,24 +4459,60 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                       }}
                     />
                   </Box>
-                  {/* Embedding profile display (readonly) */}
-                  <Box sx={{ textAlign: "right" }}>
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      RAG 임베딩 모델 (수정 불가)
-                    </Typography>
-                    <Chip
-                      label={formatEmbeddingModelName(
-                        latestRagJob?.embeddingModel
-                        || latestRagJob?.embeddingDeploymentId
-                        || (ragMetadata as any)?.embeddingModel
-                        || (ragMetadata as any)?.embeddingDeploymentId)}
-                      size="small"
-                      variant="outlined"
-                      sx={{ mt: 0.5, fontWeight: 600, bgcolor: "background.paper" }}
+
+                  {/* RAG Answer Mode selection */}
+                  <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>
+                    <RagAnswerModeSelector
+                      capabilities={qaAnswerPolicy}
+                      value={qaAnswerMode}
+                      disabled={qaSending}
+                      hideHelperText
+                      onChange={(mode) => {
+                        if (mode === qaAnswerMode) return;
+                        setQaAnswerMode(mode);
+                        setQaMessages([]);
+                        setQaInput("");
+                        setQaError(null);
+                      }}
                     />
                   </Box>
+
+                  {/* Embedding profile display (readonly) */}
+                  <Box sx={{ flexShrink: 0, width: { xs: "100%", md: "auto" } }}>
+                    <Tooltip title="이 문서에 적용된 RAG 임베딩 모델입니다 (수정 불가)">
+                      <Box
+                        sx={{
+                          display: "inline-flex",
+                          flexDirection: "column",
+                          alignItems: { xs: "flex-start", md: "flex-end" },
+                          px: 1.5,
+                          py: 0.75,
+                          borderRadius: "8px",
+                          bgcolor: (theme) => alpha(theme.palette.action.hover, 0.5),
+                          border: "1px solid",
+                          borderColor: "divider",
+                          width: "100%",
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 0.5 }}>
+                          <LockOutlined sx={{ fontSize: 11 }} /> RAG 임베딩 모델
+                        </Typography>
+                        <Chip
+                          label={formatEmbeddingModelName(
+                            latestRagJob?.embeddingModel
+                            || latestRagJob?.embeddingDeploymentId
+                            || (ragMetadata as any)?.embeddingModel
+                            || (ragMetadata as any)?.embeddingDeploymentId)}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          sx={{ height: 20, fontSize: 11, fontWeight: 700, mt: 0.25, border: 0 }}
+                        />
+                      </Box>
+                    </Tooltip>
+                  </Box>
                 </Stack>
-              </Box>
+              </Paper>
 
               {/* Chat messages list */}
               <Box sx={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column" }}>

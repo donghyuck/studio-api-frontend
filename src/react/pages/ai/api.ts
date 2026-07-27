@@ -10,6 +10,7 @@ import type {
   ChatStreamCompleteEventDto,
   ChatStreamDeltaEventDto,
   ChatStreamUsageEventDto,
+  ChatStreamErrorEventDto,
   ConversationDeleteResponseDto,
   ConversationDetailDto,
   ConversationSummaryDto,
@@ -38,6 +39,9 @@ import type {
   SearchVisualizationRequest,
   SearchVisualizationResponse,
   RegenerateRequestDto,
+  RagRegenerateRequestDto,
+  RagAnswerPolicyCapabilitiesDto,
+  RagStreamStatusEventDto,
   VectorItemDetail,
   VectorProjection,
   VectorSearchRequestDto,
@@ -78,6 +82,83 @@ async function getAccessTokenForFetch() {
 
 let embeddingOptionsCachePromise: Promise<{ options: EmbeddingOption[] }> | null = null;
 
+type ChatStreamHandlers = {
+  onDelta?: (payload: ChatStreamDeltaEventDto) => void;
+  onUsage?: (payload: ChatStreamUsageEventDto) => void;
+  onComplete?: (payload: ChatStreamCompleteEventDto) => void;
+  onRagStatus?: (payload: RagStreamStatusEventDto) => void;
+  onError?: (payload: ChatStreamErrorEventDto) => void;
+};
+
+async function consumeChatStream(
+  path: string,
+  req: ChatRequestDto | ChatRagRequestDto,
+  handlers: ChatStreamHandlers
+) {
+  const token = await getAccessTokenForFetch();
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify(req),
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(`채팅 스트림 요청에 실패했습니다. (${response.status})`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const flush = (rawBlock: string) => {
+    const lines = rawBlock.split(/\r?\n/);
+    let currentEvent = "message";
+    const dataLines: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith("event:")) {
+        currentEvent = line.slice(6).trim();
+      } else if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trimStart());
+      }
+    }
+    const data = dataLines.join("\n").trim();
+    if (!data) return;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      throw new Error(`채팅 스트림 응답을 해석할 수 없습니다. (${currentEvent})`);
+    }
+
+    if (currentEvent === "delta") {
+      handlers.onDelta?.(parsed as ChatStreamDeltaEventDto);
+    } else if (currentEvent === "usage") {
+      handlers.onUsage?.(parsed as ChatStreamUsageEventDto);
+    } else if (currentEvent === "rag_status") {
+      handlers.onRagStatus?.(parsed as RagStreamStatusEventDto);
+    } else if (currentEvent === "complete") {
+      handlers.onComplete?.(parsed as ChatStreamCompleteEventDto);
+    } else if (currentEvent === "error") {
+      handlers.onError?.(parsed as ChatStreamErrorEventDto);
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const chunks = buffer.split(/\r?\n\r?\n/);
+    buffer = chunks.pop() ?? "";
+    chunks.forEach(flush);
+  }
+  if (buffer.trim()) flush(buffer);
+}
+
 export const reactAiApi = {
   sendChat(req: ChatRequestDto) {
     return apiRequest<ChatResponseDto>("post", `${BASE}/chat`, { data: req });
@@ -97,10 +178,15 @@ export const reactAiApi = {
       onDelta?: (payload: ChatStreamDeltaEventDto) => void;
       onUsage?: (payload: ChatStreamUsageEventDto) => void;
       onComplete?: (payload: ChatStreamCompleteEventDto) => void;
-      onRagStatus?: (payload: any) => void;
+      onRagStatus?: (payload: RagStreamStatusEventDto) => void;
+      onError?: (payload: ChatStreamErrorEventDto) => void;
     }
   ) {
-    return this.sendChatStream(req as any, handlers);
+    return consumeChatStream(`${BASE}/chat/rag/stream`, req, handlers);
+  },
+
+  fetchRagAnswerPolicy() {
+    return apiRequest<RagAnswerPolicyCapabilitiesDto>("get", `${BASE}/chat/rag/answer-policy`);
   },
 
   fetchProviders() {
@@ -123,6 +209,10 @@ export const reactAiApi = {
     return apiRequest<ChatResponseDto>("post", `${BASE}/chat/regenerate`, { data: req });
   },
 
+  regenerateRag(req: RagRegenerateRequestDto) {
+    return apiRequest<ChatResponseDto>("post", `${BASE}/chat/rag/regenerate`, { data: req });
+  },
+
   async sendChatStream(
     req: ChatRequestDto,
     handlers: {
@@ -131,80 +221,7 @@ export const reactAiApi = {
       onComplete?: (payload: ChatStreamCompleteEventDto) => void;
     }
   ) {
-    const token = await getAccessTokenForFetch();
-    const response = await fetch(`${API_BASE_URL}${BASE}/chat/stream`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      credentials: "include",
-      body: JSON.stringify(req),
-    });
-
-    if (!response.ok || !response.body) {
-      throw new Error(`채팅 스트림 요청에 실패했습니다. (${response.status})`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    const flush = (rawBlock: string) => {
-      const lines = rawBlock.split(/\r?\n/);
-      let currentEvent = "message";
-      const dataLines: string[] = [];
-      for (const line of lines) {
-        if (line.startsWith("event:")) {
-          currentEvent = line.slice(6).trim();
-        } else if (line.startsWith("data:")) {
-          dataLines.push(line.slice(5).trimStart());
-        }
-      }
-      const data = dataLines.join("\n").trim();
-      if (!data) {
-        return;
-      }
-      let parsed:
-        | ChatStreamDeltaEventDto
-        | ChatStreamUsageEventDto
-        | ChatStreamCompleteEventDto;
-      try {
-        parsed = JSON.parse(data) as
-          | ChatStreamDeltaEventDto
-          | ChatStreamUsageEventDto
-          | ChatStreamCompleteEventDto;
-      } catch {
-        throw new Error(`채팅 스트림 응답을 해석할 수 없습니다. (${currentEvent})`);
-      }
-
-      if (currentEvent === "delta") {
-        handlers.onDelta?.(parsed as ChatStreamDeltaEventDto);
-      } else if (currentEvent === "usage") {
-        handlers.onUsage?.(parsed as ChatStreamUsageEventDto);
-      } else if (currentEvent === "complete") {
-        handlers.onComplete?.(parsed as ChatStreamCompleteEventDto);
-      }
-    };
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) {
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const chunks = buffer.split(/\r?\n\r?\n/);
-      buffer = chunks.pop() ?? "";
-
-      for (const chunk of chunks) {
-        flush(chunk);
-      }
-    }
-
-    if (buffer.trim()) {
-      flush(buffer);
-    }
+    return consumeChatStream(`${BASE}/chat/stream`, req, handlers);
   },
 
   searchVector(req: VectorSearchRequestDto) {

@@ -496,23 +496,6 @@ function MarkdownText({
   );
 }
 
-function buildVisibleRagContext(rows: SearchResultDto[], topK: number) {
-  return rows
-    .slice(0, Math.max(1, topK))
-    .map((row, index) => {
-      const content = row.content?.trim();
-      if (!content) {
-        return "";
-      }
-      const score = typeof row.score === "number" ? ` score=${row.score.toFixed(4)}` : "";
-      const chunk = chunkValue(row.metadata);
-      const chunkLabel = chunk === "-" ? "" : ` chunk=${chunk}`;
-      return `[${referenceLabel(row, index)}] documentId=${row.documentId}${score}${chunkLabel}\n${content.slice(0, 1600)}`;
-    })
-    .filter(Boolean)
-    .join("\n\n");
-}
-
 function highlightText(content: string, query: string) {
   const terms = query
     .split(/\s+/)
@@ -1650,21 +1633,12 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
     setDiagnostics(null);
     setAnswerError(false);
     setActiveReferenceIndex(null);
-    const visibleRagContext = buildVisibleRagContext(ragRows, topKNumber);
     try {
       const payload: any = {
         chat: {
           provider: provider || undefined,
           model: model || undefined,
-          systemPrompt: [
-            "제공된 RAG 문서 내용에 근거해서만 답변하세요. 문서에서 확인할 수 없는 내용은 확인할 수 없다고 답변하세요.",
-            "답변에서 참고 문서를 언급할 때는 긴 문서명이나 Chunk를 쓰지 말고 반드시 (근거 1), (근거 2) 형식만 사용하세요.",
-            "같은 문장 안에서는 근거를 반복하지 말고 문장 끝에 필요한 근거만 한 번 모아서 표시하세요.",
-            "표가 적절한 경우 Markdown table로 작성하고, 표의 셀이나 행에도 필요한 경우 (근거 N)을 붙이세요.",
-            visibleRagContext
-              ? `아래는 현재 화면의 RAG 결과입니다. 이 내용을 우선 근거로 사용하세요.\n${visibleRagContext}`
-              : "",
-          ].filter(Boolean).join("\n\n"),
+          systemPrompt: "표가 적절한 경우 Markdown table로 작성하세요.",
           messages: [{ role: "user", content: query.trim() }],
         },
         ragQuery: query.trim(),
@@ -1673,6 +1647,7 @@ export function RagSearchValidationPanel({ job }: { job: RagIndexJobDto | null }
         ...searchScope,
         minScore: Number.isFinite(minScoreNumber) ? minScoreNumber : undefined,
         debug,
+        answerMode: "STRICT_GROUNDED",
       };
       if (selectedOption) {
         if (selectedOption.profileId) {

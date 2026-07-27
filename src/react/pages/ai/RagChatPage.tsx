@@ -23,6 +23,7 @@ import { reactAiApi, type EmbeddingOption } from "@/react/pages/ai/api";
 import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
 import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
+import { RagAnswerModeSelector } from "@/react/pages/ai/components/RagAnswerModeSelector";
 import type { ChatMessage } from "@/react/pages/ai/components/chatTypes";
 import type {
   AiInfoResponse,
@@ -30,6 +31,8 @@ import type {
   ChatRagRequestDto,
   ChatStreamUsageEventDto,
   ProviderInfo,
+  RagAnswerMode,
+  RagAnswerPolicyCapabilitiesDto,
   TokenUsageDto,
 } from "@/types/studio/ai";
 import { resolveAxiosError } from "@/utils/helpers";
@@ -72,9 +75,9 @@ export function RagChatPage() {
   const [deploymentId, setDeploymentId] = useState("chat-default");
   const [embeddingOptions, setEmbeddingOptions] = useState<EmbeddingOption[]>([]);
   const [selectedOption, setSelectedOption] = useState<EmbeddingOption | null>(null);
-  const [systemPrompt, setSystemPrompt] = useState(
-    "제공된 RAG 문서 내용에 근거해서만 답변하세요. 문서에서 확인할 수 없는 내용은 확인할 수 없다고 답변하세요."
-  );
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [answerPolicy, setAnswerPolicy] = useState<RagAnswerPolicyCapabilitiesDto | null>(null);
+  const [answerMode, setAnswerMode] = useState<RagAnswerMode | null>(null);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
   const [input, setInput] = useState("");
@@ -140,6 +143,14 @@ export function RagChatPage() {
       .catch(() => {
         // ignore
       });
+
+    reactAiApi
+      .fetchRagAnswerPolicy()
+      .then((policy) => {
+        setAnswerPolicy(policy);
+        setAnswerMode(policy.defaultMode);
+      })
+      .catch((loadError) => setError(resolveAxiosError(loadError)));
   }, []);
 
   useEffect(() => {
@@ -220,6 +231,7 @@ export function RagChatPage() {
           includeDebugChunks,
         },
         debug,
+        answerMode: answerMode ?? undefined,
       };
       if (selectedOption) {
         if (selectedOption.deploymentId) {
@@ -298,6 +310,9 @@ export function RagChatPage() {
             )
           );
         },
+        onError: (streamPayload) => {
+          throw new Error(streamPayload.errorMessage || "RAG 스트림 처리 중 오류가 발생했습니다.");
+        },
       });
     } catch (sendError) {
       if (activeRequestIdRef.current !== requestId) return;
@@ -343,6 +358,12 @@ export function RagChatPage() {
     setInput("");
     setError(null);
     setStreamStatus(null);
+  }
+
+  function handleAnswerModeChange(nextMode: RagAnswerMode) {
+    if (nextMode === answerMode) return;
+    handleNewConversation();
+    setAnswerMode(nextMode);
   }
 
   async function handleCopyMessage(content: string) {
@@ -471,6 +492,12 @@ export function RagChatPage() {
               </Typography>
             ) : null}
             <TextField label="System Prompt" value={systemPrompt} onChange={(event) => setSystemPrompt(event.target.value)} multiline minRows={2} size="small" fullWidth />
+            <RagAnswerModeSelector
+              capabilities={answerPolicy}
+              value={answerMode}
+              disabled={sending}
+              onChange={handleAnswerModeChange}
+            />
             <TextField
               select
               label="RAG 검색 전략 (retrievalStrategy)"

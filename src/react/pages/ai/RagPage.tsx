@@ -229,16 +229,6 @@ function formatTokenUsage(usage?: TokenUsageDto) {
   return `입력 ${usage.inputTokens.toLocaleString()} / 출력 ${usage.outputTokens.toLocaleString()} / 합계 ${usage.totalTokens.toLocaleString()}`;
 }
 
-function buildVisibleRagContext(rows: SearchResultDto[], limit: number) {
-  const maxChars = 6000;
-  const chunks = rows.slice(0, Math.max(1, limit)).map((row, index) => {
-    const content = row.content?.trim() || "";
-    return `[화면 RAG 후보 ${index + 1}] documentId=${row.documentId} score=${formatValue(row.score)}\n${content}`;
-  });
-  const context = chunks.join("\n\n").trim();
-  return context.length > maxChars ? `${context.slice(0, maxChars)}\n...` : context;
-}
-
 function extractRagDiagnostics(metadata?: ChatResponseMetadataDto | null) {
   if (!metadata) {
     return null;
@@ -1917,7 +1907,6 @@ export function RagPage() {
 
     const scope = resolveScope();
     const ragTopK = Number(topK) || 5;
-    const visibleRagContext = buildVisibleRagContext(contextRows, ragTopK);
     const nextMessages: ChatMessageDto[] = [
       { role: "user", content: trimmed },
     ];
@@ -1934,13 +1923,6 @@ export function RagPage() {
         chat: {
           provider: provider || undefined,
           model: model || undefined,
-          systemPrompt:
-            [
-              "제공된 RAG 문서 내용에 근거해서만 답변하세요. 문서에서 확인할 수 없는 내용은 확인할 수 없다고 답변하세요.",
-              visibleRagContext
-                ? `아래는 현재 화면의 RAG 결과 탭에 표시된 후보 문맥입니다. 이 문맥을 우선 근거로 사용하세요.\n${visibleRagContext}`
-                : "",
-            ].filter(Boolean).join("\n\n"),
           messages: nextMessages,
         },
         ragQuery: lastRagSearchQuery.trim() || trimmed,
@@ -1948,6 +1930,7 @@ export function RagPage() {
         objectType: scope.objectType,
         objectId: scope.objectId,
         debug,
+        answerMode: "STRICT_GROUNDED",
       };
       if (selectedOption) {
         if (selectedOption.profileId) {

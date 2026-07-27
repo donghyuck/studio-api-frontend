@@ -473,6 +473,11 @@ export function AssistantMessageBubble({
   const isErrorMessage =
     message.metadata?.finishReason === "error" || message.content.startsWith("오류:");
   const ragReferences = getRagReferences(message.metadata);
+  const answerPolicy = message.metadata?.answerPolicy;
+  const citationsReady =
+    !sending &&
+    ragReferences.length > 0 &&
+    typeof message.metadata?.canonicalContent === "string";
 
   const displayedReferences = useMemo(() => {
     if (!selectedCitationIndices || selectedCitationIndices.length === 0) {
@@ -518,6 +523,27 @@ export function AssistantMessageBubble({
               sx={{ height: 18, fontSize: 10, fontWeight: 500, borderColor: "divider", color: "text.secondary" }}
             />
           )}
+          {answerPolicy?.effectiveMode ? (
+            <Tooltip
+              title={
+                answerPolicy.clamped
+                  ? `요청 모드가 서버 정책에 의해 조정되었습니다. (${answerPolicy.reasonCode})`
+                  : "서버가 실제 적용한 RAG 답변 범위입니다."
+              }
+            >
+              <Chip
+                size="small"
+                color={answerPolicy.effectiveMode === "STRICT_GROUNDED" ? "primary" : "secondary"}
+                variant="outlined"
+                label={
+                  answerPolicy.effectiveMode === "STRICT_GROUNDED"
+                    ? "문서 직접 근거"
+                    : "문서 기반 해석"
+                }
+                sx={{ height: 18, fontSize: 10, fontWeight: 600 }}
+              />
+            </Tooltip>
+          ) : null}
         </Typography>
       </Stack>
 
@@ -526,10 +552,12 @@ export function AssistantMessageBubble({
           {message.content
             ? renderInlineMarkdown(
                 message.content,
-                (indices, event) => {
-                  setSourceAnchorEl(event.currentTarget);
-                  setSelectedCitationIndices(indices);
-                },
+                citationsReady
+                  ? (indices, event) => {
+                      setSourceAnchorEl(event.currentTarget);
+                      setSelectedCitationIndices(indices);
+                    }
+                  : undefined,
                 ragReferences
               )
             : sending
@@ -568,7 +596,7 @@ export function AssistantMessageBubble({
             </IconButton>
           </Tooltip>
         ) : null}
-        {ragReferences.length > 0 ? (
+        {citationsReady ? (
           <>
             <Box
               component="button"
