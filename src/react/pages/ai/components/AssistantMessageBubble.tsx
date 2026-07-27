@@ -508,7 +508,7 @@ export function AssistantMessageBubble({
         >
           ✦
         </Avatar>
-        <Typography variant="subtitle2" component="div" sx={{ fontWeight: 700, fontSize: 13, color: "text.primary", display: "flex", alignItems="center", gap: 1 }}>
+        <Typography variant="subtitle2" component="div" sx={{ fontWeight: 700, fontSize: 13, color: "text.primary", display: "flex", alignItems: "center", gap: 1 }}>
           Assistant
           {message.model && (
             <Chip
