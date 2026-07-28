@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Autocomplete, TextField } from "@mui/material";
+import { Alert, Autocomplete, Box, Button, Menu, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { CheckOutlined, ExpandMoreOutlined } from "@mui/icons-material";
 import { reactAiApi } from "@/react/pages/ai/api";
 import type { ProviderInfo } from "@/types/studio/ai";
 
@@ -9,6 +10,7 @@ interface Props {
   deploymentId?: string;
   onChange: (provider: string, model: string, deploymentId?: string) => void;
   size?: "small" | "medium";
+  variant?: "standard" | "compact-pill";
 }
 
 export interface ModelOption {
@@ -29,9 +31,10 @@ const DEFAULT_FALLBACK_OPTIONS: ModelOption[] = [
   { deploymentId: "local-gemma-v1", model: "gemma-3-4b", provider: "local-gemma" },
 ];
 
-export function AiProviderSelect({ provider, model, deploymentId, onChange, size = "small" }: Props) {
+export function AiProviderSelect({ provider, model, deploymentId, onChange, size = "small", variant = "standard" }: Props) {
   const [deployOptions, setDeployOptions] = useState<ModelOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -124,6 +127,91 @@ export function AiProviderSelect({ provider, model, deploymentId, onChange, size
     }
     return model ? { provider: provider || "google-ai", model } : "";
   }, [options, model, provider, deploymentId]);
+
+  const selectedDisplayLabel = useMemo(() => {
+    if (typeof value === "string") return value || "모델 선택";
+    if (value.model && value.model !== "undefined") {
+      return value.model;
+    }
+    return value.deploymentId || "모델 선택";
+  }, [value]);
+
+  if (variant === "compact-pill") {
+    return (
+      <>
+        <Button
+          size="small"
+          onClick={(e) => setAnchorEl(e.currentTarget)}
+          endIcon={<ExpandMoreOutlined sx={{ fontSize: 16 }} />}
+          sx={{
+            textTransform: "none",
+            fontWeight: 600,
+            fontSize: 12.5,
+            color: "text.primary",
+            px: 1.25,
+            py: 0.5,
+            borderRadius: "16px",
+            bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.04)"),
+            border: "1px solid",
+            borderColor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"),
+            "&:hover": {
+              bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.08)"),
+            },
+          }}
+        >
+          {selectedDisplayLabel}
+        </Button>
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl)}
+          onClose={() => setAnchorEl(null)}
+          slotProps={{
+            paper: {
+              sx: {
+                minWidth: 220,
+                borderRadius: "12px",
+                boxShadow: (theme) => (theme.palette.mode === "dark" ? "0 8px 24px rgba(0,0,0,0.6)" : "0 8px 24px rgba(0,0,0,0.12)"),
+              },
+            },
+          }}
+        >
+          <Box sx={{ px: 2, py: 1, borderBottom: "1px solid", borderColor: "divider" }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={700}>
+              답변 생성 모델 선택
+            </Typography>
+          </Box>
+          {options.map((option) => {
+            const isSelected =
+              (option.deploymentId && option.deploymentId === deploymentId) ||
+              (option.model === model && option.provider === provider);
+            return (
+              <MenuItem
+                key={option.deploymentId || option.model}
+                selected={isSelected}
+                onClick={() => {
+                  onChange(option.provider, option.model, option.deploymentId);
+                  setAnchorEl(null);
+                }}
+                sx={{ fontSize: 13, py: 1 }}
+              >
+                <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between" sx={{ width: "100%" }}>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: isSelected ? 700 : 500 }}>
+                      {option.model || option.deploymentId}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" display="block">
+                      {option.deploymentId} ({option.provider})
+                    </Typography>
+                  </Box>
+                  {isSelected && <CheckOutlined fontSize="small" color="primary" />}
+                </Stack>
+              </MenuItem>
+            );
+          })}
+        </Menu>
+      </>
+    );
+  }
 
   return (
     <Autocomplete<ModelOption | string, false, false, true>

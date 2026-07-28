@@ -1,4 +1,6 @@
-import { Alert, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { useState } from "react";
+import { Alert, Box, Button, Menu, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { CheckOutlined, ExpandMoreOutlined } from "@mui/icons-material";
 import type {
   RagAnswerMode,
   RagAnswerPolicyCapabilitiesDto,
@@ -10,6 +12,7 @@ interface Props {
   onChange: (mode: RagAnswerMode) => void;
   disabled?: boolean;
   hideHelperText?: boolean;
+  variant?: "standard" | "compact-pill";
 }
 
 const modeDescription: Record<RagAnswerMode, string> = {
@@ -23,12 +26,92 @@ export function RagAnswerModeSelector({
   onChange,
   disabled,
   hideHelperText,
+  variant = "standard",
 }: Props) {
   const modes = capabilities?.availableModes ?? [];
   const selected =
     capabilities && !capabilities.clientSelectionEnabled
       ? capabilities.defaultMode
       : value ?? capabilities?.defaultMode ?? "";
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+
+  if (variant === "compact-pill") {
+    const selectedLabel = selected === "STRICT_GROUNDED" ? "문서 직접 근거만" : "문서 기반 해석 허용";
+
+    return (
+      <>
+        <Button
+          size="small"
+          disabled={disabled || !capabilities || !capabilities.clientSelectionEnabled}
+          onClick={(e) => setAnchorEl(e.currentTarget)}
+          endIcon={<ExpandMoreOutlined sx={{ fontSize: 16 }} />}
+          sx={{
+            textTransform: "none",
+            fontWeight: 600,
+            fontSize: 12.5,
+            color: "text.primary",
+            px: 1.25,
+            py: 0.5,
+            borderRadius: "16px",
+            bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.04)"),
+            border: "1px solid",
+            borderColor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"),
+            "&:hover": {
+              bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.08)"),
+            },
+          }}
+        >
+          {selectedLabel}
+        </Button>
+        <Menu
+          anchorEl={anchorEl}
+          open={Boolean(anchorEl)}
+          onClose={() => setAnchorEl(null)}
+          slotProps={{
+            paper: {
+              sx: {
+                minWidth: 260,
+                borderRadius: "12px",
+                boxShadow: (theme) => (theme.palette.mode === "dark" ? "0 8px 24px rgba(0,0,0,0.6)" : "0 8px 24px rgba(0,0,0,0.12)"),
+              },
+            },
+          }}
+        >
+          <Box sx={{ px: 2, py: 1, borderBottom: "1px solid", borderColor: "divider" }}>
+            <Typography variant="caption" color="text.secondary" fontWeight={700}>
+              RAG 답변 범위 선택
+            </Typography>
+          </Box>
+          {modes.map((mode) => {
+            const isSelected = mode === selected;
+            return (
+              <MenuItem
+                key={mode}
+                selected={isSelected}
+                onClick={() => {
+                  onChange(mode as RagAnswerMode);
+                  setAnchorEl(null);
+                }}
+                sx={{ py: 1.2, px: 2 }}
+              >
+                <Stack spacing={0.25} sx={{ width: "100%" }}>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <Typography variant="body2" sx={{ fontWeight: isSelected ? 700 : 500 }}>
+                      {mode === "STRICT_GROUNDED" ? "문서 직접 근거만" : "문서 기반 해석 허용"}
+                    </Typography>
+                    {isSelected && <CheckOutlined fontSize="small" color="primary" />}
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+                    {modeDescription[mode as RagAnswerMode]}
+                  </Typography>
+                </Stack>
+              </MenuItem>
+            );
+          })}
+        </Menu>
+      </>
+    );
+  }
 
   return (
     <Stack spacing={0.75}>

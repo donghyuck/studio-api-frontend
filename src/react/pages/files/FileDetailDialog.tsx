@@ -4583,34 +4583,32 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                     sx={{ mt: 1.5, pt: 1, borderTop: "1px solid", borderColor: (theme) => alpha(theme.palette.divider, 0.5) }}
                   >
                     {/* Controls on left */}
-                    <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ gap: 1 }}>
-                      <Box sx={{ minWidth: 160 }}>
-                        <AiProviderSelect
-                          provider={qaProvider}
-                          model={qaModel}
-                          deploymentId={qaDeploymentId}
-                          onChange={(p, m, d) => {
-                            setQaProvider(p);
-                            setQaModel(m);
-                            if (d) setQaDeploymentId(d);
-                          }}
-                        />
-                      </Box>
-                      <Box sx={{ minWidth: 160 }}>
-                        <RagAnswerModeSelector
-                          capabilities={qaAnswerPolicy}
-                          value={qaAnswerMode}
-                          disabled={qaSending}
-                          hideHelperText
-                          onChange={(mode) => {
-                            if (mode === qaAnswerMode) return;
-                            setQaAnswerMode(mode);
-                            setQaMessages([]);
-                            setQaInput("");
-                            setQaError(null);
-                          }}
-                        />
-                      </Box>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                      <AiProviderSelect
+                        provider={qaProvider}
+                        model={qaModel}
+                        deploymentId={qaDeploymentId}
+                        variant="compact-pill"
+                        onChange={(p, m, d) => {
+                          setQaProvider(p);
+                          setQaModel(m);
+                          if (d) setQaDeploymentId(d);
+                        }}
+                      />
+                      <RagAnswerModeSelector
+                        capabilities={qaAnswerPolicy}
+                        value={qaAnswerMode}
+                        disabled={qaSending}
+                        hideHelperText
+                        variant="compact-pill"
+                        onChange={(mode) => {
+                          if (mode === qaAnswerMode) return;
+                          setQaAnswerMode(mode);
+                          setQaMessages([]);
+                          setQaInput("");
+                          setQaError(null);
+                        }}
+                      />
 
                       {/* RAG Embedding Badge */}
                       <Tooltip title="이 문서 검색에 사용되는 고정 RAG 임베딩 모델입니다">
