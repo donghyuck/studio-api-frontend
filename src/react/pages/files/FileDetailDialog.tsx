@@ -2741,8 +2741,6 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         objectType: "attachment",
         objectId: String(file.attachmentId),
         topK: 5,
-        minScore: 0.35,
-        debug: true,
         answerMode: qaAnswerMode,
       };
 
@@ -4606,8 +4604,6 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                         onChange={(mode) => {
                           if (mode === qaAnswerMode) return;
                           setQaAnswerMode(mode);
-                          setQaMessages([]);
-                          setQaInput("");
                           setQaError(null);
                         }}
                       />
