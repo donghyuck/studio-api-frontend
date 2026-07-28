@@ -12,6 +12,7 @@ import {
   CircularProgress,
   Divider,
   IconButton,
+  InputBase,
   MenuItem,
   Stack,
   Table,
@@ -50,6 +51,7 @@ import {
   ArrowBackIosNewOutlined,
   VisibilityOutlined,
   ArrowDownwardOutlined,
+  ArrowUpwardOutlined,
   AutoFixHighOutlined,
   LockOutlined,
   DescriptionOutlined,
@@ -4424,100 +4426,6 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
           {currentTab === "qa" && file && (
             <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, height: "calc(100vh - 120px)", overflow: "hidden" }}>
-              {/* Chat config row */}
-              <Box
-                sx={{
-                  px: 3,
-                  py: 1.5,
-                  display: "flex",
-                  alignItems: "flex-start",
-                  justifyContent: "space-between",
-                  borderBottom: "1px solid",
-                  borderColor: "divider",
-                  bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.paper" : "rgba(248, 250, 252, 0.6)"),
-                }}
-              >
-                <Stack direction="row" spacing={2} alignItems="flex-start" sx={{ flex: 1, maxWidth: 640 }}>
-                  {/* Chat model selection */}
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <AiProviderSelect
-                      provider={qaProvider}
-                      model={qaModel}
-                      deploymentId={qaDeploymentId}
-                      onChange={(p, m, d) => {
-                        setQaProvider(p);
-                        setQaModel(m);
-                        if (d) setQaDeploymentId(d);
-                      }}
-                    />
-                  </Box>
-
-                  {/* RAG Answer Mode selection */}
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <RagAnswerModeSelector
-                      capabilities={qaAnswerPolicy}
-                      value={qaAnswerMode}
-                      disabled={qaSending}
-                      hideHelperText
-                      onChange={(mode) => {
-                        if (mode === qaAnswerMode) return;
-                        setQaAnswerMode(mode);
-                        setQaMessages([]);
-                        setQaInput("");
-                        setQaError(null);
-                      }}
-                    />
-                  </Box>
-                </Stack>
-
-                {/* High Contrast Subtle Embedding Model Badge */}
-                <Tooltip title="이 문서 검색에 사용되는 고정 RAG 임베딩 모델입니다">
-                  <Box
-                    sx={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 0.75,
-                      px: 1.5,
-                      py: 0.6,
-                      borderRadius: "20px",
-                      bgcolor: (theme) => (theme.palette.mode === "dark" ? alpha(theme.palette.primary.main, 0.16) : alpha(theme.palette.primary.main, 0.08)),
-                      border: "1px solid",
-                      borderColor: (theme) => (theme.palette.mode === "dark" ? alpha(theme.palette.primary.main, 0.35) : alpha(theme.palette.primary.main, 0.25)),
-                      mt: 0.5,
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.75)" : "text.secondary"),
-                      }}
-                    >
-                      임베딩:
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        fontSize: 11.5,
-                        fontWeight: 700,
-                        color: (theme) => (theme.palette.mode === "dark" ? "#90caf9" : theme.palette.primary.dark),
-                        letterSpacing: 0.2,
-                      }}
-                    >
-                      {formatEmbeddingModelName(
-                        latestRagJob?.embeddingModel
-                        || latestRagJob?.embeddingDeploymentId
-                        || (ragMetadata as any)?.embeddingModel
-                        || (ragMetadata as any)?.embeddingDeploymentId
-                        || selectedEmbeddingOption?.displayName
-                        || selectedEmbeddingOption?.model
-                        || "-")}
-                    </Typography>
-                  </Box>
-                </Tooltip>
-              </Box>
-
               {/* Chat messages list */}
               <Box sx={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column" }}>
                 <Box
@@ -4601,10 +4509,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                 )}
               </Box>
 
-              {/* Input field */}
-              <Box sx={{ p: 2, borderTop: "1px solid", borderColor: "divider", bgcolor: "background.paper" }}>
+              {/* Integrated Antigravity-Style Input Area */}
+              <Box sx={{ p: 2.5, borderTop: "1px solid", borderColor: "divider", bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.default" : "#fafafa") }}>
                 {lastQaAssistantMessage?.metadata && (
-                  <Stack direction="row" spacing={2} sx={{ mb: 1.25, px: 0.5 }} alignItems="center">
+                  <Stack direction="row" spacing={2} sx={{ mb: 1.5, px: 0.5 }} alignItems="center">
                     {lastQaAssistantMessage.metadata.tokenUsage && (
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
                         토큰량: <strong>{lastQaAssistantMessage.metadata.tokenUsage.totalTokens}</strong> tokens
@@ -4619,12 +4527,34 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                     )}
                   </Stack>
                 )}
-                <Stack direction="row" spacing={1} alignItems="flex-end">
-                  <TextField
+
+                <Paper
+                  elevation={0}
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    borderRadius: "20px",
+                    bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.paper" : "#ffffff"),
+                    borderColor: (theme) => (theme.palette.mode === "dark" ? alpha(theme.palette.divider, 0.8) : "rgba(226, 232, 240, 0.9)"),
+                    boxShadow: (theme) =>
+                      theme.palette.mode === "dark"
+                        ? "0 4px 20px rgba(0, 0, 0, 0.4)"
+                        : "0 4px 20px rgba(0, 0, 0, 0.04)",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
+                    "&:focus-within": {
+                      borderColor: "primary.main",
+                      boxShadow: (theme) =>
+                        theme.palette.mode === "dark"
+                          ? `0 0 0 2px ${alpha(theme.palette.primary.main, 0.3)}`
+                          : `0 0 0 2px ${alpha(theme.palette.primary.main, 0.2)}`,
+                    },
+                  }}
+                >
+                  <InputBase
                     placeholder="문서에 대해 질문해보세요... (Shift+Enter 줄바꿈, Enter 전송)"
                     multiline
-                    maxRows={4}
-                    size="small"
+                    minRows={2}
+                    maxRows={6}
                     fullWidth
                     value={qaInput}
                     onChange={(e) => setQaInput(e.target.value)}
@@ -4636,16 +4566,113 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                       }
                     }}
                     disabled={qaSending}
+                    sx={{
+                      fontSize: 14,
+                      lineHeight: 1.6,
+                      px: 0.5,
+                      color: "text.primary",
+                    }}
                   />
-                  <Button
-                    variant="contained"
-                    onClick={handleSendQa}
-                    disabled={qaSending || !qaInput.trim()}
-                    sx={{ height: 40, minWidth: 70 }}
+
+                  {/* Bottom toolbar inside input box */}
+                  <Stack
+                    direction={{ xs: "column", sm: "row" }}
+                    spacing={1.5}
+                    alignItems="center"
+                    justifyContent="space-between"
+                    sx={{ mt: 1.5, pt: 1, borderTop: "1px solid", borderColor: (theme) => alpha(theme.palette.divider, 0.5) }}
                   >
-                    전송
-                  </Button>
-                </Stack>
+                    {/* Controls on left */}
+                    <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ gap: 1 }}>
+                      <Box sx={{ minWidth: 160 }}>
+                        <AiProviderSelect
+                          provider={qaProvider}
+                          model={qaModel}
+                          deploymentId={qaDeploymentId}
+                          onChange={(p, m, d) => {
+                            setQaProvider(p);
+                            setQaModel(m);
+                            if (d) setQaDeploymentId(d);
+                          }}
+                        />
+                      </Box>
+                      <Box sx={{ minWidth: 160 }}>
+                        <RagAnswerModeSelector
+                          capabilities={qaAnswerPolicy}
+                          value={qaAnswerMode}
+                          disabled={qaSending}
+                          hideHelperText
+                          onChange={(mode) => {
+                            if (mode === qaAnswerMode) return;
+                            setQaAnswerMode(mode);
+                            setQaMessages([]);
+                            setQaInput("");
+                            setQaError(null);
+                          }}
+                        />
+                      </Box>
+
+                      {/* RAG Embedding Badge */}
+                      <Tooltip title="이 문서 검색에 사용되는 고정 RAG 임베딩 모델입니다">
+                        <Box
+                          sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 0.5,
+                            px: 1.25,
+                            py: 0.5,
+                            borderRadius: "16px",
+                            bgcolor: (theme) => (theme.palette.mode === "dark" ? alpha(theme.palette.primary.main, 0.16) : alpha(theme.palette.primary.main, 0.08)),
+                            border: "1px solid",
+                            borderColor: (theme) => (theme.palette.mode === "dark" ? alpha(theme.palette.primary.main, 0.35) : alpha(theme.palette.primary.main, 0.25)),
+                          }}
+                        >
+                          <Typography variant="caption" sx={{ fontSize: 10.5, fontWeight: 600, color: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.75)" : "text.secondary") }}>
+                            임베딩:
+                          </Typography>
+                          <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700, color: (theme) => (theme.palette.mode === "dark" ? "#90caf9" : theme.palette.primary.dark) }}>
+                            {formatEmbeddingModelName(
+                              latestRagJob?.embeddingModel
+                              || latestRagJob?.embeddingDeploymentId
+                              || (ragMetadata as any)?.embeddingModel
+                              || (ragMetadata as any)?.embeddingDeploymentId
+                              || selectedEmbeddingOption?.displayName
+                              || selectedEmbeddingOption?.model
+                              || "-")}
+                          </Typography>
+                        </Box>
+                      </Tooltip>
+                    </Stack>
+
+                    {/* Send Button on right */}
+                    <IconButton
+                      onClick={handleSendQa}
+                      disabled={qaSending || !qaInput.trim()}
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: "50%",
+                        bgcolor: "primary.main",
+                        color: "common.white",
+                        "&:hover": {
+                          bgcolor: "primary.dark",
+                        },
+                        "&.Mui-disabled": {
+                          bgcolor: "action.disabledBackground",
+                          color: "action.disabled",
+                        },
+                        boxShadow: (theme) => `0 2px 8px ${alpha(theme.palette.primary.main, 0.4)}`,
+                        transition: "transform 0.15s ease-in-out",
+                        "&:active": {
+                          transform: "scale(0.95)",
+                        },
+                      }}
+                      size="small"
+                    >
+                      <ArrowUpwardOutlined sx={{ fontSize: 20 }} />
+                    </IconButton>
+                  </Stack>
+                </Paper>
               </Box>
             </Box>
           )}
