@@ -4510,9 +4510,15 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
               </Box>
 
               {/* Integrated Antigravity-Style Input Area */}
-              <Box sx={{ p: 2.5, borderTop: "1px solid", borderColor: "divider", bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.default" : "#fafafa") }}>
+              <Box
+                sx={{
+                  px: 3,
+                  py: 2,
+                  bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.default" : "background.paper"),
+                }}
+              >
                 {lastQaAssistantMessage?.metadata && (
-                  <Stack direction="row" spacing={2} sx={{ mb: 1.5, px: 0.5 }} alignItems="center">
+                  <Stack direction="row" spacing={2} sx={{ mb: 1, px: 1, maxWidth: 840, mx: "auto" }} alignItems="center">
                     {lastQaAssistantMessage.metadata.tokenUsage && (
                       <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
                         토큰량: <strong>{lastQaAssistantMessage.metadata.tokenUsage.totalTokens}</strong> tokens
@@ -4530,23 +4536,20 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
                 <Paper
                   elevation={0}
-                  variant="outlined"
                   sx={{
-                    p: 2,
-                    borderRadius: "20px",
-                    bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.paper" : "#ffffff"),
-                    borderColor: (theme) => (theme.palette.mode === "dark" ? alpha(theme.palette.divider, 0.8) : "rgba(226, 232, 240, 0.9)"),
-                    boxShadow: (theme) =>
-                      theme.palette.mode === "dark"
-                        ? "0 4px 20px rgba(0, 0, 0, 0.4)"
-                        : "0 4px 20px rgba(0, 0, 0, 0.04)",
-                    transition: "border-color 0.2s, box-shadow 0.2s",
+                    maxWidth: 840,
+                    mx: "auto",
+                    p: "14px 18px 12px 18px",
+                    borderRadius: "24px",
+                    bgcolor: (theme) => (theme.palette.mode === "dark" ? "#2f2f2f" : "#f4f4f4"),
+                    border: (theme) => (theme.palette.mode === "dark" ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(0, 0, 0, 0.04)"),
+                    transition: "background-color 0.2s, box-shadow 0.2s",
                     "&:focus-within": {
-                      borderColor: "primary.main",
+                      bgcolor: (theme) => (theme.palette.mode === "dark" ? "#333333" : "#ebebeb"),
                       boxShadow: (theme) =>
                         theme.palette.mode === "dark"
-                          ? `0 0 0 2px ${alpha(theme.palette.primary.main, 0.3)}`
-                          : `0 0 0 2px ${alpha(theme.palette.primary.main, 0.2)}`,
+                          ? `0 0 0 1.5px ${alpha(theme.palette.common.white, 0.2)}`
+                          : `0 0 0 1.5px ${alpha(theme.palette.common.black, 0.12)}`,
                     },
                   }}
                 >
@@ -4567,23 +4570,22 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                     }}
                     disabled={qaSending}
                     sx={{
-                      fontSize: 14,
+                      fontSize: 14.5,
                       lineHeight: 1.6,
                       px: 0.5,
                       color: "text.primary",
                     }}
                   />
 
-                  {/* Bottom toolbar inside input box */}
+                  {/* Seamless bottom toolbar inside input card */}
                   <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    spacing={1.5}
+                    direction="row"
                     alignItems="center"
                     justifyContent="space-between"
-                    sx={{ mt: 1.5, pt: 1, borderTop: "1px solid", borderColor: (theme) => alpha(theme.palette.divider, 0.5) }}
+                    sx={{ mt: 1, pt: 0.5 }}
                   >
                     {/* Controls on left */}
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
                       <AiProviderSelect
                         provider={qaProvider}
                         model={qaModel}
@@ -4617,18 +4619,17 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                             display: "inline-flex",
                             alignItems: "center",
                             gap: 0.5,
-                            px: 1.25,
-                            py: 0.5,
+                            px: 1,
+                            py: 0.3,
                             borderRadius: "16px",
-                            bgcolor: (theme) => (theme.palette.mode === "dark" ? alpha(theme.palette.primary.main, 0.16) : alpha(theme.palette.primary.main, 0.08)),
-                            border: "1px solid",
-                            borderColor: (theme) => (theme.palette.mode === "dark" ? alpha(theme.palette.primary.main, 0.35) : alpha(theme.palette.primary.main, 0.25)),
+                            bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.04)"),
+                            color: "text.secondary",
                           }}
                         >
-                          <Typography variant="caption" sx={{ fontSize: 10.5, fontWeight: 600, color: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.75)" : "text.secondary") }}>
+                          <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 500, color: "text.secondary" }}>
                             임베딩:
                           </Typography>
-                          <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700, color: (theme) => (theme.palette.mode === "dark" ? "#90caf9" : theme.palette.primary.dark) }}>
+                          <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700, color: (theme) => (theme.palette.mode === "dark" ? "#90caf9" : "primary.main") }}>
                             {formatEmbeddingModelName(
                               latestRagJob?.embeddingModel
                               || latestRagJob?.embeddingDeploymentId
@@ -4647,27 +4648,26 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                       onClick={handleSendQa}
                       disabled={qaSending || !qaInput.trim()}
                       sx={{
-                        width: 36,
-                        height: 36,
+                        width: 32,
+                        height: 32,
                         borderRadius: "50%",
-                        bgcolor: "primary.main",
-                        color: "common.white",
+                        bgcolor: "#0288d1",
+                        color: "#ffffff",
                         "&:hover": {
-                          bgcolor: "primary.dark",
+                          bgcolor: "#01579b",
                         },
                         "&.Mui-disabled": {
-                          bgcolor: "action.disabledBackground",
-                          color: "action.disabled",
+                          bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.12)"),
+                          color: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.26)"),
                         },
-                        boxShadow: (theme) => `0 2px 8px ${alpha(theme.palette.primary.main, 0.4)}`,
-                        transition: "transform 0.15s ease-in-out",
+                        transition: "transform 0.15s ease-in-out, background-color 0.2s",
                         "&:active": {
-                          transform: "scale(0.95)",
+                          transform: "scale(0.92)",
                         },
                       }}
                       size="small"
                     >
-                      <ArrowUpwardOutlined sx={{ fontSize: 20 }} />
+                      <ArrowUpwardOutlined sx={{ fontSize: 18 }} />
                     </IconButton>
                   </Stack>
                 </Paper>

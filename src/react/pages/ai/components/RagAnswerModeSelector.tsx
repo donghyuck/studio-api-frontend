@@ -44,20 +44,19 @@ export function RagAnswerModeSelector({
           size="small"
           disabled={disabled || !capabilities || !capabilities.clientSelectionEnabled}
           onClick={(e) => setAnchorEl(e.currentTarget)}
-          endIcon={<ExpandMoreOutlined sx={{ fontSize: 16 }} />}
+          endIcon={<ExpandMoreOutlined sx={{ fontSize: 16, color: "text.secondary" }} />}
           sx={{
             textTransform: "none",
-            fontWeight: 600,
+            fontWeight: 500,
             fontSize: 12.5,
-            color: "text.primary",
-            px: 1.25,
-            py: 0.5,
+            color: "text.secondary",
+            px: 1,
+            py: 0.3,
             borderRadius: "16px",
-            bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.04)"),
-            border: "1px solid",
-            borderColor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"),
+            bgcolor: "transparent",
             "&:hover": {
-              bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.08)"),
+              bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)"),
+              color: "text.primary",
             },
           }}
         >
