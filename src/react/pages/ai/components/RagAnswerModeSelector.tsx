@@ -14,7 +14,7 @@ interface Props {
 
 const modeDescription: Record<RagAnswerMode, string> = {
   STRICT_GROUNDED: "문서에 직접 명시된 내용만 답변합니다.",
-  GROUNDED_INFERENCE: "문서 근거에서 합리적인 해석까지 허용하며 사실과 해석을 구분합니다.",
+  GROUNDED_INFERENCE: "문서 근거와 합리적 해석까지 포함하여 답변합니다.",
 };
 
 export function RagAnswerModeSelector({
@@ -22,7 +22,7 @@ export function RagAnswerModeSelector({
   value,
   onChange,
   disabled,
-  hideHelperText = false,
+  hideHelperText,
 }: Props) {
   const modes = capabilities?.availableModes ?? [];
   const selected =
@@ -30,14 +30,8 @@ export function RagAnswerModeSelector({
       ? capabilities.defaultMode
       : value ?? capabilities?.defaultMode ?? "";
 
-  const helperTextContent = hideHelperText
-    ? undefined
-    : selected
-    ? modeDescription[selected as RagAnswerMode]
-    : "서버의 답변 정책을 확인하고 있습니다.";
-
   return (
-    <Stack spacing={hideHelperText ? 0 : 0.75}>
+    <Stack spacing={0.75}>
       <TextField
         select
         label="RAG 답변 범위"
@@ -45,7 +39,20 @@ export function RagAnswerModeSelector({
         value={selected}
         disabled={disabled || !capabilities || !capabilities.clientSelectionEnabled}
         onChange={(event) => onChange(event.target.value as RagAnswerMode)}
-        helperText={helperTextContent}
+        helperText={
+          selected
+            ? modeDescription[selected as RagAnswerMode]
+            : "서버의 답변 정책을 확인하고 있습니다."
+        }
+        FormHelperTextProps={{
+          sx: {
+            whiteSpace: "nowrap",
+            textOverflow: "ellipsis",
+            overflow: "hidden",
+            mx: 0,
+            mt: 0.5,
+          },
+        }}
         fullWidth
       >
         {modes.map((mode) => (
@@ -54,19 +61,15 @@ export function RagAnswerModeSelector({
           </MenuItem>
         ))}
       </TextField>
-      {!hideHelperText && (
-        <>
-          {capabilities && !capabilities.clientSelectionEnabled ? (
-            <Alert severity="info" sx={{ py: 0 }}>
-              서버 정책에 따라 {capabilities.defaultMode === "STRICT_GROUNDED" ? "문서 직접 근거만" : "문서 기반 해석 허용"} 모드가 적용됩니다.
-            </Alert>
-          ) : (
-            <Typography variant="caption" color="text.secondary">
-              답변 범위를 바꾸면 기존 답변과 섞이지 않도록 새 대화가 시작됩니다.
-            </Typography>
-          )}
-        </>
-      )}
+      {!hideHelperText && capabilities && !capabilities.clientSelectionEnabled ? (
+        <Alert severity="info" sx={{ py: 0, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>
+          서버 정책에 따라 {capabilities.defaultMode === "STRICT_GROUNDED" ? "문서 직접 근거만" : "문서 기반 해석 허용"} 모드가 적용됩니다.
+        </Alert>
+      ) : !hideHelperText ? (
+        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
+          답변 모드는 검색 결과나 색인을 변경하지 않습니다. 범위를 바꾸면 새 대화가 시작됩니다.
+        </Typography>
+      ) : null}
     </Stack>
   );
 }
