@@ -4512,7 +4512,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                 sx={{
                   px: 3,
                   py: 2,
-                  bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.default" : "background.paper"),
+                  bgcolor: "background.default",
                 }}
               >
                 {lastQaAssistantMessage?.metadata && (
