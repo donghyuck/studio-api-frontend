@@ -66,6 +66,8 @@ import type {
   ChatRagRequestDto,
   RagAnswerMode,
   RagAnswerPolicyCapabilitiesDto,
+  RagSourcePolicyCapabilitiesDto,
+  RagSourceScope,
 } from "@/types/studio/ai";
 import {
   reactFilesApi,
@@ -97,6 +99,7 @@ import {
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import { AssistantMessageBubble } from "../ai/components/AssistantMessageBubble";
 import { RagAnswerModeSelector } from "../ai/components/RagAnswerModeSelector";
+import { RagSourceScopeSelector } from "../ai/components/RagSourceScopeSelector";
 import { UserMessageBubble } from "../ai/components/UserMessageBubble";
 import type { ChatMessage } from "../ai/components/chatTypes";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
@@ -680,6 +683,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [qaError, setQaError] = useState<string | null>(null);
   const [qaAnswerPolicy, setQaAnswerPolicy] = useState<RagAnswerPolicyCapabilitiesDto | null>(null);
   const [qaAnswerMode, setQaAnswerMode] = useState<RagAnswerMode>("STRICT_GROUNDED");
+  const [qaSourcePolicy, setQaSourcePolicy] = useState<RagSourcePolicyCapabilitiesDto | null>(null);
+  const [qaSourceScope, setQaSourceScope] = useState<RagSourceScope>("DOCUMENT_ONLY");
   const [showScrollToBottomBtn, setShowScrollToBottomBtn] = useState<boolean>(false);
   const qaMessageListRef = useRef<HTMLDivElement | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
@@ -743,7 +748,10 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
   const loadRagAnswerPolicy = useCallback(async () => {
     try {
-      setQaAnswerPolicy(await reactAiApi.fetchRagAnswerPolicy());
+      const capabilities = await reactAiApi.fetchRagCapabilities();
+      setQaAnswerPolicy(capabilities.answerPolicy);
+      setQaSourcePolicy(capabilities.sourcePolicy);
+      setQaSourceScope(capabilities.sourcePolicy.defaultScope);
     } catch {
       // The server still enforces its default policy if capabilities cannot be loaded.
     }
@@ -766,6 +774,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       setQaSending(false);
       setQaError(null);
       setQaAnswerMode("STRICT_GROUNDED");
+      setQaSourceScope("DOCUMENT_ONLY");
     }
   }, [open]);
 
@@ -2742,6 +2751,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         objectId: String(file.attachmentId),
         topK: 5,
         answerMode: qaAnswerMode,
+        sourceScope: qaSourceScope,
       };
 
       if (embeddingDeploymentId) {
@@ -4604,6 +4614,18 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                         onChange={(mode) => {
                           if (mode === qaAnswerMode) return;
                           setQaAnswerMode(mode);
+                          setQaError(null);
+                        }}
+                      />
+                      <RagSourceScopeSelector
+                        capabilities={qaSourcePolicy}
+                        value={qaSourceScope}
+                        disabled={qaSending}
+                        hideHelperText
+                        variant="compact-pill"
+                        onChange={(scope) => {
+                          if (scope === qaSourceScope) return;
+                          setQaSourceScope(scope);
                           setQaError(null);
                         }}
                       />
