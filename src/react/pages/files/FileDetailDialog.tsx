@@ -4470,7 +4470,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                   </Box>
                 </Stack>
 
-                {/* Subtle Embedding Model Badge */}
+                {/* High Contrast Subtle Embedding Model Badge */}
                 <Tooltip title="이 문서 검색에 사용되는 고정 RAG 임베딩 모델입니다">
                   <Box
                     sx={{
@@ -4480,17 +4480,31 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                       px: 1.5,
                       py: 0.6,
                       borderRadius: "20px",
-                      bgcolor: (theme) => alpha(theme.palette.action.hover, 0.6),
-                      color: "text.secondary",
+                      bgcolor: (theme) => (theme.palette.mode === "dark" ? alpha(theme.palette.primary.main, 0.16) : alpha(theme.palette.primary.main, 0.08)),
                       border: "1px solid",
-                      borderColor: (theme) => alpha(theme.palette.divider, 0.6),
+                      borderColor: (theme) => (theme.palette.mode === "dark" ? alpha(theme.palette.primary.main, 0.35) : alpha(theme.palette.primary.main, 0.25)),
                       mt: 0.5,
                     }}
                   >
-                    <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 500, color: "text.secondary" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.75)" : "text.secondary"),
+                      }}
+                    >
                       임베딩:
                     </Typography>
-                    <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700, color: "primary.main" }}>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontSize: 11.5,
+                        fontWeight: 700,
+                        color: (theme) => (theme.palette.mode === "dark" ? "#90caf9" : theme.palette.primary.dark),
+                        letterSpacing: 0.2,
+                      }}
+                    >
                       {formatEmbeddingModelName(
                         latestRagJob?.embeddingModel
                         || latestRagJob?.embeddingDeploymentId
