@@ -4430,14 +4430,14 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                   px: 3,
                   py: 1.5,
                   display: "flex",
-                  alignItems: "center",
+                  alignItems: "flex-start",
                   justifyContent: "space-between",
                   borderBottom: "1px solid",
                   borderColor: "divider",
                   bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.paper" : "rgba(248, 250, 252, 0.6)"),
                 }}
               >
-                <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1, maxWidth: 640 }}>
+                <Stack direction="row" spacing={2} alignItems="flex-start" sx={{ flex: 1, maxWidth: 640 }}>
                   {/* Chat model selection */}
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <AiProviderSelect
@@ -4484,6 +4484,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                       color: "text.secondary",
                       border: "1px solid",
                       borderColor: (theme) => alpha(theme.palette.divider, 0.6),
+                      mt: 0.5,
                     }}
                   >
                     <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 500, color: "text.secondary" }}>
