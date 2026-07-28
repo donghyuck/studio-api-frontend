@@ -4425,29 +4425,21 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
           {currentTab === "qa" && file && (
             <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, height: "calc(100vh - 120px)", overflow: "hidden" }}>
               {/* Chat config row */}
-              <Paper
-                elevation={0}
-                variant="outlined"
+              <Box
                 sx={{
-                  mx: 3,
-                  mt: 2,
-                  mb: 1.5,
-                  p: 2,
-                  borderRadius: "10px",
-                  bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.paper" : "rgba(248, 250, 252, 0.9)"),
-                  borderColor: (theme) => alpha(theme.palette.divider, 0.8),
-                  boxShadow: (theme) => `0 2px 8px ${alpha(theme.palette.common.black, 0.03)}`,
+                  px: 3,
+                  py: 1.5,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "flex-start",
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                  bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.paper" : "rgba(248, 250, 252, 0.6)"),
                 }}
               >
-                <Stack
-                  direction={{ xs: "column", md: "row" }}
-                  spacing={2}
-                  alignItems="center"
-                  justifyContent="space-between"
-                  sx={{ width: "100%" }}
-                >
+                <Stack direction="row" spacing={2} alignItems="center" sx={{ width: "100%", maxWidth: 720 }}>
                   {/* Chat model selection */}
-                  <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
                     <AiProviderSelect
                       provider={qaProvider}
                       model={qaModel}
@@ -4461,7 +4453,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                   </Box>
 
                   {/* RAG Answer Mode selection */}
-                  <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
                     <RagAnswerModeSelector
                       capabilities={qaAnswerPolicy}
                       value={qaAnswerMode}
@@ -4476,43 +4468,8 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                       }}
                     />
                   </Box>
-
-                  {/* Embedding profile display (readonly) */}
-                  <Box sx={{ flexShrink: 0, width: { xs: "100%", md: "auto" } }}>
-                    <Tooltip title="이 문서에 적용된 RAG 임베딩 모델입니다 (수정 불가)">
-                      <Box
-                        sx={{
-                          display: "inline-flex",
-                          flexDirection: "column",
-                          alignItems: { xs: "flex-start", md: "flex-end" },
-                          px: 1.5,
-                          py: 0.75,
-                          borderRadius: "8px",
-                          bgcolor: (theme) => alpha(theme.palette.action.hover, 0.5),
-                          border: "1px solid",
-                          borderColor: "divider",
-                          width: "100%",
-                        }}
-                      >
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 0.5 }}>
-                          <LockOutlined sx={{ fontSize: 11 }} /> RAG 임베딩 모델
-                        </Typography>
-                        <Chip
-                          label={formatEmbeddingModelName(
-                            latestRagJob?.embeddingModel
-                            || latestRagJob?.embeddingDeploymentId
-                            || (ragMetadata as any)?.embeddingModel
-                            || (ragMetadata as any)?.embeddingDeploymentId)}
-                          size="small"
-                          color="primary"
-                          variant="outlined"
-                          sx={{ height: 20, fontSize: 11, fontWeight: 700, mt: 0.25, border: 0 }}
-                        />
-                      </Box>
-                    </Tooltip>
-                  </Box>
                 </Stack>
-              </Paper>
+              </Box>
 
               {/* Chat messages list */}
               <Box sx={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column" }}>
