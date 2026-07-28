@@ -55,6 +55,8 @@ import {
   AutoFixHighOutlined,
   LockOutlined,
   DescriptionOutlined,
+  FullscreenOutlined,
+  FullscreenExitOutlined,
 } from "@mui/icons-material";
 import dayjs from "dayjs";
 import { useAuthStore } from "@/react/auth/store";
@@ -674,6 +676,38 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [blockifyPiiMaskingEnabled, setBlockifyPiiMaskingEnabled] = useState<boolean>(true);
   const [aiInfo, setAiInfo] = useState<AiInfoResponse | null>(null);
   const [currentTab, setCurrentTab] = useState<"info" | "qa">("info");
+  const [drawerWidth, setDrawerWidth] = useState<number>(() => {
+    return Math.min(Math.max(window.innerWidth * 0.7, 640), window.innerWidth - 32);
+  });
+  const [isFullWidth, setIsFullWidth] = useState<boolean>(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const newWidth = window.innerWidth - e.clientX;
+      const minWidth = 480;
+      const maxWidth = window.innerWidth - 20;
+      setDrawerWidth(Math.min(Math.max(newWidth, minWidth), maxWidth));
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging]);
   const [qaProvider, setQaProvider] = useState<string>("google-ai");
   const [qaModel, setQaModel] = useState<string>("gemini-2.5-flash");
   const [qaDeploymentId, setQaDeploymentId] = useState<string>("chat-default");
@@ -2848,16 +2882,36 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       onClose={onClose}
       sx={{
         "& .MuiDrawer-paper": {
-          width: "70vw",
+          width: isFullWidth ? "100vw" : `${drawerWidth}px`,
+          maxWidth: "100vw",
           p: 0,
           display: "flex",
           flexDirection: "column",
-          borderRadius: "12px 0 0 12px",
+          borderRadius: isFullWidth ? 0 : "12px 0 0 12px",
           borderTopRightRadius: 0,
           borderBottomRightRadius: 0,
+          transition: isDragging ? "none" : "width 0.15s ease",
         },
       }}
     >
+      {!isFullWidth && (
+        <Box
+          onMouseDown={handleMouseDown}
+          sx={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 8,
+            cursor: "col-resize",
+            zIndex: 1200,
+            transition: "background-color 0.15s",
+            "&:hover, &:active": {
+              bgcolor: "primary.main",
+            },
+          }}
+        />
+      )}
       <Box sx={{ px: 3, py: 2, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid", borderColor: "divider", bgcolor: "background.paper", flexShrink: 0 }}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0, flex: 1, mr: 2 }}>
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: "8px", bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08), color: "primary.main", flexShrink: 0 }}>
@@ -2909,6 +2963,11 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
               </Button>
             </>
           )}
+          <Tooltip title={isFullWidth ? "원래 크기로 복원" : "전체 화면으로 확대"}>
+            <IconButton size="small" onClick={() => setIsFullWidth((prev) => !prev)} sx={{ border: "1px solid", borderColor: "divider", borderRadius: "8px", width: 32, height: 32 }}>
+              {isFullWidth ? <FullscreenExitOutlined fontSize="small" /> : <FullscreenOutlined fontSize="small" />}
+            </IconButton>
+          </Tooltip>
           <Tooltip title="새로고침">
             <IconButton size="small" onClick={refreshDetail} sx={{ border: "1px solid", borderColor: "divider", borderRadius: "8px", width: 32, height: 32 }}>
               <RefreshOutlined fontSize="small" />
