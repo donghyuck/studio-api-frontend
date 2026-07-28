@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Autocomplete, Box, Button, Menu, MenuItem, Stack, TextField, Typography, alpha } from "@mui/material";
-import { AddOutlined, CheckOutlined, ExpandMoreOutlined } from "@mui/icons-material";
+import { CheckOutlined, ExpandMoreOutlined } from "@mui/icons-material";
 import { reactAiApi } from "@/react/pages/ai/api";
 import type { ProviderInfo } from "@/types/studio/ai";
 
@@ -142,7 +142,6 @@ export function AiProviderSelect({ provider, model, deploymentId, onChange, size
         <Button
           size="small"
           onClick={(e) => setAnchorEl(e.currentTarget)}
-          startIcon={<AddOutlined sx={{ fontSize: 16, color: "text.secondary" }} />}
           endIcon={<ExpandMoreOutlined sx={{ fontSize: 16, color: "text.secondary" }} />}
           sx={{
             textTransform: "none",
