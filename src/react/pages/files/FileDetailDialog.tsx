@@ -4431,13 +4431,13 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                   py: 1.5,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "flex-start",
+                  justifyContent: "space-between",
                   borderBottom: "1px solid",
                   borderColor: "divider",
                   bgcolor: (theme) => (theme.palette.mode === "dark" ? "background.paper" : "rgba(248, 250, 252, 0.6)"),
                 }}
               >
-                <Stack direction="row" spacing={2} alignItems="center" sx={{ width: "100%", maxWidth: 720 }}>
+                <Stack direction="row" spacing={2} alignItems="center" sx={{ flex: 1, maxWidth: 640 }}>
                   {/* Chat model selection */}
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <AiProviderSelect
@@ -4469,6 +4469,38 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                     />
                   </Box>
                 </Stack>
+
+                {/* Subtle Embedding Model Badge */}
+                <Tooltip title="이 문서 검색에 사용되는 고정 RAG 임베딩 모델입니다">
+                  <Box
+                    sx={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 0.75,
+                      px: 1.5,
+                      py: 0.6,
+                      borderRadius: "20px",
+                      bgcolor: (theme) => alpha(theme.palette.action.hover, 0.6),
+                      color: "text.secondary",
+                      border: "1px solid",
+                      borderColor: (theme) => alpha(theme.palette.divider, 0.6),
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 500, color: "text.secondary" }}>
+                      임베딩:
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700, color: "primary.main" }}>
+                      {formatEmbeddingModelName(
+                        latestRagJob?.embeddingModel
+                        || latestRagJob?.embeddingDeploymentId
+                        || (ragMetadata as any)?.embeddingModel
+                        || (ragMetadata as any)?.embeddingDeploymentId
+                        || selectedEmbeddingOption?.displayName
+                        || selectedEmbeddingOption?.model
+                        || "-")}
+                    </Typography>
+                  </Box>
+                </Tooltip>
               </Box>
 
               {/* Chat messages list */}
