@@ -3,8 +3,8 @@ import { alpha, Avatar, Box, Chip, Divider, IconButton, Paper, Popover, Stack, T
 import { CloseOutlined, ContentCopyOutlined, DescriptionOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
 import type { ChatMessage, ChatResponseMetadataDto } from "@/react/pages/ai/components/chatTypes";
 import type { RagReferenceDto } from "@/types/studio/ai";
-import katex from "katex";
-import "katex/dist/katex.min.css";
+import { deriveRagOutcome } from "@/react/pages/ai/components/ragOutcome";
+import { RagMarkdownRenderer } from "@/react/pages/ai/components/RagMarkdownRenderer";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -40,6 +40,20 @@ function metadataValue(reference: RagReferenceDto, keys: string[]) {
   return "";
 }
 
+function renderInlineMarkdown(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <Box component="strong" key={`${part}-${index}`} sx={{ fontWeight: 700 }}>
+          {part.slice(2, -2)}
+        </Box>
+      );
+    }
+    return part;
+  });
+}
+
 function formatLocationFromSourceRef(sourceRef: string) {
   if (!sourceRef) return "";
   const pageMatch =
@@ -62,6 +76,11 @@ function extractReferenceContent(reference: RagReferenceDto): string {
   if (typeof reference.exactText === "string" && reference.exactText.trim()) {
     return reference.exactText;
   }
+  return extractLegacyReferenceContent(reference);
+}
+
+// Transitional adapter for conversations created before the typed exactText contract.
+function extractLegacyReferenceContent(reference: RagReferenceDto): string {
   const exactSpan = reference.spans?.find((span) => typeof span.exactText === "string" && span.exactText.length > 0);
   if (exactSpan) {
     return exactSpan.exactText;
@@ -173,7 +192,9 @@ function normalizeReference(reference: RagReferenceDto, fallbackIndex: number): 
     metadataValue(reference, ["sourceRef", "sourceRefs", "location", "path", "url"]);
 
   const locationParts: string[] = [];
-  if (page != null && page !== "") {
+  if (reference.locator) {
+    locationParts.push(reference.locator);
+  } else if (page != null && page !== "") {
     locationParts.push(`페이지 ${stringifyValue(page)}`);
   } else if (slide != null && slide !== "") {
     locationParts.push(`슬라이드 ${stringifyValue(slide)}`);
@@ -216,39 +237,6 @@ function formatReferenceTitle(reference: NormalizedRagReference) {
 
 function formatReferenceSummary(reference: NormalizedRagReference) {
   return (reference.content ?? "").replace(/\s+/g, " ").trim();
-}
-
-function scorePercent(score?: number) {
-  if (typeof score !== "number") {
-    return undefined;
-  }
-  return Math.max(0, Math.min(100, Math.round(score * 100)));
-}
-
-function scoreLabel(percent?: number) {
-  if (percent == null) {
-    return "";
-  }
-  if (percent >= 80) {
-    return "높음";
-  }
-  if (percent >= 60) {
-    return "보통";
-  }
-  return "낮음";
-}
-
-function scoreColor(percent?: number) {
-  if (percent == null) {
-    return "text.secondary";
-  }
-  if (percent >= 80) {
-    return "success.main";
-  }
-  if (percent >= 60) {
-    return "primary.main";
-  }
-  return "warning.main";
 }
 
 function renderTokenUsage(metadata?: ChatResponseMetadataDto) {
@@ -313,136 +301,6 @@ function renderRetrievalDebug(metadata?: ChatResponseMetadataDto) {
   );
 }
 
-function renderInlineMarkdown(
-  text: string,
-  onCitationClick?: (indices: number[], event: React.MouseEvent<HTMLElement>) => void,
-  ragReferences?: NormalizedRagReference[]
-) {
-  // Split on display math ($$...$$), inline math ($...$), bold (**...**), and bracketed citations ([1], [1, 2], [1, 2, 3])
-  const parts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\*\*[^*]+\*\*|\[\d+(?:\s*,\s*\d+)*\]))/g);
-  return parts.map((part, index) => {
-    if (part.startsWith("**") && part.endsWith("**")) {
-      return (
-        <Box component="strong" key={`bold-${index}`} sx={{ fontWeight: 700 }}>
-          {part.slice(2, -2)}
-        </Box>
-      );
-    }
-    const citationMatch = part.match(/^\[(\d+(?:\s*,\s*\d+)*)\]$/);
-    if (citationMatch) {
-      const numbers = citationMatch[1].split(",").map((n) => parseInt(n.trim(), 10));
-      const matchingRefs = ragReferences?.filter((r) => numbers.includes(r.index ?? -1));
-
-      const badge = (
-        <Box
-          component="span"
-          key={`cite-${index}`}
-          onClick={(e) => {
-            if (onCitationClick) {
-              onCitationClick(numbers, e);
-            }
-          }}
-          sx={{
-            display: "inline-flex",
-            alignItems: "center",
-            mx: 0.3,
-            px: 0.6,
-            py: 0.1,
-            borderRadius: "4px",
-            bgcolor: (theme) => alpha(theme.palette.primary.main, 0.12),
-            color: "primary.main",
-            fontWeight: 700,
-            fontSize: "0.82em",
-            cursor: onCitationClick ? "pointer" : "inherit",
-            verticalAlign: "baseline",
-            lineHeight: 1.2,
-            transition: "all 120ms ease",
-            "&:hover": onCitationClick
-              ? { bgcolor: "primary.main", color: "#fff" }
-              : {},
-          }}
-        >
-          {part}
-        </Box>
-      );
-
-      if (matchingRefs && matchingRefs.length > 0) {
-        return (
-          <Tooltip
-            key={`cite-tooltip-${index}`}
-            arrow
-            placement="top"
-            title={
-              <Box sx={{ p: 0.5, maxWidth: 300 }}>
-                {matchingRefs.map((r, i) => (
-                  <Box key={i} sx={{ mb: i < matchingRefs.length - 1 ? 1 : 0 }}>
-                    <Typography variant="caption" component="div" sx={{ fontWeight: 800, fontSize: 11.5, color: "#fff" }}>
-                      근거 {r.index ?? i + 1}: {r.title} {r.chunk ? `(${r.chunk})` : ""}
-                    </Typography>
-                    {r.content ? (
-                      <Typography
-                        variant="caption"
-                        component="div"
-                        sx={{
-                          color: "rgba(255, 255, 255, 0.85)",
-                          fontSize: 11,
-                          mt: 0.25,
-                          lineHeight: 1.45,
-                          display: "-webkit-box",
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: "vertical",
-                          overflow: "hidden",
-                        }}
-                      >
-                        "{r.content.trim()}"
-                      </Typography>
-                    ) : null}
-                  </Box>
-                ))}
-              </Box>
-            }
-          >
-            {badge}
-          </Tooltip>
-        );
-      }
-
-      return badge;
-    }
-    if (part.startsWith("$$") && part.endsWith("$$")) {
-      try {
-        const html = katex.renderToString(part.slice(2, -2), { displayMode: true, throwOnError: false });
-        return (
-          <Box
-            key={`displaymath-${index}`}
-            component="span"
-            dangerouslySetInnerHTML={{ __html: html }}
-            sx={{ display: "block", overflowX: "auto", my: 1, "& .katex": { fontSize: "1.05em" } }}
-          />
-        );
-      } catch {
-        return <Box key={`displaymath-${index}`} component="span">{part}</Box>;
-      }
-    }
-    if (part.startsWith("$") && part.endsWith("$")) {
-      try {
-        const html = katex.renderToString(part.slice(1, -1), { displayMode: false, throwOnError: false });
-        return (
-          <Box
-            key={`inlinemath-${index}`}
-            component="span"
-            dangerouslySetInnerHTML={{ __html: html }}
-            sx={{ "& .katex": { fontSize: "1.05em" } }}
-          />
-        );
-      } catch {
-        return <Box key={`inlinemath-${index}`} component="span">{part}</Box>;
-      }
-    }
-    return part;
-  });
-}
-
 function formatMessageTime(value?: string) {
   if (!value) return "";
   return new Date(value).toLocaleTimeString("ko-KR", {
@@ -474,7 +332,9 @@ export function AssistantMessageBubble({
     message.metadata?.finishReason === "error" || message.content.startsWith("오류:");
   const ragReferences = getRagReferences(message.metadata);
   const answerPolicy = message.metadata?.answerPolicy;
-  const citationsReady =
+  const outcomeView = deriveRagOutcome(message.metadata, sending);
+  const citationsReady = outcomeView.citationsReady;
+  const referencesVisible =
     !sending &&
     ragReferences.length > 0 &&
     typeof message.metadata?.canonicalContent === "string";
@@ -492,7 +352,7 @@ export function AssistantMessageBubble({
   const popoverTitle =
     selectedCitationIndices && selectedCitationIndices.length > 0
       ? `근거 ${selectedCitationIndices.join(", ")}`
-      : `전체 출처 (${ragReferences.length}개)`;
+      : `${outcomeView.referencesTitle} (${ragReferences.length}개)`;
 
   const sourcePopoverOpen = Boolean(sourceAnchorEl);
 
@@ -548,22 +408,24 @@ export function AssistantMessageBubble({
       </Stack>
 
       <Box sx={{ width: "100%", color: "text.primary", pl: 0 }}>
-        <Typography component="div" sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14.5, lineHeight: 1.8 }}>
-          {message.content
-            ? renderInlineMarkdown(
-                message.content,
-                citationsReady
-                  ? (indices, event) => {
-                      setSourceAnchorEl(event.currentTarget);
-                      setSelectedCitationIndices(indices);
-                    }
-                  : undefined,
-                ragReferences
-              )
-            : sending
-            ? "응답 생성 중..."
-            : ""}
-        </Typography>
+        {message.content ? (
+          <RagMarkdownRenderer
+            content={message.content}
+            references={ragReferences}
+            onCitationClick={
+              citationsReady
+                ? (indices, event) => {
+                    setSourceAnchorEl(event.currentTarget);
+                    setSelectedCitationIndices(indices);
+                  }
+                : undefined
+            }
+          />
+        ) : sending ? (
+          <Typography component="div" sx={{ fontSize: 14.5, lineHeight: 1.8 }}>
+            응답 생성 중...
+          </Typography>
+        ) : null}
         {renderTokenUsage(message.metadata)}
         {renderRetrievalDebug(message.metadata)}
         {renderRetrievalPolicy(message.metadata)}
@@ -596,7 +458,7 @@ export function AssistantMessageBubble({
             </IconButton>
           </Tooltip>
         ) : null}
-        {citationsReady ? (
+        {referencesVisible ? (
           <>
             <Box
               component="button"
@@ -649,7 +511,7 @@ export function AssistantMessageBubble({
                 ))}
               </Stack>
               <Typography variant="caption" color="inherit" sx={{ fontWeight: 600, fontSize: 11 }}>
-                출처
+                {outcomeView.outcome?.type === "EVIDENCE_ONLY" ? "근거 후보" : "근거"}
               </Typography>
             </Box>
             <Popover
@@ -683,7 +545,6 @@ export function AssistantMessageBubble({
               </Stack>
               <Stack divider={<Divider />} sx={{ maxHeight: 490, overflowY: "auto" }}>
                 {displayedReferences.map((reference) => {
-                  const percent = scorePercent(reference.score);
                   return (
                     <Stack key={`${reference.index}-${reference.title}-${reference.chunk}`} direction="row" spacing={1.75} sx={{ px: 2.5, py: 2 }}>
                       <Box
@@ -706,41 +567,10 @@ export function AssistantMessageBubble({
                           <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "text.primary", fontSize: 13.5 }}>
                             {reference.index ? `근거 ${reference.index}` : "근거"}
                           </Typography>
-                          {percent != null ? (
-                            <Stack direction="row" spacing={0.75} alignItems="center">
-                              <Typography variant="caption" sx={{ color: scoreColor(percent), fontWeight: 700, fontSize: 11.5 }}>
-                                관련도 {percent}%
-                              </Typography>
-                              <Box
-                                sx={{
-                                  width: 60,
-                                  height: 5,
-                                  borderRadius: 999,
-                                  bgcolor: "action.hover",
-                                  overflow: "hidden",
-                                }}
-                              >
-                                <Box
-                                  sx={{
-                                    width: `${percent}%`,
-                                    height: "100%",
-                                    borderRadius: 999,
-                                    bgcolor: scoreColor(percent),
-                                  }}
-                                />
-                              </Box>
-                              <Chip
-                                label={scoreLabel(percent)}
-                                size="small"
-                                sx={{
-                                  height: 18,
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  bgcolor: (theme) => alpha(scoreColor(percent) === "success.main" ? theme.palette.success.main : scoreColor(percent) === "primary.main" ? theme.palette.primary.main : theme.palette.warning.main, 0.12),
-                                  color: scoreColor(percent),
-                                }}
-                              />
-                            </Stack>
+                          {typeof reference.score === "number" ? (
+                            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, fontSize: 11.5 }}>
+                              검색 점수 {reference.score.toFixed(3)}
+                            </Typography>
                           ) : null}
                           {reference.supportStatus ? (
                             <Chip
@@ -757,12 +587,9 @@ export function AssistantMessageBubble({
                         </Typography>
                         {(() => {
                           const summary = formatReferenceSummary(reference);
-                          const meta = reference.raw?.metadata || {};
                           const fallbackText =
                             summary ||
-                            (meta.sourceEvidence ? String(meta.sourceEvidence) : "") ||
-                            (meta.trustedAnswer ? String(meta.trustedAnswer) : "") ||
-                            (reference.chunk ? `원문 위치: ${reference.chunk}` : "원문 본문 검색 결과 수신됨");
+                            (reference.chunk ? `원문 위치: ${reference.chunk}` : "원문 발췌를 제공할 수 없습니다.");
 
                           return (
                             <Paper
