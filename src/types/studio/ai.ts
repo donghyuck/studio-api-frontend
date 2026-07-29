@@ -67,7 +67,10 @@ export interface ChatResponseMetadataDto {
   ragReferences?: RagReferenceDto[];
   canonicalContent?: string;
   answerPolicy?: ResolvedRagAnswerPolicyDto;
+  sourcePolicy?: ResolvedRagSourcePolicyDto;
+  externalSourceReview?: ExternalSourceReviewDto;
   answerPolicyValidationStatus?: string;
+  ragAnswerOutcome?: RagAnswerOutcomeDto;
   [key: string]: unknown;
 }
 
@@ -90,10 +93,91 @@ export interface RagAnswerPolicyCapabilitiesDto {
   availableModes: RagAnswerMode[];
 }
 
+export type RagSourceScope = "DOCUMENT_ONLY" | "DOCUMENT_AND_OFFICIAL_EXTERNAL";
+
+export interface ResolvedRagSourcePolicyDto {
+  requestedScope?: RagSourceScope | null;
+  effectiveScope: RagSourceScope;
+  source: "SERVER_DEFAULT" | "REQUEST";
+  clamped: boolean;
+  reasonCode:
+    | "NONE"
+    | "SERVER_MAXIMUM"
+    | "CLIENT_SELECTION_DISABLED"
+    | "EXTERNAL_PROVIDER_UNAVAILABLE"
+    | string;
+  policyVersion: string;
+}
+
+export interface RagSourcePolicyCapabilitiesDto {
+  defaultScope: RagSourceScope;
+  maximumScope: RagSourceScope;
+  clientSelectionEnabled: boolean;
+  externalProviderAvailable: boolean;
+  policyVersion: string;
+  availableScopes: RagSourceScope[];
+}
+
+export interface RagChatCapabilitiesDto {
+  answerPolicy: RagAnswerPolicyCapabilitiesDto;
+  sourcePolicy: RagSourcePolicyCapabilitiesDto;
+  indexedWeb: IndexedWebCapabilitiesDto;
+}
+
+export interface IndexedWebCapabilitiesDto {
+  enabled: boolean;
+  maxSelectedSources: number;
+  supportedSchemes: string[];
+  maxUrlLength: number;
+}
+
+export interface IndexedWebSourceRefDto {
+  sourceId: string;
+  revisionId: string;
+}
+
+export interface WebKnowledgeSourceDto {
+  sourceId: string;
+  workspaceId: number;
+  url: string;
+  canonicalUrl?: string | null;
+  host: string;
+  displayName?: string | null;
+  embeddingDeploymentId: string;
+  embeddingSpaceId?: string | null;
+  status: "PENDING" | "FETCHING" | "NORMALIZING" | "INDEXING" | "COMPLETED" | "UNCHANGED" | "FAILED" | "CANCELLED" | string;
+  currentRevisionId?: string | null;
+  revisionStatus?: string | null;
+  title?: string | null;
+  publisher?: string | null;
+  language?: string | null;
+  publishedAt?: string | null;
+  modifiedAt?: string | null;
+  retrievedAt?: string | null;
+  contentPreview?: string | null;
+  errorCode?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebKnowledgeSourceCreateRequest {
+  url: string;
+  displayName?: string;
+  embeddingDeploymentId: string;
+}
+
+export interface ExternalSourceReviewDto {
+  status: "NOT_REQUESTED" | "COMPLETE" | "NO_RESULTS" | "UNAVAILABLE" | "FAILED" | string;
+  reasonCode: string;
+  evidenceCount: number;
+}
+
 export interface RagReferenceDto {
   index?: number;
   citationIndex?: number;
   evidenceId?: string;
+  usageStatus?: "CITED" | "RETRIEVED_ONLY";
+  locator?: string;
   documentId?: string;
   revisionId?: string;
   sourceName?: string;
@@ -116,6 +200,13 @@ export interface RagReferenceDto {
   heading?: string;
   evidenceKind?: string;
   supportStatus?: "SOURCE_VERIFIED" | "INFERRED" | "INDEX_VALID" | string;
+  origin?: "DOCUMENT" | "INDEXED_WEB" | "OFFICIAL_EXTERNAL";
+  sourceType?: "NORMALIZED_CHUNK" | "STATUTE" | "CASE" | "GOVERNMENT" | "ACADEMIC" | "OFFICIAL" | string;
+  publisher?: string;
+  canonicalUrl?: string;
+  publishedDate?: string;
+  effectiveDate?: string;
+  retrievedAt?: string;
   startOffset?: number;
   endOffset?: number;
   truncated?: boolean;
@@ -134,6 +225,37 @@ export interface RagReferenceDto {
     blockIds?: string[];
   }>;
   metadata?: Record<string, unknown>;
+}
+
+export type RagAnswerOutcomeType = "ANSWERED" | "EVIDENCE_ONLY" | "ABSTAINED";
+export type RagAnswerOutcomeStage = "NONE" | "RETRIEVAL" | "PACKING" | "VALIDATION" | "GENERATION";
+export type RagAnswerOutcomeReasonCode =
+  | "NONE"
+  | "NO_RETRIEVAL_RESULTS"
+  | "NO_PACKED_EVIDENCE"
+  | "EMPTY_DRAFT"
+  | "MISSING_CITATION"
+  | "OUT_OF_RANGE_CITATION"
+  | "MISSING_UNIT_CITATION"
+  | "MISSING_COMPARISON_SOURCE_CITATION"
+  | "INSUFFICIENT_SOURCE_COVERAGE"
+  | "NO_USABLE_SOURCE_SPAN";
+
+export interface RagAnswerOutcomeDto {
+  type: RagAnswerOutcomeType;
+  stage: RagAnswerOutcomeStage;
+  reasonCode: RagAnswerOutcomeReasonCode;
+  retrievedResultCount: number;
+  acceptedResultCount: number;
+  packedEvidenceCount: number;
+  usedEvidenceIndexes: number[];
+  citationValidationStatus: string;
+  policyValidationStatus: string;
+  validationUnitCount: number;
+  citedValidationUnitCount: number;
+  partial?: boolean;
+  originalValidationUnitCount?: number;
+  omittedValidationUnitCount?: number;
 }
 
 export interface ChatRagRequestDto {
@@ -159,6 +281,13 @@ export interface ChatRagRequestDto {
     includeDebugChunks?: boolean;
   };
   answerMode?: RagAnswerMode;
+  sourceScope?: RagSourceScope;
+  externalSourceOptions?: {
+    jurisdiction?: string;
+    asOfDate?: string;
+    language?: string;
+  };
+  indexedWebSources?: IndexedWebSourceRefDto[];
 }
 
 export interface TokenUsageDto {

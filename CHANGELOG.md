@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-07-27
+
+### Changed
+
+- RAG 답변 방식과 별도로 `문서만 사용 | 문서 + 공식 외부 자료` 검색 자료 범위를 선택하고,
+  서버 capabilities에 따라 사용할 수 없는 외부 자료 모드를 안내한다. 범위 변경 시 이전 대화와
+  근거가 섞이지 않도록 새 대화를 시작하며 공식 외부 근거는 발행기관·기준일·검증된 HTTPS 링크를 표시한다.
+- RAG canonical 답변을 제목·문단·목록·인용문·코드·수식 구조가 구분되는 안전한 Markdown으로
+  표시한다. 원문 HTML은 실행하지 않으며 검증 완료된 근거 번호만 기존 근거 상세 동작에 연결한다.
+- RAG 응답의 `ANSWERED | EVIDENCE_ONLY | ABSTAINED` outcome을 공통 view model로 해석하고 검색 실패,
+  packing 실패, 인용 실패를 구분해 표시한다.
+- 검증 실패 시 inline citation 대신 “검색된 근거 후보”와 500자 이하 `exactText`를 표시하며 검색
+  score는 백분율 관련도가 아닌 raw 값으로 표시한다.
+- RAG SSE는 `complete.canonicalContent` 수신 전 답변 본문과 citation을 표시하지 않는다.
+- 첨부 상세 Q&A의 고정 `minScore=0.35`와 일반 사용자 요청의 `debug=true`를 제거해 서버 검색
+  기본값과 공개 응답 계약을 사용한다.
+- `FACTUAL_LIST` 부분 답변의 `partial`과 제외 항목 수를 표시하면서 검증된 canonical 인용 링크는
+  정상적으로 활성화한다.
+
+### Verification
+
+- `npm test` 통과
+- `npm run typecheck` 통과
+- `npm run build` 통과
+
 ## 2026-07-20
 
 ### Added

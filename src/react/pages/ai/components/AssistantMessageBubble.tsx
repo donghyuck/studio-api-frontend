@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { alpha, Avatar, Box, Chip, Divider, IconButton, Paper, Popover, Stack, Tooltip, Typography } from "@mui/material";
-import { CloseOutlined, ContentCopyOutlined, DescriptionOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
+import { CloseOutlined, ContentCopyOutlined, DescriptionOutlined, OpenInNewOutlined, PublicOutlined, RefreshOutlined, SyncOutlined } from "@mui/icons-material";
 import type { ChatMessage, ChatResponseMetadataDto } from "@/react/pages/ai/components/chatTypes";
 import type { RagReferenceDto } from "@/types/studio/ai";
 import { deriveRagOutcome } from "@/react/pages/ai/components/ragOutcome";
@@ -20,6 +20,11 @@ interface NormalizedRagReference {
   score?: number;
   content?: string;
   supportStatus?: string;
+  origin?: "DOCUMENT" | "INDEXED_WEB" | "OFFICIAL_EXTERNAL";
+  sourceType?: string;
+  publisher?: string;
+  canonicalUrl?: string;
+  sourceDate?: string;
   raw?: RagReferenceDto;
 }
 
@@ -218,6 +223,14 @@ function normalizeReference(reference: RagReferenceDto, fallbackIndex: number): 
     score: reference.score,
     content,
     supportStatus: reference.supportStatus,
+    origin: reference.origin,
+    sourceType: reference.sourceType,
+    publisher: reference.publisher,
+    canonicalUrl:
+      typeof reference.canonicalUrl === "string" && reference.canonicalUrl.startsWith("https://")
+        ? reference.canonicalUrl
+        : undefined,
+    sourceDate: reference.effectiveDate ?? reference.publishedDate ?? reference.retrievedAt,
     raw: reference,
   };
 }
@@ -237,6 +250,19 @@ function formatReferenceTitle(reference: NormalizedRagReference) {
 
 function formatReferenceSummary(reference: NormalizedRagReference) {
   return (reference.content ?? "").replace(/\s+/g, " ").trim();
+}
+
+function isWebReference(reference: NormalizedRagReference) {
+  return reference.origin === "INDEXED_WEB" || reference.origin === "OFFICIAL_EXTERNAL";
+}
+
+function referenceOriginLabel(reference: NormalizedRagReference) {
+  if (reference.origin === "INDEXED_WEB") return "수집한 웹";
+  if (reference.origin !== "OFFICIAL_EXTERNAL") return "문서";
+  if (reference.sourceType === "STATUTE") return "법령";
+  if (reference.sourceType === "CASE") return "판례";
+  if (reference.sourceType === "ACADEMIC") return "논문";
+  return "공식 외부 자료";
 }
 
 function renderTokenUsage(metadata?: ChatResponseMetadataDto) {
@@ -332,6 +358,7 @@ export function AssistantMessageBubble({
     message.metadata?.finishReason === "error" || message.content.startsWith("오류:");
   const ragReferences = getRagReferences(message.metadata);
   const answerPolicy = message.metadata?.answerPolicy;
+  const sourcePolicy = message.metadata?.sourcePolicy;
   const outcomeView = deriveRagOutcome(message.metadata, sending);
   const citationsReady = outcomeView.citationsReady;
   const referencesVisible =
@@ -399,6 +426,27 @@ export function AssistantMessageBubble({
                   answerPolicy.effectiveMode === "STRICT_GROUNDED"
                     ? "문서 직접 근거"
                     : "문서 기반 해석"
+                }
+                sx={{ height: 18, fontSize: 10, fontWeight: 600 }}
+              />
+            </Tooltip>
+          ) : null}
+          {sourcePolicy?.effectiveScope ? (
+            <Tooltip
+              title={
+                sourcePolicy.clamped
+                  ? `요청한 자료 범위가 서버 정책에 의해 조정되었습니다. (${sourcePolicy.reasonCode})`
+                  : "서버가 실제 적용한 참고 자료 범위입니다."
+              }
+            >
+              <Chip
+                size="small"
+                variant="outlined"
+                icon={<PublicOutlined sx={{ fontSize: 13 }} />}
+                label={
+                  sourcePolicy.effectiveScope === "DOCUMENT_AND_OFFICIAL_EXTERNAL"
+                    ? "공식 외부 자료 참고"
+                    : "첨부 문서만"
                 }
                 sx={{ height: 18, fontSize: 10, fontWeight: 600 }}
               />
@@ -560,7 +608,9 @@ export function AssistantMessageBubble({
                           flex: "0 0 auto",
                         }}
                       >
-                        <DescriptionOutlined sx={{ fontSize: 18 }} />
+                        {isWebReference(reference)
+                          ? <PublicOutlined sx={{ fontSize: 18 }} />
+                          : <DescriptionOutlined sx={{ fontSize: 18 }} />}
                       </Box>
                       <Stack spacing={0.75} sx={{ minWidth: 0, flex: 1 }}>
                         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -581,10 +631,23 @@ export function AssistantMessageBubble({
                               sx={{ height: 18, fontSize: 10 }}
                             />
                           ) : null}
+                          <Chip
+                            size="small"
+                            variant="outlined"
+                            label={referenceOriginLabel(reference)}
+                            sx={{ height: 18, fontSize: 10 }}
+                          />
                         </Stack>
                         <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary", fontSize: 13.5, overflowWrap: "anywhere", lineHeight: 1.5 }}>
                           {formatReferenceTitle(reference)}
                         </Typography>
+                        {isWebReference(reference) && (reference.publisher || reference.sourceDate) ? (
+                          <Typography variant="caption" color="text.secondary">
+                            {[reference.publisher, reference.sourceDate ? `기준 ${reference.sourceDate.slice(0, 10)}` : null]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </Typography>
+                        ) : null}
                         {(() => {
                           const summary = formatReferenceSummary(reference);
                           const fallbackText =
@@ -617,6 +680,28 @@ export function AssistantMessageBubble({
                             </Paper>
                           );
                         })()}
+                        {reference.canonicalUrl ? (
+                          <Box
+                            component="a"
+                            href={reference.canonicalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 0.5,
+                              color: "primary.main",
+                              fontSize: 12,
+                              fontWeight: 700,
+                              textDecoration: "none",
+                              width: "fit-content",
+                              "&:hover": { textDecoration: "underline" },
+                            }}
+                          >
+                            공식 원문 열기
+                            <OpenInNewOutlined sx={{ fontSize: 14 }} />
+                          </Box>
+                        ) : null}
 
                         {/* IdeaBlock 특정 필드 노출 */}
                         {(() => {
