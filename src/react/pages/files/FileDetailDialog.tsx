@@ -38,6 +38,7 @@ import {
   Tabs,
 } from "@mui/material";
 import {
+  AddOutlined,
   CloseOutlined,
   ContentCopyOutlined,
   ExpandMoreOutlined,
@@ -70,6 +71,8 @@ import type {
   RagAnswerPolicyCapabilitiesDto,
   RagSourcePolicyCapabilitiesDto,
   RagSourceScope,
+  IndexedWebCapabilitiesDto,
+  IndexedWebSourceRefDto,
 } from "@/types/studio/ai";
 import {
   reactFilesApi,
@@ -102,6 +105,9 @@ import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import { AssistantMessageBubble } from "../ai/components/AssistantMessageBubble";
 import { RagAnswerModeSelector } from "../ai/components/RagAnswerModeSelector";
 import { RagSourceScopeSelector } from "../ai/components/RagSourceScopeSelector";
+import { RagEvidenceSourceDrawer } from "../ai/components/RagEvidenceSourceDrawer";
+import { reactWorkspaceApi } from "@/react/pages/workspaces/api";
+import type { WorkspaceRef } from "@/types/studio/workspace";
 import { UserMessageBubble } from "../ai/components/UserMessageBubble";
 import type { ChatMessage } from "../ai/components/chatTypes";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
@@ -148,6 +154,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   attachmentId: number;
+  workspaceId?: number;
 }
 
 function ragObjectScopes(file: AttachmentDto | null, fallbackAttachmentId: number) {
@@ -199,12 +206,6 @@ function normalizeExtractedText(value: string) {
     .replaceAll(String.fromCharCode(0), "")
     .replace(/\f/g, "\n\n")
     .trim();
-}
-
-interface Props {
-  open: boolean;
-  attachmentId: number;
-  onClose: () => void;
 }
 
 const knownMetadataLabels: Record<string, string> = {
@@ -328,7 +329,7 @@ function RagMetadataAccordion({ entries }: { entries: Array<[string, unknown]> }
   );
 }
 
-export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
+export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: Props) {
   const toast = useToast();
   
   const [file, setFile] = useState<AttachmentDto | null>(null);
@@ -719,9 +720,31 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
   const [qaAnswerMode, setQaAnswerMode] = useState<RagAnswerMode>("STRICT_GROUNDED");
   const [qaSourcePolicy, setQaSourcePolicy] = useState<RagSourcePolicyCapabilitiesDto | null>(null);
   const [qaSourceScope, setQaSourceScope] = useState<RagSourceScope>("DOCUMENT_ONLY");
+  const [qaIndexedWebCapabilities, setQaIndexedWebCapabilities] =
+    useState<IndexedWebCapabilitiesDto | null>(null);
+  const [qaIndexedWebCapabilitiesLoading, setQaIndexedWebCapabilitiesLoading] = useState(false);
+  const [qaIndexedWebCapabilitiesError, setQaIndexedWebCapabilitiesError] = useState<string | null>(null);
+  const [qaIndexedWebSources, setQaIndexedWebSources] = useState<IndexedWebSourceRefDto[]>([]);
+  const [workspaces, setWorkspaces] = useState<WorkspaceRef[]>([]);
+  const [userSelectedWorkspaceId, setUserSelectedWorkspaceId] = useState<number | null>(null);
+  const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
   const [showScrollToBottomBtn, setShowScrollToBottomBtn] = useState<boolean>(false);
   const qaMessageListRef = useRef<HTMLDivElement | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
+
+  const effectiveWorkspaceId = useMemo(() => {
+    if (workspaceId) return workspaceId;
+    if (file) {
+      const typeStr = String(file.objectType);
+      if (typeStr === "2103" || typeStr.toLowerCase() === "workspace") {
+        const objId = Number(file.objectId);
+        if (Number.isFinite(objId) && objId > 0) {
+          return objId;
+        }
+      }
+    }
+    return userSelectedWorkspaceId;
+  }, [workspaceId, file, userSelectedWorkspaceId]);
 
   function clearThumbnail() {
     setThumbnailAvailable(false);
@@ -782,14 +805,28 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
   const loadRagAnswerPolicy = useCallback(async () => {
     try {
+      setQaIndexedWebCapabilitiesLoading(true);
       const capabilities = await reactAiApi.fetchRagCapabilities();
       setQaAnswerPolicy(capabilities.answerPolicy);
       setQaSourcePolicy(capabilities.sourcePolicy);
       setQaSourceScope(capabilities.sourcePolicy.defaultScope);
-    } catch {
-      // The server still enforces its default policy if capabilities cannot be loaded.
+      setQaIndexedWebCapabilities(capabilities.indexedWeb);
+      setQaIndexedWebCapabilitiesError(null);
+    } catch (err) {
+      setQaIndexedWebCapabilitiesError(resolveAxiosError(err));
+    } finally {
+      setQaIndexedWebCapabilitiesLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (open) {
+      reactWorkspaceApi
+        .list({ archived: false, page: 0, size: 100, sort: "name,asc" })
+        .then((res) => setWorkspaces(res.content ?? []))
+        .catch(() => {});
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open && attachmentId) {
@@ -809,6 +846,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
       setQaError(null);
       setQaAnswerMode("STRICT_GROUNDED");
       setQaSourceScope("DOCUMENT_ONLY");
+      setQaIndexedWebSources([]);
     }
   }, [open]);
 
@@ -2786,6 +2824,7 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
         topK: 5,
         answerMode: qaAnswerMode,
         sourceScope: qaSourceScope,
+        indexedWebSources: qaIndexedWebSources.length > 0 ? qaIndexedWebSources : undefined,
       };
 
       if (embeddingDeploymentId) {
@@ -4493,6 +4532,37 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
 
           {currentTab === "qa" && file && (
             <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, height: "calc(100vh - 120px)", overflow: "hidden" }}>
+              <RagEvidenceSourceDrawer
+                open={evidenceDrawerOpen}
+                onClose={() => setEvidenceDrawerOpen(false)}
+                workspaceId={effectiveWorkspaceId}
+                workspaces={workspaces}
+                onWorkspaceChange={(nextWorkspaceId) => {
+                  setUserSelectedWorkspaceId(nextWorkspaceId);
+                  setQaIndexedWebSources([]);
+                  setQaMessages([]);
+                  setQaInput("");
+                  setQaError(null);
+                }}
+                embeddingDeploymentId={
+                  latestRagJob?.embeddingDeploymentId
+                  || (ragMetadata as any)?.embeddingDeploymentId
+                  || selectedEmbeddingOption?.deploymentId
+                }
+                value={qaIndexedWebSources}
+                maxSelectedSources={qaIndexedWebCapabilities?.maxSelectedSources}
+                capabilities={qaIndexedWebCapabilities}
+                capabilitiesLoading={qaIndexedWebCapabilitiesLoading}
+                capabilitiesError={qaIndexedWebCapabilitiesError}
+                disabled={qaSending}
+                onChange={(sources) => {
+                  if (JSON.stringify(sources) === JSON.stringify(qaIndexedWebSources)) return;
+                  setQaIndexedWebSources(sources);
+                  setQaMessages([]);
+                  setQaInput("");
+                  setQaError(null);
+                }}
+              />
               {/* Chat messages list */}
               <Box sx={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column" }}>
                 <Box
@@ -4653,6 +4723,30 @@ export function FileDetailDialog({ open, attachmentId, onClose }: Props) {
                   >
                     {/* Controls on left */}
                     <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
+                      <Tooltip title="Add Context (자료 추가)">
+                        <IconButton
+                          size="small"
+                          onClick={() => setEvidenceDrawerOpen(true)}
+                          sx={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: "50%",
+                            bgcolor: (theme) =>
+                              theme.palette.mode === "dark"
+                                ? "rgba(255, 255, 255, 0.12)"
+                                : "rgba(0, 0, 0, 0.08)",
+                            color: "text.primary",
+                            "&:hover": {
+                              bgcolor: (theme) =>
+                                theme.palette.mode === "dark"
+                                  ? "rgba(255, 255, 255, 0.2)"
+                                  : "rgba(0, 0, 0, 0.14)",
+                            },
+                          }}
+                        >
+                          <AddOutlined fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
                       <AiProviderSelect
                         provider={qaProvider}
                         model={qaModel}

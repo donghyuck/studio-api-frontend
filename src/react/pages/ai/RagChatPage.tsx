@@ -24,6 +24,9 @@ import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
 import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import { RagAnswerModeSelector } from "@/react/pages/ai/components/RagAnswerModeSelector";
+import { RagSourceScopeSelector } from "@/react/pages/ai/components/RagSourceScopeSelector";
+import { RagEvidenceSourceDrawer } from "@/react/pages/ai/components/RagEvidenceSourceDrawer";
+import { reactWorkspaceApi } from "@/react/pages/workspaces/api";
 import type { ChatMessage } from "@/react/pages/ai/components/chatTypes";
 import type {
   AiInfoResponse,
@@ -33,8 +36,13 @@ import type {
   ProviderInfo,
   RagAnswerMode,
   RagAnswerPolicyCapabilitiesDto,
+  RagSourcePolicyCapabilitiesDto,
+  RagSourceScope,
   TokenUsageDto,
+  IndexedWebCapabilitiesDto,
+  IndexedWebSourceRefDto,
 } from "@/types/studio/ai";
+import type { WorkspaceRef } from "@/types/studio/workspace";
 import { resolveAxiosError } from "@/utils/helpers";
 
 const RAG_CHAT_INPUT_HISTORY_KEY = "ai_rag_chat_input_history";
@@ -78,6 +86,16 @@ export function RagChatPage() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [answerPolicy, setAnswerPolicy] = useState<RagAnswerPolicyCapabilitiesDto | null>(null);
   const [answerMode, setAnswerMode] = useState<RagAnswerMode | null>(null);
+  const [sourcePolicy, setSourcePolicy] = useState<RagSourcePolicyCapabilitiesDto | null>(null);
+  const [sourceScope, setSourceScope] = useState<RagSourceScope | null>(null);
+  const [indexedWebCapabilities, setIndexedWebCapabilities] =
+    useState<IndexedWebCapabilitiesDto | null>(null);
+  const [indexedWebCapabilitiesLoading, setIndexedWebCapabilitiesLoading] = useState(true);
+  const [indexedWebCapabilitiesError, setIndexedWebCapabilitiesError] = useState<string | null>(null);
+  const [indexedWebSources, setIndexedWebSources] = useState<IndexedWebSourceRefDto[]>([]);
+  const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
+  const [workspaces, setWorkspaces] = useState<WorkspaceRef[]>([]);
+  const [workspaceId, setWorkspaceId] = useState<number | null>(null);
   const [memoryEnabled, setMemoryEnabled] = useState(false);
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
   const [input, setInput] = useState("");
@@ -88,8 +106,8 @@ export function RagChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [streamStatus, setStreamStatus] = useState<string | null>(null);
   const [topK, setTopK] = useState("5"); // changed default topK to 5
-  const [minScore, setMinScore] = useState("0.35");
-  const [debug, setDebug] = useState(true); // changed default debug to true for leg visualization
+  const [minScore, setMinScore] = useState("");
+  const [debug, setDebug] = useState(false);
   const [retrievalStrategy, setRetrievalStrategy] = useState("hybrid");
   const [structureTopK, setStructureTopK] = useState("5");
   const [ideaBlockTopK, setIdeaBlockTopK] = useState("5");
@@ -144,13 +162,36 @@ export function RagChatPage() {
         // ignore
       });
 
+    setIndexedWebCapabilitiesLoading(true);
     reactAiApi
-      .fetchRagAnswerPolicy()
-      .then((policy) => {
-        setAnswerPolicy(policy);
-        setAnswerMode(policy.defaultMode);
+      .fetchRagCapabilities()
+      .then((capabilities) => {
+        setAnswerPolicy(capabilities.answerPolicy);
+        setAnswerMode(capabilities.answerPolicy.defaultMode);
+        setSourcePolicy(capabilities.sourcePolicy);
+        setSourceScope(capabilities.sourcePolicy.defaultScope);
+        setIndexedWebCapabilities(capabilities.indexedWeb);
+        setIndexedWebCapabilitiesError(null);
       })
-      .catch((loadError) => setError(resolveAxiosError(loadError)));
+      .catch((loadError) => {
+        const message = resolveAxiosError(loadError);
+        setError(message);
+        setIndexedWebCapabilitiesError(message);
+      })
+      .finally(() => {
+        setIndexedWebCapabilitiesLoading(false);
+      });
+
+    reactWorkspaceApi
+      .list({ archived: false, page: 0, size: 100, sort: "name,asc" })
+      .then((response) => {
+        const items = response.content ?? [];
+        setWorkspaces(items);
+        setWorkspaceId((current) => current ?? items[0]?.id ?? null);
+      })
+      .catch(() => {
+        // URL 자료 기능만 비활성화하고 기존 RAG 채팅은 유지합니다.
+      });
   }, []);
 
   useEffect(() => {
@@ -204,7 +245,11 @@ export function RagChatPage() {
     setInput("");
     setSending(true);
     setError(null);
-    setStreamStatus("문서 근거를 검색하고 있습니다.");
+    setStreamStatus(
+      sourceScope === "DOCUMENT_AND_OFFICIAL_EXTERNAL"
+        ? "문서와 공식 외부 자료를 검색하고 있습니다."
+        : "문서 근거를 검색하고 있습니다."
+    );
     setInput("");
 
     try {
@@ -226,12 +271,14 @@ export function RagChatPage() {
           structureTopK: numberOrUndefined(structureTopK) ?? 5,
           ideaBlockTopK: numberOrUndefined(ideaBlockTopK) ?? 5,
           finalTopK: numberOrUndefined(finalTopK) ?? 5,
-          minScore: numericMinScore ?? 0.35,
+          minScore: numericMinScore,
           dedupe,
           includeDebugChunks,
         },
         debug,
         answerMode: answerMode ?? undefined,
+        sourceScope: sourceScope ?? undefined,
+        indexedWebSources: indexedWebSources.length > 0 ? indexedWebSources : undefined,
       };
       if (selectedOption) {
         if (selectedOption.deploymentId) {
@@ -249,20 +296,21 @@ export function RagChatPage() {
           if (streamPayload.stage === "retrieval_complete") {
             const count = streamPayload.resultCount ?? 0;
             setStreamStatus(`근거 ${count}건 검색 완료 · 답변을 생성하고 있습니다.`);
+          } else if (streamPayload.stage === "generation_started") {
+            setStreamStatus("근거를 바탕으로 답변을 생성하고 검증하고 있습니다.");
+          } else if (streamPayload.stage === "external_search") {
+            setStreamStatus("공식 외부 자료를 검색하고 출처를 확인하고 있습니다.");
           } else {
-            setStreamStatus("문서 근거를 검색하고 있습니다.");
+            setStreamStatus(
+              sourceScope === "DOCUMENT_AND_OFFICIAL_EXTERNAL"
+                ? "문서와 공식 외부 자료를 검색하고 있습니다."
+                : "문서 근거를 검색하고 있습니다."
+            );
           }
         },
-        onDelta: (streamPayload) => {
+        onDelta: () => {
           if (activeRequestIdRef.current !== requestId) return;
-          setStreamStatus(null);
-          setMessages((current) =>
-            current.map((message) =>
-              message.id === assistantMessageId
-                ? { ...message, content: `${message.content}${streamPayload.delta ?? streamPayload.content ?? ""}` }
-                : message
-            )
-          );
+          setStreamStatus("답변을 검증하고 있습니다.");
         },
         onUsage: (streamPayload) => {
           if (activeRequestIdRef.current !== requestId) return;
@@ -364,6 +412,20 @@ export function RagChatPage() {
     if (nextMode === answerMode) return;
     handleNewConversation();
     setAnswerMode(nextMode);
+  }
+
+  function handleSourceScopeChange(nextScope: RagSourceScope) {
+    if (nextScope === sourceScope) return;
+    handleNewConversation();
+    setSourceScope(nextScope);
+  }
+
+  function handleIndexedWebSourcesChange(nextSources: IndexedWebSourceRefDto[]) {
+    const current = JSON.stringify(indexedWebSources);
+    const next = JSON.stringify(nextSources);
+    if (current === next) return;
+    handleNewConversation();
+    setIndexedWebSources(nextSources);
   }
 
   async function handleCopyMessage(content: string) {
@@ -497,6 +559,12 @@ export function RagChatPage() {
               value={answerMode}
               disabled={sending}
               onChange={handleAnswerModeChange}
+            />
+            <RagSourceScopeSelector
+              capabilities={sourcePolicy}
+              value={sourceScope}
+              disabled={sending}
+              onChange={handleSourceScopeChange}
             />
             <TextField
               select
@@ -652,6 +720,57 @@ export function RagChatPage() {
             latencyMs={lastAssistantMessage?.metadata?.latencyMs}
             tokenUsage={lastAssistantMessage?.metadata?.tokenUsage}
             inputHistory={inputHistory}
+            selectedWebSourcesCount={indexedWebSources.length}
+            onOpenEvidenceDrawer={() => setEvidenceDrawerOpen(true)}
+            controls={
+              <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap>
+                <RagAnswerModeSelector
+                  capabilities={answerPolicy}
+                  value={answerMode}
+                  disabled={sending}
+                  hideHelperText
+                  variant="compact-pill"
+                  onChange={(mode) => {
+                    if (mode === answerMode) return;
+                    setAnswerMode(mode);
+                    setError(null);
+                  }}
+                />
+                <RagSourceScopeSelector
+                  capabilities={sourcePolicy}
+                  value={sourceScope}
+                  disabled={sending}
+                  hideHelperText
+                  variant="compact-pill"
+                  onChange={(scope) => {
+                    if (scope === sourceScope) return;
+                    setSourceScope(scope);
+                    setError(null);
+                  }}
+                />
+                {selectedOption ? (
+                  <Tooltip title="이 대화에 사용되는 RAG 임베딩 모델입니다">
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        px: 1,
+                        py: 0.3,
+                        borderRadius: "16px",
+                        fontSize: 12,
+                        fontWeight: 500,
+                        color: "text.secondary",
+                        bgcolor: (theme) =>
+                          theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.04)",
+                      }}
+                    >
+                      (임베딩 : {selectedOption.displayName || selectedOption.model})
+                    </Typography>
+                  </Tooltip>
+                ) : null}
+              </Stack>
+            }
             onInputChange={setInput}
             onSubmit={() => void handleSend()}
             onKeyDown={(event) => {
@@ -692,6 +811,26 @@ export function RagChatPage() {
           />
         </Paper>
       </Stack>
+
+      <RagEvidenceSourceDrawer
+        open={evidenceDrawerOpen}
+        onClose={() => setEvidenceDrawerOpen(false)}
+        workspaceId={workspaceId}
+        workspaces={workspaces}
+        onWorkspaceChange={(nextWorkspaceId) => {
+          handleNewConversation();
+          setWorkspaceId(nextWorkspaceId);
+          setIndexedWebSources([]);
+        }}
+        embeddingDeploymentId={selectedOption?.deploymentId}
+        value={indexedWebSources}
+        maxSelectedSources={indexedWebCapabilities?.maxSelectedSources}
+        capabilities={indexedWebCapabilities}
+        capabilitiesLoading={indexedWebCapabilitiesLoading}
+        capabilitiesError={indexedWebCapabilitiesError}
+        disabled={sending}
+        onChange={handleIndexedWebSourcesChange}
+      />
     </Stack>
   );
 }

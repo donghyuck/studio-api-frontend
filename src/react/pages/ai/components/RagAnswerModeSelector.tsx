@@ -149,7 +149,7 @@ export function RagAnswerModeSelector({
         </Alert>
       ) : !hideHelperText ? (
         <Typography variant="caption" color="text.secondary" noWrap sx={{ display: "block" }}>
-          답변 모드는 검색 결과나 색인을 변경하지 않으며, 변경 이후 질문부터 적용됩니다.
+        답변 모드는 검색 결과나 색인을 변경하지 않습니다. 변경 이후 질문부터 적용됩니다.
         </Typography>
       ) : null}
     </Stack>

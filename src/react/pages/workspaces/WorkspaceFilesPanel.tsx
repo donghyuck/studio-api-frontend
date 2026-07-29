@@ -492,6 +492,7 @@ export function WorkspaceFilesPanel({ workspaceId, archived = false }: Props) {
       <FileDetailDialog
         open={selectedAttachmentId !== null}
         attachmentId={selectedAttachmentId || 0}
+        workspaceId={workspaceId}
         onClose={() => setSelectedAttachmentId(null)}
       />
     </Stack>

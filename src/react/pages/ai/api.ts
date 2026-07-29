@@ -41,6 +41,7 @@ import type {
   RegenerateRequestDto,
   RagRegenerateRequestDto,
   RagAnswerPolicyCapabilitiesDto,
+  RagChatCapabilitiesDto,
   RagStreamStatusEventDto,
   VectorItemDetail,
   VectorProjection,
@@ -56,6 +57,8 @@ import type {
   VectorSearchVisualizationResponseDto,
   VectorProjectionEstimateRequest,
   VectorProjectionEstimateResponse,
+  WebKnowledgeSourceCreateRequest,
+  WebKnowledgeSourceDto,
 } from "@/types/studio/ai";
 
 const BASE = "/api/ai";
@@ -187,6 +190,50 @@ export const reactAiApi = {
 
   fetchRagAnswerPolicy() {
     return apiRequest<RagAnswerPolicyCapabilitiesDto>("get", `${BASE}/chat/rag/answer-policy`);
+  },
+
+  fetchRagCapabilities() {
+    return apiRequest<RagChatCapabilitiesDto>("get", `${BASE}/chat/rag/capabilities`);
+  },
+
+  listWebKnowledgeSources(workspaceId: number, embeddingDeploymentId?: string) {
+    return apiRequest<WebKnowledgeSourceDto[]>(
+      "get",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources`,
+      { params: { embeddingDeploymentId } }
+    );
+  },
+
+  createWebKnowledgeSource(
+    workspaceId: number,
+    payload: WebKnowledgeSourceCreateRequest
+  ) {
+    return apiRequest<WebKnowledgeSourceDto, WebKnowledgeSourceCreateRequest>(
+      "post",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources`,
+      { data: payload }
+    );
+  },
+
+  refreshWebKnowledgeSource(workspaceId: number, sourceId: string) {
+    return apiRequest<WebKnowledgeSourceDto>(
+      "post",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources/${encodeURIComponent(sourceId)}/refresh`
+    );
+  },
+
+  cancelWebKnowledgeSource(workspaceId: number, sourceId: string) {
+    return apiRequest<WebKnowledgeSourceDto>(
+      "post",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources/${encodeURIComponent(sourceId)}/cancel`
+    );
+  },
+
+  archiveWebKnowledgeSource(workspaceId: number, sourceId: string) {
+    return apiRequest<void>(
+      "delete",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources/${encodeURIComponent(sourceId)}`
+    );
   },
 
   fetchProviders() {
