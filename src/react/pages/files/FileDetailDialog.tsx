@@ -106,6 +106,8 @@ import { AssistantMessageBubble } from "../ai/components/AssistantMessageBubble"
 import { RagAnswerModeSelector } from "../ai/components/RagAnswerModeSelector";
 import { RagSourceScopeSelector } from "../ai/components/RagSourceScopeSelector";
 import { RagEvidenceSourceDrawer } from "../ai/components/RagEvidenceSourceDrawer";
+import { RagEvidenceSourceSummary } from "../ai/components/RagEvidenceSourceSummary";
+import { toIndexedWebSourcePayload } from "../ai/utils/evidenceSource";
 import { reactWorkspaceApi } from "@/react/pages/workspaces/api";
 import type { WorkspaceRef } from "@/types/studio/workspace";
 import { UserMessageBubble } from "../ai/components/UserMessageBubble";
@@ -2824,7 +2826,7 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
         topK: 5,
         answerMode: qaAnswerMode,
         sourceScope: qaSourceScope,
-        indexedWebSources: qaIndexedWebSources.length > 0 ? qaIndexedWebSources : undefined,
+        indexedWebSources: qaIndexedWebSources.length > 0 ? toIndexedWebSourcePayload(qaIndexedWebSources) : undefined,
       };
 
       if (embeddingDeploymentId) {
@@ -4670,6 +4672,19 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                     )}
                   </Stack>
                 )}
+
+                <Box sx={{ maxWidth: 840, mx: "auto", mb: 1.5 }}>
+                  <RagEvidenceSourceSummary
+                    attachedDocumentName={file.name}
+                    selectedWebSourcesCount={qaIndexedWebSources.length}
+                    onOpenDrawer={() => setEvidenceDrawerOpen(true)}
+                    disabled={qaSending}
+                    selection={lastQaAssistantMessage?.metadata?.evidenceSourceSelection as any}
+                    sourcePolicy={lastQaAssistantMessage?.metadata?.sourcePolicy}
+                    packedOrigins={(lastQaAssistantMessage?.metadata?.evidenceSourceSelection as any)?.packedOrigins}
+                    usedOrigins={(lastQaAssistantMessage?.metadata?.evidenceSourceSelection as any)?.usedOrigins}
+                  />
+                </Box>
 
                 <Paper
                   elevation={0}

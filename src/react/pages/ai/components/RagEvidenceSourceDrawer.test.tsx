@@ -89,7 +89,7 @@ describe("RagEvidenceSourceDrawer", () => {
         onClose={vi.fn()}
         capabilities={{ enabled: true, maxSelectedSources: 10, supportedSchemes: ["https"], maxUrlLength: 2048 }}
         workspaceId={1}
-        embeddingDeploymentId={null}
+        embeddingDeploymentId="embedding-default"
         value={[]}
         onChange={vi.fn()}
       />

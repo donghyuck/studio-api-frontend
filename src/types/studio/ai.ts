@@ -129,11 +129,36 @@ export interface IndexedWebCapabilitiesDto {
   maxSelectedSources: number;
   supportedSchemes: string[];
   maxUrlLength: number;
+  collectionModes?: string[];
+  siteCrawlEnabled?: boolean;
+  defaultMaxDepth?: number;
+  maximumDepth?: number;
+  defaultMaxPages?: number;
+  maximumPages?: number;
+  defaultMaxConcurrency?: number;
+  maximumConcurrency?: number;
+  discoveryModes?: string[];
 }
 
 export interface IndexedWebSourceRefDto {
   sourceId: string;
-  revisionId: string;
+  revisionId?: string;
+  corpusRevisionId?: string;
+}
+
+export type WebCollectionMode = "SINGLE_PAGE" | "SITE" | string;
+export type WebCrawlScope = "PATH_PREFIX" | "SAME_ORIGIN" | string;
+export type WebCrawlDiscoveryMode = "SITEMAP_AND_LINKS" | "SITEMAP_ONLY" | "LINKS_ONLY" | string;
+
+export interface WebCrawlPolicyRequest {
+  scope?: WebCrawlScope;
+  discoveryMode?: WebCrawlDiscoveryMode;
+  maxDepth?: number;
+  maxPages?: number;
+  maxConcurrency?: number;
+  includePathGlobs?: string[];
+  excludePathGlobs?: string[];
+  allowedQueryKeys?: string[];
 }
 
 export interface WebKnowledgeSourceDto {
@@ -146,8 +171,20 @@ export interface WebKnowledgeSourceDto {
   embeddingDeploymentId: string;
   embeddingSpaceId?: string | null;
   status: "PENDING" | "FETCHING" | "NORMALIZING" | "INDEXING" | "COMPLETED" | "UNCHANGED" | "FAILED" | "CANCELLED" | string;
+  collectionMode?: WebCollectionMode;
   currentRevisionId?: string | null;
+  currentCorpusRevisionId?: string | null;
   revisionStatus?: string | null;
+  latestRunId?: string | null;
+  crawlTruncated?: boolean;
+  discoveredCount?: number;
+  fetchedCount?: number;
+  indexedCount?: number;
+  unchangedCount?: number;
+  updatedCount?: number;
+  removedCount?: number;
+  failedCount?: number;
+  skippedCount?: number;
   title?: string | null;
   publisher?: string | null;
   language?: string | null;
@@ -164,6 +201,89 @@ export interface WebKnowledgeSourceCreateRequest {
   url: string;
   displayName?: string;
   embeddingDeploymentId: string;
+  collectionMode?: WebCollectionMode;
+  crawlPolicy?: WebCrawlPolicyRequest;
+}
+
+export interface WebKnowledgeSitePreviewRequest {
+  url: string;
+  crawlPolicy?: WebCrawlPolicyRequest;
+}
+
+export interface WebKnowledgeSitePreviewCandidate {
+  url: string;
+  host: string;
+  path: string;
+  depth: number;
+  discoveredBy?: string;
+}
+
+export interface WebKnowledgeSitePreviewExcludedCandidate {
+  host: string;
+  path: string;
+  reasonCode: string;
+}
+
+export interface WebKnowledgeSitePreviewEffectivePolicy {
+  scope: string;
+  discoveryMode: string;
+  maxDepth: number;
+  maxPages: number;
+  maxConcurrency: number;
+  minDelayPerOriginMillis: number;
+  dropAllQuery: boolean;
+  includePathGlobs: string[];
+  excludePathGlobs: string[];
+  allowedQueryKeys: string[];
+  policyVersion?: string;
+}
+
+export interface WebKnowledgeSitePreviewView {
+  rootUrl: string;
+  effectivePolicy: WebKnowledgeSitePreviewEffectivePolicy;
+  candidateCount: number;
+  candidates: WebKnowledgeSitePreviewCandidate[];
+  excludedCount: number;
+  excludedSamples: WebKnowledgeSitePreviewExcludedCandidate[];
+  queryParametersRemovedCount: number;
+  truncated: boolean;
+  warnings: string[];
+}
+
+export interface WebKnowledgeCrawlRunView {
+  runId: string;
+  status: string;
+  discoveredCount: number;
+  fetchedCount: number;
+  indexedCount: number;
+  unchangedCount: number;
+  updatedCount: number;
+  removedCount: number;
+  failedCount: number;
+  skippedCount: number;
+  responseBytes: number;
+  normalizedChars: number;
+  truncated: boolean;
+  truncationReason?: string | null;
+  errorCode?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WebKnowledgePageView {
+  url: string;
+  canonicalUrl?: string | null;
+  host?: string | null;
+  path?: string | null;
+  title?: string | null;
+  status: string;
+  active: boolean;
+  missingRunCount: number;
+  firstSeenAt?: string | null;
+  lastSeenAt?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface ExternalSourceReviewDto {

@@ -25,6 +25,7 @@ interface NormalizedRagReference {
   publisher?: string;
   canonicalUrl?: string;
   sourceDate?: string;
+  usageStatus?: "CITED" | "RETRIEVED_ONLY" | string;
   raw?: RagReferenceDto;
 }
 
@@ -92,6 +93,9 @@ function extractLegacyReferenceContent(reference: RagReferenceDto): string {
   }
 
   const directKeys = [
+    "exactText",
+    "exact_text",
+    "exactExcerpt",
     "content",
     "page_content",
     "pageContent",
@@ -231,6 +235,7 @@ function normalizeReference(reference: RagReferenceDto, fallbackIndex: number): 
         ? reference.canonicalUrl
         : undefined,
     sourceDate: reference.effectiveDate ?? reference.publishedDate ?? reference.retrievedAt,
+    usageStatus: reference.usageStatus || "CITED",
     raw: reference,
   };
 }
