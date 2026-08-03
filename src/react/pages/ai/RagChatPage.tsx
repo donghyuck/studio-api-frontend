@@ -26,6 +26,8 @@ import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import { RagAnswerModeSelector } from "@/react/pages/ai/components/RagAnswerModeSelector";
 import { RagSourceScopeSelector } from "@/react/pages/ai/components/RagSourceScopeSelector";
 import { RagEvidenceSourceDrawer } from "@/react/pages/ai/components/RagEvidenceSourceDrawer";
+import { RagEvidenceSourceSummary } from "@/react/pages/ai/components/RagEvidenceSourceSummary";
+import { toIndexedWebSourcePayload } from "@/react/pages/ai/utils/evidenceSource";
 import { reactWorkspaceApi } from "@/react/pages/workspaces/api";
 import type { ChatMessage } from "@/react/pages/ai/components/chatTypes";
 import type {
@@ -278,7 +280,7 @@ export function RagChatPage() {
         debug,
         answerMode: answerMode ?? undefined,
         sourceScope: sourceScope ?? undefined,
-        indexedWebSources: indexedWebSources.length > 0 ? indexedWebSources : undefined,
+        indexedWebSources: indexedWebSources.length > 0 ? toIndexedWebSourcePayload(indexedWebSources) : undefined,
       };
       if (selectedOption) {
         if (selectedOption.deploymentId) {
@@ -708,6 +710,17 @@ export function RagChatPage() {
             emptyTitle="내부 자료에 대해 질문해 보세요."
             emptyDescription="등록된 내부 자료를 바탕으로 답변합니다."
           />
+          <Box sx={{ maxWidth: 920, mx: "auto", px: { xs: 1.5, md: 5 }, mb: 1 }}>
+            <RagEvidenceSourceSummary
+              selectedWebSourcesCount={indexedWebSources.length}
+              onOpenDrawer={() => setEvidenceDrawerOpen(true)}
+              disabled={sending}
+              selection={lastAssistantMessage?.metadata?.evidenceSourceSelection as any}
+              sourcePolicy={lastAssistantMessage?.metadata?.sourcePolicy}
+              packedOrigins={(lastAssistantMessage?.metadata?.evidenceSourceSelection as any)?.packedOrigins}
+              usedOrigins={(lastAssistantMessage?.metadata?.evidenceSourceSelection as any)?.usedOrigins}
+            />
+          </Box>
           <ChatComposer
             input={input}
             sending={sending}

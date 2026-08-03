@@ -119,6 +119,7 @@ export function RagEvidenceSourceDrawer({
           <RagEvidenceSourcePicker
             workspaceId={workspaceId}
             embeddingDeploymentId={embeddingDeploymentId}
+            capabilities={capabilities}
             value={value}
             maxSelectedSources={maxSelectedSources ?? capabilities?.maxSelectedSources ?? 10}
             disabled={disabled}

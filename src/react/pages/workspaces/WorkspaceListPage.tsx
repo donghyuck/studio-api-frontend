@@ -419,6 +419,12 @@ export function WorkspaceListPage() {
     }
   }, [keywordInput, archivedInput, companyInput]);
 
+  useEffect(() => {
+    if (viewMode === "tree") {
+      void loadTreeData();
+    }
+  }, [viewMode, loadTreeData]);
+
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
 
   const selectedWorkspace = useMemo(() => {

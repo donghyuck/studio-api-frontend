@@ -57,6 +57,11 @@ import type {
   VectorSearchVisualizationResponseDto,
   VectorProjectionEstimateRequest,
   VectorProjectionEstimateResponse,
+  WebCrawlPolicyRequest,
+  WebKnowledgeCrawlRunView,
+  WebKnowledgePageView,
+  WebKnowledgeSitePreviewRequest,
+  WebKnowledgeSitePreviewView,
   WebKnowledgeSourceCreateRequest,
   WebKnowledgeSourceDto,
 } from "@/types/studio/ai";
@@ -196,11 +201,29 @@ export const reactAiApi = {
     return apiRequest<RagChatCapabilitiesDto>("get", `${BASE}/chat/rag/capabilities`);
   },
 
+  previewWebKnowledgeSource(
+    workspaceId: number,
+    payload: WebKnowledgeSitePreviewRequest
+  ) {
+    return apiRequest<WebKnowledgeSitePreviewView, WebKnowledgeSitePreviewRequest>(
+      "post",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources/preview`,
+      { data: payload }
+    );
+  },
+
   listWebKnowledgeSources(workspaceId: number, embeddingDeploymentId?: string) {
     return apiRequest<WebKnowledgeSourceDto[]>(
       "get",
       `/api/workspaces/${workspaceId}/ai/rag/web-sources`,
       { params: { embeddingDeploymentId } }
+    );
+  },
+
+  getWebKnowledgeSource(workspaceId: number, sourceId: string) {
+    return apiRequest<WebKnowledgeSourceDto>(
+      "get",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources/${encodeURIComponent(sourceId)}`
     );
   },
 
@@ -226,6 +249,39 @@ export const reactAiApi = {
     return apiRequest<WebKnowledgeSourceDto>(
       "post",
       `/api/workspaces/${workspaceId}/ai/rag/web-sources/${encodeURIComponent(sourceId)}/cancel`
+    );
+  },
+
+  listCrawlRuns(workspaceId: number, sourceId: string) {
+    return apiRequest<WebKnowledgeCrawlRunView[]>(
+      "get",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources/${encodeURIComponent(sourceId)}/crawl-runs`
+    );
+  },
+
+  getCrawlRun(workspaceId: number, sourceId: string, runId: string) {
+    return apiRequest<WebKnowledgeCrawlRunView>(
+      "get",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources/${encodeURIComponent(sourceId)}/crawl-runs/${encodeURIComponent(runId)}`
+    );
+  },
+
+  listPages(workspaceId: number, sourceId: string) {
+    return apiRequest<WebKnowledgePageView[]>(
+      "get",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources/${encodeURIComponent(sourceId)}/pages`
+    );
+  },
+
+  updateCrawlPolicy(
+    workspaceId: number,
+    sourceId: string,
+    payload: WebCrawlPolicyRequest
+  ) {
+    return apiRequest<WebKnowledgeSourceDto, WebCrawlPolicyRequest>(
+      "patch",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources/${encodeURIComponent(sourceId)}/crawl-policy`,
+      { data: payload }
     );
   },
 
