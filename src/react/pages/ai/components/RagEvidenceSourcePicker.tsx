@@ -347,13 +347,13 @@ export function RagEvidenceSourcePicker({
     setDetailTab("runs");
     setPolicyEditNotice(null);
 
-    // Populate policy edit state for existing source
-    setEditScope("PATH_PREFIX");
-    setEditDiscoveryMode("SITEMAP_AND_LINKS");
-    setEditMaxDepth(capabilities?.defaultMaxDepth ?? 2);
-    setEditMaxPages(capabilities?.defaultMaxPages ?? 50);
-    setEditIncludeGlobs("");
-    setEditExcludeGlobs("");
+    const savedPolicy = source.crawlPolicy;
+    setEditScope(savedPolicy?.scope ?? "PATH_PREFIX");
+    setEditDiscoveryMode(savedPolicy?.discoveryMode ?? "SITEMAP_AND_LINKS");
+    setEditMaxDepth(savedPolicy?.maxDepth ?? capabilities?.defaultMaxDepth ?? 2);
+    setEditMaxPages(savedPolicy?.maxPages ?? capabilities?.defaultMaxPages ?? 50);
+    setEditIncludeGlobs((savedPolicy?.includePathGlobs ?? []).join(", "));
+    setEditExcludeGlobs((savedPolicy?.excludePathGlobs ?? []).join(", "));
 
     if (!workspaceId) return;
     try {

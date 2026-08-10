@@ -65,6 +65,69 @@ describe("RagMarkdownRenderer", () => {
       />
     );
 
-    expect(container.querySelector("a")?.getAttribute("href")).toBeNull();
+    expect(container.querySelector("a")).toBeNull();
+    expect(within(container).getByText("위험 링크")).toBeTruthy();
+  });
+
+  it("renders a GFM table, copies it as tab-separated text, and keeps citations interactive", async () => {
+    const onCitationClick = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    render(
+      <RagMarkdownRenderer
+        content={"| 학자 | 관련 내용 |\n| --- | --- |\n| 니컬러스 P. 머니 | 진균학자 [1] |\n| 로베르트 레마크 | 백선증 연구 [2] |"}
+        references={[
+          { index: 1, title: "진균의 역사" },
+          { index: 2, title: "진균의 역사" },
+        ]}
+        onCitationClick={onCitationClick}
+      />
+    );
+
+    const table = screen.getByRole("table");
+    expect(table).toBeTruthy();
+    expect(within(table).getAllByRole("row")).toHaveLength(3);
+    fireEvent.click(within(table).getByRole("button", { name: "근거 2" }));
+    expect(onCitationClick).toHaveBeenCalledWith([2], expect.anything());
+
+    fireEvent.click(screen.getByRole("button", { name: "표 복사" }));
+    expect(writeText).toHaveBeenCalledWith(
+      "학자\t관련 내용\n니컬러스 P. 머니\t진균학자 [1]\n로베르트 레마크\t백선증 연구 [2]"
+    );
+    expect(await screen.findByRole("button", { name: "표 복사 완료" })).toBeTruthy();
+  });
+
+  it("does not activate model-authored external links or images", () => {
+    const { container } = render(
+      <RagMarkdownRenderer
+        content={"[외부 링크](https://example.com)\n\n![차트](https://example.com/chart.png)"}
+        references={[]}
+      />
+    );
+
+    expect(container.querySelector("a")).toBeNull();
+    expect(container.querySelector("img")).toBeNull();
+    expect(within(container).getByText("외부 링크")).toBeTruthy();
+    expect(within(container).getByText("[이미지: 차트]")).toBeTruthy();
+  });
+
+  it("does not promote a model-authored citation target with a non-citation label", () => {
+    const { container } = render(
+      <RagMarkdownRenderer
+        content={"[중요 근거](#rag-citation-1)"}
+        references={[{ index: 1, title: "문서" }]}
+      />
+    );
+
+    expect(within(container).queryByRole("button", { name: "근거 1" })).toBeNull();
+    expect(within(container).getByText("중요 근거")).toBeTruthy();
+  });
+
+  it("falls back to plain text when the rich markdown budget is exceeded", () => {
+    render(<RagMarkdownRenderer content={"a".repeat(32_001)} references={[]} />);
+    expect(screen.getByTestId("rag-markdown-plain-fallback")).toBeTruthy();
   });
 });

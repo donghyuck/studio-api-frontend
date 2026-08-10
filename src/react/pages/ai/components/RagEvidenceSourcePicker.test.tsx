@@ -118,6 +118,65 @@ describe("RagEvidenceSourcePicker", () => {
     expect(screen.getByText(/하위 페이지 포함/i)).toBeDefined();
   });
 
+  it("initializes the SITE policy editor from the saved source policy", async () => {
+    listWebKnowledgeSources.mockResolvedValue([
+      {
+        sourceId: "wsrc-site-policy",
+        workspaceId: 2,
+        url: "https://example.org/docs/",
+        host: "example.org",
+        displayName: "저장 정책 자료",
+        embeddingDeploymentId: "embedding-default",
+        status: "COMPLETED",
+        collectionMode: "SITE",
+        currentCorpusRevisionId: "wcorpus-policy",
+        crawlPolicy: {
+          scope: "SAME_ORIGIN",
+          discoveryMode: "LINKS_ONLY",
+          maxDepth: 1,
+          maxPages: 10,
+          maxConcurrency: 2,
+          minDelayPerOriginMillis: 500,
+          dropAllQuery: true,
+          includePathGlobs: ["/docs/**", "/guide/**"],
+          excludePathGlobs: ["/archive/**"],
+          allowedQueryKeys: [],
+          policyVersion: "web-crawl-policy-v1",
+        },
+        createdAt: "2026-08-03T00:00:00Z",
+        updatedAt: "2026-08-03T00:00:00Z",
+      },
+    ]);
+
+    render(
+      <RagEvidenceSourcePicker
+        workspaceId={2}
+        embeddingDeploymentId="embedding-default"
+        capabilities={{
+          enabled: true,
+          siteCrawlEnabled: true,
+          maxSelectedSources: 10,
+          supportedSchemes: ["https"],
+          maxUrlLength: 2048,
+          defaultMaxDepth: 2,
+          defaultMaxPages: 50,
+        }}
+        value={[]}
+        onChange={vi.fn()}
+      />
+    );
+
+    await screen.findByText("저장 정책 자료");
+    fireEvent.click(screen.getByRole("button", { name: "옵션 수정" }));
+
+    expect((await screen.findByLabelText("최대 깊이") as HTMLInputElement).value).toBe("1");
+    expect((screen.getByLabelText("최대 페이지 수") as HTMLInputElement).value).toBe("10");
+    const includeInputs = screen.getAllByLabelText(/포함 패턴/);
+    const excludeInputs = screen.getAllByLabelText(/제외 패턴/);
+    expect((includeInputs.at(-1) as HTMLInputElement).value).toBe("/docs/**, /guide/**");
+    expect((excludeInputs.at(-1) as HTMLInputElement).value).toBe("/archive/**");
+  });
+
   it("triggers preview and opens preview modal on SITE preview click", async () => {
     listWebKnowledgeSources.mockResolvedValue([]);
     previewWebKnowledgeSource.mockResolvedValue({

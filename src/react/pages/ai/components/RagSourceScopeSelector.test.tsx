@@ -46,4 +46,31 @@ describe("RagSourceScopeSelector", () => {
       screen.getByText(/서버에 공식 외부 자료 공급자가 설정되지 않아 첨부 문서만 사용할 수 있습니다/)
     ).toBeTruthy();
   });
+
+  it("describes AUTO as an explicit conditional external lookup", () => {
+    render(
+      <RagSourceScopeSelector
+        capabilities={{
+          defaultScope: "DOCUMENT_ONLY",
+          maximumScope: "DOCUMENT_AND_OFFICIAL_EXTERNAL",
+          clientSelectionEnabled: true,
+          externalProviderAvailable: true,
+          policyVersion: "source-test",
+          availableScopes: ["DOCUMENT_ONLY", "DOCUMENT_AND_OFFICIAL_EXTERNAL"],
+        }}
+        externalRetrievalCapabilities={{
+          defaultMode: "OFF",
+          maximumMode: "AUTO",
+          clientSelectionEnabled: true,
+          policyVersion: "external-test",
+          availableModes: ["OFF", "AUTO"],
+        }}
+        value="DOCUMENT_AND_OFFICIAL_EXTERNAL"
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/필요 시 외부 자료 자동 검색/)).toBeTruthy();
+    expect(screen.getByText(/내부 근거 부족 시에만 검증된 공식 외부 자료를 검색/)).toBeTruthy();
+  });
 });

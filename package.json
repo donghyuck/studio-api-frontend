@@ -71,6 +71,7 @@
         "react-router-dom": "^7.18.1",
         "rehype-katex": "^7.0.1",
         "rehype-sanitize": "^6.0.0",
+        "remark-gfm": "^4.0.1",
         "remark-math": "^6.0.0",
         "sockjs-client": "^1.6.1",
         "yup": "^1.7.1",
