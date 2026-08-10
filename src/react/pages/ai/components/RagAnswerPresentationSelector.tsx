@@ -27,6 +27,12 @@ const descriptions: Record<RagAnswerPresentationPreference, string> = {
   VISUAL_PREFERRED: "근거가 충분하면 표처럼 비교하기 쉬운 구성을 우선합니다.",
 };
 
+const ALL_PREFERENCES: RagAnswerPresentationPreference[] = [
+  "AUTO",
+  "TEXT_FOCUSED",
+  "VISUAL_PREFERRED",
+];
+
 export function RagAnswerPresentationSelector({
   capabilities,
   value,
@@ -35,10 +41,16 @@ export function RagAnswerPresentationSelector({
   hideHelperText,
   variant = "standard",
 }: Props) {
-  const preferences = capabilities?.availablePreferences ?? [];
-  const selected = capabilities && !capabilities.clientSelectionEnabled
-    ? capabilities.defaultPreference
-    : value ?? capabilities?.defaultPreference ?? "";
+  const preferences =
+    capabilities?.availablePreferences && capabilities.availablePreferences.length > 0
+      ? capabilities.availablePreferences
+      : ALL_PREFERENCES;
+  const selected =
+    (capabilities && !capabilities.clientSelectionEnabled
+      ? capabilities.defaultPreference
+      : value) ||
+    capabilities?.defaultPreference ||
+    "AUTO";
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   if (variant === "compact-pill") {

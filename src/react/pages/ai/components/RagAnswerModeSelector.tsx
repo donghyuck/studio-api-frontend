@@ -20,6 +20,8 @@ const modeDescription: Record<RagAnswerMode, string> = {
   GROUNDED_INFERENCE: "문서 근거와 합리적 해석까지 포함하여 답변합니다.",
 };
 
+const ALL_MODES: RagAnswerMode[] = ["STRICT_GROUNDED", "GROUNDED_INFERENCE"];
+
 export function RagAnswerModeSelector({
   capabilities,
   value,
@@ -28,11 +30,16 @@ export function RagAnswerModeSelector({
   hideHelperText,
   variant = "standard",
 }: Props) {
-  const modes = capabilities?.availableModes ?? [];
+  const modes =
+    capabilities?.availableModes && capabilities.availableModes.length > 0
+      ? capabilities.availableModes
+      : ALL_MODES;
   const selected =
-    capabilities && !capabilities.clientSelectionEnabled
+    (capabilities && !capabilities.clientSelectionEnabled
       ? capabilities.defaultMode
-      : value ?? capabilities?.defaultMode ?? "";
+      : value) ||
+    capabilities?.defaultMode ||
+    "STRICT_GROUNDED";
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   if (variant === "compact-pill") {

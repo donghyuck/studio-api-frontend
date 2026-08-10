@@ -28,6 +28,8 @@ const descriptions: Record<RagSourceScope, string> = {
     "현재성·비교 요청 또는 내부 근거 부족 시에만 검증된 공식 외부 자료를 검색합니다.",
 };
 
+const ALL_SCOPES: RagSourceScope[] = ["DOCUMENT_ONLY", "DOCUMENT_AND_OFFICIAL_EXTERNAL"];
+
 export function RagSourceScopeSelector({
   capabilities,
   externalRetrievalCapabilities,
@@ -40,13 +42,18 @@ export function RagSourceScopeSelector({
   const autoAvailable = externalRetrievalCapabilities === undefined
     ? true
     : externalRetrievalCapabilities?.availableModes.includes("AUTO") ?? false;
-  const scopes = (capabilities?.availableScopes ?? []).filter(
+  const rawScopes = capabilities?.availableScopes && capabilities.availableScopes.length > 0
+    ? capabilities.availableScopes
+    : ALL_SCOPES;
+  const scopes = rawScopes.filter(
     (scope) => scope !== "DOCUMENT_AND_OFFICIAL_EXTERNAL" || autoAvailable
   );
   const selected =
-    capabilities && !capabilities.clientSelectionEnabled
+    (capabilities && !capabilities.clientSelectionEnabled
       ? capabilities.defaultScope
-      : value ?? capabilities?.defaultScope ?? "";
+      : value) ||
+    capabilities?.defaultScope ||
+    "DOCUMENT_ONLY";
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const unavailableReason =
     capabilities && !capabilities.externalProviderAvailable
