@@ -1,5 +1,32 @@
 # Changelog
 
+## 2026-08-03
+
+### Changed
+
+- RAG 채팅과 첨부 상세 Q&A에 `자동 구성 | 텍스트 중심 | 시각 자료 우선` 선택을 추가하고, 질문에서
+  명시한 표·차트 형식 요청은 서버 grounding 정책을 유지한 채 우선 적용한다.
+- canonical 답변의 GFM 표와 행별 근거 링크를 표시하고, 서버가 검증된 숫자 표에서 투영한 bounded
+  차트만 렌더링한다. 각 표 우측 상단에 마우스를 올리면 나타나는 버튼으로 인용 번호를 포함한 표
+  내용을 탭 구분 형식으로 복사할 수 있다. 인용된 PDF page의 `SOURCE_IMAGE`는 canonical
+  fingerprint가 일치하고 서버가 발급한 동일
+  출처 경로일 때만 표시한다. 모델이 만든 외부 링크·이미지·HTML/SVG는 활성화하지 않는다.
+
+### Fixed
+
+- SITE 웹 자료의 옵션 수정 화면을 서버가 반환한 저장 `crawlPolicy`로 초기화한다. 기존처럼
+  capabilities 기본값으로 덮어써 다음 재수집의 깊이·페이지 수와 경로 필터가 의도치 않게 바뀌는
+  문제를 수정했다.
+
+### Verification
+
+- `npm test -- --run src/react/pages/ai/components/RagEvidenceSourcePicker.test.tsx` 통과
+- `npm test -- --run src/react/pages/ai/components/RagMarkdownRenderer.test.tsx src/react/pages/ai/components/RagAnswerPresentationSelector.test.tsx src/react/pages/ai/components/RagAnswerBlocks.test.tsx` 통과
+- `npm run typecheck` 통과
+- 전체 Vitest 43건과 production build 통과
+- `npm audit --omit=dev`는 기존 `react-router` 및 `epubjs`/`xmldom` 계열 4건 때문에 실패하며,
+  breaking downgrade/major upgrade가 필요한 별도 의존성 정비 항목으로 남긴다.
+
 ## 2026-07-27
 
 ### Changed

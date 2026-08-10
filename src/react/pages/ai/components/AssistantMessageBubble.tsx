@@ -5,6 +5,7 @@ import type { ChatMessage, ChatResponseMetadataDto } from "@/react/pages/ai/comp
 import type { RagReferenceDto } from "@/types/studio/ai";
 import { deriveRagOutcome } from "@/react/pages/ai/components/ragOutcome";
 import { RagMarkdownRenderer } from "@/react/pages/ai/components/RagMarkdownRenderer";
+import { RagAnswerBlocks } from "@/react/pages/ai/components/RagAnswerBlocks";
 
 const numberFormatter = new Intl.NumberFormat("ko-KR");
 
@@ -364,6 +365,8 @@ export function AssistantMessageBubble({
   const ragReferences = getRagReferences(message.metadata);
   const answerPolicy = message.metadata?.answerPolicy;
   const sourcePolicy = message.metadata?.sourcePolicy;
+  const externalRetrieval = message.metadata?.externalRetrieval;
+  const answerPresentation = message.metadata?.answerPresentation;
   const outcomeView = deriveRagOutcome(message.metadata, sending);
   const citationsReady = outcomeView.citationsReady;
   const referencesVisible =
@@ -450,8 +453,43 @@ export function AssistantMessageBubble({
                 icon={<PublicOutlined sx={{ fontSize: 13 }} />}
                 label={
                   sourcePolicy.effectiveScope === "DOCUMENT_AND_OFFICIAL_EXTERNAL"
-                    ? "공식 외부 자료 참고"
+                    ? "외부 자료 검색 허용"
                     : "첨부 문서만"
+                }
+                sx={{ height: 18, fontSize: 10, fontWeight: 600 }}
+              />
+            </Tooltip>
+          ) : null}
+          {externalRetrieval?.effectiveMode === "AUTO" ? (
+            <Tooltip
+              title={
+                externalRetrieval.clamped
+                  ? `외부 조회 모드가 서버 정책에 의해 조정되었습니다. (${externalRetrieval.reasonCode})`
+                  : externalRetrieval.searched
+                    ? `외부 자료를 조회했습니다. (${externalRetrieval.decisionReasonCode})`
+                    : `내부 근거가 충분하여 외부 조회를 생략했습니다. (${externalRetrieval.decisionReasonCode})`
+              }
+            >
+              <Chip
+                size="small"
+                variant="outlined"
+                icon={<PublicOutlined sx={{ fontSize: 13 }} />}
+                label={externalRetrieval.searched ? "외부 검색 사용" : "외부 검색 생략"}
+                sx={{ height: 18, fontSize: 10, fontWeight: 600 }}
+              />
+            </Tooltip>
+          ) : null}
+          {answerPresentation?.effectivePreference ? (
+            <Tooltip title="서버가 실제 적용한 답변 구성 방식입니다.">
+              <Chip
+                size="small"
+                variant="outlined"
+                label={
+                  answerPresentation.effectivePreference === "VISUAL_PREFERRED"
+                    ? "시각 자료 우선"
+                    : answerPresentation.effectivePreference === "TEXT_FOCUSED"
+                      ? "텍스트 중심"
+                      : "자동 구성"
                 }
                 sx={{ height: 18, fontSize: 10, fontWeight: 600 }}
               />
@@ -478,6 +516,20 @@ export function AssistantMessageBubble({
           <Typography component="div" sx={{ fontSize: 14.5, lineHeight: 1.8 }}>
             응답 생성 중...
           </Typography>
+        ) : null}
+        {!sending ? (
+          <RagAnswerBlocks
+            document={message.metadata?.answerBlocks}
+            canonicalContent={message.metadata?.canonicalContent}
+            onCitationClick={
+              citationsReady
+                ? (indices, event) => {
+                    setSourceAnchorEl(event.currentTarget);
+                    setSelectedCitationIndices(indices);
+                  }
+                : undefined
+            }
+          />
         ) : null}
         {renderTokenUsage(message.metadata)}
         {renderRetrievalDebug(message.metadata)}

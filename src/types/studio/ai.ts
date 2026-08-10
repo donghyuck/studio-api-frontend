@@ -68,10 +68,62 @@ export interface ChatResponseMetadataDto {
   canonicalContent?: string;
   answerPolicy?: ResolvedRagAnswerPolicyDto;
   sourcePolicy?: ResolvedRagSourcePolicyDto;
+  externalRetrieval?: ResolvedRagExternalRetrievalDto;
   externalSourceReview?: ExternalSourceReviewDto;
   answerPolicyValidationStatus?: string;
   ragAnswerOutcome?: RagAnswerOutcomeDto;
+  answerPresentation?: ResolvedRagAnswerPresentationDto;
+  answerBlocks?: RagAnswerBlocksDto;
   [key: string]: unknown;
+}
+
+export interface ResolvedRagAnswerPresentationDto {
+  requestedPreference?: RagAnswerPresentationPreference | null;
+  effectivePreference: RagAnswerPresentationPreference;
+  source: "SERVER_DEFAULT" | "REQUEST";
+  clamped: boolean;
+  reasonCode: string;
+  policyVersion: string;
+  generationStrategy: "MARKDOWN" | string;
+  allowedBlockTypes: string[];
+  selectedBlockTypes: string[];
+}
+
+export interface RagAnswerBlocksDto {
+  schemaVersion: string;
+  canonicalContentFingerprint?: string;
+  blocks: RagAnswerBlockDto[];
+}
+
+export type RagAnswerBlockDto =
+  | RagAnswerTableBlockDto
+  | RagAnswerChartBlockDto
+  | RagAnswerSourceImageBlockDto;
+
+export interface RagAnswerTableBlockDto {
+  blockId: string;
+  type: "TABLE";
+  columns: string[];
+  rows: Array<{ cells: string[]; citationIndexes: number[] }>;
+}
+
+export interface RagAnswerChartBlockDto {
+  blockId: string;
+  type: "CHART";
+  chartType: "BAR";
+  title: string;
+  unit: string;
+  points: Array<{ label: string; value: number; citationIndexes: number[] }>;
+}
+
+export interface RagAnswerSourceImageBlockDto {
+  blockId: string;
+  type: "SOURCE_IMAGE";
+  mediaType: "image/png";
+  src: string;
+  alt: string;
+  page: number;
+  citationIndexes: number[];
 }
 
 export type RagAnswerMode = "STRICT_GROUNDED" | "GROUNDED_INFERENCE";
@@ -118,10 +170,55 @@ export interface RagSourcePolicyCapabilitiesDto {
   availableScopes: RagSourceScope[];
 }
 
+export type RagExternalRetrievalMode = "OFF" | "AUTO";
+
+export interface ResolvedRagExternalRetrievalDto {
+  requestedMode?: RagExternalRetrievalMode | null;
+  effectiveMode: RagExternalRetrievalMode;
+  source: "SERVER_DEFAULT" | "REQUEST";
+  clamped: boolean;
+  reasonCode: string;
+  policyVersion: string;
+  searched: boolean;
+  decisionReasonCode: string;
+  internalEvidenceCount: number;
+  status: string;
+  retrievalReasonCode: string;
+  evidenceCount: number;
+}
+
+export interface RagExternalRetrievalCapabilitiesDto {
+  defaultMode: RagExternalRetrievalMode;
+  maximumMode: RagExternalRetrievalMode;
+  clientSelectionEnabled: boolean;
+  policyVersion: string;
+  availableModes: RagExternalRetrievalMode[];
+}
+
+export type RagAnswerPresentationPreference =
+  | "AUTO"
+  | "TEXT_FOCUSED"
+  | "VISUAL_PREFERRED";
+
+export interface RagAnswerPresentationRequestDto {
+  preference: RagAnswerPresentationPreference;
+}
+
+export interface RagAnswerPresentationCapabilitiesDto {
+  enabled: boolean;
+  defaultPreference: RagAnswerPresentationPreference;
+  clientSelectionEnabled: boolean;
+  policyVersion: string;
+  availablePreferences: RagAnswerPresentationPreference[];
+  allowedBlockTypes: string[];
+}
+
 export interface RagChatCapabilitiesDto {
   answerPolicy: RagAnswerPolicyCapabilitiesDto;
   sourcePolicy: RagSourcePolicyCapabilitiesDto;
   indexedWeb: IndexedWebCapabilitiesDto;
+  answerPresentation: RagAnswerPresentationCapabilitiesDto;
+  externalRetrieval?: RagExternalRetrievalCapabilitiesDto;
 }
 
 export interface IndexedWebCapabilitiesDto {
@@ -193,6 +290,7 @@ export interface WebKnowledgeSourceDto {
   retrievedAt?: string | null;
   contentPreview?: string | null;
   errorCode?: string | null;
+  crawlPolicy?: WebKnowledgeSitePreviewEffectivePolicy | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -402,12 +500,14 @@ export interface ChatRagRequestDto {
   };
   answerMode?: RagAnswerMode;
   sourceScope?: RagSourceScope;
+  externalRetrievalMode?: RagExternalRetrievalMode;
   externalSourceOptions?: {
     jurisdiction?: string;
     asOfDate?: string;
     language?: string;
   };
   indexedWebSources?: IndexedWebSourceRefDto[];
+  presentation?: RagAnswerPresentationRequestDto;
 }
 
 export interface TokenUsageDto {

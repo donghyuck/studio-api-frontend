@@ -24,6 +24,7 @@ import { ChatComposer } from "@/react/pages/ai/components/ChatComposer";
 import { ChatMessageList } from "@/react/pages/ai/components/ChatMessageList";
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import { RagAnswerModeSelector } from "@/react/pages/ai/components/RagAnswerModeSelector";
+import { RagAnswerPresentationSelector } from "@/react/pages/ai/components/RagAnswerPresentationSelector";
 import { RagSourceScopeSelector } from "@/react/pages/ai/components/RagSourceScopeSelector";
 import { RagEvidenceSourceDrawer } from "@/react/pages/ai/components/RagEvidenceSourceDrawer";
 import { RagEvidenceSourceSummary } from "@/react/pages/ai/components/RagEvidenceSourceSummary";
@@ -38,6 +39,10 @@ import type {
   ProviderInfo,
   RagAnswerMode,
   RagAnswerPolicyCapabilitiesDto,
+  RagAnswerPresentationCapabilitiesDto,
+  RagAnswerPresentationPreference,
+  RagExternalRetrievalCapabilitiesDto,
+  RagExternalRetrievalMode,
   RagSourcePolicyCapabilitiesDto,
   RagSourceScope,
   TokenUsageDto,
@@ -88,8 +93,16 @@ export function RagChatPage() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [answerPolicy, setAnswerPolicy] = useState<RagAnswerPolicyCapabilitiesDto | null>(null);
   const [answerMode, setAnswerMode] = useState<RagAnswerMode | null>(null);
+  const [answerPresentation, setAnswerPresentation] =
+    useState<RagAnswerPresentationCapabilitiesDto | null>(null);
+  const [presentationPreference, setPresentationPreference] =
+    useState<RagAnswerPresentationPreference | null>(null);
   const [sourcePolicy, setSourcePolicy] = useState<RagSourcePolicyCapabilitiesDto | null>(null);
   const [sourceScope, setSourceScope] = useState<RagSourceScope | null>(null);
+  const [externalRetrieval, setExternalRetrieval] =
+    useState<RagExternalRetrievalCapabilitiesDto | null>(null);
+  const [externalRetrievalMode, setExternalRetrievalMode] =
+    useState<RagExternalRetrievalMode>("OFF");
   const [indexedWebCapabilities, setIndexedWebCapabilities] =
     useState<IndexedWebCapabilitiesDto | null>(null);
   const [indexedWebCapabilitiesLoading, setIndexedWebCapabilitiesLoading] = useState(true);
@@ -170,8 +183,12 @@ export function RagChatPage() {
       .then((capabilities) => {
         setAnswerPolicy(capabilities.answerPolicy);
         setAnswerMode(capabilities.answerPolicy.defaultMode);
+        setAnswerPresentation(capabilities.answerPresentation);
+        setPresentationPreference(capabilities.answerPresentation?.defaultPreference ?? "AUTO");
         setSourcePolicy(capabilities.sourcePolicy);
         setSourceScope(capabilities.sourcePolicy.defaultScope);
+        setExternalRetrieval(capabilities.externalRetrieval ?? null);
+        setExternalRetrievalMode(capabilities.externalRetrieval?.defaultMode ?? "OFF");
         setIndexedWebCapabilities(capabilities.indexedWeb);
         setIndexedWebCapabilitiesError(null);
       })
@@ -248,8 +265,8 @@ export function RagChatPage() {
     setSending(true);
     setError(null);
     setStreamStatus(
-      sourceScope === "DOCUMENT_AND_OFFICIAL_EXTERNAL"
-        ? "문서와 공식 외부 자료를 검색하고 있습니다."
+      externalRetrievalMode === "AUTO"
+        ? "문서 근거를 확인하고 필요하면 공식 외부 자료를 검색합니다."
         : "문서 근거를 검색하고 있습니다."
     );
     setInput("");
@@ -279,7 +296,9 @@ export function RagChatPage() {
         },
         debug,
         answerMode: answerMode ?? undefined,
+        presentation: presentationPreference ? { preference: presentationPreference } : undefined,
         sourceScope: sourceScope ?? undefined,
+        externalRetrievalMode,
         indexedWebSources: indexedWebSources.length > 0 ? toIndexedWebSourcePayload(indexedWebSources) : undefined,
       };
       if (selectedOption) {
@@ -300,12 +319,15 @@ export function RagChatPage() {
             setStreamStatus(`근거 ${count}건 검색 완료 · 답변을 생성하고 있습니다.`);
           } else if (streamPayload.stage === "generation_started") {
             setStreamStatus("근거를 바탕으로 답변을 생성하고 검증하고 있습니다.");
-          } else if (streamPayload.stage === "external_search") {
-            setStreamStatus("공식 외부 자료를 검색하고 출처를 확인하고 있습니다.");
+          } else if (
+            streamPayload.stage === "external_search" ||
+            streamPayload.stage === "external_search_complete"
+          ) {
+            setStreamStatus("필요한 공식 외부 자료 검색과 출처 확인을 완료했습니다.");
           } else {
             setStreamStatus(
-              sourceScope === "DOCUMENT_AND_OFFICIAL_EXTERNAL"
-                ? "문서와 공식 외부 자료를 검색하고 있습니다."
+              externalRetrievalMode === "AUTO"
+                ? "문서 근거를 확인하고 필요하면 공식 외부 자료를 검색합니다."
                 : "문서 근거를 검색하고 있습니다."
             );
           }
@@ -420,6 +442,15 @@ export function RagChatPage() {
     if (nextScope === sourceScope) return;
     handleNewConversation();
     setSourceScope(nextScope);
+    setExternalRetrievalMode(
+      nextScope === "DOCUMENT_AND_OFFICIAL_EXTERNAL" ? "AUTO" : "OFF"
+    );
+  }
+
+  function handlePresentationChange(nextPreference: RagAnswerPresentationPreference) {
+    if (nextPreference === presentationPreference) return;
+    handleNewConversation();
+    setPresentationPreference(nextPreference);
   }
 
   function handleIndexedWebSourcesChange(nextSources: IndexedWebSourceRefDto[]) {
@@ -562,8 +593,15 @@ export function RagChatPage() {
               disabled={sending}
               onChange={handleAnswerModeChange}
             />
+            <RagAnswerPresentationSelector
+              capabilities={answerPresentation}
+              value={presentationPreference}
+              disabled={sending}
+              onChange={handlePresentationChange}
+            />
             <RagSourceScopeSelector
               capabilities={sourcePolicy}
+              externalRetrievalCapabilities={externalRetrieval}
               value={sourceScope}
               disabled={sending}
               onChange={handleSourceScopeChange}
@@ -749,17 +787,22 @@ export function RagChatPage() {
                     setError(null);
                   }}
                 />
+                <RagAnswerPresentationSelector
+                  capabilities={answerPresentation}
+                  value={presentationPreference}
+                  disabled={sending}
+                  hideHelperText
+                  variant="compact-pill"
+                  onChange={handlePresentationChange}
+                />
                 <RagSourceScopeSelector
                   capabilities={sourcePolicy}
+                  externalRetrievalCapabilities={externalRetrieval}
                   value={sourceScope}
                   disabled={sending}
                   hideHelperText
                   variant="compact-pill"
-                  onChange={(scope) => {
-                    if (scope === sourceScope) return;
-                    setSourceScope(scope);
-                    setError(null);
-                  }}
+                  onChange={handleSourceScopeChange}
                 />
                 {selectedOption ? (
                   <Tooltip title="이 대화에 사용되는 RAG 임베딩 모델입니다">

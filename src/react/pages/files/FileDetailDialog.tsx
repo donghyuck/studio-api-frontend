@@ -69,6 +69,10 @@ import type {
   ChatRagRequestDto,
   RagAnswerMode,
   RagAnswerPolicyCapabilitiesDto,
+  RagAnswerPresentationCapabilitiesDto,
+  RagAnswerPresentationPreference,
+  RagExternalRetrievalCapabilitiesDto,
+  RagExternalRetrievalMode,
   RagSourcePolicyCapabilitiesDto,
   RagSourceScope,
   IndexedWebCapabilitiesDto,
@@ -104,6 +108,7 @@ import {
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
 import { AssistantMessageBubble } from "../ai/components/AssistantMessageBubble";
 import { RagAnswerModeSelector } from "../ai/components/RagAnswerModeSelector";
+import { RagAnswerPresentationSelector } from "../ai/components/RagAnswerPresentationSelector";
 import { RagSourceScopeSelector } from "../ai/components/RagSourceScopeSelector";
 import { RagEvidenceSourceDrawer } from "../ai/components/RagEvidenceSourceDrawer";
 import { RagEvidenceSourceSummary } from "../ai/components/RagEvidenceSourceSummary";
@@ -720,8 +725,16 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
   const [qaError, setQaError] = useState<string | null>(null);
   const [qaAnswerPolicy, setQaAnswerPolicy] = useState<RagAnswerPolicyCapabilitiesDto | null>(null);
   const [qaAnswerMode, setQaAnswerMode] = useState<RagAnswerMode>("STRICT_GROUNDED");
+  const [qaAnswerPresentation, setQaAnswerPresentation] =
+    useState<RagAnswerPresentationCapabilitiesDto | null>(null);
+  const [qaPresentationPreference, setQaPresentationPreference] =
+    useState<RagAnswerPresentationPreference>("AUTO");
   const [qaSourcePolicy, setQaSourcePolicy] = useState<RagSourcePolicyCapabilitiesDto | null>(null);
   const [qaSourceScope, setQaSourceScope] = useState<RagSourceScope>("DOCUMENT_ONLY");
+  const [qaExternalRetrieval, setQaExternalRetrieval] =
+    useState<RagExternalRetrievalCapabilitiesDto | null>(null);
+  const [qaExternalRetrievalMode, setQaExternalRetrievalMode] =
+    useState<RagExternalRetrievalMode>("OFF");
   const [qaIndexedWebCapabilities, setQaIndexedWebCapabilities] =
     useState<IndexedWebCapabilitiesDto | null>(null);
   const [qaIndexedWebCapabilitiesLoading, setQaIndexedWebCapabilitiesLoading] = useState(false);
@@ -810,8 +823,12 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
       setQaIndexedWebCapabilitiesLoading(true);
       const capabilities = await reactAiApi.fetchRagCapabilities();
       setQaAnswerPolicy(capabilities.answerPolicy);
+      setQaAnswerPresentation(capabilities.answerPresentation);
+      setQaPresentationPreference(capabilities.answerPresentation?.defaultPreference ?? "AUTO");
       setQaSourcePolicy(capabilities.sourcePolicy);
       setQaSourceScope(capabilities.sourcePolicy.defaultScope);
+      setQaExternalRetrieval(capabilities.externalRetrieval ?? null);
+      setQaExternalRetrievalMode(capabilities.externalRetrieval?.defaultMode ?? "OFF");
       setQaIndexedWebCapabilities(capabilities.indexedWeb);
       setQaIndexedWebCapabilitiesError(null);
     } catch (err) {
@@ -2825,7 +2842,9 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
         objectId: String(file.attachmentId),
         topK: 5,
         answerMode: qaAnswerMode,
+        presentation: { preference: qaPresentationPreference },
         sourceScope: qaSourceScope,
+        externalRetrievalMode: qaExternalRetrievalMode,
         indexedWebSources: qaIndexedWebSources.length > 0 ? toIndexedWebSourcePayload(qaIndexedWebSources) : undefined,
       };
 
@@ -4602,12 +4621,8 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                           key={msg.id}
                           message={msg}
                           onCopy={(content) => void navigator.clipboard.writeText(content)}
-                          onEdit={(id, content) => {
+                          onEdit={(_id, content) => {
                             setQaInput(content);
-                            setQaMessages((prev) => {
-                              const idx = prev.findIndex((m) => m.id === id);
-                              return idx >= 0 ? prev.slice(0, idx) : prev;
-                            });
                           }}
                         />
                       );
@@ -4785,8 +4800,22 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                           setQaError(null);
                         }}
                       />
+                      <RagAnswerPresentationSelector
+                        capabilities={qaAnswerPresentation}
+                        value={qaPresentationPreference}
+                        disabled={qaSending}
+                        hideHelperText
+                        variant="compact-pill"
+                        onChange={(preference) => {
+                          if (preference === qaPresentationPreference) return;
+                          setQaPresentationPreference(preference);
+                          setQaMessages([]);
+                          setQaError(null);
+                        }}
+                      />
                       <RagSourceScopeSelector
                         capabilities={qaSourcePolicy}
+                        externalRetrievalCapabilities={qaExternalRetrieval}
                         value={qaSourceScope}
                         disabled={qaSending}
                         hideHelperText
@@ -4794,6 +4823,10 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                         onChange={(scope) => {
                           if (scope === qaSourceScope) return;
                           setQaSourceScope(scope);
+                          setQaExternalRetrievalMode(
+                            scope === "DOCUMENT_AND_OFFICIAL_EXTERNAL" ? "AUTO" : "OFF"
+                          );
+                          setQaMessages([]);
                           setQaError(null);
                         }}
                       />

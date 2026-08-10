@@ -1,14 +1,17 @@
-import type { MouseEvent, ReactNode } from "react";
-import { alpha, Box, Tooltip, Typography } from "@mui/material";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { CheckOutlined, ContentCopyOutlined } from "@mui/icons-material";
+import { alpha, Box, IconButton, Tooltip, Typography } from "@mui/material";
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import rehypeSanitize from "rehype-sanitize";
+import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import "katex/dist/katex.min.css";
 
 const CITATION_PATTERN = /\[(\d+(?:\s*,\s*\d+)*)\]/g;
 const CITATION_TARGET = "#rag-citation-";
 const FENCE_PATTERN = /^\s{0,3}(`{3,}|~{3,})/;
+const MAX_RICH_MARKDOWN_CHARS = 32_000;
 
 export interface RagMarkdownReference {
   index?: number;
@@ -99,6 +102,9 @@ function CitationLink({
 }) {
   const matchingReferences = references.filter((reference) => indices.includes(reference.index ?? -1));
   const label = `[${indices.join(", ")}]`;
+  if (matchingReferences.length !== indices.length) {
+    return <>{label}</>;
+  }
   const badge = (
     <Box
       component="button"
@@ -179,6 +185,107 @@ function safeUrlTransform(url: string) {
   return url.startsWith(CITATION_TARGET) ? url : defaultUrlTransform(url);
 }
 
+type TableCopyStatus = "idle" | "copied" | "failed";
+
+function tableAsTsv(table: HTMLTableElement) {
+  return Array.from(table.rows)
+    .map((row) => Array.from(row.cells)
+      .map((cell) => (cell.textContent ?? "").replace(/\s+/g, " ").trim())
+      .join("\t"))
+    .join("\n");
+}
+
+function CopyableTable({ children }: { children: ReactNode }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [copyStatus, setCopyStatus] = useState<TableCopyStatus>("idle");
+
+  useEffect(() => {
+    if (copyStatus === "idle") return undefined;
+    const timer = window.setTimeout(() => setCopyStatus("idle"), 1_600);
+    return () => window.clearTimeout(timer);
+  }, [copyStatus]);
+
+  const copyTable = async () => {
+    const table = containerRef.current?.querySelector("table");
+    const text = table ? tableAsTsv(table) : "";
+    if (!text || !navigator.clipboard?.writeText) {
+      setCopyStatus("failed");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  };
+
+  const tooltip = copyStatus === "copied"
+    ? "표 복사 완료"
+    : copyStatus === "failed"
+      ? "표를 복사할 수 없습니다"
+      : "표 복사";
+
+  return (
+    <Box
+      ref={containerRef}
+      className="rag-table-container"
+      sx={{ position: "relative", maxWidth: "100%" }}
+    >
+      <Box className="rag-table-scroll" sx={{ maxWidth: "100%", overflowX: "auto" }}>
+        <table>{children}</table>
+      </Box>
+      <Box
+        className="rag-table-copy-zone"
+        sx={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          width: 44,
+          height: 44,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          "& .rag-table-copy-button": {
+            opacity: 0,
+            pointerEvents: "none",
+          },
+          "&:hover .rag-table-copy-button, &:focus-within .rag-table-copy-button": {
+            opacity: 1,
+            pointerEvents: "auto",
+          },
+        }}
+      >
+        <Tooltip title={tooltip} placement="top" arrow>
+          <IconButton
+            className="rag-table-copy-button"
+            type="button"
+            size="small"
+            aria-label={tooltip}
+            onClick={() => void copyTable()}
+            color={copyStatus === "failed" ? "error" : "default"}
+            sx={{
+              width: 28,
+              height: 28,
+              border: "1px solid",
+              borderColor: "divider",
+              borderRadius: 1,
+              bgcolor: (theme) => alpha(theme.palette.background.paper, 0.94),
+              boxShadow: 1,
+              transition: "opacity 120ms ease, background-color 120ms ease",
+              "&:hover, &:focus-visible": { bgcolor: "background.paper" },
+            }}
+          >
+            {copyStatus === "copied"
+              ? <CheckOutlined color="success" sx={{ fontSize: 16 }} />
+              : <ContentCopyOutlined sx={{ fontSize: 15 }} />}
+          </IconButton>
+        </Tooltip>
+      </Box>
+    </Box>
+  );
+}
+
 export function RagMarkdownRenderer({ content, references, onCitationClick }: Props) {
   const allowedCitationIndices = new Set(
     references
@@ -188,7 +295,13 @@ export function RagMarkdownRenderer({ content, references, onCitationClick }: Pr
   const components: Components = {
     a: ({ href, children }) => {
       const indices = citationIndices(href);
-      if (indices.length > 0) {
+      const renderedLabel = Array.isArray(children)
+        ? children.join("")
+        : String(children ?? "");
+      const expectedLabel = indices.join(", ");
+      if (indices.length > 0
+          && renderedLabel.replace(/\s+/g, " ").trim() === expectedLabel
+          && indices.every((index) => allowedCitationIndices.has(index))) {
         return (
           <CitationLink
             indices={indices}
@@ -197,13 +310,25 @@ export function RagMarkdownRenderer({ content, references, onCitationClick }: Pr
           />
         );
       }
-      return (
-        <a href={href} target="_blank" rel="noreferrer noopener">
-          {children as ReactNode}
-        </a>
-      );
+      // Model-authored links are not trusted navigation. Source links are
+      // rendered by the bounded reference UI after the server authorizes them.
+      return <>{children as ReactNode}</>;
     },
+    img: ({ alt }) => <>{alt ? `[이미지: ${alt}]` : null}</>,
+    table: ({ children }) => <CopyableTable>{children}</CopyableTable>,
   };
+
+  if (content.length > MAX_RICH_MARKDOWN_CHARS) {
+    return (
+      <Typography
+        data-testid="rag-markdown-plain-fallback"
+        component="div"
+        sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 14.5, lineHeight: 1.75 }}
+      >
+        {content}
+      </Typography>
+    );
+  }
 
   return (
     <Box
@@ -254,11 +379,32 @@ export function RagMarkdownRenderer({ content, references, onCitationClick }: Pr
         },
         "& pre code": { p: 0, bgcolor: "transparent" },
         "& a": { color: "primary.main", textDecorationColor: "currentColor" },
+        "& .rag-table-container": { my: 1.25 },
+        "& table": {
+          width: "100%",
+          minWidth: 480,
+          borderCollapse: "collapse",
+          fontSize: "0.94em",
+        },
+        "& th, & td": {
+          px: 1.25,
+          py: 0.8,
+          border: "1px solid",
+          borderColor: "divider",
+          textAlign: "left",
+          verticalAlign: "top",
+        },
+        "& th": {
+          bgcolor: (theme) => alpha(theme.palette.primary.main, 0.07),
+          fontWeight: 800,
+          whiteSpace: "nowrap",
+        },
+        "& th:last-of-type": { pr: 5 },
       }}
     >
       <ReactMarkdown
         skipHtml
-        remarkPlugins={[remarkMath]}
+        remarkPlugins={[remarkMath, remarkGfm]}
         rehypePlugins={[rehypeSanitize, rehypeKatex]}
         urlTransform={safeUrlTransform}
         components={components}

@@ -3,11 +3,13 @@ import { Alert, Box, Button, Menu, MenuItem, Stack, TextField, Typography } from
 import { CheckOutlined, ExpandMoreOutlined, PublicOutlined } from "@mui/icons-material";
 import type {
   RagSourcePolicyCapabilitiesDto,
+  RagExternalRetrievalCapabilitiesDto,
   RagSourceScope,
 } from "@/types/studio/ai";
 
 interface Props {
   capabilities: RagSourcePolicyCapabilitiesDto | null;
+  externalRetrievalCapabilities?: RagExternalRetrievalCapabilitiesDto | null;
   value: RagSourceScope | null;
   onChange: (scope: RagSourceScope) => void;
   disabled?: boolean;
@@ -17,24 +19,30 @@ interface Props {
 
 const labels: Record<RagSourceScope, string> = {
   DOCUMENT_ONLY: "첨부 문서만",
-  DOCUMENT_AND_OFFICIAL_EXTERNAL: "공식 외부 자료도 참고",
+  DOCUMENT_AND_OFFICIAL_EXTERNAL: "필요 시 외부 자료 자동 검색",
 };
 
 const descriptions: Record<RagSourceScope, string> = {
   DOCUMENT_ONLY: "첨부 문서에서 확인된 근거만 검색합니다.",
   DOCUMENT_AND_OFFICIAL_EXTERNAL:
-    "문서 근거와 검증된 공식 외부 자료를 분리하여 검색하고 비교합니다.",
+    "현재성·비교 요청 또는 내부 근거 부족 시에만 검증된 공식 외부 자료를 검색합니다.",
 };
 
 export function RagSourceScopeSelector({
   capabilities,
+  externalRetrievalCapabilities,
   value,
   onChange,
   disabled,
   hideHelperText,
   variant = "standard",
 }: Props) {
-  const scopes = capabilities?.availableScopes ?? [];
+  const autoAvailable = externalRetrievalCapabilities === undefined
+    ? true
+    : externalRetrievalCapabilities?.availableModes.includes("AUTO") ?? false;
+  const scopes = (capabilities?.availableScopes ?? []).filter(
+    (scope) => scope !== "DOCUMENT_AND_OFFICIAL_EXTERNAL" || autoAvailable
+  );
   const selected =
     capabilities && !capabilities.clientSelectionEnabled
       ? capabilities.defaultScope
@@ -43,6 +51,8 @@ export function RagSourceScopeSelector({
   const unavailableReason =
     capabilities && !capabilities.externalProviderAvailable
       ? "서버에 공식 외부 자료 공급자가 설정되지 않아 첨부 문서만 사용할 수 있습니다."
+      : capabilities?.externalProviderAvailable && !autoAvailable
+        ? "서버 정책에서 필요 시 외부 자료 자동 검색을 허용하지 않습니다."
       : null;
 
   if (variant === "compact-pill") {
