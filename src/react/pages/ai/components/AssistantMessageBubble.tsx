@@ -345,6 +345,7 @@ interface Props {
   message: ChatMessage;
   sending: boolean;
   isLastAssistant: boolean;
+  metadataDensity?: "full" | "compact";
   onCopy: (content: string) => void;
   onRegenerate: () => void;
   onRetryLastUser: () => void;
@@ -354,6 +355,7 @@ export function AssistantMessageBubble({
   message,
   sending,
   isLastAssistant,
+  metadataDensity = "full",
   onCopy,
   onRegenerate,
   onRetryLastUser,
@@ -367,6 +369,25 @@ export function AssistantMessageBubble({
   const sourcePolicy = message.metadata?.sourcePolicy;
   const externalRetrieval = message.metadata?.externalRetrieval;
   const answerPresentation = message.metadata?.answerPresentation;
+  const compactPolicySummary = [
+    answerPolicy?.effectiveMode === "STRICT_GROUNDED"
+      ? "문서 직접 근거"
+      : answerPolicy?.effectiveMode === "GROUNDED_INFERENCE"
+        ? "문서 기반 해석"
+        : null,
+    sourcePolicy?.effectiveScope === "DOCUMENT_AND_OFFICIAL_EXTERNAL"
+      ? "외부 자료 검색 허용"
+      : sourcePolicy?.effectiveScope
+        ? "첨부 문서만"
+        : null,
+    answerPresentation?.effectivePreference === "VISUAL_PREFERRED"
+      ? "시각 자료 우선"
+      : answerPresentation?.effectivePreference === "TEXT_FOCUSED"
+        ? "텍스트 중심"
+        : answerPresentation?.effectivePreference
+          ? "자동 구성"
+          : null,
+  ].filter(Boolean).join(" · ");
   const outcomeView = deriveRagOutcome(message.metadata, sending);
   const citationsReady = outcomeView.citationsReady;
   const referencesVisible =
@@ -418,7 +439,18 @@ export function AssistantMessageBubble({
               sx={{ height: 18, fontSize: 10, fontWeight: 500, borderColor: "divider", color: "text.secondary" }}
             />
           )}
-          {answerPolicy?.effectiveMode ? (
+          {metadataDensity === "compact" && compactPolicySummary ? (
+            <Tooltip title={`적용 설정 · ${compactPolicySummary}`}>
+              <Chip
+                size="small"
+                color="primary"
+                variant="outlined"
+                label={externalRetrieval?.searched ? "문서 + 외부 근거" : "문서 근거"}
+                sx={{ height: 18, fontSize: 10, fontWeight: 600 }}
+              />
+            </Tooltip>
+          ) : null}
+          {metadataDensity === "full" && answerPolicy?.effectiveMode ? (
             <Tooltip
               title={
                 answerPolicy.clamped
@@ -439,7 +471,7 @@ export function AssistantMessageBubble({
               />
             </Tooltip>
           ) : null}
-          {sourcePolicy?.effectiveScope ? (
+          {metadataDensity === "full" && sourcePolicy?.effectiveScope ? (
             <Tooltip
               title={
                 sourcePolicy.clamped
@@ -460,7 +492,7 @@ export function AssistantMessageBubble({
               />
             </Tooltip>
           ) : null}
-          {externalRetrieval?.effectiveMode === "AUTO" ? (
+          {metadataDensity === "full" && externalRetrieval?.effectiveMode === "AUTO" ? (
             <Tooltip
               title={
                 externalRetrieval.clamped
@@ -479,7 +511,7 @@ export function AssistantMessageBubble({
               />
             </Tooltip>
           ) : null}
-          {answerPresentation?.effectivePreference ? (
+          {metadataDensity === "full" && answerPresentation?.effectivePreference ? (
             <Tooltip title="서버가 실제 적용한 답변 구성 방식입니다.">
               <Chip
                 size="small"

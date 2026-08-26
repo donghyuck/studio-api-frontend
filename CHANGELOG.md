@@ -1,5 +1,69 @@
 # Changelog
 
+## 2026-08-20
+
+### Added
+
+- 파일 상세 Metadata 탭에서 비한국어 문서 요약을 `한국어로 보기`로 번역하고 `원문으로 보기`로 전환할 수
+  있게 했다. 원문 summary·keywords는 유지하며 서버에 저장된 revision-bound 한국어 번역을 재사용한다.
+  번역 진행·실패는 원문 표시와 분리하고 클릭당 요청 1회만 실행한다.
+
+## 2026-08-14
+
+### Changed
+
+- Markdown 보기의 기본 탭에서는 metadata API를 선조회하지 않는다. Metadata 탭은 compact summary와
+  pipeline progress만 먼저 읽고, 큰 resource/locator payload는 사용자가 `상세 데이터 불러오기`를 선택한
+  뒤에만 현재 revision 기준으로 조회하며 같은 dialog 세션에서는 캐시를 재사용한다.
+- Markdown RAG 색인 요청은 LLM keyword extraction을 활성화해 서버가 문서·chunk keyword 신호를 생성할 수
+  있게 했다.
+- 파일 상세 문서 Q&A의 고정 대표질문을 서버의 현재 revision 기반 `question-suggestions` 응답으로
+  교체했다. 추천 질문을 클릭하면 반환된 `query`를 그대로 기존 RAG 질문 경로에 전송하며,
+  `AVAILABLE`, `NOT_READY`, `NO_SIGNALS`, 조회 실패를 구분해 표시하고 고정 질문으로 대체하지 않는다.
+
+### Verification
+
+- `npm test -- --run src/react/pages/files/DocumentQaWorkspace.test.tsx --pool=threads --maxWorkers=1 --no-file-parallelism` 5건 통과
+- `npm run typecheck` 통과
+
+## 2026-08-11
+
+### Fixed
+
+- EPUB 미리보기에서 비동기 `epubjs` 팩토리의 반환값을 `Book`으로 잘못 사용해 발생하던
+  `book.renderTo is not a function` 오류를 수정했다. 리더 종료 중 정리 오류도 격리해 창을 닫은 뒤
+  전체 화면이 흰색으로 남지 않도록 했다.
+
+### Verification
+
+- `npx vitest run src/react/pages/files/epubReaderSession.test.ts --pool=threads --maxWorkers=1 --no-file-parallelism --reporter=verbose` 3건 통과
+- `npm run typecheck` 통과
+- attachment `19` EPUB 미리보기의 본문 iframe 렌더링과 종료 후 파일 상세 화면 복구 확인
+- `npm run build` 통과
+
+## 2026-08-10
+
+### Changed
+
+- 파일 상세의 문서 Q&A를 공용 대화 목록과 단일 composer 중심으로 재구성했다. 문서·웹 자료와
+  응답 설정은 각각 하나의 진입점으로 모으고, 빈 화면에는 자주 쓰는 질문을 제공한다.
+- 자료나 답변 표현 설정을 바꿔도 기존 대화를 유지하며, 요청 실패는 중복 assistant 메시지 대신
+  composer 위의 재시도 가능한 오류 상태로 표시한다.
+- `AGENTS.md`의 범위를 실제 프런트엔드 저장소에 맞게 바로잡고, 서버 저장소는 별도 요청이 없는 한
+  API 계약 확인을 위한 읽기 전용 대상으로 명시했다.
+- 마크다운 보기의 메타데이터 상태를 서버 `usability` 판정으로 통합하고, 문서 품질·색인 허용·색인
+  실행·검색 가능·자동 평가 상태를 분리해 표시한다. 측정값 `0`은 실제 값으로 유지하고 EPUB의 고정
+  페이지 지표는 적용 대상 아님으로 표시한다.
+- 검색 가능한 현재 리비전에 대해 자동 RAG 평가를 실행하고 완료 후 `usability` 상태를 다시 조회한다.
+  과거 리비전을 보고 있을 때는 기준 불일치를 안내하고 평가 실행을 막는다.
+
+### Verification
+
+- `npx vitest run src/react/pages/files/documentUsabilityView.test.ts src/react/pages/files/DocumentUsabilityPanel.test.tsx --pool=threads --maxWorkers=1 --no-file-parallelism --reporter=verbose` 통과
+- `npm test -- --pool=threads --maxWorkers=1 --no-file-parallelism` 55건 통과
+- `npm run typecheck` 통과
+- `npm run build` 통과
+
 ## 2026-08-03
 
 ### Changed

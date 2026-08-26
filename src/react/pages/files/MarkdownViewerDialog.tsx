@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Alert,
   Box,
   Chip,
   Dialog,
@@ -19,10 +21,6 @@ import {
   InputAdornment,
   Paper,
   Grid,
-  Divider,
-  List,
-  ListItem,
-  ListItemText,
   Table,
   TableBody,
   TableCell,
@@ -33,7 +31,6 @@ import {
   Accordion,
   AccordionSummary,
   AccordionDetails,
-  LinearProgress,
 } from "@mui/material";
 import {
   CloseOutlined,
@@ -44,13 +41,13 @@ import {
   SearchOutlined,
   RefreshOutlined,
   VisibilityOutlined,
-  InfoOutlined,
+  ExpandLessOutlined,
   ExpandMoreOutlined,
+  TranslateOutlined,
 } from "@mui/icons-material";
 import CodeMirror from "@uiw/react-codemirror";
 import { EditorView } from "@codemirror/view";
 import { markdown as markdownLang } from "@codemirror/lang-markdown";
-import DOMPurify from "dompurify";
 import ReactMarkdown from "react-markdown";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
@@ -58,30 +55,47 @@ import "katex/dist/katex.min.css";
 import { useAuthStore } from "@/react/auth/store";
 import {
   reactMarkdownDocumentApi,
+  type DocumentMetadataSummaryDto,
+  type DocumentMetadataTranslationDto,
   type MarkdownResourceDto,
   type MarkdownLocatorDto,
   type MarkdownProvenanceDto,
   type MarkdownPipelineProgressResponseDto,
   type MarkdownOcrMetadata,
-  shouldSuggestOcrReextract,
   ocrBadgeLabel,
   ocrBadgeColor,
 } from "./api";
 import { useToast } from "@/react/feedback";
 import { API_BASE_URL } from "@/config/backend";
+import { reactAiApi } from "@/react/pages/ai/api";
+import { resolveAxiosError } from "@/utils/helpers";
+import { filesQueryKeys } from "./queryKeys";
+import { DocumentUsabilityPanel } from "./DocumentUsabilityPanel";
+import { shouldPollUsability } from "./documentUsabilityView";
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  attachmentId: number;
   documentId: string;
   revisionId?: string;
   fileName?: string;
   onRetryProgress?: () => void;
 }
 
+function isKoreanSummary(language: string | null | undefined, summary: string | null | undefined): boolean {
+  const normalizedLanguage = language?.trim().toLowerCase();
+  if (normalizedLanguage?.startsWith("ko") || normalizedLanguage?.startsWith("kor")) return true;
+  if (!summary) return false;
+  const letters = Array.from(summary).filter(character => /\p{L}/u.test(character));
+  const hangul = letters.filter(character => /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(character)).length;
+  return hangul >= 3 && hangul * 2 >= Math.max(1, letters.length);
+}
+
 export function MarkdownViewerDialog({
   open,
   onClose,
+  attachmentId,
   documentId,
   revisionId,
   fileName,
@@ -102,8 +116,18 @@ export function MarkdownViewerDialog({
   const [searchTerm, setSearchTerm] = useState<string>("");
 
   // Metadata Tab specific states
+  const [metadataSummary, setMetadataSummary] = useState<DocumentMetadataSummaryDto | null>(null);
+  const [metadataSummaryLoading, setMetadataSummaryLoading] = useState(false);
+  const [metadataSummaryError, setMetadataSummaryError] = useState<string | null>(null);
+  const [metadataSummaryExpanded, setMetadataSummaryExpanded] = useState(true);
+  const [metadataSummaryReextracting, setMetadataSummaryReextracting] = useState(false);
+  const [metadataTranslation, setMetadataTranslation] = useState<DocumentMetadataTranslationDto | null>(null);
+  const [metadataTranslationLoading, setMetadataTranslationLoading] = useState(false);
+  const [showKoreanTranslation, setShowKoreanTranslation] = useState(false);
   const [metadataLoading, setMetadataLoading] = useState(false);
   const [metadataError, setMetadataError] = useState<string | null>(null);
+  const [metadataDetailsRequested, setMetadataDetailsRequested] = useState(false);
+  const [metadataDetailsLoaded, setMetadataDetailsLoaded] = useState(false);
   const [resources, setResources] = useState<MarkdownResourceDto[]>([]);
   const [locators, setLocators] = useState<MarkdownLocatorDto[]>([]);
   const [provenances, setProvenances] = useState<MarkdownProvenanceDto[]>([]);
@@ -117,8 +141,35 @@ export function MarkdownViewerDialog({
   const [previewBlobUrl, setPreviewBlobUrl] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
+  const metadataSummaryCacheRef = useRef(new Map<string, {
+    summary: DocumentMetadataSummaryDto | null;
+    progress: MarkdownPipelineProgressResponseDto | null;
+  }>());
+  const metadataCacheRef = useRef(new Map<string, {
+    resources: MarkdownResourceDto[];
+    locators: MarkdownLocatorDto[];
+  }>());
+  const metadataSummaryRequestRef = useRef(0);
+  const metadataRequestRef = useRef(0);
+  const metadataRegenerationRequestRef = useRef(0);
+  const metadataTranslationRequestRef = useRef(0);
 
   const token = useAuthStore.getState().token;
+  const queryClient = useQueryClient();
+  const usabilityQueryKey = filesQueryKeys.custom("rag-usability", "attachment", attachmentId);
+  const usabilityQuery = useQuery({
+    queryKey: usabilityQueryKey,
+    queryFn: () => reactAiApi.getRagObjectUsability("attachment", String(attachmentId)),
+    enabled: open && activeTab === "metadata" && attachmentId > 0,
+    retry: false,
+    refetchInterval: (query) => shouldPollUsability(query.state.data) ? 2000 : false,
+  });
+  const autoEvaluationMutation = useMutation({
+    mutationFn: () => reactAiApi.runRagObjectAutoEvaluation("attachment", String(attachmentId)),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: usabilityQueryKey, refetchType: "active" });
+    },
+  });
 
   async function openPagePreview(page: number, bbox?: number[] | null) {
     if (!documentId) return;
@@ -172,6 +223,125 @@ export function MarkdownViewerDialog({
   }, [previewBlobUrl]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const metadataCacheKey = `${documentId}::${revisionId ?? "current"}`;
+
+  function locatorsToProvenances(values: MarkdownLocatorDto[]): MarkdownProvenanceDto[] {
+    return values.map((value) => ({
+      locatorId: value.locatorId,
+      locatorType: value.locatorType,
+      locatorNo: value.locatorNo,
+      page: value.page,
+      slide: value.slide,
+      bbox: value.bbox ?? null,
+      sourceRef: value.sourceRef,
+      metadataJson: value.metadataJson,
+      confidence: null,
+    }));
+  }
+
+  async function loadMetadataSummary(force = false) {
+    const cached = metadataSummaryCacheRef.current.get(metadataCacheKey);
+    if (!force && cached) {
+      setMetadataSummary(cached.summary);
+      setProgress(cached.progress);
+      setMetadataSummaryError(null);
+      return;
+    }
+    const requestId = ++metadataSummaryRequestRef.current;
+    setMetadataSummaryLoading(true);
+    setMetadataSummaryError(null);
+    try {
+      const [summaryData, progData] = await Promise.all([
+        reactMarkdownDocumentApi.getMetadataSummary(documentId, revisionId),
+        reactMarkdownDocumentApi.getProgress(documentId, revisionId).catch(() => null),
+      ]);
+      if (requestId !== metadataSummaryRequestRef.current) {
+        return;
+      }
+      metadataSummaryCacheRef.current.set(metadataCacheKey, {
+        summary: summaryData,
+        progress: progData,
+      });
+      setMetadataSummary(summaryData);
+      setProgress(progData);
+    } catch (err: any) {
+      if (requestId !== metadataSummaryRequestRef.current) {
+        return;
+      }
+      setMetadataSummary(null);
+      setProgress(null);
+      setMetadataSummaryError(err?.message || "요약 메타데이터를 불러오는 도중 오류가 발생했습니다.");
+    } finally {
+      if (requestId === metadataSummaryRequestRef.current) {
+        setMetadataSummaryLoading(false);
+      }
+    }
+  }
+
+  async function reextractMetadataSummary() {
+    if (!documentId || metadataSummaryReextracting) return;
+    const confirmed = window.confirm(
+      "현재 문서의 요약과 키워드 메타데이터를 AI로 다시 추출합니다. 처리 시간과 모델 사용 비용이 발생할 수 있습니다. 계속하시겠습니까?"
+    );
+    if (!confirmed) return;
+
+    const requestId = ++metadataRegenerationRequestRef.current;
+    setMetadataSummaryReextracting(true);
+    try {
+      await reactMarkdownDocumentApi.reextractMetadata(documentId, revisionId);
+      if (requestId !== metadataRegenerationRequestRef.current) return;
+      metadataTranslationRequestRef.current += 1;
+      setMetadataTranslation(null);
+      setMetadataTranslationLoading(false);
+      setShowKoreanTranslation(false);
+      metadataSummaryCacheRef.current.delete(metadataCacheKey);
+      await loadMetadataSummary(true);
+      if (requestId !== metadataRegenerationRequestRef.current) return;
+      toast.success("문서 메타데이터 요약을 다시 추출했습니다.");
+    } catch (err) {
+      if (requestId !== metadataRegenerationRequestRef.current) return;
+      toast.error(`요약 재추출 실패: ${resolveAxiosError(err)}`);
+    } finally {
+      if (requestId === metadataRegenerationRequestRef.current) {
+        setMetadataSummaryReextracting(false);
+      }
+    }
+  }
+
+  async function toggleKoreanMetadataSummary() {
+    if (showKoreanTranslation) {
+      setShowKoreanTranslation(false);
+      return;
+    }
+    if (metadataTranslation) {
+      setShowKoreanTranslation(true);
+      return;
+    }
+    if (!documentId || metadataTranslationLoading || !metadataSummary?.summary) return;
+    const confirmed = window.confirm(
+      "원문 요약과 키워드를 한국어로 번역합니다. 저장된 번역이 없으면 모델 사용 비용이 발생할 수 있습니다. 계속하시겠습니까?"
+    );
+    if (!confirmed) return;
+
+    const requestId = ++metadataTranslationRequestRef.current;
+    setMetadataTranslationLoading(true);
+    try {
+      const translated = await reactMarkdownDocumentApi.translateMetadataSummary(documentId, revisionId, "ko");
+      if (requestId !== metadataTranslationRequestRef.current) return;
+      setMetadataTranslation(translated);
+      setShowKoreanTranslation(true);
+      toast.success(translated.reused
+        ? "저장된 한국어 번역을 불러왔습니다."
+        : "한국어 번역을 생성했습니다.");
+    } catch (err) {
+      if (requestId !== metadataTranslationRequestRef.current) return;
+      toast.error(`한국어 번역 실패: ${resolveAxiosError(err)}`);
+    } finally {
+      if (requestId === metadataTranslationRequestRef.current) {
+        setMetadataTranslationLoading(false);
+      }
+    }
+  }
 
 
   // Load markdown text with progressive streaming
@@ -242,30 +412,66 @@ export function MarkdownViewerDialog({
     }
   }
 
-  // Load Metadata
-  async function loadMetadata() {
+  // Load detailed metadata
+  async function loadMetadata(force = false) {
+    const cached = metadataCacheRef.current.get(metadataCacheKey);
+    if (!force && cached) {
+      setResources(cached.resources);
+      setLocators(cached.locators);
+      setProvenances(locatorsToProvenances(cached.locators));
+      setMetadataDetailsLoaded(true);
+      setMetadataError(null);
+      return;
+    }
+    const requestId = ++metadataRequestRef.current;
     setMetadataLoading(true);
     setMetadataError(null);
     try {
-      const [resData, locData, provData, progData] = await Promise.all([
-        reactMarkdownDocumentApi.getResources(documentId),
-        reactMarkdownDocumentApi.getLocators(documentId),
-        reactMarkdownDocumentApi.getProvenance(documentId).catch(() => []),
-        reactMarkdownDocumentApi.getProgress(documentId).catch(() => null),
+      const [resData, locData] = await Promise.all([
+        reactMarkdownDocumentApi.getResources(documentId, revisionId),
+        reactMarkdownDocumentApi.getLocators(documentId, revisionId),
       ]);
+      if (requestId !== metadataRequestRef.current) {
+        return;
+      }
+      metadataCacheRef.current.set(metadataCacheKey, {
+        resources: resData,
+        locators: locData,
+      });
       setResources(resData);
       setLocators(locData);
-      setProvenances(provData || []);
-      setProgress(progData);
+      setProvenances(locatorsToProvenances(locData));
+      setMetadataDetailsLoaded(true);
     } catch (err: any) {
+      if (requestId !== metadataRequestRef.current) {
+        return;
+      }
+      setMetadataDetailsLoaded(false);
       setMetadataError(err?.message || "메타데이터를 불러오는 도중 오류가 발생했습니다.");
     } finally {
-      setMetadataLoading(false);
+      if (requestId === metadataRequestRef.current) {
+        setMetadataLoading(false);
+      }
     }
   }
 
   useEffect(() => {
     // Reset all states when documentId or revisionId changes
+    metadataSummaryRequestRef.current += 1;
+    metadataRequestRef.current += 1;
+    metadataRegenerationRequestRef.current += 1;
+    metadataTranslationRequestRef.current += 1;
+    setMetadataSummaryLoading(false);
+    setMetadataLoading(false);
+    setMetadataSummary(null);
+    setMetadataSummaryError(null);
+    setMetadataSummaryExpanded(true);
+    setMetadataSummaryReextracting(false);
+    setMetadataTranslation(null);
+    setMetadataTranslationLoading(false);
+    setShowKoreanTranslation(false);
+    setMetadataDetailsRequested(false);
+    setMetadataDetailsLoaded(false);
     setResources([]);
     setLocators([]);
     setProvenances([]);
@@ -276,12 +482,35 @@ export function MarkdownViewerDialog({
     setText("");
     setError(null);
     setIs409(false);
+    setSelectedProv(null);
   }, [documentId, revisionId]);
+
+  useEffect(() => {
+    if (!open) {
+      metadataSummaryRequestRef.current += 1;
+      metadataRequestRef.current += 1;
+      metadataRegenerationRequestRef.current += 1;
+      metadataTranslationRequestRef.current += 1;
+      setMetadataSummaryLoading(false);
+      setMetadataLoading(false);
+      setMetadataSummaryError(null);
+      setMetadataSummaryExpanded(true);
+      setMetadataSummaryReextracting(false);
+      setMetadataTranslation(null);
+      setMetadataTranslationLoading(false);
+      setShowKoreanTranslation(false);
+      setMetadataError(null);
+      setMetadataDetailsRequested(false);
+      setMetadataDetailsLoaded(false);
+      setSelectedProv(null);
+      setActiveTab("markdown");
+      setTabValue(0);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open && documentId) {
       void loadMarkdown();
-      void loadMetadata();
     }
     return () => {
       if (abortControllerRef.current) {
@@ -289,6 +518,18 @@ export function MarkdownViewerDialog({
       }
     };
   }, [open, documentId, revisionId]);
+
+  useEffect(() => {
+    if (open && documentId && activeTab === "metadata") {
+      void loadMetadataSummary();
+    }
+  }, [activeTab, open, documentId, revisionId]);
+
+  useEffect(() => {
+    if (open && documentId && activeTab === "metadata" && metadataDetailsRequested) {
+      void loadMetadata();
+    }
+  }, [activeTab, open, documentId, revisionId, metadataDetailsRequested]);
 
   const handleCopy = () => {
     if (!text) return;
@@ -347,38 +588,12 @@ export function MarkdownViewerDialog({
 
   // Render Metadata View
   function renderMetadataContent() {
-    if (metadataLoading) {
-      return (
-        <Stack spacing={1.5} alignItems="center" justifyContent="center" sx={{ minHeight: "40vh" }}>
-          <CircularProgress size={32} />
-          <Typography variant="body2" color="text.secondary">메타데이터를 불러오는 중입니다...</Typography>
-        </Stack>
-      );
-    }
-
-    if (metadataError) {
-      return (
-        <Stack spacing={1.5} alignItems="center" justifyContent="center" sx={{ minHeight: "40vh", p: 4, textAlign: "center" }}>
-          <Typography variant="body2" color="error" sx={{ fontWeight: 600 }}>
-            불러오기 실패: {metadataError}
-          </Typography>
-          <Button size="small" variant="outlined" color="primary" startIcon={<RefreshOutlined />} onClick={loadMetadata}>
-            다시 시도
-          </Button>
-        </Stack>
-      );
-    }
-
     const normResource = resources.find(r => r.resourceType === "NORMALIZED_DOCUMENT");
     let normMeta: any = null;
-    let parseFailed = false;
 
     if (normResource) {
       if (normResource.metadataJson) {
         normMeta = parseSafeJson(normResource.metadataJson);
-        if (Object.keys(normMeta).length === 0) {
-          parseFailed = true;
-        }
       }
     }
 
@@ -429,8 +644,6 @@ export function MarkdownViewerDialog({
       ocrMeta.mathVisionCorrectionRequested != null
     );
 
-    const suggestOcrReextract = shouldSuggestOcrReextract(ocrMeta);
-
     // 1. Provenance Page/Slide 파싱 및 통계
     const parsedProvenances = provenances.map((prov, index) => {
       const parsedMeta = parseSafeJson(prov.metadataJson);
@@ -445,29 +658,17 @@ export function MarkdownViewerDialog({
         slide = prov.locatorNo;
       }
 
-      const isCoverageTarget = 
-        prov.locatorType === "NORMALIZED_BLOCK" || 
-        prov.locatorType === "page" || 
-        prov.locatorType === "slide" || 
-        (prov.sourceRef != null && prov.sourceRef.trim() !== "");
-
       return {
         ...prov,
         index,
         resolvedPage: page,
         resolvedSlide: slide,
-        isCoverageTarget,
         bbox: prov.bbox || parsedMeta.bbox || null,
         confidence: prov.confidence ?? parsedMeta.confidence ?? null,
       };
     });
 
     const totalProvenanceCount = parsedProvenances.length;
-    const coverageTargets = parsedProvenances.filter(p => p.isCoverageTarget);
-    const totalCoverageTargetCount = coverageTargets.length;
-    
-    const pageConfirmedCount = coverageTargets.filter(p => p.resolvedPage != null).length;
-    const slideConfirmedCount = coverageTargets.filter(p => p.resolvedSlide != null).length;
 
     const uniquePages = Array.from(new Set(parsedProvenances.map(p => p.resolvedPage).filter((p): p is number => p != null))).sort((a, b) => a - b);
     const uniqueSlides = Array.from(new Set(parsedProvenances.map(p => p.resolvedSlide).filter((s): s is number => s != null))).sort((a, b) => a - b);
@@ -495,41 +696,9 @@ export function MarkdownViewerDialog({
 
     const docMetadata = normMeta?.document?.metadata || null;
 
-    // Normalization & Quality gate statuses
-    const normalizationStatus = normMeta?.normalizationStatus || ocrRaw?.normalizationStatus || "-";
-    const markdownQualityStatus = ocrRaw?.markdownQualityStatus || "-";
-    const markdownQualityScore = ocrRaw?.markdownQualityScore ?? normMeta?.markdownQualityScore ?? null;
-    const qualityGateStatus = ocrRaw?.qualityGateStatus ?? normMeta?.qualityGateStatus ?? "-";
-    const ragIndexEligible = ocrRaw?.ragIndexEligible ?? normMeta?.ragIndexEligible ?? null;
-
     const normalizationIssues = normMeta?.normalizationIssues || [];
     const markdownQualityIssues = ocrRaw?.markdownQualityIssues || [];
     const allIssues = [...new Set([...normalizationIssues, ...markdownQualityIssues])];
-
-    // 사용 가능 판정 논리
-    let usageDecisionLabel = "판정 불가";
-    let usageDecisionColor: "success" | "warning" | "error" = "warning";
-    let usageDecisionDesc = "품질 분석이 아직 완료되지 않았습니다.";
-
-    if (qualityGateStatus === "PASSED" && ragIndexEligible === true) {
-      if (markdownQualityStatus === "REVIEW_REQUIRED" || normalizationStatus === "REVIEW_REQUIRED") {
-        usageDecisionLabel = "사용 가능 (품질 경고 존재)";
-        usageDecisionColor = "warning";
-        usageDecisionDesc = "품질 게이트를 통과하고 RAG 색인도 가능하지만, 일부 검토가 필요합니다.";
-      } else {
-        usageDecisionLabel = "사용 가능";
-        usageDecisionColor = "success";
-        usageDecisionDesc = "품질 게이트를 충족하며 RAG 및 서비스 색인에 완전히 적합합니다.";
-      }
-    } else if (qualityGateStatus === "FAILED" || ragIndexEligible === false) {
-      usageDecisionLabel = "사용 제한";
-      usageDecisionColor = "error";
-      usageDecisionDesc = "품질 기준에 미달(Gate FAILED)되었거나 RAG 색인 대상에서 제외되었습니다.";
-    } else if (markdownQualityStatus === "REVIEW_REQUIRED" || normalizationStatus === "REVIEW_REQUIRED") {
-      usageDecisionLabel = "사용 가능 (품질 경고 존재)";
-      usageDecisionColor = "warning";
-      usageDecisionDesc = "정규화 결과 분석에 일부 주의/검토 요구 사항이 포함되어 있습니다.";
-    }
 
     // 이슈 친근한 명칭 변환 딕셔너리
     const issueLabels: Record<string, string> = {
@@ -538,178 +707,282 @@ export function MarkdownViewerDialog({
       PAGE_QUALITY_REVIEW_REQUIRED: "페이지 전반의 추출 품질 검토 필요",
     };
 
-    function getMathVisionStatus(): { label: string; color: "success" | "warning" | "info" | "default" } {
-      const req = ocrMeta.mathVisionCorrectionRequested;
-      const app = ocrMeta.mathVisionCorrectionApplied;
-      const skip = ocrMeta.mathVisionCorrectionSkipReason;
-      
-      if (req === true) {
-        if (app === true) {
-          return { label: "Vision LLM 보정 적용됨", color: "success" };
-        } else {
-          if (skip === "SERVER_DISABLED") {
-            return { label: "서버 설정상 Vision LLM 보정이 비활성화됨", color: "warning" };
-          } else if (skip === "NO_API_KEY") {
-            return { label: "Vision LLM API key가 설정되지 않음", color: "warning" };
-          }
-          return { label: `Vision LLM 보정 미적용 (${skip || "알 수 없는 이유"})`, color: "warning" };
-        }
-      }
-      return { label: "Vision LLM 보정 미요청", color: "default" };
-    }
-
-    // Extract coverage values safely
-    const pageProvCoverage = ocrRaw?.pageProvenanceCoverage ?? normMeta?.pageProvenanceCoverage ?? null;
-    const mathProvCoverage = ocrRaw?.mathPageProvenanceCoverage ?? normMeta?.mathPageProvenanceCoverage ?? null;
-    const searchableCoverage = ocrRaw?.searchablePageCoverage ?? normMeta?.searchablePageCoverage ?? null;
-
-    // Calculate text mapping percent
-    const textMappingPct = pageProvCoverage != null 
-      ? pageProvCoverage * 100 
-      : (totalCoverageTargetCount > 0 ? (pageConfirmedCount / totalCoverageTargetCount) * 100 : null);
-    
-    // Calculate math mapping percent
-    const mathMappingPct = mathProvCoverage != null ? mathProvCoverage * 100 : null;
-
-    // Calculate searchable percent
-    const searchablePct = searchableCoverage != null ? searchableCoverage * 100 : null;
+    const translatedView = showKoreanTranslation ? metadataTranslation : null;
+    const displayedSummary = translatedView?.summary ?? metadataSummary?.summary ?? null;
+    const displayedKeywords = translatedView?.keywords ?? metadataSummary?.keywords ?? [];
+    const canTranslateSummary = Boolean(metadataSummary?.summary)
+      && !isKoreanSummary(metadataSummary?.language, metadataSummary?.summary);
 
     return (
       <Box sx={{ p: 3, display: "flex", flexDirection: "column", gap: 3 }}>
-        {/* A. 종합 품질 및 RAG 색인 판정 카드 */}
-        <Paper
-          variant="outlined"
-          sx={{
-            p: 3,
-            borderRadius: 2,
-            borderLeft: "6px solid",
-            borderColor: `${usageDecisionColor}.main`,
-            bgcolor: `${usageDecisionColor}.lighter` || "action.hover",
-          }}
-        >
-          <Grid container spacing={3} alignItems="center">
-            {markdownQualityScore !== null && (
-              <Grid size={{ xs: 12, sm: 3 }} sx={{ display: "flex", justifyContent: "center" }}>
+        {usabilityQuery.isLoading ? (
+          <Stack spacing={1.25} alignItems="center" sx={{ py: 5 }}>
+            <CircularProgress size={28} />
+            <Typography variant="body2" color="text.secondary">RAG 사용 가능 상태를 확인하는 중입니다...</Typography>
+          </Stack>
+        ) : usabilityQuery.error ? (
+          <Alert
+            severity="error"
+            action={
+              <Button color="inherit" size="small" onClick={() => void usabilityQuery.refetch()}>
+                다시 시도
+              </Button>
+            }
+          >
+            RAG 상태를 불러오지 못했습니다: {resolveAxiosError(usabilityQuery.error)}
+          </Alert>
+        ) : usabilityQuery.data ? (
+          <DocumentUsabilityPanel
+            assessment={usabilityQuery.data}
+            basisMatches={!revisionId || usabilityQuery.data.basis.revisionId === revisionId}
+            evaluating={autoEvaluationMutation.isPending}
+            evaluationError={autoEvaluationMutation.error ? resolveAxiosError(autoEvaluationMutation.error) : null}
+            onAutoEvaluate={() => autoEvaluationMutation.mutate()}
+          />
+        ) : null}
+
+        {metadataSummaryLoading && !metadataSummary && !metadataSummaryError ? (
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+            <Stack direction="row" spacing={1.25} alignItems="center">
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">
+                요약 메타데이터를 불러오는 중입니다...
+              </Typography>
+            </Stack>
+          </Paper>
+        ) : metadataSummary ? (
+          <Accordion
+            expanded={metadataSummaryExpanded}
+            onChange={(_, expanded) => setMetadataSummaryExpanded(expanded)}
+            disableGutters
+            variant="outlined"
+            sx={{ borderRadius: 2, overflow: "hidden", "&:before": { display: "none" } }}
+          >
+            <AccordionSummary
+              aria-label={`문서 메타데이터 요약 ${metadataSummaryExpanded ? "접기" : "펼치기"}`}
+              expandIcon={(
                 <Box
+                  component="span"
                   sx={{
-                    width: 90,
-                    height: 90,
-                    borderRadius: "50%",
-                    border: "5px solid",
-                    borderColor: `${usageDecisionColor}.main`,
-                    display: "flex",
-                    flexDirection: "column",
+                    display: "inline-flex",
                     alignItems: "center",
-                    justifyContent: "center",
-                    bgcolor: "background.paper",
-                    boxShadow: 1
+                    gap: 0.5,
+                    px: 1.25,
+                    py: 0.5,
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    color: "text.secondary",
                   }}
                 >
-                  <Typography variant="h5" sx={{ fontWeight: 800, color: "text.primary" }}>
-                    {markdownQualityScore}
+                  <Typography component="span" variant="caption" sx={{ fontWeight: 700 }}>
+                    {metadataSummaryExpanded ? "접기" : "펼치기"}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    품질 점수
-                  </Typography>
-                </Box>
-              </Grid>
-            )}
-            <Grid size={{ xs: 12, sm: markdownQualityScore !== null ? 9 : 12 }}>
-              <Stack spacing={1.5}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: `${usageDecisionColor}.dark` }}>
-                    {usageDecisionLabel}
-                  </Typography>
-                  {ragIndexEligible !== null && (
-                    <Chip
-                      label={ragIndexEligible ? "RAG 색인 자동 승인" : "RAG 색인 대상 보류"}
-                      color={ragIndexEligible ? "success" : "error"}
-                      size="small"
-                      sx={{ fontWeight: 700, fontSize: 11 }}
-                    />
+                  {metadataSummaryExpanded ? (
+                    <ExpandLessOutlined sx={{ fontSize: 16 }} />
+                  ) : (
+                    <ExpandMoreOutlined sx={{ fontSize: 16 }} />
                   )}
                 </Box>
-                <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.5 }}>
-                  {usageDecisionDesc}
-                </Typography>
-              </Stack>
-            </Grid>
-          </Grid>
-        </Paper>
-
-        {/* B. 원문 연결 및 신뢰성 게이지 (Linear Progress) */}
-        <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 3, display: "flex", alignItems: "center", gap: 1 }}>
-            <VisibilityOutlined color="primary" fontSize="small" /> 원문 위치 분석 및 신뢰도 (Provenance & Searchability Coverage)
-          </Typography>
-          <Stack spacing={3.5}>
-            {/* 1. 텍스트 매핑 커버리지 */}
-            <Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>텍스트 원문 매핑 신뢰도 (Text Mapping)</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 800, color: "primary.main" }}>
-                  {textMappingPct !== null ? `${textMappingPct.toFixed(1)}%` : "판정 불가"}
-                </Typography>
-              </Box>
-              <LinearProgress 
-                variant="determinate" 
-                value={textMappingPct ?? 0} 
-                color="primary" 
-                sx={{ height: 8, borderRadius: 4, bgcolor: "action.hover" }} 
-              />
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.8 }}>
-                문서 본문 중 {textMappingPct !== null ? `${textMappingPct.toFixed(1)}%` : "-%"}가 원본 문서의 위치 좌표 및 페이지 정보와 정확히 일치하여 매핑되었습니다.
-              </Typography>
-            </Box>
-
-            {/* 2. 수학 수식 복원 커버리지 */}
-            <Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>수학 수식 및 기호 복원도 (Math Recovery)</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 800, color: "secondary.main" }}>
-                  {ocrRaw?.mathBlockCount === 0 
-                    ? "수식 없음 (일반 문서)" 
-                    : (mathMappingPct !== null ? `${mathMappingPct.toFixed(1)}%` : "판정 불가")}
-                </Typography>
-              </Box>
-              {ocrRaw?.mathBlockCount !== 0 && (
-                <LinearProgress 
-                  variant="determinate" 
-                  value={mathMappingPct ?? 0} 
-                  color="secondary" 
-                  sx={{ height: 8, borderRadius: 4, bgcolor: "action.hover" }} 
-                />
               )}
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.8 }}>
-                {ocrRaw?.mathBlockCount === 0 
-                  ? "해당 문서에는 복잡한 수학 수식이 검출되지 않았으므로 수식 보정이 제외되었습니다." 
-                  : `문서 내 수학 기호 및 공식들 중 ${mathMappingPct !== null ? `${mathMappingPct.toFixed(1)}%` : "-%"}가 수학 전용 OCR 영역에 완벽히 매핑되어 복원되었습니다.`}
-              </Typography>
-            </Box>
-
-            {/* 3. 검색 색인 적합도 */}
-            <Box>
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>검색 적합도 커버리지 (Searchability)</Typography>
-                <Typography variant="body2" sx={{ fontWeight: 800, color: "info.main" }}>
-                  {searchablePct !== null ? `${searchablePct.toFixed(1)}%` : "판정 불가"}
+              sx={{
+                px: 3,
+                "& .MuiAccordionSummary-content": { my: 2 },
+                "& .MuiAccordionSummary-expandIconWrapper.Mui-expanded": { transform: "none" },
+              }}
+            >
+              <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" alignItems="center">
+                <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                  문서 메타데이터 요약
                 </Typography>
-              </Box>
-              <LinearProgress 
-                variant="determinate" 
-                value={searchablePct ?? 0} 
-                color="info" 
-                sx={{ height: 8, borderRadius: 4, bgcolor: "action.hover" }} 
-              />
-              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.8 }}>
-                정규화된 문서 블록 중 자연어 검색(RAG)에 안전하게 인덱싱하여 활용하기에 적합하다고 판정된 블록들의 비율입니다.
+                {metadataSummary.semanticType ? (
+                  <Chip size="small" label={metadataSummary.semanticType} color="primary" variant="outlined" />
+                ) : null}
+                {metadataSummary.quality ? (
+                  <Chip size="small" label={`품질 ${metadataSummary.quality}`} variant="outlined" />
+                ) : null}
+                {metadataSummary.confidence != null ? (
+                  <Chip size="small" label={`신뢰도 ${(metadataSummary.confidence * 100).toFixed(0)}%`} variant="outlined" />
+                ) : null}
+              </Stack>
+            </AccordionSummary>
+            <AccordionDetails sx={{ px: 3, pt: 0, pb: 3 }}>
+              <Stack spacing={1.5}>
+                <Stack direction="row" spacing={1} justifyContent="flex-end" useFlexGap flexWrap="wrap">
+                  {canTranslateSummary ? (
+                    <Button
+                      size="small"
+                      variant={showKoreanTranslation ? "contained" : "outlined"}
+                      startIcon={metadataTranslationLoading
+                        ? <CircularProgress size={14} color="inherit" />
+                        : <TranslateOutlined />}
+                      disabled={metadataTranslationLoading || metadataSummaryReextracting}
+                      onClick={() => void toggleKoreanMetadataSummary()}
+                    >
+                      {metadataTranslationLoading
+                        ? "한국어 번역 중..."
+                        : showKoreanTranslation
+                          ? "원문으로 보기"
+                          : "한국어로 보기"}
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={metadataSummaryReextracting
+                      ? <CircularProgress size={14} color="inherit" />
+                      : <RefreshOutlined />}
+                    disabled={metadataSummaryReextracting}
+                    onClick={() => void reextractMetadataSummary()}
+                  >
+                    {metadataSummaryReextracting ? "요약 재추출 중..." : "요약 재추출"}
+                  </Button>
+                </Stack>
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, md: 8 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                      {metadataSummary.title || "제목 정보 없음"}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, lineHeight: 1.7 }}>
+                      {displayedSummary || "문서 요약은 아직 추출되지 않았습니다."}
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Stack spacing={1}>
+                      {metadataSummary.authors.length > 0 ? (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">저자</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{metadataSummary.authors.join(", ")}</Typography>
+                        </Box>
+                      ) : null}
+                      {metadataSummary.organization ? (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">기관</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{metadataSummary.organization}</Typography>
+                        </Box>
+                      ) : null}
+                      {metadataSummary.publicationYear ? (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">발행 연도</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{metadataSummary.publicationYear}</Typography>
+                        </Box>
+                      ) : null}
+                      {metadataSummary.subject ? (
+                        <Box>
+                          <Typography variant="caption" color="text.secondary" display="block">주제</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>{metadataSummary.subject}</Typography>
+                        </Box>
+                      ) : null}
+                    </Stack>
+                  </Grid>
+                </Grid>
+                {displayedKeywords.length > 0 ? (
+                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                    {displayedKeywords.map((keyword) => (
+                      <Chip key={keyword} size="small" label={keyword} />
+                    ))}
+                    {showKoreanTranslation ? (
+                      <Chip size="small" color="secondary" variant="outlined" label="한국어 번역" />
+                    ) : null}
+                  </Stack>
+                ) : null}
+                {metadataSummary.warnings.length > 0 ? (
+                  <Alert severity="warning">{metadataSummary.warnings.join(", ")}</Alert>
+                ) : null}
+              </Stack>
+            </AccordionDetails>
+          </Accordion>
+        ) : metadataSummaryError ? (
+          <Alert
+            severity="info"
+            action={
+              <Stack direction="row" spacing={0.5}>
+                <Button
+                  color="inherit"
+                  size="small"
+                  disabled={metadataSummaryReextracting}
+                  onClick={() => void reextractMetadataSummary()}
+                >
+                  {metadataSummaryReextracting ? "재추출 중..." : "요약 재추출"}
+                </Button>
+                <Button color="inherit" size="small" onClick={() => void loadMetadataSummary(true)}>
+                  다시 시도
+                </Button>
+              </Stack>
+            }
+          >
+            요약 메타데이터를 바로 불러오지 못했습니다: {metadataSummaryError}
+          </Alert>
+        ) : null}
+
+        {progress ? (
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Typography variant="caption" color="text.secondary" display="block">파이프라인 단계</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{progress.currentStage || "-"}</Typography>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Typography variant="caption" color="text.secondary" display="block">상태</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{progress.status || "-"}</Typography>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 4 }}>
+                <Typography variant="caption" color="text.secondary" display="block">Revision</Typography>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{revisionId || metadataSummary?.revisionId || "-"}</Typography>
+              </Grid>
+            </Grid>
+          </Paper>
+        ) : null}
+
+        {!metadataDetailsLoaded && !metadataDetailsRequested ? (
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+            <Stack spacing={1.25}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                상세 메타데이터는 필요할 때만 불러옵니다
               </Typography>
-            </Box>
-          </Stack>
-        </Paper>
+              <Typography variant="body2" color="text.secondary">
+                원문 위치 정보, 리소스 JSON, OCR 진단처럼 큰 payload는 별도 요청으로 지연시킵니다.
+              </Typography>
+              <Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<RefreshOutlined />}
+                  onClick={() => setMetadataDetailsRequested(true)}
+                >
+                  상세 데이터 불러오기
+                </Button>
+              </Box>
+            </Stack>
+          </Paper>
+        ) : null}
+
+        {metadataDetailsRequested && metadataLoading ? (
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+            <Stack direction="row" spacing={1.25} alignItems="center">
+              <CircularProgress size={18} />
+              <Typography variant="body2" color="text.secondary">
+                상세 메타데이터를 불러오는 중입니다...
+              </Typography>
+            </Stack>
+          </Paper>
+        ) : null}
+
+        {metadataDetailsRequested && metadataError ? (
+          <Alert
+            severity="error"
+            action={
+              <Button color="inherit" size="small" onClick={() => void loadMetadata(true)}>
+                다시 시도
+              </Button>
+            }
+          >
+            상세 메타데이터를 불러오지 못했습니다: {metadataError}
+          </Alert>
+        ) : null}
 
         {/* C. OCR 및 Vision LLM 설정 요약 카드 */}
-        {hasOcrInfo && (
+        {metadataDetailsLoaded && hasOcrInfo && (
           <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
               <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
@@ -762,6 +1035,7 @@ export function MarkdownViewerDialog({
         )}
 
         {/* D. 아코디언 상세 분석 데이터 목록 */}
+        {metadataDetailsLoaded ? (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5 }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, pl: 0.5 }}>
             상세 원시 데이터 분석 (개발 및 디버깅용 접기)
@@ -1020,7 +1294,7 @@ export function MarkdownViewerDialog({
                   <Table size="small">
                     <TableHead>
                       <TableRow>
-                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>Level</TableCell>
+                        <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>유형</TableCell>
                         <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>페이지</TableCell>
                         <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>제목</TableCell>
                         <TableCell sx={{ fontWeight: 700, bgcolor: "background.paper", fontSize: 12 }}>Action</TableCell>
@@ -1029,16 +1303,16 @@ export function MarkdownViewerDialog({
                     <TableBody>
                       {locators.map((loc) => (
                         <TableRow key={loc.locatorId}>
-                          <TableCell sx={{ fontSize: 12 }}>{loc.level ?? "-"}</TableCell>
-                          <TableCell sx={{ fontSize: 12 }}>{loc.pageNumber ?? "-"}페이지</TableCell>
+                          <TableCell sx={{ fontSize: 12 }}>{loc.locatorType || "-"}</TableCell>
+                          <TableCell sx={{ fontSize: 12 }}>{loc.page ?? loc.locatorNo ?? "-"}페이지</TableCell>
                           <TableCell sx={{ fontSize: 12, fontWeight: 500 }}>{loc.title || "-"}</TableCell>
                           <TableCell>
-                            {loc.pageNumber != null && (
+                            {(loc.page ?? loc.locatorNo) != null && (
                               <Button
                                 size="small"
                                 variant="outlined"
                                 startIcon={<VisibilityOutlined sx={{ fontSize: 12 }} />}
-                                onClick={() => void openPagePreview(loc.pageNumber!)}
+                                onClick={() => void openPagePreview((loc.page ?? loc.locatorNo)!)}
                                 sx={{ py: 0.1, px: 1, fontSize: 10.5, height: 22 }}
                               >
                                 위치 보기
@@ -1104,6 +1378,7 @@ export function MarkdownViewerDialog({
             </Accordion>
           )}
         </Box>
+        ) : null}
       </Box>
     );
   }

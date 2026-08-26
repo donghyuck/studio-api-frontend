@@ -213,12 +213,19 @@ export interface RagAnswerPresentationCapabilitiesDto {
   allowedBlockTypes: string[];
 }
 
+export interface RagQuestionSuggestionCapabilitiesDto {
+  enabled: boolean;
+  contractVersion: string;
+  maxSuggestions: number;
+}
+
 export interface RagChatCapabilitiesDto {
   answerPolicy: RagAnswerPolicyCapabilitiesDto;
   sourcePolicy: RagSourcePolicyCapabilitiesDto;
   indexedWeb: IndexedWebCapabilitiesDto;
   answerPresentation: RagAnswerPresentationCapabilitiesDto;
   externalRetrieval?: RagExternalRetrievalCapabilitiesDto;
+  questionSuggestions?: RagQuestionSuggestionCapabilitiesDto;
 }
 
 export interface IndexedWebCapabilitiesDto {
@@ -1220,4 +1227,254 @@ export interface RagContextSimulationResponseDto {
   contextBudgetTokens?: number;
   finalContext?: string;
   warnings?: string[];
+}
+
+export type RagMeasurementState =
+  | "MEASURED"
+  | "NOT_MEASURED"
+  | "NOT_APPLICABLE"
+  | "FAILED";
+
+export interface RagMeasuredValueDto<T> {
+  state: RagMeasurementState;
+  value: T | null;
+  reasonCode: string | null;
+}
+
+export type DocumentUsabilityDecisionCode =
+  | "AVAILABLE"
+  | "AVAILABLE_WITH_REVIEW"
+  | "PREPARING"
+  | "READY_FOR_INDEXING"
+  | "NOT_AVAILABLE"
+  | "UNKNOWN";
+
+export type DocumentQualityStatus = "PASSED" | "REVIEW_REQUIRED" | "FAILED" | "UNKNOWN";
+export type RagEligibilityStatus = "ELIGIBLE" | "BLOCKED" | "UNKNOWN";
+export type RagIndexExecutionStatus =
+  | "NOT_REQUESTED"
+  | "PENDING"
+  | "RUNNING"
+  | "SUCCEEDED"
+  | "WARNING"
+  | "FAILED"
+  | "CANCELLED";
+export type RagSearchabilityStatus = "SEARCHABLE" | "NOT_SEARCHABLE" | "UNKNOWN";
+export type RagEvaluationStatus = "NOT_RUN" | "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+export type RagEvaluationFreshness = "CURRENT" | "STALE" | "UNKNOWN";
+export type DocumentLocationScheme =
+  | "PAGE"
+  | "PAGE_BBOX"
+  | "EPUB_RESOURCE_ELEMENT"
+  | "SLIDE"
+  | "SLIDE_SHAPE"
+  | "SHEET"
+  | "SHEET_CELL_RANGE"
+  | "SECTION"
+  | "TEXT_OFFSET"
+  | "SOURCE_REF"
+  | "UNKNOWN";
+
+export interface DocumentLocationRefDto {
+  scheme: DocumentLocationScheme;
+  sourceRef: string | null;
+  page: number | null;
+  slide: number | null;
+  resourcePath: string | null;
+  elementIndex: number | null;
+  sheetName: string | null;
+  sheetIndex: number | null;
+  cellRange: string | null;
+  startOffset: number | null;
+  endOffset: number | null;
+  bbox: unknown;
+  attributes: Record<string, unknown>;
+}
+
+export interface DocumentUsabilityAssessmentDto {
+  contractVersion: string | null;
+  evaluatedAt: string;
+  basis: {
+    objectType: string | null;
+    objectId: string | null;
+    documentId: string | null;
+    revisionId: string | null;
+    sourceContentHash: string | null;
+    chunkSetId: string | null;
+    indexJobId: string | null;
+    embeddingSpaceId: string | null;
+  };
+  decision: {
+    code: DocumentUsabilityDecisionCode;
+    usable: boolean;
+    reasonCodes: string[];
+  };
+  quality: {
+    state: RagMeasurementState;
+    status: DocumentQualityStatus;
+    score: RagMeasuredValueDto<number>;
+    blocking: boolean;
+    reasonCodes: string[];
+  };
+  location: {
+    state: RagMeasurementState;
+    scheme: DocumentLocationScheme;
+    coverage: RagMeasuredValueDto<number>;
+    pageCoverage: RagMeasuredValueDto<number>;
+    reasonCodes: string[];
+    samples: DocumentLocationRefDto[];
+  };
+  indexing: {
+    eligibility: {
+      state: RagMeasurementState;
+      status: RagEligibilityStatus;
+      reasonCodes: string[];
+    };
+    execution: {
+      state: RagMeasurementState;
+      status: RagIndexExecutionStatus;
+      currentStep: string | null;
+      progress: RagMeasuredValueDto<number>;
+      chunkCount: RagMeasuredValueDto<number>;
+      embeddedCount: RagMeasuredValueDto<number>;
+      indexedCount: RagMeasuredValueDto<number>;
+      reasonCodes: string[];
+    };
+  };
+  searchability: {
+    state: RagMeasurementState;
+    status: RagSearchabilityStatus;
+    indexedRecordCount: RagMeasuredValueDto<number>;
+    reasonCodes: string[];
+  };
+  ragEvaluation: {
+    state: RagMeasurementState;
+    status: RagEvaluationStatus;
+    freshness: RagEvaluationFreshness;
+    questionSetVersionId: string | null;
+    runId: string | null;
+    topK: number | null;
+    selectedStrategy: string | null;
+    evidenceHitRate: RagMeasuredValueDto<number>;
+    mrr: RagMeasuredValueDto<number>;
+    groundedAnswerRate: RagMeasuredValueDto<number>;
+    citationAccuracy: RagMeasuredValueDto<number>;
+    reasonCodes: string[];
+  };
+  policy: {
+    version: string | null;
+    fingerprint: string | null;
+  };
+}
+
+export type DocumentQuestionSuggestionStatus = "AVAILABLE" | "NOT_READY" | "NO_SIGNALS";
+
+export type DocumentQuestionSuggestionType =
+  | "CRITICAL_QUESTION"
+  | "KEYWORD_EXPLANATION"
+  | "KEYWORD_RELATION"
+  | "KEYWORD_SUMMARY";
+
+export type DocumentQuestionSuggestionSource =
+  | "IDEA_BLOCK_QUESTION"
+  | "DOCUMENT_KEYWORDS"
+  | "KEY_POINTS"
+  | "CHUNK_KEYWORDS";
+
+export interface DocumentQuestionSuggestionsResponseDto {
+  contractVersion: string;
+  generatedAt: string;
+  basis: {
+    objectType: string | null;
+    objectId: string | null;
+    documentId: string | null;
+    revisionId: string | null;
+    sourceContentHash: string | null;
+    chunkSetId: string | null;
+  };
+  availability: {
+    status: DocumentQuestionSuggestionStatus;
+    reasonCodes: string[];
+  };
+  suggestions: Array<{
+    id: string;
+    query: string;
+    type: DocumentQuestionSuggestionType;
+    keywords: string[];
+    source: DocumentQuestionSuggestionSource;
+  }>;
+  policy: {
+    version: string;
+    fingerprint: string;
+    maxSuggestions: number;
+  };
+}
+
+export interface DocumentAutoEvaluationRequestDto {
+  questionCount?: number;
+  strategies?: string[];
+  topK?: number;
+  minScore?: number;
+}
+
+export interface DocumentAutoEvaluationResponseDto {
+  contractVersion: string | null;
+  basis: {
+    objectType: string | null;
+    objectId: string | null;
+    documentId: string | null;
+    revisionId: string | null;
+    sourceContentHash: string | null;
+    chunkSetId: string | null;
+    embeddingSpaceId: string | null;
+    reasonCodes: string[];
+  };
+  generatorVersion: string | null;
+  questionSet: {
+    questionSetId: string;
+    name: string;
+    description: string | null;
+    createdAt: string;
+    updatedAt: string;
+    questions: Array<{
+      query: string;
+      expectedChunkIds: string[];
+      expectedDocumentChunkIds: string[];
+      expectedContentContains: string[];
+    }>;
+  };
+  result: {
+    runId: string;
+    createdAt: string;
+    objectType: string;
+    objectId: string;
+    questionSetId: string;
+    embeddingProfileId: string | null;
+    embeddingProvider: string | null;
+    embeddingModel: string | null;
+    topK: number | null;
+    minScore: number | null;
+    strategies: Array<{
+      strategy: string;
+      questionCount: number;
+      hitCount: number;
+      hitRate: number;
+      mrr: number;
+      averageElapsedMs: number;
+      questions: Array<{
+        query: string;
+        hit: boolean;
+        firstRelevantRank: number | null;
+        elapsedMs: number;
+        results: Array<{
+          rank: number;
+          chunkId: string | null;
+          documentChunkId: string | null;
+          documentId: string | null;
+          score: number;
+          metadataPreview: Record<string, unknown>;
+        }>;
+      }>;
+    }>;
+  };
 }
