@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowDownwardOutlined } from "@mui/icons-material";
 import { Box, CircularProgress, Fab, Stack, Typography } from "@mui/material";
 import type { ChatMessage } from "@/react/pages/ai/components/chatTypes";
@@ -19,6 +19,9 @@ interface Props {
   onRetryLastUser: () => void;
   emptyTitle?: string;
   emptyDescription?: string;
+  emptyActions?: ReactNode;
+  sendingLabel?: string;
+  assistantMetadataDensity?: "full" | "compact";
 }
 
 function EmptyChatIllustration() {
@@ -54,6 +57,9 @@ export function ChatMessageList({
   onRetryLastUser,
   emptyTitle = "궁금한 내용을 입력해 보세요.",
   emptyDescription = "AI가 질문에 맞춰 답변합니다.",
+  emptyActions,
+  sendingLabel = "응답 생성 중...",
+  assistantMetadataDensity = "full",
 }: Props) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [isNearBottom, setIsNearBottom] = useState(true);
@@ -71,10 +77,14 @@ export function ChatMessageList({
     if (!container) {
       return;
     }
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior,
-    });
+    if (typeof container.scrollTo === "function") {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior,
+      });
+    } else {
+      container.scrollTop = container.scrollHeight;
+    }
   }
 
   function handleScroll() {
@@ -127,6 +137,7 @@ export function ChatMessageList({
               <Typography variant="body2" color="text.secondary">
                 {emptyDescription}
               </Typography>
+              {emptyActions}
             </Stack>
           ) : (
             messages.map((message, index) => (
@@ -150,6 +161,7 @@ export function ChatMessageList({
                     message={message}
                     sending={sending}
                     isLastAssistant={message.id === lastAssistantId}
+                    metadataDensity={assistantMetadataDensity}
                     onCopy={onCopy}
                     onRegenerate={onRegenerate}
                     onRetryLastUser={onRetryLastUser}
@@ -174,7 +186,7 @@ export function ChatMessageList({
               >
                 <CircularProgress size={16} />
                 <Typography variant="body2" color="text.secondary">
-                  응답 생성 중...
+                  {sendingLabel}
                 </Typography>
               </Box>
             </Stack>

@@ -230,14 +230,17 @@ export interface MarkdownProvenanceDto {
 
 export interface MarkdownLocatorDto {
   locatorId: string;
-  documentId: string;
   revisionId: string;
+  locatorType: string;
+  locatorNo?: number | null;
   title: string;
-  level: number;
   startOffset: number;
   endOffset: number;
-  pageNumber: number | null;
-  orderIndex: number;
+  sourceRef?: string | null;
+  metadataJson?: string | null;
+  page?: number | null;
+  slide?: number | null;
+  bbox?: number[] | null;
 }
 
 export interface MarkdownResourceDto {
@@ -327,6 +330,40 @@ export interface DocumentMetadataArtifact {
   warnings: string[];
 }
 
+export interface DocumentMetadataSummaryDto {
+  documentId: string;
+  revisionId: string;
+  artifactId: string;
+  semanticType: string | null;
+  subject: string | null;
+  confidence: number | null;
+  language: string | null;
+  title: string | null;
+  authors: string[];
+  publicationYear: string | null;
+  organization: string | null;
+  summary: string | null;
+  keywords: string[];
+  quality: string | null;
+  warnings: string[];
+}
+
+export interface DocumentMetadataTranslationDto {
+  translationId: string;
+  revisionId: string;
+  sourceArtifactId: string;
+  sourceSummaryHash: string;
+  sourceLanguage: string;
+  targetLanguage: string;
+  summary: string;
+  keywords: string[];
+  generationMode: "TRANSLATED" | "SOURCE_REUSED";
+  model: string | null;
+  promptVersion: string;
+  createdAt: string;
+  reused: boolean;
+}
+
 export interface MarkdownOcrMetadata {
   ocrMode?: OcrMode;
   ocrRequired?: boolean;
@@ -381,6 +418,7 @@ export interface MarkdownDocumentFromAttachmentRequest {
   runRagIndex: boolean;
   runSkillExtraction: boolean;
   force: boolean;
+  useLlmKeywordExtraction?: boolean;
   chunkingStrategy?: string | null;
   chunkMaxSize?: number | null;
   chunkOverlap?: number | null;
@@ -408,6 +446,7 @@ export interface MarkdownDocumentReextractRequest {
   runChunking: boolean;
   runRagIndex: boolean;
   runSkillExtraction: boolean;
+  useLlmKeywordExtraction?: boolean;
   chunkingStrategy?: string | null;
   chunkMaxSize?: number | null;
   chunkOverlap?: number | null;
@@ -514,6 +553,7 @@ export interface MarkdownResumeRequest {
   runChunking?: boolean;
   runRagIndex?: boolean;
   runSkillExtraction?: boolean;
+  useLlmKeywordExtraction?: boolean;
   chunkingStrategy?: string | null;
   chunkMaxSize?: number;
   chunkOverlap?: number;
@@ -551,6 +591,7 @@ export interface MarkdownRagReindexRequest {
   embeddingProvider?: string | null;
   embeddingModel?: string | null;
   embeddingDimension?: number | null;
+  useLlmKeywordExtraction?: boolean;
   runSkillExtraction: boolean;
   skillExtractionMode?: 'regex' | 'llm' | null;
 }
@@ -646,6 +687,31 @@ export const reactMarkdownDocumentApi = {
       { params: revisionId ? { revisionId } : undefined }
     );
   },
+  async getMetadataSummary(documentId: string, revisionId?: string): Promise<DocumentMetadataSummaryDto> {
+    return apiRequest<DocumentMetadataSummaryDto>(
+      "get",
+      `/api/markdown-documents/${encodeURIComponent(documentId)}/metadata/summary`,
+      { params: revisionId ? { revisionId } : undefined }
+    );
+  },
+  async reextractMetadata(documentId: string, revisionId?: string): Promise<DocumentMetadataArtifact> {
+    return apiRequest<DocumentMetadataArtifact>(
+      "post",
+      `/api/markdown-documents/${encodeURIComponent(documentId)}/metadata/reextract`,
+      { params: revisionId ? { revisionId } : undefined }
+    );
+  },
+  async translateMetadataSummary(
+    documentId: string,
+    revisionId?: string,
+    language = "ko"
+  ): Promise<DocumentMetadataTranslationDto> {
+    return apiRequest<DocumentMetadataTranslationDto>(
+      "post",
+      `/api/markdown-documents/${encodeURIComponent(documentId)}/metadata/translations`,
+      { params: { ...(revisionId ? { revisionId } : {}), language } }
+    );
+  },
   async getProcessingPlan(request: MarkdownDocumentFromAttachmentRequest): Promise<MarkdownProcessingPlan> {
     return apiRequest<MarkdownProcessingPlan>("post", "/api/markdown-documents/processing-plan", {
       data: request,
@@ -673,8 +739,12 @@ export const reactMarkdownDocumentApi = {
       data: request,
     });
   },
-  async getProgress(documentId: string): Promise<MarkdownPipelineProgressResponseDto> {
-    return apiRequest<MarkdownPipelineProgressResponseDto>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/pipeline/progress`);
+  async getProgress(documentId: string, revisionId?: string): Promise<MarkdownPipelineProgressResponseDto> {
+    return apiRequest<MarkdownPipelineProgressResponseDto>(
+      "get",
+      `/api/markdown-documents/${encodeURIComponent(documentId)}/pipeline/progress`,
+      { params: revisionId ? { revisionId } : undefined }
+    );
   },
   async reextract(documentId: string, request: MarkdownDocumentReextractRequest): Promise<MarkdownDocumentFromAttachmentResponse> {
     return apiRequest<MarkdownDocumentFromAttachmentResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/reextract`, {
@@ -694,14 +764,26 @@ export const reactMarkdownDocumentApi = {
   async cancelExtraction(documentId: string): Promise<void> {
     await apiRequest("delete", `/api/markdown-documents/${encodeURIComponent(documentId)}/extraction`);
   },
-  async getLocators(documentId: string): Promise<MarkdownLocatorDto[]> {
-    return apiRequest<MarkdownLocatorDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/locators`);
+  async getLocators(documentId: string, revisionId?: string): Promise<MarkdownLocatorDto[]> {
+    return apiRequest<MarkdownLocatorDto[]>(
+      "get",
+      `/api/markdown-documents/${encodeURIComponent(documentId)}/locators`,
+      { params: revisionId ? { revisionId } : undefined }
+    );
   },
-  async getProvenance(documentId: string): Promise<MarkdownProvenanceDto[]> {
-    return apiRequest<MarkdownProvenanceDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/provenance`);
+  async getProvenance(documentId: string, revisionId?: string): Promise<MarkdownProvenanceDto[]> {
+    return apiRequest<MarkdownProvenanceDto[]>(
+      "get",
+      `/api/markdown-documents/${encodeURIComponent(documentId)}/provenance`,
+      { params: revisionId ? { revisionId } : undefined }
+    );
   },
-  async getResources(documentId: string): Promise<MarkdownResourceDto[]> {
-    return apiRequest<MarkdownResourceDto[]>("get", `/api/markdown-documents/${encodeURIComponent(documentId)}/resources`);
+  async getResources(documentId: string, revisionId?: string): Promise<MarkdownResourceDto[]> {
+    return apiRequest<MarkdownResourceDto[]>(
+      "get",
+      `/api/markdown-documents/${encodeURIComponent(documentId)}/resources`,
+      { params: revisionId ? { revisionId } : undefined }
+    );
   },
   async mergePreview(documentId: string, revisionId: string, request: IdeaBlockMergePreviewRequest): Promise<IdeaBlockMergePreviewResponse> {
     return apiRequest<IdeaBlockMergePreviewResponse>("post", `/api/markdown-documents/${encodeURIComponent(documentId)}/revisions/${encodeURIComponent(revisionId)}/ideablocks/merge-preview`, {

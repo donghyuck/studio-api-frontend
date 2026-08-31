@@ -64,6 +64,10 @@ import type {
   WebKnowledgeSitePreviewView,
   WebKnowledgeSourceCreateRequest,
   WebKnowledgeSourceDto,
+  DocumentAutoEvaluationRequestDto,
+  DocumentAutoEvaluationResponseDto,
+  DocumentQuestionSuggestionsResponseDto,
+  DocumentUsabilityAssessmentDto,
 } from "@/types/studio/ai";
 
 const BASE = "/api/ai";
@@ -452,6 +456,32 @@ export const reactAiApi = {
     return apiRequest<Record<string, unknown>>(
       "get",
       `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}/metadata`
+    );
+  },
+
+  getRagObjectUsability(objectType: string, objectId: string) {
+    return apiRequest<DocumentUsabilityAssessmentDto>(
+      "get",
+      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}/usability`
+    );
+  },
+
+  getRagObjectQuestionSuggestions(objectType: string, objectId: string) {
+    return apiRequest<DocumentQuestionSuggestionsResponseDto>(
+      "get",
+      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}/question-suggestions`
+    );
+  },
+
+  runRagObjectAutoEvaluation(
+    objectType: string,
+    objectId: string,
+    req: DocumentAutoEvaluationRequestDto = {}
+  ) {
+    return apiRequest<DocumentAutoEvaluationResponseDto, DocumentAutoEvaluationRequestDto>(
+      "post",
+      `${MGMT_BASE}/rag/objects/${encodeURIComponent(objectType)}/${encodeURIComponent(objectId)}/evaluations/auto`,
+      { data: req }
     );
   },
 

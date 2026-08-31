@@ -7,7 +7,6 @@ import {
   Box,
   Button,
   CircularProgress,
-  Drawer,
   IconButton,
   LinearProgress,
   List,
@@ -30,9 +29,16 @@ import {
   FullscreenExitOutlined,
 } from "@mui/icons-material";
 import Epub from "epubjs";
-import type { Book, Rendition, NavItem } from "epubjs";
 
 import { apiClient } from "@/react/api/client";
+import {
+  createEpubReaderSession,
+  disposeEpubReaderSession,
+  epubProgress,
+  type EpubFactory,
+  type EpubNavItem,
+  type EpubReaderSession,
+} from "./epubReaderSession";
 
 interface Props {
   open: boolean;
@@ -44,12 +50,11 @@ interface Props {
 
 export function EpubReaderDialog({ open, onClose, url, filename }: Props) {
   const [viewerElement, setViewerElement] = useState<HTMLDivElement | null>(null);
-  const bookRef = useRef<Book | null>(null);
-  const renditionRef = useRef<Rendition | null>(null);
+  const sessionRef = useRef<EpubReaderSession | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [toc, setToc] = useState<NavItem[]>([]);
+  const [toc, setToc] = useState<EpubNavItem[]>([]);
   const [tocOpen, setTocOpen] = useState(false);
   const [progress, setProgress] = useState(0);
   const [fontSize, setFontSize] = useState(16);
@@ -57,14 +62,9 @@ export function EpubReaderDialog({ open, onClose, url, filename }: Props) {
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const destroy = useCallback(() => {
-    if (renditionRef.current) {
-      renditionRef.current.destroy();
-      renditionRef.current = null;
-    }
-    if (bookRef.current) {
-      bookRef.current.destroy();
-      bookRef.current = null;
-    }
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    disposeEpubReaderSession(session);
   }, []);
 
   useEffect(() => {
@@ -75,8 +75,6 @@ export function EpubReaderDialog({ open, onClose, url, filename }: Props) {
     }
 
     let isMounted = true;
-    let objectUrl = "";
-
     const loadBook = async () => {
       console.log("[EpubReaderDialog] Starting loadBook. url:", url);
       setLoading(true);
@@ -99,15 +97,17 @@ export function EpubReaderDialog({ open, onClose, url, filename }: Props) {
         }
 
         const arrayBuffer = res.data;
-        const book = Epub(arrayBuffer);
-        bookRef.current = book;
-
-        const rendition = book.renderTo(viewerElement, {
-          width: "100%",
-          height: "100%",
-          spread: "none",
-        });
-        renditionRef.current = rendition;
+        const session = await createEpubReaderSession(
+          Epub as unknown as EpubFactory,
+          arrayBuffer,
+          viewerElement,
+        );
+        if (!isMounted) {
+          disposeEpubReaderSession(session);
+          return;
+        }
+        sessionRef.current = session;
+        const { book, rendition, sectionCount } = session;
 
         rendition.themes.fontSize(`${fontSize}px`);
         rendition.themes.default({
@@ -118,32 +118,14 @@ export function EpubReaderDialog({ open, onClose, url, filename }: Props) {
           },
         });
 
-        rendition.display().catch((err) => {
-          console.error("[EpubReaderDialog] Rendition display error:", err);
-        });
+        const navigation = Array.isArray(book.toc) ? book.toc : [];
 
-        console.log("[EpubReaderDialog] Waiting for book.ready...");
-        await book.ready;
-        console.log("[EpubReaderDialog] book.ready resolved. Generating locations...");
-        await book.locations.generate(1024);
-        console.log("[EpubReaderDialog] Locations generated.");
-
-        if (!isMounted) return;
-        setLoading(false);
-
-        const nav = await book.loaded.navigation;
-        console.log("[EpubReaderDialog] Navigation loaded. TOC items:", nav.toc.length);
-        if (isMounted) {
-          setToc(nav.toc);
-        }
-
-        rendition.on("relocated", (location: { start: { percentage: number; href: string } }) => {
+        rendition.on("relocated", (location) => {
           if (!isMounted) return;
-          const pct = Math.round((location.start.percentage ?? 0) * 100);
-          setProgress(pct);
+          setProgress(epubProgress(location, sectionCount));
 
           const href = location.start.href;
-          const findLabel = (items: NavItem[]): string => {
+          const findLabel = (items: EpubNavItem[]): string => {
             for (const item of items) {
               if (href.includes(item.href)) return item.label.trim();
               if (item.subitems?.length) {
@@ -153,11 +135,17 @@ export function EpubReaderDialog({ open, onClose, url, filename }: Props) {
             }
             return "";
           };
-          setCurrentLabel(findLabel(nav.toc));
+          setCurrentLabel(findLabel(navigation));
         });
+
+        await rendition.display();
+        if (!isMounted) return;
+        setToc(navigation);
+        setLoading(false);
 
       } catch (err: unknown) {
         console.error("[EpubReaderDialog] Error loading book:", err);
+        destroy();
         if (isMounted) {
           setError(`EPUB 로딩 실패: ${err instanceof Error ? err.message : String(err)}`);
           setLoading(false);
@@ -170,33 +158,29 @@ export function EpubReaderDialog({ open, onClose, url, filename }: Props) {
     return () => {
       console.log("[EpubReaderDialog] useEffect cleanup");
       isMounted = false;
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-      }
       destroy();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, url, viewerElement]);
+  }, [destroy, open, url, viewerElement]);
 
   // Sync font size to rendition
   useEffect(() => {
-    if (renditionRef.current) {
-      renditionRef.current.themes.fontSize(`${fontSize}px`);
+    if (sessionRef.current) {
+      sessionRef.current.rendition.themes.fontSize(`${fontSize}px`);
     }
   }, [fontSize]);
 
-  const handlePrev = () => renditionRef.current?.prev();
-  const handleNext = () => renditionRef.current?.next();
+  const handlePrev = () => sessionRef.current?.rendition.prev();
+  const handleNext = () => sessionRef.current?.rendition.next();
 
   const handleTocClick = (href: string) => {
-    renditionRef.current?.display(href);
+    void sessionRef.current?.rendition.display(href);
     setTocOpen(false);
   };
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!open) return;
-    if (e.key === "ArrowLeft") renditionRef.current?.prev();
-    if (e.key === "ArrowRight") renditionRef.current?.next();
+    if (e.key === "ArrowLeft") sessionRef.current?.rendition.prev();
+    if (e.key === "ArrowRight") sessionRef.current?.rendition.next();
   }, [open]);
 
   useEffect(() => {
@@ -204,7 +188,7 @@ export function EpubReaderDialog({ open, onClose, url, filename }: Props) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  const renderTocItems = (items: NavItem[], depth = 0): React.ReactNode =>
+  const renderTocItems = (items: EpubNavItem[], depth = 0): React.ReactNode =>
     items.map((item) => (
       <Box key={item.id ?? item.href}>
         <ListItemButton

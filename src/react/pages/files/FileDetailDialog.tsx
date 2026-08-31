@@ -12,7 +12,6 @@ import {
   CircularProgress,
   Divider,
   IconButton,
-  InputBase,
   MenuItem,
   Stack,
   Table,
@@ -38,7 +37,6 @@ import {
   Tabs,
 } from "@mui/material";
 import {
-  AddOutlined,
   CloseOutlined,
   ContentCopyOutlined,
   ExpandMoreOutlined,
@@ -51,8 +49,6 @@ import {
   Cancel,
   ArrowBackIosNewOutlined,
   VisibilityOutlined,
-  ArrowDownwardOutlined,
-  ArrowUpwardOutlined,
   AutoFixHighOutlined,
   LockOutlined,
   DescriptionOutlined,
@@ -73,10 +69,12 @@ import type {
   RagAnswerPresentationPreference,
   RagExternalRetrievalCapabilitiesDto,
   RagExternalRetrievalMode,
+  RagQuestionSuggestionCapabilitiesDto,
   RagSourcePolicyCapabilitiesDto,
   RagSourceScope,
   IndexedWebCapabilitiesDto,
   IndexedWebSourceRefDto,
+  DocumentQuestionSuggestionsResponseDto,
 } from "@/types/studio/ai";
 import {
   reactFilesApi,
@@ -106,16 +104,13 @@ import {
   type MetadataEnrichmentMode,
 } from "@/react/pages/files/api";
 import { AiProviderSelect } from "@/react/components/ai/AiProviderSelect";
-import { AssistantMessageBubble } from "../ai/components/AssistantMessageBubble";
 import { RagAnswerModeSelector } from "../ai/components/RagAnswerModeSelector";
 import { RagAnswerPresentationSelector } from "../ai/components/RagAnswerPresentationSelector";
 import { RagSourceScopeSelector } from "../ai/components/RagSourceScopeSelector";
 import { RagEvidenceSourceDrawer } from "../ai/components/RagEvidenceSourceDrawer";
-import { RagEvidenceSourceSummary } from "../ai/components/RagEvidenceSourceSummary";
 import { toIndexedWebSourcePayload } from "../ai/utils/evidenceSource";
 import { reactWorkspaceApi } from "@/react/pages/workspaces/api";
 import type { WorkspaceRef } from "@/types/studio/workspace";
-import { UserMessageBubble } from "../ai/components/UserMessageBubble";
 import type { ChatMessage } from "../ai/components/chatTypes";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { resolveAxiosError } from "@/utils/helpers";
@@ -127,22 +122,79 @@ import { MarkdownViewerDialog } from "./MarkdownViewerDialog";
 import { useMarkdownDocumentPolling } from "./hooks/useMarkdownDocumentPolling";
 import { getCachedThumbnailUrl, requestThumbnail, invalidateThumbnail } from "./thumbnailCache";
 import { findNormalizedDocumentResource, getNormalizationBadge, getNormalizationSourceLabel } from "../ai/chunkMetaHelper";
+import { DocumentQaWorkspace } from "./DocumentQaWorkspace";
 
 const THUMBNAIL_RETRY_INTERVAL_MS = 1500;
 const THUMBNAIL_RETRY_LIMIT = 8;
 
+const DOCUMENT_PROFILE_KOREAN_MAP: Record<string, { label: string; description: string }> = {
+  AUTO: {
+    label: "서버 권장 프로필",
+    description: "파일 형식과 구조에 따라 서버가 처리 프로필을 결정합니다.",
+  },
+  GENERAL_DOCUMENT: {
+    label: "일반 문서",
+    description: "구조를 인식하는 일반 텍스트 문서 청킹 방식입니다.",
+  },
+  PROFESSIONAL_BOOK: {
+    label: "전문 서적 / 도서",
+    description: "긴 장(Chapter), 표, 각주 및 넓은 문맥을 고려하는 긴 문서입니다.",
+  },
+  TEXTBOOK: {
+    label: "교재 / 학습서",
+    description: "단원, 개념, 예제, 문항과 페이지 출처를 추적하는 학습용 문서입니다.",
+  },
+  MATH_TEXTBOOK: {
+    label: "수학 교재",
+    description: "한글/수식 OCR, 수식 교정 및 엄격한 페이지 출처 추적을 지원하는 수학 교재입니다.",
+  },
+  SCANNED_DOCUMENT: {
+    label: "스캔 문서",
+    description: "강제 OCR을 수행하여 페이지 및 영역(Bounding Box) 출처 정보를 추출하는 스캔 이미지 문서입니다.",
+  },
+  PRESENTATION: {
+    label: "프레젠테이션",
+    description: "슬라이드 및 도형 구조에 최적화된 소형 슬라이드 단위 청크를 생성합니다.",
+  },
+  TECHNICAL_MANUAL: {
+    label: "기술 매뉴얼",
+    description: "절차, 코드, 표, 경고문 및 섹션 문맥을 정밀하게 추출하는 기술 문서입니다.",
+  },
+};
+
+const STRATEGY_KOREAN_MAP: Record<string, string> = {
+  "structure-based": "구조 기반",
+  "fixed-size": "고정 크기",
+};
+
+const UNIT_KOREAN_MAP: Record<string, string> = {
+  CHARACTER: "자",
+  TOKEN: "토큰",
+  WORD: "단어",
+};
+
 function documentProfileLabel(profile: MarkdownDocumentProfileDescriptor) {
-  return profile.displayName;
+  const mapped = DOCUMENT_PROFILE_KOREAN_MAP[profile.id];
+  return mapped?.label ?? profile.displayName;
 }
 
 function documentProfileDescription(profile: MarkdownDocumentProfileDescriptor) {
-  return profile.description;
+  const mapped = DOCUMENT_PROFILE_KOREAN_MAP[profile.id];
+  return mapped?.description ?? profile.description;
+}
+
+function getDocumentProfileLabelById(id: string | null | undefined): string {
+  if (!id) return "-";
+  const mapped = DOCUMENT_PROFILE_KOREAN_MAP[id];
+  return mapped ? `${mapped.label} (${id})` : id;
 }
 
 function documentProfileSettings(profile: MarkdownDocumentProfileDescriptor) {
-  const strategy = profile.chunkingStrategy ?? "자동 선택";
+  const rawStrategy = profile.chunkingStrategy;
+  const strategy = rawStrategy ? (STRATEGY_KOREAN_MAP[rawStrategy] ?? rawStrategy) : "자동 선택";
+  const unit = UNIT_KOREAN_MAP[profile.chunkUnit] ?? profile.chunkUnit;
   const ocr = profile.ocrRequired ? "OCR 강제" : profile.ocrMode === "AUTO" ? "OCR 자동" : `OCR ${profile.ocrMode}`;
-  return `청킹 ${strategy} · ${profile.chunkMaxSize}/${profile.chunkOverlap} ${profile.chunkUnit} · ${ocr}`;
+  return `청킹 ${strategy} · ${profile.chunkMaxSize}/${profile.chunkOverlap} ${unit} · ${ocr}`;
 }
 
 function shouldRetryThumbnail(status?: string) {
@@ -740,11 +792,16 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
   const [qaIndexedWebCapabilitiesLoading, setQaIndexedWebCapabilitiesLoading] = useState(false);
   const [qaIndexedWebCapabilitiesError, setQaIndexedWebCapabilitiesError] = useState<string | null>(null);
   const [qaIndexedWebSources, setQaIndexedWebSources] = useState<IndexedWebSourceRefDto[]>([]);
+  const [qaQuestionSuggestionCapabilities, setQaQuestionSuggestionCapabilities] =
+    useState<RagQuestionSuggestionCapabilitiesDto | null>(null);
+  const [qaQuestionSuggestions, setQaQuestionSuggestions] =
+    useState<DocumentQuestionSuggestionsResponseDto | null>(null);
+  const [qaQuestionSuggestionsLoading, setQaQuestionSuggestionsLoading] = useState(false);
+  const [qaQuestionSuggestionsError, setQaQuestionSuggestionsError] = useState<string | null>(null);
+  const qaQuestionSuggestionsRequestRef = useRef(0);
   const [workspaces, setWorkspaces] = useState<WorkspaceRef[]>([]);
   const [userSelectedWorkspaceId, setUserSelectedWorkspaceId] = useState<number | null>(null);
   const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
-  const [showScrollToBottomBtn, setShowScrollToBottomBtn] = useState<boolean>(false);
-  const qaMessageListRef = useRef<HTMLDivElement | null>(null);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
 
   const effectiveWorkspaceId = useMemo(() => {
@@ -830,6 +887,7 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
       setQaExternalRetrieval(capabilities.externalRetrieval ?? null);
       setQaExternalRetrievalMode(capabilities.externalRetrieval?.defaultMode ?? "OFF");
       setQaIndexedWebCapabilities(capabilities.indexedWeb);
+      setQaQuestionSuggestionCapabilities(capabilities.questionSuggestions ?? null);
       setQaIndexedWebCapabilitiesError(null);
     } catch (err) {
       setQaIndexedWebCapabilitiesError(resolveAxiosError(err));
@@ -837,6 +895,28 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
       setQaIndexedWebCapabilitiesLoading(false);
     }
   }, []);
+
+  const loadQaQuestionSuggestions = useCallback(async () => {
+    const objectId = file?.attachmentId;
+    if (!objectId) return;
+
+    const requestId = ++qaQuestionSuggestionsRequestRef.current;
+    setQaQuestionSuggestionsLoading(true);
+    setQaQuestionSuggestionsError(null);
+    try {
+      const response = await reactAiApi.getRagObjectQuestionSuggestions("attachment", String(objectId));
+      if (requestId !== qaQuestionSuggestionsRequestRef.current) return;
+      setQaQuestionSuggestions(response);
+    } catch (err) {
+      if (requestId !== qaQuestionSuggestionsRequestRef.current) return;
+      setQaQuestionSuggestions(null);
+      setQaQuestionSuggestionsError(resolveAxiosError(err));
+    } finally {
+      if (requestId === qaQuestionSuggestionsRequestRef.current) {
+        setQaQuestionSuggestionsLoading(false);
+      }
+    }
+  }, [file?.attachmentId]);
 
   useEffect(() => {
     if (open) {
@@ -857,6 +937,25 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
   }, [open, attachmentId, loadEmbeddingOptions, loadChunkConfig, loadProviders, loadRagAnswerPolicy]);
 
   useEffect(() => {
+    const enabled = qaQuestionSuggestionCapabilities?.enabled === true;
+    if (!open || currentTab !== "qa" || !file?.attachmentId || !enabled) {
+      qaQuestionSuggestionsRequestRef.current += 1;
+      setQaQuestionSuggestions(null);
+      setQaQuestionSuggestionsLoading(false);
+      setQaQuestionSuggestionsError(null);
+      return;
+    }
+    void loadQaQuestionSuggestions();
+  }, [
+    open,
+    currentTab,
+    file?.attachmentId,
+    markdownDocument?.currentRevisionId,
+    qaQuestionSuggestionCapabilities?.enabled,
+    loadQaQuestionSuggestions,
+  ]);
+
+  useEffect(() => {
     if (!open) {
       setCurrentTab("info");
       setQaMessages([]);
@@ -866,6 +965,10 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
       setQaAnswerMode("STRICT_GROUNDED");
       setQaSourceScope("DOCUMENT_ONLY");
       setQaIndexedWebSources([]);
+      setQaQuestionSuggestionCapabilities(null);
+      setQaQuestionSuggestions(null);
+      setQaQuestionSuggestionsLoading(false);
+      setQaQuestionSuggestionsError(null);
     }
   }, [open]);
 
@@ -1820,6 +1923,7 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
       runChunking,
       runRagIndex,
       runSkillExtraction,
+      ...(runRagIndex && !forEstimate ? { useLlmKeywordExtraction: true } : {}),
       chunkingStrategy: (runChunking || forEstimate) ? (chunkingStrategyOverride || null) : null,
       chunkMaxSize: (runChunking || forEstimate) ? (maxSize || null) : null,
       chunkOverlap: (runChunking || forEstimate) ? (overlap || null) : null,
@@ -2245,6 +2349,7 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
     try {
       const payload: MarkdownRagReindexRequest = {
         runSkillExtraction: runSkillExtraction,
+        useLlmKeywordExtraction: true,
       };
 
       if (selectedEmbeddingOption.deploymentId) {
@@ -2798,10 +2903,6 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
     }
   }, [isRagCompleted, currentTab]);
 
-  const lastQaAssistantMessage = useMemo(() => {
-    return [...qaMessages].reverse().find((m) => m.role === "assistant");
-  }, [qaMessages]);
-
   const submitQaQuestion = async (trimmed: string, baseMessages: ChatMessage[], appendUserMessage: boolean) => {
     if (!trimmed || qaSending || !file) return;
 
@@ -2874,16 +2975,7 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
     } catch (err: any) {
       const msg = resolveAxiosError(err);
       setQaError(msg);
-      setQaMessages([
-        ...nextMessages,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: `오류가 발생했습니다: ${msg}`,
-          createdAt: new Date().toISOString(),
-          metadata: { finishReason: "error" },
-        }
-      ]);
+      setQaMessages(nextMessages);
     } finally {
       setQaSending(false);
     }
@@ -2910,30 +3002,6 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
       setQaInput(lastUser.content);
     }
   };
-
-  const handleQaScroll = () => {
-    const container = qaMessageListRef.current;
-    if (!container) return;
-    const { scrollTop, scrollHeight, clientHeight } = container;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-    setShowScrollToBottomBtn(!isNearBottom);
-  };
-
-  const scrollToBottom = () => {
-    const container = qaMessageListRef.current;
-    if (container) {
-      container.scrollTo({
-        top: container.scrollHeight,
-        behavior: "smooth",
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (currentTab === "qa") {
-      scrollToBottom();
-    }
-  }, [qaMessages, currentTab]);
 
   return (
     <Drawer
@@ -3456,7 +3524,7 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                           <Box sx={{ mt: 1.5, p: 2, border: "1px solid", borderColor: "divider", borderRadius: 1.5, bgcolor: "action.hover" }}>
                             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
                               <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: 13 }}>
-                                {selectedProfileObj.displayName}
+                                {documentProfileLabel(selectedProfileObj)} ({selectedProfileObj.id})
                               </Typography>
                               <Chip
                                 label={selectedProfileObj.costTier}
@@ -3946,7 +4014,7 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                               <Grid size={{ xs: 6 }}>
                                 <Typography variant="caption" color="text.secondary" display="block">분석 프로필</Typography>
                                 <Typography variant="body2" sx={{ fontWeight: 600, fontSize: 11.5 }}>
-                                  {processingPlan.resolvedDocumentProfile || "-"}
+                                  {getDocumentProfileLabelById(processingPlan.resolvedDocumentProfile)}
                                 </Typography>
                               </Grid>
                               <Grid size={{ xs: 6 }}>
@@ -4540,6 +4608,7 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
             <MarkdownViewerDialog
               open={markdownViewerOpen}
               onClose={() => setMarkdownViewerOpen(false)}
+              attachmentId={file.attachmentId}
               documentId={documentId}
               revisionId={selectedViewerRevisionId}
               fileName={file.name}
@@ -4552,7 +4621,7 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
           )}
 
           {currentTab === "qa" && file && (
-            <Box sx={{ display: "flex", flexDirection: "column", flexGrow: 1, height: "calc(100vh - 120px)", overflow: "hidden" }}>
+            <>
               <RagEvidenceSourceDrawer
                 open={evidenceDrawerOpen}
                 onClose={() => setEvidenceDrawerOpen(false)}
@@ -4561,8 +4630,6 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                 onWorkspaceChange={(nextWorkspaceId) => {
                   setUserSelectedWorkspaceId(nextWorkspaceId);
                   setQaIndexedWebSources([]);
-                  setQaMessages([]);
-                  setQaInput("");
                   setQaError(null);
                 }}
                 embeddingDeploymentId={
@@ -4579,276 +4646,82 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                 onChange={(sources) => {
                   if (JSON.stringify(sources) === JSON.stringify(qaIndexedWebSources)) return;
                   setQaIndexedWebSources(sources);
-                  setQaMessages([]);
-                  setQaInput("");
                   setQaError(null);
                 }}
               />
-              {/* Chat messages list */}
-              <Box sx={{ flex: 1, minHeight: 0, position: "relative", display: "flex", flexDirection: "column" }}>
-                <Box
-                  ref={qaMessageListRef}
-                  onScroll={handleQaScroll}
-                  sx={{ flex: 1, overflow: "auto", p: 3, display: "flex", flexDirection: "column", gap: 2, bgcolor: "background.default" }}
-                >
-                  {qaMessages.length === 0 ? (
-                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", opacity: 0.7 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                        문서 Q&A (Ask Gemini)
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" align="center">
-                        이 문서의 내용을 기반으로 RAG 질문과 답변을 생성할 수 있습니다.<br />
-                        질문을 입력하여 대화를 시작해 보세요.
-                      </Typography>
-                    </Box>
-                  ) : (
-                    qaMessages.map((msg, idx) => {
-                      if (msg.role === "assistant") {
-                        return (
-                          <AssistantMessageBubble
-                            key={msg.id}
-                            message={msg}
-                            sending={qaSending}
-                            isLastAssistant={idx === qaMessages.length - 1}
-                            onCopy={(content) => void navigator.clipboard.writeText(content)}
-                            onRegenerate={handleQaRegenerate}
-                            onRetryLastUser={handleQaRetryLastUser}
-                          />
-                        );
-                      }
-                      return (
-                        <UserMessageBubble
-                          key={msg.id}
-                          message={msg}
-                          onCopy={(content) => void navigator.clipboard.writeText(content)}
-                          onEdit={(_id, content) => {
-                            setQaInput(content);
-                          }}
-                        />
-                      );
-                    })
-                  )}
-                  {qaSending && (
-                    <Box sx={{ display: "flex", justifyContent: "center", py: 2 }}>
-                      <CircularProgress size={20} />
-                    </Box>
-                  )}
-                </Box>
-
-                {/* Floating scroll to bottom button */}
-                {showScrollToBottomBtn && (
-                  <IconButton
-                    onClick={scrollToBottom}
-                    sx={{
-                      position: "absolute",
-                      bottom: 16,
-                      right: 24,
-                      bgcolor: "background.paper",
-                      color: "text.primary",
-                      boxShadow: 3,
-                      "&:hover": {
-                        bgcolor: "action.hover",
-                      },
-                      width: 36,
-                      height: 36,
-                      borderRadius: "50%",
-                      border: "1px solid",
-                      borderColor: "divider",
-                      zIndex: 10,
-                    }}
-                    size="small"
-                  >
-                    <ArrowDownwardOutlined fontSize="small" />
-                  </IconButton>
-                )}
-              </Box>
-
-              {/* Integrated Antigravity-Style Input Area */}
-              <Box
-                sx={{
-                  px: 3,
-                  py: 2,
-                  bgcolor: "background.default",
+              <DocumentQaWorkspace
+                fileName={file.name}
+                messages={qaMessages}
+                sending={qaSending}
+                error={qaError}
+                input={qaInput}
+                selectedWebSourcesCount={qaIndexedWebSources.length}
+                settingsLabel={qaModel || qaDeploymentId}
+                questionSuggestions={qaQuestionSuggestions}
+                questionSuggestionsLoading={qaQuestionSuggestionsLoading}
+                questionSuggestionsError={qaQuestionSuggestionsError}
+                onInputChange={setQaInput}
+                onSelectSuggestedQuestion={(query) => {
+                  if (qaSending) return;
+                  void submitQaQuestion(query, qaMessages, true);
                 }}
-              >
-                {lastQaAssistantMessage?.metadata && (
-                  <Stack direction="row" spacing={2} sx={{ mb: 1, px: 1, maxWidth: 840, mx: "auto" }} alignItems="center">
-                    {lastQaAssistantMessage.metadata.tokenUsage && (
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
-                        토큰량: <strong>{lastQaAssistantMessage.metadata.tokenUsage.totalTokens}</strong> tokens
-                        (입력: {lastQaAssistantMessage.metadata.tokenUsage.inputTokens} /
-                         출력: {lastQaAssistantMessage.metadata.tokenUsage.outputTokens})
-                      </Typography>
-                    )}
-                    {lastQaAssistantMessage.metadata.latencyMs != null && (
-                      <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
-                        응답 속도: <strong>{(lastQaAssistantMessage.metadata.latencyMs / 1000).toFixed(2)}</strong>초 ({lastQaAssistantMessage.metadata.latencyMs}ms)
-                      </Typography>
-                    )}
-                  </Stack>
-                )}
-
-                <Box sx={{ maxWidth: 840, mx: "auto", mb: 1.5 }}>
-                  <RagEvidenceSourceSummary
-                    attachedDocumentName={file.name}
-                    selectedWebSourcesCount={qaIndexedWebSources.length}
-                    onOpenDrawer={() => setEvidenceDrawerOpen(true)}
-                    disabled={qaSending}
-                    selection={lastQaAssistantMessage?.metadata?.evidenceSourceSelection as any}
-                    sourcePolicy={lastQaAssistantMessage?.metadata?.sourcePolicy}
-                    packedOrigins={(lastQaAssistantMessage?.metadata?.evidenceSourceSelection as any)?.packedOrigins}
-                    usedOrigins={(lastQaAssistantMessage?.metadata?.evidenceSourceSelection as any)?.usedOrigins}
-                  />
-                </Box>
-
-                <Paper
-                  elevation={0}
-                  sx={{
-                    maxWidth: 840,
-                    mx: "auto",
-                    p: "14px 18px 12px 18px",
-                    borderRadius: "24px",
-                    bgcolor: (theme) => (theme.palette.mode === "dark" ? "#2f2f2f" : "#f4f4f4"),
-                    border: (theme) => (theme.palette.mode === "dark" ? "1px solid rgba(255, 255, 255, 0.08)" : "1px solid rgba(0, 0, 0, 0.04)"),
-                    transition: "background-color 0.2s, box-shadow 0.2s",
-                    "&:focus-within": {
-                      bgcolor: (theme) => (theme.palette.mode === "dark" ? "#333333" : "#ebebeb"),
-                      boxShadow: (theme) =>
-                        theme.palette.mode === "dark"
-                          ? `0 0 0 1.5px ${alpha(theme.palette.common.white, 0.2)}`
-                          : `0 0 0 1.5px ${alpha(theme.palette.common.black, 0.12)}`,
-                    },
-                  }}
-                >
-                  <InputBase
-                    placeholder="문서에 대해 질문해보세요... (Shift+Enter 줄바꿈, Enter 전송)"
-                    multiline
-                    minRows={2}
-                    maxRows={6}
-                    fullWidth
-                    value={qaInput}
-                    onChange={(e) => setQaInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.nativeEvent.isComposing) return;
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void handleSendQa();
-                      }
-                    }}
-                    disabled={qaSending}
-                    sx={{
-                      fontSize: 14.5,
-                      lineHeight: 1.6,
-                      px: 0.5,
-                      color: "text.primary",
-                    }}
-                  />
-
-                  {/* Seamless bottom toolbar inside input card */}
-                  <Stack
-                    direction="row"
-                    alignItems="center"
-                    justifyContent="space-between"
-                    sx={{ mt: 1, pt: 0.5 }}
-                  >
-                    {/* Controls on left */}
-                    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
-                      <Tooltip title="Add Context (자료 추가)">
-                        <IconButton
-                          size="small"
-                          onClick={() => setEvidenceDrawerOpen(true)}
-                          sx={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: "50%",
-                            bgcolor: (theme) =>
-                              theme.palette.mode === "dark"
-                                ? "rgba(255, 255, 255, 0.12)"
-                                : "rgba(0, 0, 0, 0.08)",
-                            color: "text.primary",
-                            "&:hover": {
-                              bgcolor: (theme) =>
-                                theme.palette.mode === "dark"
-                                  ? "rgba(255, 255, 255, 0.2)"
-                                  : "rgba(0, 0, 0, 0.14)",
-                            },
-                          }}
-                        >
-                          <AddOutlined fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                      <AiProviderSelect
+                onRetryQuestionSuggestions={() => void loadQaQuestionSuggestions()}
+                onSubmit={() => void handleSendQa()}
+                onOpenSources={() => setEvidenceDrawerOpen(true)}
+                onCopy={(content) => void navigator.clipboard.writeText(content)}
+                onEditUser={(_id, content) => setQaInput(content)}
+                onRegenerate={() => void handleQaRegenerate()}
+                onRetryLastUser={handleQaRetryLastUser}
+                settingsContent={
+                  <Stack spacing={1.5}>
+                    <AiProviderSelect
                         provider={qaProvider}
                         model={qaModel}
                         deploymentId={qaDeploymentId}
-                        variant="compact-pill"
                         onChange={(p, m, d) => {
                           setQaProvider(p);
                           setQaModel(m);
                           if (d) setQaDeploymentId(d);
                         }}
-                      />
-                      <RagAnswerModeSelector
+                    />
+                    <RagAnswerModeSelector
                         capabilities={qaAnswerPolicy}
                         value={qaAnswerMode}
                         disabled={qaSending}
-                        hideHelperText
-                        variant="compact-pill"
                         onChange={(mode) => {
                           if (mode === qaAnswerMode) return;
                           setQaAnswerMode(mode);
                           setQaError(null);
                         }}
-                      />
-                      <RagAnswerPresentationSelector
+                    />
+                    <RagAnswerPresentationSelector
                         capabilities={qaAnswerPresentation}
                         value={qaPresentationPreference}
                         disabled={qaSending}
-                        hideHelperText
-                        variant="compact-pill"
                         onChange={(preference) => {
                           if (preference === qaPresentationPreference) return;
                           setQaPresentationPreference(preference);
-                          setQaMessages([]);
                           setQaError(null);
                         }}
-                      />
-                      <RagSourceScopeSelector
+                    />
+                    <RagSourceScopeSelector
                         capabilities={qaSourcePolicy}
                         externalRetrievalCapabilities={qaExternalRetrieval}
                         value={qaSourceScope}
                         disabled={qaSending}
-                        hideHelperText
-                        variant="compact-pill"
                         onChange={(scope) => {
                           if (scope === qaSourceScope) return;
                           setQaSourceScope(scope);
                           setQaExternalRetrievalMode(
                             scope === "DOCUMENT_AND_OFFICIAL_EXTERNAL" ? "AUTO" : "OFF"
                           );
-                          setQaMessages([]);
                           setQaError(null);
                         }}
-                      />
-
-                      {/* RAG Embedding Badge */}
-                      <Tooltip title="이 문서 검색에 사용되는 고정 RAG 임베딩 모델입니다">
-                        <Box
-                          sx={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: 0.5,
-                            px: 1,
-                            py: 0.3,
-                            borderRadius: "16px",
-                            bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.04)"),
-                            color: "text.secondary",
-                          }}
-                        >
-                          <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 500, color: "text.secondary" }}>
-                            임베딩:
-                          </Typography>
-                          <Typography variant="caption" sx={{ fontSize: 11, fontWeight: 700, color: (theme) => (theme.palette.mode === "dark" ? "#90caf9" : "primary.main") }}>
+                    />
+                    <Box sx={{ px: 1, py: 0.75, borderRadius: 1.5, bgcolor: "action.hover" }}>
+                        <Typography variant="caption" color="text.secondary">
+                          문서 검색 임베딩 ·{" "}
+                          <Box component="span" sx={{ color: "text.primary", fontWeight: 700 }}>
                             {formatEmbeddingModelName(
                               latestRagJob?.embeddingModel
                               || latestRagJob?.embeddingDeploymentId
@@ -4857,41 +4730,13 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                               || selectedEmbeddingOption?.displayName
                               || selectedEmbeddingOption?.model
                               || "-")}
-                          </Typography>
-                        </Box>
-                      </Tooltip>
-                    </Stack>
-
-                    {/* Send Button on right */}
-                    <IconButton
-                      onClick={handleSendQa}
-                      disabled={qaSending || !qaInput.trim()}
-                      sx={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: "50%",
-                        bgcolor: "#0288d1",
-                        color: "#ffffff",
-                        "&:hover": {
-                          bgcolor: "#01579b",
-                        },
-                        "&.Mui-disabled": {
-                          bgcolor: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.12)"),
-                          color: (theme) => (theme.palette.mode === "dark" ? "rgba(255, 255, 255, 0.3)" : "rgba(0, 0, 0, 0.26)"),
-                        },
-                        transition: "transform 0.15s ease-in-out, background-color 0.2s",
-                        "&:active": {
-                          transform: "scale(0.92)",
-                        },
-                      }}
-                      size="small"
-                    >
-                      <ArrowUpwardOutlined sx={{ fontSize: 18 }} />
-                    </IconButton>
+                          </Box>
+                        </Typography>
+                    </Box>
                   </Stack>
-                </Paper>
-              </Box>
-            </Box>
+                }
+              />
+            </>
           )}
         </>
       )}
