@@ -1309,7 +1309,7 @@ export function WorkspaceDetailPage() {
               </TextField>
               <Stack direction="row" spacing={2}>
                 <StatItem label="ID" value={workspace.id} />
-                <StatItem label="Company" value={workspace.companyId ?? "-"} />
+                <StatItem label="Team" value={workspace.teamId ? `#${workspace.teamId}` : "-"} />
                 <StatItem label="Root" value={workspace.rootId ?? "-"} />
                 <StatItem label="Depth" value={workspace.depth} />
               </Stack>

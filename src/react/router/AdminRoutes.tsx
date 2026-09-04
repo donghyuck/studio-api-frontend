@@ -8,6 +8,8 @@ import { AttachmentDownloadUrlIssueLogPage } from "@/react/pages/audit/Attachmen
 import { LoginFailureLogPage } from "@/react/pages/audit/LoginFailureLogPage";
 import { CompanyDetailPage } from "@/react/pages/companies/CompanyDetailPage";
 import { CompanyListPage } from "@/react/pages/companies/CompanyListPage";
+import { TeamDetailPage } from "@/react/pages/teams/TeamDetailPage";
+import { TeamListPage } from "@/react/pages/teams/TeamListPage";
 import { ForumAclPage } from "@/react/pages/forums/admin/ForumAclPage";
 import { ForumAuditLogPage } from "@/react/pages/forums/admin/ForumAuditLogPage";
 import { ForumListPage } from "@/react/pages/forums/admin/ForumListPage";
@@ -26,6 +28,8 @@ export function AdminRoutes() {
       <Route path="roles/:roleId" element={<RoleDetailPage />} />
       <Route path="companies" element={<CompanyListPage />} />
       <Route path="companies/:companyId" element={<CompanyDetailPage />} />
+      <Route path="teams" element={<TeamListPage />} />
+      <Route path="teams/:teamId" element={<TeamDetailPage />} />
       <Route path="audit/login-failures" element={<LoginFailureLogPage />} />
       <Route
         path="audit/attachment-download-links"

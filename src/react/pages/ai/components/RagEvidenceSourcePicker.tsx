@@ -13,7 +13,6 @@ import {
   DialogTitle,
   FormControl,
   FormControlLabel,
-  FormLabel,
   IconButton,
   InputLabel,
   Link,
@@ -38,6 +37,8 @@ import {
   SettingsOutlined,
 } from "@mui/icons-material";
 import { reactAiApi } from "@/react/pages/ai/api";
+import { GridContent } from "@/react/components/ag-grid";
+import type { ColDef } from "ag-grid-community";
 import type {
   IndexedWebCapabilitiesDto,
   IndexedWebSourceRefDto,
@@ -46,6 +47,7 @@ import type {
   WebCrawlScope,
   WebKnowledgeCrawlRunView,
   WebKnowledgePageView,
+  WebKnowledgePageDetailView,
   WebKnowledgeSitePreviewView,
   WebKnowledgeSourceDto,
 } from "@/types/studio/ai";
@@ -58,6 +60,9 @@ type Props = {
   value: IndexedWebSourceRefDto[];
   maxSelectedSources?: number;
   disabled?: boolean;
+  managementOnly?: boolean;
+  selectionOnly?: boolean;
+  listAllDeployments?: boolean;
   onChange: (value: IndexedWebSourceRefDto[]) => void;
   onResetConversation?: () => void;
 };
@@ -82,6 +87,12 @@ function statusLabel(status: string) {
   }
 }
 
+function formatRunDate(value: string | null | undefined) {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR");
+}
+
 function isForbiddenError(err: unknown) {
   if (!err) return false;
   if (typeof err === "object" && "status" in err && (err as { status?: number }).status === 403) return true;
@@ -97,6 +108,9 @@ export function RagEvidenceSourcePicker({
   value,
   maxSelectedSources = 10,
   disabled = false,
+  managementOnly = false,
+  selectionOnly = false,
+  listAllDeployments = false,
   onChange,
   onResetConversation,
 }: Props) {
@@ -128,7 +142,11 @@ export function RagEvidenceSourcePicker({
   const [detailTab, setDetailTab] = useState<"runs" | "pages">("runs");
   const [crawlRuns, setCrawlRuns] = useState<WebKnowledgeCrawlRunView[]>([]);
   const [pages, setPages] = useState<WebKnowledgePageView[]>([]);
+  const [pageDetail, setPageDetail] = useState<WebKnowledgePageDetailView | null>(null);
+  const [pageDetailLoading, setPageDetailLoading] = useState(false);
+  const [pageDetailError, setPageDetailError] = useState<string | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [detailLoadError, setDetailLoadError] = useState<string | null>(null);
   const [policyEditNotice, setPolicyEditNotice] = useState<string | null>(null);
 
   // Crawl Policy edit state for an existing source
@@ -141,6 +159,8 @@ export function RagEvidenceSourcePicker({
 
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
+  const detailRequestSeqRef = useRef(0);
+  const pageDetailRequestSeqRef = useRef(0);
 
   useEffect(() => {
     valueRef.current = value;
@@ -149,6 +169,24 @@ export function RagEvidenceSourcePicker({
 
   const effectiveDeploymentId = embeddingDeploymentId?.trim() || null;
   const siteCrawlEnabled = capabilities?.siteCrawlEnabled !== false;
+
+  useEffect(() => {
+    detailRequestSeqRef.current += 1;
+    pageDetailRequestSeqRef.current += 1;
+    setDetailSource(null);
+    setLoadingDetail(false);
+    setDetailLoadError(null);
+    setCrawlRuns([]);
+    setPages([]);
+    setPageDetail(null);
+    setPageDetailLoading(false);
+    setPageDetailError(null);
+  }, [workspaceId, effectiveDeploymentId, listAllDeployments]);
+
+  useEffect(() => () => {
+    detailRequestSeqRef.current += 1;
+    pageDetailRequestSeqRef.current += 1;
+  }, []);
 
   const buildCrawlPolicyInput = useCallback((): WebCrawlPolicyRequest | undefined => {
     if (collectionMode !== "SITE") return undefined;
@@ -169,7 +207,7 @@ export function RagEvidenceSourcePicker({
   }, [collectionMode, scope, discoveryMode, maxDepth, maxPages, includeGlobs, excludeGlobs]);
 
   const load = useCallback(async () => {
-    if (!workspaceId || !effectiveDeploymentId) {
+    if (!workspaceId || (!listAllDeployments && !effectiveDeploymentId)) {
       setSources([]);
       return;
     }
@@ -177,7 +215,7 @@ export function RagEvidenceSourcePicker({
       setLoading(true);
       const result = await reactAiApi.listWebKnowledgeSources(
         workspaceId,
-        effectiveDeploymentId
+        listAllDeployments ? undefined : effectiveDeploymentId ?? undefined
       );
       setSources(result);
       setReadError(null);
@@ -202,7 +240,7 @@ export function RagEvidenceSourcePicker({
     } finally {
       setLoading(false);
     }
-  }, [workspaceId, effectiveDeploymentId, onResetConversation]);
+  }, [workspaceId, effectiveDeploymentId, listAllDeployments, onResetConversation]);
 
   useEffect(() => {
     setWriteError(null);
@@ -220,6 +258,36 @@ export function RagEvidenceSourcePicker({
     () => new Set(value.map((item) => item.sourceId)),
     [value]
   );
+  const crawlRunColumns = useMemo<ColDef<WebKnowledgeCrawlRunView>[]>(() => [
+    {
+      field: "runId",
+      headerName: "Run ID",
+      minWidth: 170,
+      flex: 1,
+      tooltipField: "runId",
+    },
+    { field: "status", headerName: "상태", width: 110 },
+    { field: "discoveredCount", headerName: "발견", width: 82, type: "numericColumn" },
+    { field: "fetchedCount", headerName: "수집", width: 82, type: "numericColumn" },
+    { field: "indexedCount", headerName: "색인", width: 82, type: "numericColumn" },
+    { field: "failedCount", headerName: "실패", width: 82, type: "numericColumn" },
+    { field: "skippedCount", headerName: "제외", width: 82, type: "numericColumn" },
+    { field: "responseBytes", headerName: "응답 Byte", width: 112, type: "numericColumn" },
+    { field: "normalizedChars", headerName: "정규화 문자", width: 120, type: "numericColumn" },
+    {
+      field: "startedAt",
+      headerName: "시작",
+      minWidth: 170,
+      valueFormatter: ({ value }) => formatRunDate(value),
+    },
+    {
+      field: "completedAt",
+      headerName: "완료",
+      minWidth: 170,
+      valueFormatter: ({ value }) => formatRunDate(value),
+    },
+    { field: "errorCode", headerName: "오류", minWidth: 180, flex: 1 },
+  ], []);
 
   async function handlePreview() {
     if (!workspaceId || !url.trim() || !effectiveDeploymentId) return;
@@ -343,8 +411,16 @@ export function RagEvidenceSourcePicker({
   }
 
   async function openDetailView(source: WebKnowledgeSourceDto) {
+    const requestSeq = ++detailRequestSeqRef.current;
+    pageDetailRequestSeqRef.current += 1;
     setDetailSource(source);
     setDetailTab("runs");
+    setCrawlRuns([]);
+    setPages([]);
+    setDetailLoadError(null);
+    setPageDetail(null);
+    setPageDetailError(null);
+    setPageDetailLoading(false);
     setPolicyEditNotice(null);
 
     const savedPolicy = source.crawlPolicy;
@@ -358,15 +434,55 @@ export function RagEvidenceSourcePicker({
     if (!workspaceId) return;
     try {
       setLoadingDetail(true);
-      const [runsData, pagesData] = await Promise.all([
-        reactAiApi.listCrawlRuns(workspaceId, source.sourceId).catch(() => []),
-        reactAiApi.listPages(workspaceId, source.sourceId).catch(() => []),
+      const [runsResult, pagesResult] = await Promise.allSettled([
+        reactAiApi.listCrawlRuns(workspaceId, source.sourceId),
+        reactAiApi.listPages(workspaceId, source.sourceId),
       ]);
-      setCrawlRuns(runsData);
-      setPages(pagesData);
+      if (requestSeq !== detailRequestSeqRef.current) return;
+
+      if (runsResult.status === "fulfilled") setCrawlRuns(runsResult.value);
+      if (pagesResult.status === "fulfilled") setPages(pagesResult.value);
+
+      const rejectedResult = runsResult.status === "rejected" ? runsResult : pagesResult.status === "rejected" ? pagesResult : null;
+      if (rejectedResult) {
+        setDetailLoadError(mapWebKnowledgeError(rejectedResult.reason, "수집 이력 또는 페이지 목록을 불러오지 못했습니다."));
+      }
     } finally {
-      setLoadingDetail(false);
+      if (requestSeq === detailRequestSeqRef.current) setLoadingDetail(false);
     }
+  }
+
+  async function openPageDetail(page: WebKnowledgePageView) {
+    if (!workspaceId || !detailSource) return;
+    const requestSeq = ++pageDetailRequestSeqRef.current;
+    try {
+      setPageDetailLoading(true);
+      setPageDetail(null);
+      setPageDetailError(null);
+      const result = await reactAiApi.getPage(workspaceId, detailSource.sourceId, page.pageId);
+      if (requestSeq === pageDetailRequestSeqRef.current) setPageDetail(result);
+    } catch (err) {
+      if (requestSeq === pageDetailRequestSeqRef.current) setPageDetailError(mapWebKnowledgeError(err));
+    } finally {
+      if (requestSeq === pageDetailRequestSeqRef.current) setPageDetailLoading(false);
+    }
+  }
+
+  function closePageDetail() {
+    pageDetailRequestSeqRef.current += 1;
+    setPageDetail(null);
+    setPageDetailLoading(false);
+    setPageDetailError(null);
+  }
+
+  function closeDetailView() {
+    detailRequestSeqRef.current += 1;
+    setDetailSource(null);
+    setLoadingDetail(false);
+    setDetailLoadError(null);
+    setCrawlRuns([]);
+    setPages([]);
+    closePageDetail();
   }
 
   async function handleUpdatePolicyAndRefresh() {
@@ -375,6 +491,8 @@ export function RagEvidenceSourcePicker({
       setPolicyEditNotice("서버의 수집 범위 전환 기능이 필요합니다.");
       return;
     }
+    const requestSeq = ++detailRequestSeqRef.current;
+    const sourceId = detailSource.sourceId;
     try {
       setLoadingDetail(true);
       const payload: WebCrawlPolicyRequest = {
@@ -391,15 +509,16 @@ export function RagEvidenceSourcePicker({
           .map((s) => s.trim())
           .filter(Boolean),
       };
-      await reactAiApi.updateCrawlPolicy(workspaceId, detailSource.sourceId, payload);
-      await reactAiApi.refreshWebKnowledgeSource(workspaceId, detailSource.sourceId);
+      await reactAiApi.updateCrawlPolicy(workspaceId, sourceId, payload);
+      await reactAiApi.refreshWebKnowledgeSource(workspaceId, sourceId);
+      if (requestSeq !== detailRequestSeqRef.current) return;
       setPolicyEditNotice("수집 정책을 갱신하고 재수집을 시작했습니다.");
       await load();
-      setDetailSource(null);
+      if (requestSeq === detailRequestSeqRef.current) closeDetailView();
     } catch (err) {
-      setPolicyEditNotice(mapWebKnowledgeError(err));
+      if (requestSeq === detailRequestSeqRef.current) setPolicyEditNotice(mapWebKnowledgeError(err));
     } finally {
-      setLoadingDetail(false);
+      if (requestSeq === detailRequestSeqRef.current) setLoadingDetail(false);
     }
   }
 
@@ -411,10 +530,12 @@ export function RagEvidenceSourcePicker({
     <Stack spacing={1.5}>
       <Box>
         <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-          수집한 웹 참고자료
+          {selectionOnly ? "Workspace URL 자료" : "수집한 웹 참고자료"}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          공개 HTTPS URL 한 페이지 또는 사이트 전체를 수집하여 RAG 근거로 활용합니다.
+          {selectionOnly
+            ? "현재 문서와 함께 답변 근거로 사용할 기존 URL 자료를 선택합니다."
+            : "공개 HTTPS URL 한 페이지 또는 사이트 전체를 수집하여 RAG 근거로 활용합니다."}
         </Typography>
       </Box>
 
@@ -422,7 +543,7 @@ export function RagEvidenceSourcePicker({
       {readError ? <Alert severity="error">{readError}</Alert> : null}
 
       {/* Prominent Collection Mode Box */}
-      <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: "background.paper", border: "1px solid", borderColor: "divider" }}>
+      <Paper variant="outlined" sx={{ display: selectionOnly ? "none" : undefined, p: 2, borderRadius: 2, bgcolor: "background.paper", border: "1px solid", borderColor: "divider" }}>
         <Stack spacing={1.5}>
           <Typography variant="subtitle2" sx={{ fontWeight: 800, color: "text.primary" }}>
             수집 범위 설정
@@ -543,7 +664,7 @@ export function RagEvidenceSourcePicker({
       </Paper>
 
       {/* URL Input Row */}
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ display: selectionOnly ? "none" : undefined }}>
         <TextField
           size="small"
           type="url"
@@ -631,7 +752,8 @@ export function RagEvidenceSourcePicker({
                       size="small"
                       checked={isSelected}
                       onChange={() => toggle(source)}
-                      disabled={disabled || !selectable}
+                      disabled={managementOnly || disabled || !selectable}
+                      sx={managementOnly ? { display: "none" } : undefined}
                     />
                   }
                   label={
@@ -666,11 +788,23 @@ export function RagEvidenceSourcePicker({
                       </Stack>
 
                       <Link
-                        href={source.canonicalUrl || source.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        component="button"
+                        type="button"
                         variant="caption"
-                        sx={{ overflowWrap: "anywhere", display: "inline-block", mt: 0.25 }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void openDetailView(source);
+                        }}
+                        sx={{
+                          overflowWrap: "anywhere",
+                          display: "inline-block",
+                          mt: 0.25,
+                          p: 0,
+                          border: 0,
+                          textAlign: "left",
+                          cursor: "pointer",
+                        }}
                       >
                         {source.url}
                       </Link>
@@ -689,7 +823,7 @@ export function RagEvidenceSourcePicker({
                   }
                 />
 
-                <Stack direction="row" spacing={0.5} alignItems="center">
+                <Stack direction="row" spacing={0.5} alignItems="center" sx={{ display: selectionOnly ? "none" : undefined }}>
                   <Button
                     size="small"
                     variant="text"
@@ -806,7 +940,7 @@ export function RagEvidenceSourcePicker({
       </Dialog>
 
       {/* Source Detail & Policy Edit / Runs / Pages Modal */}
-      <Dialog open={Boolean(detailSource)} onClose={() => setDetailSource(null)} maxWidth="md" fullWidth>
+      <Dialog open={Boolean(detailSource)} onClose={closeDetailView} maxWidth="md" fullWidth>
         <DialogTitle sx={{ fontWeight: 800 }}>
           {detailSource?.displayName || detailSource?.host || "자료 상세 및 수집 이력"}
         </DialogTitle>
@@ -814,14 +948,25 @@ export function RagEvidenceSourcePicker({
           {detailSource ? (
             <Stack spacing={2}>
               {policyEditNotice ? <Alert severity="info">{policyEditNotice}</Alert> : null}
+              {detailLoadError ? <Alert severity="error">{detailLoadError}</Alert> : null}
 
               <Stack direction="row" spacing={1} alignItems="center">
                 <Chip label={`모드: ${detailSource.collectionMode || "SINGLE_PAGE"}`} color="primary" size="small" />
                 <Chip label={`상태: ${statusLabel(detailSource.status)}`} size="small" />
               </Stack>
 
+              <Link
+                href={detailSource.canonicalUrl || detailSource.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                variant="body2"
+                sx={{ alignSelf: "flex-start", overflowWrap: "anywhere" }}
+              >
+                {detailSource.url} · 원문 URL 열기
+              </Link>
+
               {/* Crawl policy update form for SITE */}
-              {detailSource.collectionMode === "SITE" ? (
+              {!selectionOnly && detailSource.collectionMode === "SITE" ? (
                 <Paper variant="outlined" sx={{ p: 2, bgcolor: "background.paper", borderRadius: 2 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1.5, color: "primary.main" }}>
                     수집 정책(옵션) 변경 및 재수집
@@ -904,11 +1049,11 @@ export function RagEvidenceSourcePicker({
                     </Button>
                   </Stack>
                 </Paper>
-              ) : (
+              ) : !selectionOnly ? (
                 <Alert severity="info" sx={{ py: 0.5 }}>
                   서버의 수집 범위 전환 기능이 필요합니다. (SINGLE_PAGE → SITE 전환 불가)
                 </Alert>
-              )}
+              ) : null}
 
               <Box>
                 <Tabs value={detailTab} onChange={(_, val) => setDetailTab(val)}>
@@ -920,37 +1065,35 @@ export function RagEvidenceSourcePicker({
               {loadingDetail ? (
                 <CircularProgress size={24} />
               ) : detailTab === "runs" ? (
-                <Stack spacing={1} sx={{ maxHeight: 300, overflowY: "auto" }}>
-                  {crawlRuns.map((run) => (
-                    <Paper key={run.runId} variant="outlined" sx={{ p: 1 }}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                          Run ID: {run.runId.slice(0, 16)}...
-                        </Typography>
-                        <Chip size="small" label={run.status} />
-                      </Stack>
-                      <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: 0.5 }}>
-                        {`색인 ${run.indexedCount} / 발견 ${run.discoveredCount} / 실패 ${run.failedCount}`}
-                      </Typography>
-                      {run.errorCode ? (
-                        <Typography variant="caption" color="error">
-                          오류: {mapWebKnowledgeError(run.errorCode)}
-                        </Typography>
-                      ) : null}
-                    </Paper>
-                  ))}
-                  {crawlRuns.length === 0 ? <Typography variant="caption" color="text.secondary">실행 이력이 없습니다.</Typography> : null}
-                </Stack>
+                <GridContent<WebKnowledgeCrawlRunView>
+                  columns={crawlRunColumns}
+                  rowData={crawlRuns}
+                  height={300}
+                  options={{
+                    pagination: true,
+                    paginationPageSize: 10,
+                    paginationPageSizeSelector: [10, 20, 50],
+                    defaultColDef: { sortable: true, filter: false, resizable: true },
+                    overlayNoRowsTemplate: "수집 실행 이력이 없습니다.",
+                  }}
+                />
               ) : (
                 <Stack spacing={1} sx={{ maxHeight: 300, overflowY: "auto" }}>
-                  {pages.map((p, idx) => (
-                    <Paper key={idx} variant="outlined" sx={{ p: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {p.title || p.path || p.url}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {p.host}{p.path} ({p.status})
-                      </Typography>
+                  {pages.map((page) => (
+                    <Paper key={page.pageId} variant="outlined" sx={{ p: 1 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>
+                            {page.title || page.path || page.url}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block" noWrap>
+                            {page.host}{page.path} ({page.status})
+                          </Typography>
+                        </Box>
+                        <Button size="small" variant="outlined" disabled={pageDetailLoading} onClick={() => void openPageDetail(page)}>
+                          상세
+                        </Button>
+                      </Stack>
                     </Paper>
                   ))}
                   {pages.length === 0 ? <Typography variant="caption" color="text.secondary">수집된 페이지가 없습니다.</Typography> : null}
@@ -960,7 +1103,73 @@ export function RagEvidenceSourcePicker({
           ) : null}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDetailSource(null)}>닫기</Button>
+          <Button onClick={closeDetailView}>닫기</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(pageDetail) || pageDetailLoading || Boolean(pageDetailError)} onClose={closePageDetail} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800 }}>수집 페이지 상세</DialogTitle>
+        <DialogContent dividers>
+          {pageDetailLoading ? <CircularProgress size={24} /> : null}
+          {pageDetailError ? <Alert severity="error">{pageDetailError}</Alert> : null}
+          {pageDetail ? (
+            <Stack spacing={2}>
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                  {pageDetail.title || pageDetail.path || pageDetail.url}
+                </Typography>
+                <Link href={pageDetail.canonicalUrl || pageDetail.url} target="_blank" rel="noopener noreferrer">
+                  {pageDetail.canonicalUrl || pageDetail.url}
+                </Link>
+              </Box>
+
+              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                <Chip size="small" label={`페이지 ${pageDetail.active ? "활성" : "제거됨"}`} />
+                <Chip size="small" label={`Revision ${pageDetail.revisionStatus || "없음"}`} />
+                <Chip size="small" label={pageDetail.contentType || "content-type 없음"} />
+                {pageDetail.language ? <Chip size="small" label={`언어 ${pageDetail.language}`} /> : null}
+              </Stack>
+
+              <Stack spacing={0.5}>
+                <Typography variant="body2"><b>Page ID:</b> {pageDetail.pageId}</Typography>
+                <Typography variant="body2"><b>Revision ID:</b> {pageDetail.pageRevisionId || "-"}</Typography>
+                <Typography variant="body2"><b>Run ID:</b> {pageDetail.runId || "-"}</Typography>
+                <Typography variant="body2"><b>Publisher:</b> {pageDetail.publisher || "-"}</Typography>
+                <Typography variant="body2"><b>수집 시각:</b> {formatRunDate(pageDetail.retrievedAt)}</Typography>
+                <Typography variant="body2"><b>원문 수정 시각:</b> {formatRunDate(pageDetail.sourceModifiedAt)}</Typography>
+                <Typography variant="body2"><b>크기:</b> {pageDetail.contentLength ?? "-"}</Typography>
+                <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}><b>Content hash:</b> {pageDetail.contentHash || "-"}</Typography>
+              </Stack>
+
+              {pageDetail.errorCode ? (
+                <Alert severity="error">{mapWebKnowledgeError(pageDetail.errorCode)}</Alert>
+              ) : null}
+
+              <Box>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>본문 미리보기</Typography>
+                <Paper component="pre" variant="outlined" sx={{ p: 1.5, m: 0, maxHeight: 260, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 12 }}>
+                  {pageDetail.contentPreview || "미리보기가 없습니다."}
+                </Paper>
+              </Box>
+
+              {pageDetail.metadataJson ? (
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>메타데이터</Typography>
+                  {pageDetail.metadataTruncated ? (
+                    <Alert severity="info" sx={{ mb: 1 }}>
+                      큰 메타데이터이므로 앞부분만 표시합니다.
+                    </Alert>
+                  ) : null}
+                  <Paper component="pre" variant="outlined" sx={{ p: 1.5, m: 0, maxHeight: 220, overflow: "auto", whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 12 }}>
+                    {pageDetail.metadataJson}
+                  </Paper>
+                </Box>
+              ) : null}
+            </Stack>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closePageDetail}>닫기</Button>
         </DialogActions>
       </Dialog>
     </Stack>

@@ -20,6 +20,7 @@ import {
   FolderOpenOutlined,
   ForumOutlined,
   GroupOutlined,
+  GroupsOutlined,
   Inventory2Outlined,
   LinkOutlined,
   MailOutline,
@@ -85,6 +86,11 @@ export function buildNavSections(): NavSection[] {
       title: "Resource",
       items: [
         { label: "파일", path: "/application/files", icon: <FolderOpenOutlined fontSize="small" /> },
+        {
+          label: "Team",
+          path: "/admin/teams",
+          icon: <GroupsOutlined fontSize="small" />,
+        },
         {
           label: "Workspace",
           path: "/application/workspaces",

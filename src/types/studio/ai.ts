@@ -219,6 +219,13 @@ export interface RagQuestionSuggestionCapabilitiesDto {
   maxSuggestions: number;
 }
 
+export interface TeamRagCapabilitiesDto {
+  enabled: boolean;
+  maxObjectScopes: number;
+  workspaceSubtreeSupported: boolean;
+  cacheIsolationVersion: string;
+}
+
 export interface RagChatCapabilitiesDto {
   answerPolicy: RagAnswerPolicyCapabilitiesDto;
   sourcePolicy: RagSourcePolicyCapabilitiesDto;
@@ -226,6 +233,7 @@ export interface RagChatCapabilitiesDto {
   answerPresentation: RagAnswerPresentationCapabilitiesDto;
   externalRetrieval?: RagExternalRetrievalCapabilitiesDto;
   questionSuggestions?: RagQuestionSuggestionCapabilitiesDto;
+  teamRag?: TeamRagCapabilitiesDto;
 }
 
 export interface IndexedWebCapabilitiesDto {
@@ -378,6 +386,7 @@ export interface WebKnowledgeCrawlRunView {
 }
 
 export interface WebKnowledgePageView {
+  pageId: string;
   url: string;
   canonicalUrl?: string | null;
   host?: string | null;
@@ -389,6 +398,26 @@ export interface WebKnowledgePageView {
   firstSeenAt?: string | null;
   lastSeenAt?: string | null;
   updatedAt?: string | null;
+}
+
+export interface WebKnowledgePageDetailView extends WebKnowledgePageView {
+  workspaceId: number;
+  sourceId: string;
+  pageRevisionId?: string | null;
+  runId?: string | null;
+  revisionStatus?: string | null;
+  publisher?: string | null;
+  language?: string | null;
+  publishedAt?: string | null;
+  sourceModifiedAt?: string | null;
+  retrievedAt?: string | null;
+  contentType?: string | null;
+  contentLength?: number | null;
+  contentHash?: string | null;
+  contentPreview?: string | null;
+  metadataJson?: string | null;
+  metadataTruncated?: boolean;
+  errorCode?: string | null;
 }
 
 export interface ExternalSourceReviewDto {
@@ -485,6 +514,10 @@ export interface RagAnswerOutcomeDto {
 
 export interface ChatRagRequestDto {
   chat: ChatRequestDto;
+  /** Team Chat에서는 필수이며, 일반 RAG 호출에서는 생략합니다. */
+  teamId?: number;
+  /** 지정하면 Team 전체가 아닌 해당 Workspace subtree로 검색 범위를 제한합니다. */
+  workspaceId?: number;
   ragQuery?: string;
   ragTopK?: number; // 선택
   objectType?: string;
@@ -1006,6 +1039,20 @@ export interface RagIndexJobDto {
   embeddingSpaceId?: string;
 }
 export type RagIndexJobListResponseDto = PageDto<RagIndexJobDto>;
+
+export interface RagObjectIndexStatusDto {
+  objectType: string;
+  objectId: string;
+  jobId?: string | null;
+  status: RagIndexJobStatus | "NOT_REQUESTED" | "UNAVAILABLE" | string;
+  currentStep?: RagIndexJobStep | null;
+  progress?: number | null;
+  chunkCount: number;
+  embeddedCount: number;
+  indexedCount: number;
+  warningCount: number;
+  updatedAt?: string | null;
+}
 
 export interface RagIndexJobLogDto {
   logId: string;

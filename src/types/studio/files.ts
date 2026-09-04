@@ -1,4 +1,5 @@
 import type { UserDto } from "./user";
+import type { RagObjectIndexStatusDto } from "./ai";
 
 export interface AttachmentDto {
   attachmentId: number;
@@ -11,6 +12,7 @@ export interface AttachmentDto {
   createdAt: Date | null;
   updatedAt?: Date | null;
   properties?: Record<string, any>;
+  ragIndexStatus?: RagObjectIndexStatusDto | null;
 }
 
 
@@ -28,4 +30,4 @@ export const emptyAttachment = (
   updatedAt: null,
   properties: {},
   ...overrides,
-}); 
+});

@@ -74,11 +74,11 @@ describe("DocumentQaWorkspace", () => {
     const props = renderWorkspace();
 
     expect(screen.getByText("이 문서에서 무엇을 찾을까요?")).toBeDefined();
-    expect(screen.getByText("현재 문서 + 웹 2")).toBeDefined();
+    expect(screen.getByText("추가 자료 2")).toBeDefined();
     expect(screen.getByText("gemini-2.5-flash")).toBeDefined();
     expect(screen.queryByText("설정 내용")).toBeNull();
 
-    fireEvent.click(screen.getByText("현재 문서 + 웹 2"));
+    fireEvent.click(screen.getByText("추가 자료 2"));
     expect(props.onOpenSources).toHaveBeenCalledTimes(1);
 
     fireEvent.click(screen.getByText("gemini-2.5-flash"));

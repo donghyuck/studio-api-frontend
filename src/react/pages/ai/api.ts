@@ -34,6 +34,7 @@ import type {
   RagIndexJobListResponseDto,
   RagIndexJobLogDto,
   RagIndexJobStatus,
+  RagObjectIndexStatusDto,
   SearchRequestDto,
   SearchResponseDto,
   SearchVisualizationRequest,
@@ -60,6 +61,7 @@ import type {
   WebCrawlPolicyRequest,
   WebKnowledgeCrawlRunView,
   WebKnowledgePageView,
+  WebKnowledgePageDetailView,
   WebKnowledgeSitePreviewRequest,
   WebKnowledgeSitePreviewView,
   WebKnowledgeSourceCreateRequest,
@@ -277,6 +279,13 @@ export const reactAiApi = {
     );
   },
 
+  getPage(workspaceId: number, sourceId: string, pageId: string) {
+    return apiRequest<WebKnowledgePageDetailView>(
+      "get",
+      `/api/workspaces/${workspaceId}/ai/rag/web-sources/${encodeURIComponent(sourceId)}/pages/${encodeURIComponent(pageId)}`
+    );
+  },
+
   updateCrawlPolicy(
     workspaceId: number,
     sourceId: string,
@@ -405,6 +414,12 @@ export const reactAiApi = {
     direction?: "asc" | "desc";
   }) {
     return apiRequest<RagIndexJobListResponseDto>("get", `${MGMT_BASE}/rag/jobs`, { params });
+  },
+
+  getRagObjectIndexStatuses(objectType: string, objectIds: string[]) {
+    return apiRequest<RagObjectIndexStatusDto[]>("post", `${MGMT_BASE}/rag/objects/index-statuses`, {
+      data: { objectType, objectIds },
+    });
   },
 
   getRagJob(jobId: string) {
