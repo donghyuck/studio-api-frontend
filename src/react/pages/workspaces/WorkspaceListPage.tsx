@@ -13,6 +13,8 @@ import {
   MenuItem,
   Paper,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -32,14 +34,15 @@ import {
 import { SimpleTreeView } from "@mui/x-tree-view/SimpleTreeView";
 import { TreeItem } from "@mui/x-tree-view/TreeItem";
 import { WorkspaceFilesPanel } from "@/react/pages/workspaces/WorkspaceFilesPanel";
+import { WorkspaceUrlSourcesPanel } from "@/react/pages/workspaces/WorkspaceUrlSourcesPanel";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { useToast } from "@/react/feedback";
-import { reactCompanyApi } from "@/react/pages/companies/api";
+import { reactTeamApi } from "@/react/pages/teams/api";
 import type { WorkspaceRef, WorkspaceTreeNode, WorkspaceVisibility } from "@/types/studio/workspace";
-import type { CompanyDto } from "@/types/studio/company";
+import type { TeamDto } from "@/types/studio/team";
 import { reactWorkspaceApi } from "@/react/pages/workspaces/api";
 import { resolveAxiosError } from "@/utils/helpers";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
@@ -59,67 +62,76 @@ function readArchivedFilter(params: URLSearchParams) {
   return archived === "all" ? "" : "false";
 }
 
-function readCompanyFilter(params: URLSearchParams) {
-  const companyId = params.get("companyId");
-  return companyId && /^\d+$/.test(companyId) ? companyId : "";
+function readTeamFilter(params: URLSearchParams) {
+  const teamId = params.get("teamId");
+  return teamId && /^\d+$/.test(teamId) ? teamId : "";
 }
 
-function companyLabel(company?: CompanyDto) {
-  return company ? company.displayName || company.name || `Company #${company.companyId}` : "전체";
+function teamLabel(team?: TeamDto) {
+  return team ? team.name || `Team #${team.teamId}` : "전체";
 }
 
-function toWorkspaceFilter(keyword: string, archived: string, companyId: string) {
+function toWorkspaceFilter(keyword: string, archived: string, teamId: string) {
   return {
     ...(keyword.trim() ? { q: keyword.trim() } : {}),
     ...(archived ? { archived: archived === "true" } : {}),
-    ...(companyId ? { companyId: Number(companyId) } : {}),
+    ...(teamId ? { teamId: Number(teamId) } : {}),
   };
 }
 
 function WorkspaceCreateDialog({
   open,
-  companies,
-  initialCompanyId,
+  teams,
+  initialTeamId,
+  teamScope,
   onClose,
   onCreated,
 }: {
   open: boolean;
-  companies: CompanyDto[];
-  initialCompanyId?: string;
+  teams: TeamDto[];
+  initialTeamId?: string;
+  teamScope?: number;
   onClose: () => void;
   onCreated: () => void;
 }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState<{ companyId: string; name: string; slug: string; visibility: WorkspaceVisibility }>({
-    companyId: "",
+  const [form, setForm] = useState<{ teamId: string; name: string; slug: string; visibility: WorkspaceVisibility }>({
+    teamId: "",
     name: "",
     slug: "",
     visibility: "PRIVATE",
   });
   const slugRegex = /^[a-z0-9][a-z0-9-]*$/;
-  const valid = form.companyId && form.name.trim() && slugRegex.test(form.slug);
+  const valid = form.teamId && form.name.trim() && slugRegex.test(form.slug);
 
   useEffect(() => {
     if (!open) return;
-    const companyId = initialCompanyId && companies.some((company) => String(company.companyId) === initialCompanyId)
-      ? initialCompanyId
-      : "";
-    setForm({ companyId, name: "", slug: "", visibility: "PRIVATE" });
-  }, [companies, initialCompanyId, open]);
+    const teamId = teamScope
+      ? String(teamScope)
+      : initialTeamId && teams.some((team) => String(team.teamId) === initialTeamId)
+        ? initialTeamId
+        : "";
+    setForm({ teamId, name: "", slug: "", visibility: "PRIVATE" });
+  }, [teams, initialTeamId, open, teamScope]);
 
   async function handleSubmit() {
     if (!valid) return;
     setSaving(true);
     try {
-      await reactWorkspaceApi.createRoot({
-        companyId: Number(form.companyId),
+      const payload = {
+        teamId: Number(form.teamId),
         name: form.name.trim(),
         slug: form.slug.trim(),
         visibility: form.visibility,
-      });
+      };
+      if (teamScope) {
+        await reactWorkspaceApi.createTeamRoot(teamScope, payload);
+      } else {
+        await reactWorkspaceApi.createRoot(payload);
+      }
       toast.success("작업공간이 생성되었습니다.");
-      setForm({ companyId: "", name: "", slug: "", visibility: "PRIVATE" });
+      setForm({ teamId: "", name: "", slug: "", visibility: "PRIVATE" });
       onCreated();
       onClose();
     } catch (err) {
@@ -134,21 +146,36 @@ function WorkspaceCreateDialog({
       <DialogTitle>Root 작업공간 생성</DialogTitle>
       <DialogContent>
         <Stack spacing={1.5} sx={{ pt: 1 }}>
-          <TextField
-            label="Company"
-            size="small"
-            select
-            value={form.companyId}
-            onChange={(event) => setForm((current) => ({ ...current, companyId: event.target.value }))}
-            helperText="Root 작업공간은 Company를 직접 선택합니다."
-            fullWidth
-          >
-            {companies.map((company) => (
-              <MenuItem key={company.companyId} value={String(company.companyId)}>
-                {companyLabel(company)}
-              </MenuItem>
-            ))}
-          </TextField>
+          {teamScope ? (
+            <TextField
+              label="Team"
+              size="small"
+              value={
+                teams.some((team) => team.teamId === teamScope)
+                  ? teamLabel(teams.find((team) => team.teamId === teamScope))
+                  : `Team #${teamScope}`
+              }
+              helperText="현재 Team에 Root 작업공간을 추가합니다."
+              disabled
+              fullWidth
+            />
+          ) : (
+            <TextField
+              label="Team"
+              size="small"
+              select
+              value={form.teamId}
+              onChange={(event) => setForm((current) => ({ ...current, teamId: event.target.value }))}
+              helperText="Root 작업공간은 Team에 배정합니다."
+              fullWidth
+            >
+              {teams.map((team) => (
+                <MenuItem key={team.teamId} value={String(team.teamId)}>
+                  {teamLabel(team)}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
           <TextField
             label="이름"
             size="small"
@@ -197,25 +224,32 @@ function WorkspaceCreateDialog({
   );
 }
 
-export function WorkspaceListPage() {
+export interface WorkspaceListPageProps {
+  teamId?: number;
+  embedded?: boolean;
+}
+
+export function WorkspaceListPage({ teamId: fixedTeamId, embedded = false }: WorkspaceListPageProps = {}) {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialKeyword = searchParams.get("q") ?? "";
   const initialArchived = readArchivedFilter(searchParams);
-  const initialCompanyId = readCompanyFilter(searchParams);
+  const initialTeamId = fixedTeamId ? String(fixedTeamId) : readTeamFilter(searchParams);
   const gridRef = useRef<PageableGridContentHandle<WorkspaceRef>>(null);
   const dataSource = useMemo(() => {
-    const nextDataSource = new ReactPageDataSource<WorkspaceRef>("/api/mgmt/workspaces");
-    nextDataSource.applyFilter(toWorkspaceFilter(initialKeyword, initialArchived, initialCompanyId));
+    const nextDataSource = new ReactPageDataSource<WorkspaceRef>(
+      fixedTeamId ? `/api/teams/${fixedTeamId}/workspaces` : "/api/mgmt/workspaces",
+    );
+    nextDataSource.applyFilter(toWorkspaceFilter(initialKeyword, initialArchived, initialTeamId));
     return nextDataSource;
-  }, []);
+  }, [fixedTeamId]);
   const [keywordInput, setKeywordInput] = useState(initialKeyword);
   const [archivedInput, setArchivedInput] = useState(initialArchived);
-  const [companyInput, setCompanyInput] = useState(initialCompanyId);
-  const [companies, setCompanies] = useState<CompanyDto[]>([]);
+  const [teamInput, setTeamInput] = useState(initialTeamId);
+  const [teams, setTeams] = useState<TeamDto[]>([]);
   const [statusAnchorEl, setStatusAnchorEl] = useState<HTMLElement | null>(null);
-  const [companyAnchorEl, setCompanyAnchorEl] = useState<HTMLElement | null>(null);
+  const [teamAnchorEl, setTeamAnchorEl] = useState<HTMLElement | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   const columnDefs = useMemo<ColDef<WorkspaceRef>[]>(
@@ -232,19 +266,19 @@ export function WorkspaceListPage() {
         valueFormatter: (params) => (params.value == null ? "-" : String(params.value)),
       },
       {
-        field: "companyId",
-        headerName: "Company",
+        field: "teamId",
+        headerName: "Team",
         width: 110,
         minWidth: 110,
         filter: false,
         sortable: true,
         valueFormatter: (params) => {
-          const company = companies.find((item) => item.companyId === params.value);
-          return company ? companyLabel(company) : params.value ? `#${params.value}` : "-";
+          const team = teams.find((item) => item.teamId === params.value);
+          return team ? teamLabel(team) : params.value ? `#${params.value}` : "-";
         },
         tooltipValueGetter: (params) => {
-          const company = companies.find((item) => item.companyId === params.value);
-          return company ? companyLabel(company) : params.value ? `#${params.value}` : "-";
+          const team = teams.find((item) => item.teamId === params.value);
+          return team ? teamLabel(team) : params.value ? `#${params.value}` : "-";
         },
       },
       {
@@ -343,30 +377,38 @@ export function WorkspaceListPage() {
         },
       },
     ],
-    [companies, location.pathname, location.search, navigate]
+    [teams, location.pathname, location.search, navigate]
   );
 
   useEffect(() => {
-    reactCompanyApi
-      .list({ page: 0, size: 200, sort: "displayName,asc" })
-      .then((response) => setCompanies(response.content ?? []))
-      .catch(() => setCompanies([]));
+    reactTeamApi
+      .list({ page: 0, size: 200, sort: "name,asc" })
+      .then((response) => setTeams(response.content ?? []))
+      .catch(() => setTeams([]));
   }, []);
+
+  useEffect(() => {
+    if (!searchParams.has("companyId")) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("companyId");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const nextKeyword = params.get("q") ?? "";
     const nextArchived = readArchivedFilter(params);
-    const nextCompanyId = readCompanyFilter(params);
+    const nextTeamId = fixedTeamId ? String(fixedTeamId) : readTeamFilter(params);
 
     setKeywordInput(nextKeyword);
     setArchivedInput(nextArchived);
-    setCompanyInput(nextCompanyId);
-    dataSource.applyFilter(toWorkspaceFilter(nextKeyword, nextArchived, nextCompanyId));
+    setTeamInput(nextTeamId);
+    dataSource.applyFilter(toWorkspaceFilter(nextKeyword, nextArchived, nextTeamId));
     gridRef.current?.refresh();
-  }, [dataSource, location.search]);
+  }, [dataSource, fixedTeamId, location.search]);
 
-  function applyFilters(searchValue = keywordInput, statusValue = archivedInput, companyValue = companyInput) {
+  function applyFilters(searchValue = keywordInput, statusValue = archivedInput, teamValue = teamInput) {
+    const resolvedTeamValue = fixedTeamId ? String(fixedTeamId) : teamValue;
     const trimmedSearch = searchValue.trim();
     const nextParams = new URLSearchParams(searchParams);
 
@@ -382,14 +424,15 @@ export function WorkspaceListPage() {
       nextParams.set("archived", "all");
     }
 
-    if (companyValue) {
-      nextParams.set("companyId", companyValue);
+    if (resolvedTeamValue) {
+      nextParams.set("teamId", resolvedTeamValue);
     } else {
-      nextParams.delete("companyId");
+      nextParams.delete("teamId");
     }
+    nextParams.delete("companyId");
 
     if (nextParams.toString() === searchParams.toString()) {
-      dataSource.applyFilter(toWorkspaceFilter(trimmedSearch, statusValue, companyValue));
+      dataSource.applyFilter(toWorkspaceFilter(trimmedSearch, statusValue, resolvedTeamValue));
       gridRef.current?.refresh();
       return;
     }
@@ -404,20 +447,22 @@ export function WorkspaceListPage() {
   const loadTreeData = useCallback(async () => {
     setTreeLoading(true);
     try {
-      const res = await reactWorkspaceApi.list({
+      const params = {
         page: 0,
         size: 1000,
         q: keywordInput.trim() || undefined,
         archived: archivedInput === "" ? undefined : archivedInput === "true",
-        companyId: companyInput ? Number(companyInput) : undefined,
-      });
+      };
+      const res = fixedTeamId
+        ? await reactWorkspaceApi.listForTeam(fixedTeamId, params)
+        : await reactWorkspaceApi.list({ ...params, teamId: teamInput ? Number(teamInput) : undefined });
       setTreeItems(res.content ?? []);
     } catch {
       setTreeItems([]);
     } finally {
       setTreeLoading(false);
     }
-  }, [keywordInput, archivedInput, companyInput]);
+  }, [keywordInput, archivedInput, teamInput, fixedTeamId]);
 
   useEffect(() => {
     if (viewMode === "tree") {
@@ -426,6 +471,7 @@ export function WorkspaceListPage() {
   }, [viewMode, loadTreeData]);
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<number | null>(null);
+  const [workspaceContentTab, setWorkspaceContentTab] = useState<"files" | "urls">("files");
 
   const selectedWorkspace = useMemo(() => {
     return treeItems.find((item) => item.id === selectedWorkspaceId) ?? null;
@@ -489,7 +535,7 @@ export function WorkspaceListPage() {
   function renderWorkspaceTreeNode(node: WorkspaceTreeNode) {
     const item = node.workspace;
     const hasChildren = node.children.length > 0;
-    const company = companies.find((c) => c.companyId === item.companyId);
+    const team = teams.find((candidate) => candidate.teamId === item.teamId);
     const isDraggingMe = draggedWorkspace?.id === item.id;
     const isDropTargetMe = dropTargetId === item.id;
 
@@ -601,10 +647,10 @@ export function WorkspaceListPage() {
               <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace", fontSize: 11 }}>
                 ({item.slug})
               </Typography>
-              {company ? (
+              {team ? (
                 <Chip
                   size="small"
-                  label={companyLabel(company)}
+                  label={teamLabel(team)}
                   sx={{ height: 18, fontSize: 10, bgcolor: "action.hover" }}
                 />
               ) : null}
@@ -680,14 +726,14 @@ export function WorkspaceListPage() {
   }
 
   const statusLabel = archivedInput === "true" ? "비활성" : archivedInput === "false" ? "활성" : "전체";
-  const selectedCompany = companies.find((company) => String(company.companyId) === companyInput);
-  const selectedCompanyLabel = companyInput ? (selectedCompany ? companyLabel(selectedCompany) : `#${companyInput}`) : "전체";
+  const selectedTeam = teams.find((team) => String(team.teamId) === teamInput);
+  const selectedTeamLabel = teamInput ? (selectedTeam ? teamLabel(selectedTeam) : `#${teamInput}`) : "전체";
   return (
     <Stack spacing={0.5}>
       <PageToolbar
         hasGrid={viewMode === "table"}
-        breadcrumbs={["애플리케이션", "작업공간"]}
-        label="작업공간 tree와 멤버 권한을 관리합니다."
+        breadcrumbs={embedded ? ["Team", "작업공간"] : ["애플리케이션", "작업공간"]}
+        label={embedded ? "이 Team의 작업공간과 파일을 관리합니다." : "Team별 작업공간 tree와 멤버 권한을 관리합니다."}
         searchPlaceholder="이름, slug, path 검색"
         searchValue={keywordInput}
         onSearchValueChange={setKeywordInput}
@@ -762,30 +808,32 @@ export function WorkspaceListPage() {
             >
               상태: {statusLabel}
             </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={(event) => setCompanyAnchorEl(event.currentTarget)}
-              sx={{
-                height: 32,
-                minWidth: 112,
-                px: 1.5,
-                whiteSpace: "nowrap",
-                color: "text.secondary",
-                borderColor: "divider",
-                borderRadius: "6px",
-                textTransform: "none",
-                fontSize: 12.5,
-                fontWeight: 500,
-                bgcolor: "background.paper",
-                "&:hover": {
-                  bgcolor: "action.hover",
-                  borderColor: "text.disabled",
-                },
-              }}
-            >
-              Company: {selectedCompanyLabel}
-            </Button>
+            {!fixedTeamId ? (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={(event) => setTeamAnchorEl(event.currentTarget)}
+                sx={{
+                  height: 32,
+                  minWidth: 112,
+                  px: 1.5,
+                  whiteSpace: "nowrap",
+                  color: "text.secondary",
+                  borderColor: "divider",
+                  borderRadius: "6px",
+                  textTransform: "none",
+                  fontSize: 12.5,
+                  fontWeight: 500,
+                  bgcolor: "background.paper",
+                  "&:hover": {
+                    bgcolor: "action.hover",
+                    borderColor: "text.disabled",
+                  },
+                }}
+              >
+                Team: {selectedTeamLabel}
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -875,7 +923,7 @@ export function WorkspaceListPage() {
                 <Stack direction="row" spacing={1} alignItems="center">
                   <InsertDriveFileOutlined color="primary" />
                   <Typography variant="h6" sx={{ fontWeight: 700, fontSize: 16 }}>
-                    [{selectedWorkspace.name}] 소속 파일 목록
+                    [{selectedWorkspace.name}] 자료 관리
                   </Typography>
                   <Chip size="small" label={selectedWorkspace.slug} sx={{ height: 20, fontSize: 11 }} />
                   <Chip size="small" variant="outlined" label={`ID: #${selectedWorkspace.id}`} sx={{ height: 20, fontSize: 10.5 }} />
@@ -895,12 +943,29 @@ export function WorkspaceListPage() {
                 </Button>
               </Stack>
 
-              <WorkspaceFilesPanel workspaceId={selectedWorkspace.id} />
+              <Tabs
+                value={workspaceContentTab}
+                onChange={(_, value: "files" | "urls") => setWorkspaceContentTab(value)}
+                sx={{ minHeight: 40, borderBottom: 1, borderColor: "divider" }}
+              >
+                <Tab value="files" label="파일" sx={{ minHeight: 40 }} />
+                <Tab value="urls" label="외부 URL" sx={{ minHeight: 40 }} />
+              </Tabs>
+
+              {workspaceContentTab === "files" ? (
+                <WorkspaceFilesPanel workspaceId={selectedWorkspace.id} archived={selectedWorkspace.archived} />
+              ) : (
+                <WorkspaceUrlSourcesPanel
+                  key={selectedWorkspace.id}
+                  workspaceId={selectedWorkspace.id}
+                  disabled={selectedWorkspace.archived}
+                />
+              )}
             </Stack>
           ) : (
             <Box sx={{ py: 4, textAlign: "center" }}>
               <Typography color="text.secondary" variant="body2">
-                💡 상단 트리에서 작업공간을 선택하면 하단에 소속 파일 목록이 표시됩니다.
+                💡 상단 트리에서 작업공간을 선택하면 하단에서 파일과 외부 URL을 관리할 수 있습니다.
               </Typography>
             </Box>
           )}
@@ -908,10 +973,11 @@ export function WorkspaceListPage() {
       )}
       <WorkspaceCreateDialog
         open={createOpen}
-        companies={companies}
-        initialCompanyId={companyInput}
+        teams={teams}
+        initialTeamId={teamInput}
+        teamScope={fixedTeamId}
         onClose={() => setCreateOpen(false)}
-        onCreated={() => gridRef.current?.refresh()}
+        onCreated={handleRefresh}
       />
       <Menu
         anchorEl={statusAnchorEl}
@@ -937,32 +1003,32 @@ export function WorkspaceListPage() {
         ))}
       </Menu>
       <Menu
-        anchorEl={companyAnchorEl}
-        open={Boolean(companyAnchorEl)}
-        onClose={() => setCompanyAnchorEl(null)}
+        anchorEl={teamAnchorEl}
+        open={Boolean(teamAnchorEl)}
+        onClose={() => setTeamAnchorEl(null)}
       >
         <MenuItem
-          selected={!companyInput}
+          selected={!teamInput}
           onClick={() => {
-            setCompanyInput("");
-            setCompanyAnchorEl(null);
+            setTeamInput("");
+            setTeamAnchorEl(null);
             applyFilters(keywordInput, archivedInput, "");
           }}
         >
           전체
         </MenuItem>
-        {companies.map((company) => (
+        {teams.map((team) => (
           <MenuItem
-            key={company.companyId}
-            selected={companyInput === String(company.companyId)}
+            key={team.teamId}
+            selected={teamInput === String(team.teamId)}
             onClick={() => {
-              const value = String(company.companyId);
-              setCompanyInput(value);
-              setCompanyAnchorEl(null);
+              const value = String(team.teamId);
+              setTeamInput(value);
+              setTeamAnchorEl(null);
               applyFilters(keywordInput, archivedInput, value);
             }}
           >
-            {companyLabel(company)}
+            {teamLabel(team)}
           </MenuItem>
         ))}
       </Menu>

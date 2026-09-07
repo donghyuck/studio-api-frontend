@@ -7,7 +7,6 @@ import {
 import {
   AddOutlined,
   ArrowUpwardOutlined,
-  DescriptionOutlined,
   TuneOutlined,
 } from "@mui/icons-material";
 import {
@@ -225,12 +224,11 @@ export function DocumentQaWorkspace({
           />
 
           <Stack direction="row" spacing={0.75} alignItems="center">
-            <Tooltip title={fileName}>
+            <Tooltip title={`현재 문서(${fileName})는 기본 근거로 포함됩니다. 같은 Workspace의 추가 자료를 선택합니다.`}>
               <Button
                 size="small"
                 color="inherit"
-                startIcon={<DescriptionOutlined fontSize="small" />}
-                endIcon={<AddOutlined sx={{ fontSize: 15 }} />}
+                startIcon={<AddOutlined fontSize="small" />}
                 onClick={onOpenSources}
                 disabled={sending}
                 sx={{
@@ -241,11 +239,10 @@ export function DocumentQaWorkspace({
                   color: "text.secondary",
                   textTransform: "none",
                   "& .MuiButton-startIcon": { mr: 0.5 },
-                  "& .MuiButton-endIcon": { ml: 0.5 },
                 }}
               >
                 <Typography component="span" variant="caption" noWrap sx={{ fontWeight: 700 }}>
-                  현재 문서{selectedWebSourcesCount > 0 ? ` + 웹 ${selectedWebSourcesCount}` : ""}
+                  추가 자료{selectedWebSourcesCount > 0 ? ` ${selectedWebSourcesCount}` : ""}
                 </Typography>
               </Button>
             </Tooltip>

@@ -27,6 +27,7 @@ type Props = {
   capabilitiesLoading?: boolean;
   capabilitiesError?: string | null;
   disabled?: boolean;
+  selectionOnly?: boolean;
   onChange: (value: IndexedWebSourceRefDto[]) => void;
 };
 
@@ -43,6 +44,7 @@ export function RagEvidenceSourceDrawer({
   capabilitiesLoading = false,
   capabilitiesError = null,
   disabled = false,
+  selectionOnly = false,
   onChange,
 }: Props) {
   const isCapabilityDisabled = capabilities && capabilities.enabled === false;
@@ -66,7 +68,7 @@ export function RagEvidenceSourceDrawer({
         {/* Header */}
         <Stack direction="row" alignItems="center" justifyContent="space-between">
           <Typography variant="h6" sx={{ fontWeight: 800 }}>
-            참고자료 관리
+            {selectionOnly ? "추가 자료 선택" : "참고자료 관리"}
           </Typography>
           <IconButton size="small" onClick={onClose} aria-label="닫기">
             <CloseOutlined fontSize="small" />
@@ -89,7 +91,13 @@ export function RagEvidenceSourceDrawer({
         ) : null}
 
         {/* Workspace Selector */}
-        {workspaces && workspaces.length > 0 && onWorkspaceChange ? (
+        {selectionOnly ? (
+          <Alert severity="info">
+            URL 등록·수집·수정은 Team의 Workspace `외부 URL` 탭에서 관리합니다.
+          </Alert>
+        ) : null}
+
+        {!selectionOnly && workspaces && workspaces.length > 0 && onWorkspaceChange ? (
           <TextField
             select
             label="웹 자료 workspace"
@@ -111,7 +119,11 @@ export function RagEvidenceSourceDrawer({
         ) : null}
 
         {!workspaceId ? (
-          <Alert severity="info">자료를 저장할 workspace를 선택하세요</Alert>
+          <Alert severity="info">
+            {selectionOnly
+              ? "현재 문서가 속한 Workspace를 확인할 수 없어 추가 자료를 선택할 수 없습니다."
+              : "자료를 저장할 workspace를 선택하세요"}
+          </Alert>
         ) : null}
 
         {/* Picker */}
@@ -123,6 +135,7 @@ export function RagEvidenceSourceDrawer({
             value={value}
             maxSelectedSources={maxSelectedSources ?? capabilities?.maxSelectedSources ?? 10}
             disabled={disabled}
+            selectionOnly={selectionOnly}
             onChange={onChange}
           />
         ) : null}

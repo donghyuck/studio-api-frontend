@@ -4,6 +4,7 @@ export type WorkspaceRole = "VIEWER" | "EDITOR" | "ADMIN" | "OWNER";
 
 export interface WorkspaceRef {
   id: number;
+  teamId?: number | null;
   companyId?: number | null;
   parentId?: number | null;
   rootId?: number | null;
@@ -40,6 +41,7 @@ export interface WorkspacePermissionSummary {
 }
 
 export interface WorkspaceCreateRequest {
+  teamId?: number | null;
   companyId?: number | null;
   name: string;
   slug: string;

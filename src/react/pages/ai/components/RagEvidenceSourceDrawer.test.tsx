@@ -33,6 +33,25 @@ describe("RagEvidenceSourceDrawer", () => {
     expect(screen.getByText("참고자료 관리")).toBeDefined();
   });
 
+  it("uses a fixed Workspace selection-only flow for document Q&A", () => {
+    render(
+      <RagEvidenceSourceDrawer
+        open={true}
+        onClose={vi.fn()}
+        workspaceId={1}
+        embeddingDeploymentId="humanities-text-v1"
+        capabilities={{ enabled: true, maxSelectedSources: 10, supportedSchemes: ["https"], maxUrlLength: 2048 }}
+        value={[]}
+        selectionOnly
+        onChange={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("추가 자료 선택")).toBeDefined();
+    expect(screen.getByText(/URL 등록·수집·수정은 Team의 Workspace/)).toBeDefined();
+    expect(screen.getByText("Workspace URL 자료")).toBeDefined();
+  });
+
   it("displays status notices for capability loading, disabled, missing workspace", () => {
     render(
       <RagEvidenceSourceDrawer

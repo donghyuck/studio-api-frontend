@@ -1,11 +1,11 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, Avatar, Box, Button, CircularProgress, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
+import { Alert, Avatar, Box, Button, Chip, CircularProgress, IconButton, Stack, TextField, Tooltip, Typography } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import InsertDriveFileOutlinedIcon from "@mui/icons-material/InsertDriveFileOutlined";
 import LinkOutlinedIcon from "@mui/icons-material/LinkOutlined";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
-import type { ColDef, ICellRendererParams } from "ag-grid-community";
+import type { ColDef, ICellRendererParams, SortModelItem } from "ag-grid-community";
 import type { SelectionChangedEvent } from "ag-grid-community";
 import { useNavigate } from "react-router-dom";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
@@ -13,11 +13,13 @@ import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { reactFilesApi } from "@/react/pages/files/api";
+import { reactAiApi } from "@/react/pages/ai/api";
 import { FileUploadDialog } from "@/react/pages/files/FileUploadDialog";
 import { FileDetailDialog } from "@/react/pages/files/FileDetailDialog";
 import { filesQueryKeys } from "@/react/pages/files/queryKeys";
 import { useToast } from "@/react/feedback";
 import type { AttachmentDto } from "@/types/studio/files";
+import type { RagObjectIndexStatusDto } from "@/types/studio/ai";
 import { API_BASE_URL } from "@/config/backend";
 import { ObjectTypeSelect } from "@/react/components/objecttype/ObjectTypeSelect";
 import { resolveAxiosError } from "@/utils/helpers";
@@ -35,10 +37,105 @@ async function copyTextToClipboard(value: string) {
   await navigator.clipboard.writeText(value);
 }
 
-class FilesDataSource extends ReactPageDataSource<AttachmentDto> {
-  constructor() {
+export class FilesDataSource extends ReactPageDataSource<AttachmentDto> {
+  constructor(
+    private readonly onActiveStatusChange: (active: boolean) => void,
+    private readonly onStatusError: (message: string | null) => void,
+  ) {
     super("/api/mgmt/files");
   }
+
+  async fetchForAgGrid(params: {
+    startRow: number;
+    endRow: number;
+    sortModel?: SortModelItem[];
+    filterModel?: Record<string, unknown>;
+  }) {
+    const page = await super.fetchForAgGrid(params);
+    const objectIds = page.rows.map((file) => String(file.attachmentId));
+    if (objectIds.length === 0) {
+      this.onActiveStatusChange(false);
+      this.onStatusError(null);
+      return page;
+    }
+
+    try {
+      const statuses = await reactAiApi.getRagObjectIndexStatuses("attachment", objectIds);
+      const statusByObjectId = new Map(statuses.map((status) => [status.objectId, status]));
+      this.onActiveStatusChange(statuses.some((status) => status.status === "PENDING" || status.status === "RUNNING"));
+      this.onStatusError(null);
+      return {
+        ...page,
+        rows: page.rows.map((file) => ({
+          ...file,
+          ragIndexStatus: statusByObjectId.get(String(file.attachmentId)) ?? null,
+        })),
+      };
+    } catch (error) {
+      this.onActiveStatusChange(false);
+      this.onStatusError(resolveAxiosError(error) || "RAG 진행 상태를 불러오지 못했습니다.");
+      return {
+        ...page,
+        rows: page.rows.map((file) => ({
+          ...file,
+          ragIndexStatus: unavailableRagStatus(file.attachmentId),
+        })),
+      };
+    }
+  }
+}
+
+function unavailableRagStatus(attachmentId: number): RagObjectIndexStatusDto {
+  return {
+    objectType: "attachment",
+    objectId: String(attachmentId),
+    status: "UNAVAILABLE",
+    chunkCount: 0,
+    embeddedCount: 0,
+    indexedCount: 0,
+    warningCount: 0,
+  };
+}
+
+export function ragStatusView(status: string | null | undefined, progress?: number | null) {
+  switch (status) {
+    case "PENDING": return { label: "색인 대기", color: "info" as const };
+    case "RUNNING": return {
+      label: progress == null ? "색인 중" : `색인 중 ${Math.round(progress * 100)}%`,
+      color: "info" as const,
+    };
+    case "SUCCEEDED": return { label: "색인 완료", color: "success" as const };
+    case "WARNING": return { label: "색인 완료 · 경고", color: "warning" as const };
+    case "FAILED": return { label: "색인 실패", color: "error" as const };
+    case "CANCELLED": return { label: "색인 취소", color: "default" as const };
+    case "NOT_REQUESTED": return { label: "미진행", color: "default" as const };
+    default: return { label: "확인 불가", color: "default" as const };
+  }
+}
+
+function RagIndexStatusCell({ status }: { status?: RagObjectIndexStatusDto | null }) {
+  const view = ragStatusView(status?.status, status?.progress);
+  const detail = status?.status === "NOT_REQUESTED"
+    ? "RAG 색인이 아직 요청되지 않았습니다."
+    : status?.status === "UNAVAILABLE" || !status
+      ? "RAG 진행 상태를 확인할 수 없습니다."
+      : [
+          status.currentStep ? `단계: ${status.currentStep}` : null,
+          `청크 ${status.indexedCount}/${status.chunkCount}`,
+          status.warningCount > 0 ? `경고 ${status.warningCount}` : null,
+        ].filter(Boolean).join(" · ");
+  return (
+    <Tooltip title={detail}>
+      <Chip
+        size="small"
+        color={view.color}
+        variant={status?.status === "SUCCEEDED" ? "filled" : "outlined"}
+        label={view.label}
+        icon={status?.status === "RUNNING" ? <CircularProgress size={13} color="inherit" /> : undefined}
+        sx={{ height: 24 }}
+      />
+    </Tooltip>
+  );
 }
 
 type ThumbnailCacheEntry = {
@@ -359,7 +456,6 @@ export function FilesPage() {
   const toast = useToast();
   const queryClient = useQueryClient();
   const gridRef = useRef<PageableGridContentHandle<AttachmentDto>>(null);
-  const dataSource = useMemo(() => new FilesDataSource(), []);
   const [keyword, setKeyword] = useState("");
   const [objectType, setObjectType] = useState("");
   const [objectId, setObjectId] = useState("");
@@ -369,7 +465,19 @@ export function FilesPage() {
   const [issuingDownloadLinkIds, setIssuingDownloadLinkIds] = useState<number[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [displayedCount, setDisplayedCount] = useState(0);
+  const [hasActiveRagJobs, setHasActiveRagJobs] = useState(false);
+  const [ragStatusError, setRagStatusError] = useState<string | null>(null);
+  const dataSource = useMemo(
+    () => new FilesDataSource(setHasActiveRagJobs, setRagStatusError),
+    [],
+  );
   const selectedCount = selectedIds.length;
+
+  useEffect(() => {
+    if (!hasActiveRagJobs) return;
+    const timer = window.setInterval(() => gridRef.current?.refresh(), 3_000);
+    return () => window.clearInterval(timer);
+  }, [hasActiveRagJobs]);
 
   async function handleIssueDownloadLink(attachmentId: number) {
     setActionError(null);
@@ -480,6 +588,17 @@ export function FilesPage() {
               onOpen={(attachmentId) => setSelectedAttachmentId(attachmentId)}
             />
           ) : null,
+      },
+      {
+        field: "ragIndexStatus",
+        headerName: "RAG 진행",
+        width: 128,
+        minWidth: 128,
+        sortable: false,
+        filter: false,
+        cellRenderer: (params: ICellRendererParams<AttachmentDto>) => (
+          <RagIndexStatusCell status={params.data?.ragIndexStatus} />
+        ),
       },
       {
         field: "size",
@@ -702,6 +821,11 @@ export function FilesPage() {
         </Stack>
 
         {actionError ? <Alert severity="error">{actionError}</Alert> : null}
+        {ragStatusError ? (
+          <Alert severity="warning">
+            {ragStatusError} 파일 목록은 정상적으로 사용할 수 있습니다.
+          </Alert>
+        ) : null}
 
         <PageableGridContent<AttachmentDto>
           ref={gridRef}

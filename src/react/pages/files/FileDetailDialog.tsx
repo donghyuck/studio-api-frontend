@@ -109,8 +109,6 @@ import { RagAnswerPresentationSelector } from "../ai/components/RagAnswerPresent
 import { RagSourceScopeSelector } from "../ai/components/RagSourceScopeSelector";
 import { RagEvidenceSourceDrawer } from "../ai/components/RagEvidenceSourceDrawer";
 import { toIndexedWebSourcePayload } from "../ai/utils/evidenceSource";
-import { reactWorkspaceApi } from "@/react/pages/workspaces/api";
-import type { WorkspaceRef } from "@/types/studio/workspace";
 import type { ChatMessage } from "../ai/components/chatTypes";
 import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { resolveAxiosError } from "@/utils/helpers";
@@ -799,8 +797,6 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
   const [qaQuestionSuggestionsLoading, setQaQuestionSuggestionsLoading] = useState(false);
   const [qaQuestionSuggestionsError, setQaQuestionSuggestionsError] = useState<string | null>(null);
   const qaQuestionSuggestionsRequestRef = useRef(0);
-  const [workspaces, setWorkspaces] = useState<WorkspaceRef[]>([]);
-  const [userSelectedWorkspaceId, setUserSelectedWorkspaceId] = useState<number | null>(null);
   const [evidenceDrawerOpen, setEvidenceDrawerOpen] = useState(false);
   const canManage = roles.includes("ROLE_ADMIN") || roles.includes("ADMIN") || roles.includes("features:document-convert/manage");
 
@@ -815,8 +811,8 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
         }
       }
     }
-    return userSelectedWorkspaceId;
-  }, [workspaceId, file, userSelectedWorkspaceId]);
+    return null;
+  }, [workspaceId, file]);
 
   function clearThumbnail() {
     setThumbnailAvailable(false);
@@ -917,15 +913,6 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
       }
     }
   }, [file?.attachmentId]);
-
-  useEffect(() => {
-    if (open) {
-      reactWorkspaceApi
-        .list({ archived: false, page: 0, size: 100, sort: "name,asc" })
-        .then((res) => setWorkspaces(res.content ?? []))
-        .catch(() => {});
-    }
-  }, [open]);
 
   useEffect(() => {
     if (open && attachmentId) {
@@ -4626,12 +4613,6 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                 open={evidenceDrawerOpen}
                 onClose={() => setEvidenceDrawerOpen(false)}
                 workspaceId={effectiveWorkspaceId}
-                workspaces={workspaces}
-                onWorkspaceChange={(nextWorkspaceId) => {
-                  setUserSelectedWorkspaceId(nextWorkspaceId);
-                  setQaIndexedWebSources([]);
-                  setQaError(null);
-                }}
                 embeddingDeploymentId={
                   latestRagJob?.embeddingDeploymentId
                   || (ragMetadata as any)?.embeddingDeploymentId
@@ -4643,6 +4624,7 @@ export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: P
                 capabilitiesLoading={qaIndexedWebCapabilitiesLoading}
                 capabilitiesError={qaIndexedWebCapabilitiesError}
                 disabled={qaSending}
+                selectionOnly
                 onChange={(sources) => {
                   if (JSON.stringify(sources) === JSON.stringify(qaIndexedWebSources)) return;
                   setQaIndexedWebSources(sources);
