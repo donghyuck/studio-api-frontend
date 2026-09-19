@@ -26,6 +26,7 @@ import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { useAuthStore } from "@/react/auth/store";
 import { useConfirm, useToast } from "@/react/feedback";
 import { reactAiApi } from "@/react/pages/ai/api";
+import { useServerFeatures } from "@/react/features/platform/ServerFeaturesProvider";
 import { reactTeamApi } from "@/react/pages/teams/api";
 import { TeamChatPanel } from "@/react/pages/teams/TeamChatPanel";
 import { TeamJoinPanel } from "@/react/pages/teams/TeamJoinPanel";
@@ -83,6 +84,7 @@ function Stat({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function TeamDetailPage() {
+  const features = useServerFeatures();
   const { teamId: teamIdParam } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
@@ -137,24 +139,24 @@ export function TeamDetailPage() {
   }, [invalidTeamId, teamId]);
 
   const loadWorkspaceTree = useCallback(async () => {
-    if (invalidTeamId) return;
+    if (invalidTeamId || !features.workspace) return;
     try {
       setWorkspaceTrees(await reactTeamApi.workspaceTree(teamId));
       setWorkspaceError(null);
     } catch (loadError) {
       setWorkspaceError(resolveAxiosError(loadError) || "Team Workspace 트리를 불러오지 못했습니다.");
     }
-  }, [invalidTeamId, teamId]);
+  }, [features.workspace, invalidTeamId, teamId]);
 
   const loadSources = useCallback(async () => {
-    if (invalidTeamId) return;
+    if (invalidTeamId || !features["team-rag"]) return;
     try {
       setSources(await reactTeamApi.knowledgeSources(teamId));
       setSourcesError(null);
     } catch (loadError) {
       setSourcesError(resolveAxiosError(loadError) || "Team 자료를 불러오지 못했습니다.");
     }
-  }, [invalidTeamId, teamId]);
+  }, [features, invalidTeamId, teamId]);
 
   const loadMembers = useCallback(async () => {
     if (invalidTeamId) return;
@@ -185,6 +187,7 @@ export function TeamDetailPage() {
   }, [loadSources, loadWorkspaceTree, teamAccessConfirmed]);
 
   useEffect(() => {
+    if (!features["team-rag"]) { setCapabilitiesLoading(false); return; }
     setCapabilitiesLoading(true);
     reactAiApi.fetchRagCapabilities()
       .then((value) => {
@@ -193,7 +196,7 @@ export function TeamDetailPage() {
       })
       .catch((loadError) => setCapabilitiesError(resolveAxiosError(loadError) || "RAG capability 조회 실패"))
       .finally(() => setCapabilitiesLoading(false));
-  }, []);
+  }, [features]);
 
   const sourceCounts = useMemo(() => {
     return sources.reduce<Record<string, number>>((counts, source) => {
@@ -315,9 +318,9 @@ export function TeamDetailPage() {
       <Paper variant="outlined">
         <Tabs value={tab} onChange={(_, value: TeamTab) => setTab(value)} variant="scrollable" scrollButtons="auto">
           <Tab value="overview" label="개요" />
-          {teamAccessConfirmed ? <Tab value="chat" label="Team Chat" /> : null}
-          {teamAccessConfirmed ? <Tab value="workspaces" label="Workspace" /> : null}
-          {teamAccessConfirmed ? <Tab value="sources" label="자료" /> : null}
+          {teamAccessConfirmed && features["team-rag"] ? <Tab value="chat" label="Team Chat" /> : null}
+          {teamAccessConfirmed && features.workspace ? <Tab value="workspaces" label="Workspace" /> : null}
+          {teamAccessConfirmed && features["team-rag"] ? <Tab value="sources" label="자료" /> : null}
           {teamAccessConfirmed ? <Tab value="members" label="멤버" /> : null}
           {managementAccessConfirmed ? <Tab value="settings" label="설정" /> : null}
         </Tabs>

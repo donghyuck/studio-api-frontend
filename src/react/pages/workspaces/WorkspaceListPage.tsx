@@ -35,6 +35,7 @@ import { SimpleTreeView } from "@mui/x-tree-view/SimpleTreeView";
 import { TreeItem } from "@mui/x-tree-view/TreeItem";
 import { WorkspaceFilesPanel } from "@/react/pages/workspaces/WorkspaceFilesPanel";
 import { WorkspaceUrlSourcesPanel } from "@/react/pages/workspaces/WorkspaceUrlSourcesPanel";
+import { useServerFeatures } from "@/react/features/platform/ServerFeaturesProvider";
 import type { ColDef, ICellRendererParams } from "ag-grid-community";
 import { PageableGridContent } from "@/react/components/ag-grid";
 import type { PageableGridContentHandle } from "@/react/components/ag-grid/types";
@@ -230,6 +231,7 @@ export interface WorkspaceListPageProps {
 }
 
 export function WorkspaceListPage({ teamId: fixedTeamId, embedded = false }: WorkspaceListPageProps = {}) {
+  const features = useServerFeatures();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -948,19 +950,19 @@ export function WorkspaceListPage({ teamId: fixedTeamId, embedded = false }: Wor
                 onChange={(_, value: "files" | "urls") => setWorkspaceContentTab(value)}
                 sx={{ minHeight: 40, borderBottom: 1, borderColor: "divider" }}
               >
-                <Tab value="files" label="파일" sx={{ minHeight: 40 }} />
-                <Tab value="urls" label="외부 URL" sx={{ minHeight: 40 }} />
+                <Tab value="files" label="파일" disabled={!features.attachment} sx={{ minHeight: 40 }} />
+                <Tab value="urls" label="외부 URL" disabled={!features["web-knowledge"]} sx={{ minHeight: 40 }} />
               </Tabs>
 
-              {workspaceContentTab === "files" ? (
+              {workspaceContentTab === "files" && features.attachment ? (
                 <WorkspaceFilesPanel workspaceId={selectedWorkspace.id} archived={selectedWorkspace.archived} />
-              ) : (
+              ) : workspaceContentTab === "urls" && features["web-knowledge"] ? (
                 <WorkspaceUrlSourcesPanel
                   key={selectedWorkspace.id}
                   workspaceId={selectedWorkspace.id}
                   disabled={selectedWorkspace.archived}
                 />
-              )}
+              ) : <Typography color="text.secondary">사용 가능한 자료 기능을 선택해 주세요.</Typography>}
             </Stack>
           ) : (
             <Box sx={{ py: 4, textAlign: "center" }}>

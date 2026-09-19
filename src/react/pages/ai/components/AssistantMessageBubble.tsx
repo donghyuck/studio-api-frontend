@@ -431,7 +431,12 @@ export function AssistantMessageBubble({
         </Avatar>
         <Typography variant="subtitle2" component="div" sx={{ fontWeight: 700, fontSize: 13, color: "text.primary", display: "flex", alignItems: "center", gap: 1 }}>
           Assistant
-          {message.model && (
+          {message.metadata?.answerSource === "SYSTEM_CONTEXT" && (
+            <Tooltip title={`${message.metadata.effectiveTimezone ?? "서버 시간대"} · ${message.metadata.asOf ?? ""}`}>
+              <Chip size="small" variant="outlined" label="시스템 기준" sx={{ height: 18, fontSize: 10 }} />
+            </Tooltip>
+          )}
+          {message.model && message.metadata?.answerSource !== "SYSTEM_CONTEXT" && (
             <Chip
               size="small"
               variant="outlined"

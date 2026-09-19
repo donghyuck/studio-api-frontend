@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useServerFeatures } from "@/react/features/platform/ServerFeaturesProvider";
+import { BasicFileDetailDialog } from "./BasicFileDetailDialog";
 import { alpha } from "@mui/material/styles";
 import {
   Accordion,
@@ -386,7 +388,14 @@ function RagMetadataAccordion({ entries }: { entries: Array<[string, unknown]> }
   );
 }
 
-export function FileDetailDialog({ open, attachmentId, onClose, workspaceId }: Props) {
+export function FileDetailDialog(props: Props) {
+  const features = useServerFeatures();
+  return features.markdown && features["ai-rag"]
+    ? <ProcessingFileDetailDialog {...props} />
+    : <BasicFileDetailDialog {...props} />;
+}
+
+function ProcessingFileDetailDialog({ open, attachmentId, onClose, workspaceId }: Props) {
   const toast = useToast();
   
   const [file, setFile] = useState<AttachmentDto | null>(null);

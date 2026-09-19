@@ -23,8 +23,15 @@ import {
   matchesPath,
 } from "@/react/layouts/FullLayoutNavigation";
 import { FullLayoutUserMenu } from "@/react/layouts/FullLayoutUserMenu";
+import { ServerFeaturesProvider, ServerFeatureGate, useServerFeatures } from "@/react/features/platform/ServerFeaturesProvider";
+import { supportsRoute } from "@/react/features/platform/serverFeatures";
 
 export function FullLayout() {
+  return <ServerFeaturesProvider><ConfiguredFullLayout /></ServerFeaturesProvider>;
+}
+
+function ConfiguredFullLayout() {
+  const features = useServerFeatures();
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up("lg"));
   const navigate = useNavigate();
@@ -38,7 +45,9 @@ export function FullLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
 
-  const sections = useMemo(() => buildNavSections(), []);
+  const sections = useMemo(() => buildNavSections()
+    .map((section) => ({ ...section, items: section.items.filter((item) => supportsRoute(item.path, features)) }))
+    .filter((section) => section.items.length > 0), [features]);
   const sectionDefaults = useMemo(
     () =>
       Object.fromEntries(
@@ -212,7 +221,7 @@ export function FullLayout() {
               flexDirection: "column",
             }}
           >
-            <Outlet />
+            <ServerFeatureGate path={location.pathname}><Outlet /></ServerFeatureGate>
           </Box>
         </Box>
       </Box>
