@@ -14,6 +14,7 @@ import type { PageableGridContentHandle } from "@/react/components/ag-grid/types
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { reactFilesApi } from "@/react/pages/files/api";
 import { reactAiApi } from "@/react/pages/ai/api";
+import { useServerFeatures } from "@/react/features/platform/ServerFeaturesProvider";
 import { FileUploadDialog } from "@/react/pages/files/FileUploadDialog";
 import { FileDetailDialog } from "@/react/pages/files/FileDetailDialog";
 import { filesQueryKeys } from "@/react/pages/files/queryKeys";
@@ -41,6 +42,7 @@ export class FilesDataSource extends ReactPageDataSource<AttachmentDto> {
   constructor(
     private readonly onActiveStatusChange: (active: boolean) => void,
     private readonly onStatusError: (message: string | null) => void,
+    private readonly ragAvailable = true,
   ) {
     super("/api/mgmt/files");
   }
@@ -53,7 +55,7 @@ export class FilesDataSource extends ReactPageDataSource<AttachmentDto> {
   }) {
     const page = await super.fetchForAgGrid(params);
     const objectIds = page.rows.map((file) => String(file.attachmentId));
-    if (objectIds.length === 0) {
+    if (!this.ragAvailable || objectIds.length === 0) {
       this.onActiveStatusChange(false);
       this.onStatusError(null);
       return page;
@@ -467,9 +469,10 @@ export function FilesPage() {
   const [displayedCount, setDisplayedCount] = useState(0);
   const [hasActiveRagJobs, setHasActiveRagJobs] = useState(false);
   const [ragStatusError, setRagStatusError] = useState<string | null>(null);
+  const features = useServerFeatures();
   const dataSource = useMemo(
-    () => new FilesDataSource(setHasActiveRagJobs, setRagStatusError),
-    [],
+    () => new FilesDataSource(setHasActiveRagJobs, setRagStatusError, features["ai-rag"] === true),
+    [features],
   );
   const selectedCount = selectedIds.length;
 

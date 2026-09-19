@@ -24,6 +24,7 @@ import { PageToolbar } from "@/react/components/page/PageToolbar";
 import { ReactPageDataSource } from "@/react/pages/admin/datasource";
 import { useToast } from "@/react/feedback";
 import { reactTeamApi } from "@/react/pages/teams/api";
+import { useServerFeatures } from "@/react/features/platform/ServerFeaturesProvider";
 import type {
   TeamCreateRequest,
   TeamDto,
@@ -106,6 +107,7 @@ function TeamCreateDialog({
 }) {
   const toast = useToast();
   const [form, setForm] = useState<TeamCreateRequest>(emptyForm);
+  const features = useServerFeatures();
   const [companyId, setCompanyId] = useState("");
   const [saving, setSaving] = useState(false);
   const slugValid = /^[a-z0-9][a-z0-9-]*$/.test(form.slug);
@@ -121,6 +123,8 @@ function TeamCreateDialog({
         name: form.name.trim(),
         slug: form.slug.trim(),
         description: form.description?.trim() || null,
+        provisionRootWorkspace: features.workspace === true,
+        ragEnabled: features["team-rag"] === true && form.ragEnabled,
       });
       toast.success("Team이 생성되었습니다.");
       setForm(emptyForm);

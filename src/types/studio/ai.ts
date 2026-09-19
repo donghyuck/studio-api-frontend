@@ -54,6 +54,10 @@ export interface ChatResponseDto {
 }
 
 export interface ChatResponseMetadataDto {
+  answerSource?: "SYSTEM_CONTEXT" | "DOCUMENT_RAG" | "GENERAL_MODEL" | "LIVE_TOOL" | "MIXED";
+  effectiveTimezone?: string;
+  asOf?: string;
+  routeReason?: string;
   provider?: string;
   resolvedModel?: string;
   tokenUsage?: TokenUsageDto;

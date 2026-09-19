@@ -70,6 +70,10 @@ function normalizeStreamComplete(payload: ChatStreamCompleteEventDto) {
     finishReason: payload.finishReason ?? metadata.finishReason,
     fallbackUsed: payload.fallbackUsed,
     tokenUsage: metadata.tokenUsage,
+    answerSource: metadata.answerSource,
+    effectiveTimezone: metadata.effectiveTimezone,
+    asOf: metadata.asOf,
+    routeReason: metadata.routeReason,
   };
 }
 
@@ -328,6 +332,10 @@ export function ChatPage() {
                       metadata: {
                         ...(message.metadata ?? {}),
                         provider: complete.provider,
+                        answerSource: complete.answerSource,
+                        effectiveTimezone: complete.effectiveTimezone,
+                        asOf: complete.asOf,
+                        routeReason: complete.routeReason,
                         resolvedModel: complete.resolvedModel,
                         conversationId: complete.conversationId,
                         latencyMs: complete.latencyMs,

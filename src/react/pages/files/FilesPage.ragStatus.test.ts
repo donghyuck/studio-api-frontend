@@ -31,11 +31,22 @@ const file = {
 
 describe("FilesDataSource RAG status", () => {
   beforeEach(() => {
+    vi.mocked(reactAiApi.getRagObjectIndexStatuses).mockReset();
     vi.spyOn(ReactPageDataSource.prototype, "fetchForAgGrid")
       .mockResolvedValue({ rows: [file], total: 1 });
   });
 
   afterEach(() => vi.restoreAllMocks());
+
+  it("does not query AI when the server provides files only", async () => {
+    const onActive = vi.fn();
+    const onError = vi.fn();
+    const datasource = new FilesDataSource(onActive, onError, false);
+    const result = await datasource.fetchForAgGrid({ startRow: 0, endRow: 15 });
+    expect(result.rows).toEqual([file]);
+    expect(reactAiApi.getRagObjectIndexStatuses).not.toHaveBeenCalled();
+    expect(onActive).toHaveBeenCalledWith(false);
+  });
 
   it("loads one batch for the current file page and merges active progress", async () => {
     vi.mocked(reactAiApi.getRagObjectIndexStatuses).mockResolvedValue([{
